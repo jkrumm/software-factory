@@ -1,38 +1,24 @@
 import { expect, test } from 'bun:test'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
-import {
-  HygieneAnswer,
-  HygieneRequest,
-  JudgeInputWire,
-  JudgeVerdictWire,
-  QueueAnswer,
-  QueueRequest,
-  ScreenAnswer,
-  ScreenRequest,
-  StewardAnswer,
-  StewardStall,
-  TriageAnswer,
-  TriageRequest,
-} from '@software-factory/contract'
+import { JudgeInputWire } from '@software-factory/contract'
 import { agwAmend } from '../../src/adapters/agw/amend.ts'
-import { agwHygiene } from '../../src/adapters/agw/hygiene.ts'
-import { agwJudge } from '../../src/adapters/agw/judge.ts'
-import { agwQueue } from '../../src/adapters/agw/queue.ts'
-import { agwScreen } from '../../src/adapters/agw/screen.ts'
-import { agwSettle, agwSteward } from '../../src/adapters/agw/steward.ts'
+import { loadLoopSettings } from '../../src/app/loops/settings.ts'
 import type { Precedent } from '../../src/domains/checkpoints/decision.ts'
 import { judgeInputOf } from '../../src/domains/checkpoints/decision.ts'
 import type { OpenIssue } from '../../src/domains/intake/model.ts'
-import type { AgwCall, AgwPort } from '../../src/kernel/agw.ts'
+import type { AgwPort } from '../../src/kernel/agw.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
-import { key } from '../../src/kernel/keys.ts'
+import type { Key } from '../../src/kernel/keys.ts'
 import { ok } from '../../src/kernel/result.ts'
+import { WORKFLOWS, type WorkflowName } from '../../src/kernel/workflows.ts'
 
 /**
- * One fixture, two repos: `packages/contract/fixtures/loops.json` is parsed here with the factory's schemas, and the same
- * bytes are parsed in agent-workflows (`packages/host/test/fixtures/software-factory-loops.json`) with the workflows'. A
- * shape that drifts on one side fails a test there or here.
+ * One fixture, two repos: `packages/contract/fixtures/loops.json` is parsed here with the factory's schemas, and the copy in
+ * agent-workflows (`packages/host/test/fixtures/software-factory-loops.json`) is parsed with the workflows'. The table's
+ * entries each name their example below: an entry without one does not compile, and an example its schema refuses fails.
  */
 const fixture = JSON.parse(
   await readFile(
@@ -41,23 +27,61 @@ const fixture = JSON.parse(
   ),
 )
 
-test('the fixture’s examples parse with the factory’s schemas', () => {
-  expect(JudgeInputWire.parse(fixture.judge.input)).toEqual(fixture.judge.input)
-  expect(JudgeVerdictWire.parse(fixture.judge.output)).toEqual(fixture.judge.output)
-  expect(StewardStall.parse(fixture.steward.input)).toEqual(fixture.steward.input)
-  expect(StewardAnswer.parse(fixture.steward.output)).toEqual(fixture.steward.output)
-  expect(StewardAnswer.parse(fixture.steward.decisionOutput)).toEqual(fixture.steward.decisionOutput)
-  expect(TriageRequest.parse(fixture.triage.amendInput)).toEqual(fixture.triage.amendInput)
-  expect(TriageRequest.parse(fixture.triage.settleInput)).toEqual(fixture.triage.settleInput)
-  expect(TriageAnswer.parse(fixture.triage.amendOutput)).toEqual(fixture.triage.amendOutput)
-  expect(TriageAnswer.parse(fixture.triage.settleOutput)).toEqual(fixture.triage.settleOutput)
-  expect(QueueRequest.parse(fixture.queue.input)).toEqual(fixture.queue.input)
-  expect(QueueAnswer.parse(fixture.queue.output)).toEqual(fixture.queue.output)
-  expect(HygieneRequest.parse(fixture.hygiene.input)).toEqual(fixture.hygiene.input)
-  expect(HygieneAnswer.parse(fixture.hygiene.output)).toEqual(fixture.hygiene.output)
-  expect(ScreenRequest.parse(fixture.screen.input)).toEqual(fixture.screen.input)
-  expect(ScreenAnswer.parse(fixture.screen.output)).toEqual(fixture.screen.output)
+/** The agw copy of the fixture: where it must match. Read when agent-workflows is checked out beside this repo. */
+const AGW_FIXTURE = join(
+  process.env.FACTORY_AGW_FIXTURE_ROOT ?? join(homedir(), 'SourceRoot', 'agent-workflows'),
+  'packages',
+  'host',
+  'test',
+  'fixtures',
+  'software-factory-loops.json',
+)
+
+/** The example request and answer of every entry of `WORKFLOWS`, from the fixture. */
+const EXAMPLES = {
+  judge: { request: fixture.judge.input, answer: fixture.judge.output },
+  errandScreen: { request: fixture.errand.input, answer: fixture.errand.output },
+  specScreen: { request: fixture.specScreen.input, answer: fixture.specScreen.output },
+  errandNeeded: { request: fixture.errandNeeded.input, answer: fixture.errandNeeded.output },
+  steward: { request: fixture.steward.input, answer: fixture.steward.output },
+  settle: { request: fixture.triage.settleInput, answer: fixture.triage.settleOutput },
+  amend: { request: fixture.triage.amendInput, answer: fixture.triage.amendOutput },
+  queue: { request: fixture.queue.input, answer: fixture.queue.output },
+  hygiene: { request: fixture.hygiene.input, answer: fixture.hygiene.output },
+  screen: { request: fixture.screen.input, answer: fixture.screen.output },
+} satisfies Record<WorkflowName, { request: unknown; answer: unknown }>
+
+const names = Object.keys(WORKFLOWS) as WorkflowName[]
+
+test('every entry’s example request and answer parse with its schemas, and parse back unchanged', () => {
+  for (const name of names) {
+    const { request, answer } = EXAMPLES[name]
+    expect({ name, request: WORKFLOWS[name].request.parse(request) }).toEqual({ name, request })
+    expect({ name, answer: WORKFLOWS[name].answer.parse(answer) }).toEqual({ name, answer })
+  }
+  expect(WORKFLOWS.steward.answer.parse(fixture.steward.decisionOutput)).toEqual(fixture.steward.decisionOutput)
 })
+
+test.skipIf(!existsSync(AGW_FIXTURE))(
+  'the examples agent-workflows holds parse with the factory’s schemas (skipped where it is not checked out)',
+  async () => {
+    const theirs = JSON.parse(await readFile(AGW_FIXTURE, 'utf8'))
+    const sections: [WorkflowName, { input: unknown; output: unknown }][] = [
+      ['judge', theirs.judge],
+      ['errandScreen', theirs.errand],
+      ['steward', theirs.steward],
+      ['queue', theirs.queue],
+      ['hygiene', theirs.hygiene],
+      ['screen', theirs.screen],
+      ['settle', { input: theirs.triage?.settleInput, output: theirs.triage?.settleOutput }],
+      ['amend', { input: theirs.triage?.amendInput, output: theirs.triage?.amendOutput }],
+    ]
+    for (const [name, section] of sections) {
+      expect({ name, ok: WORKFLOWS[name].request.safeParse(section.input).success }).toEqual({ name, ok: true })
+      expect({ name, ok: WORKFLOWS[name].answer.safeParse(section.output).success }).toEqual({ name, ok: true })
+    }
+  },
+)
 
 test('the Judge’s input as the checkpoints build it is the shape the workflow takes', () => {
   const precedent: Precedent = {
@@ -86,48 +110,49 @@ test('the Judge’s input as the checkpoints build it is the shape the workflow 
   expect(input.repo).toBe('example-app')
 })
 
-/** An agw port that records its calls and answers from a script. */
-function fakePort(answers: Record<string, unknown>): { port: AgwPort; calls: AgwCall<unknown>[] } {
-  const calls: AgwCall<unknown>[] = []
+test('the table sends agw the names it always has, and every key starts with its entry’s prefix', () => {
+  expect(Object.fromEntries(names.map((name) => [name, WORKFLOWS[name].agw]))).toEqual({
+    judge: 'factory-ask',
+    errandScreen: 'factory-errand',
+    specScreen: 'factory-spec-screen',
+    errandNeeded: 'factory-errand-needed',
+    steward: 'factory-steward',
+    settle: 'factory-triage',
+    amend: 'factory-triage',
+    queue: 'factory-queue',
+    hygiene: 'factory-hygiene',
+    screen: 'factory-screen',
+  })
+  expect(WORKFLOWS.judge.key('decision_7', 1, 'abc')).toBe('factory-ask:decision_7:1:abc' as Key)
+  expect(WORKFLOWS.settle.key('issue_3', 2)).toBe('triage:settle:issue_3:2' as Key)
+  expect(WORKFLOWS.queue.key('app', 'shape', 1)).toBe('queue:app:shape:1' as Key)
+})
+
+test('the steward, triage and queue gaps are their own entries', () => {
+  const own = loadLoopSettings({})
+  expect([own.retryMs, own.triageRetryMs, own.queueRetryMs]).toEqual([
+    WORKFLOWS.steward.retry.backoffMs,
+    WORKFLOWS.settle.retry.backoffMs,
+    WORKFLOWS.queue.retry.backoffMs,
+  ])
+})
+
+/** An agw port that records its calls and answers from a script keyed by workflow name. */
+function fakePort(answers: Partial<Record<WorkflowName, unknown>>): {
+  port: AgwPort
+  calls: { name: WorkflowName; request: unknown; key: Key }[]
+} {
+  const calls: { name: WorkflowName; request: unknown; key: Key }[] = []
   return {
     calls,
     port: {
-      run: async <T>(call: AgwCall<T>) => {
-        calls.push(call)
-        return ok(call.output.parse(answers[call.workflow]))
+      run: async (name, request, key) => {
+        calls.push({ name, request, key })
+        return ok(WORKFLOWS[name].answer.parse(answers[name])) as never
       },
     },
   }
 }
-
-test('each adapter sends its workflow the input as given, under the key it was handed', async () => {
-  const { port, calls } = fakePort({
-    'factory-ask': fixture.judge.output,
-    'factory-steward': fixture.steward.output,
-    'factory-triage': fixture.triage.settleOutput,
-    'factory-queue': fixture.queue.output,
-    'factory-hygiene': fixture.hygiene.output,
-    'factory-screen': fixture.screen.output,
-  })
-  const k = key('test', 1)
-  expect(await agwJudge(port).judge(fixture.judge.input, k)).toEqual(ok(fixture.judge.output))
-  expect(await agwSteward(port).ask(fixture.steward.input, k)).toEqual(ok(fixture.steward.output))
-  expect(await agwSettle(port).settle(fixture.triage.settleInput, k)).toEqual(ok(fixture.triage.settleOutput))
-  expect(await agwQueue(port).ask(fixture.queue.input, k)).toEqual(ok(fixture.queue.output))
-  expect(await agwHygiene(port).ask(fixture.hygiene.input, k)).toEqual(ok(fixture.hygiene.output))
-  expect(await agwScreen(port).screen(fixture.screen.input, k)).toEqual(ok(fixture.screen.output))
-  expect(calls.map((c) => [c.workflow, c.key])).toEqual([
-    ['factory-ask', k],
-    ['factory-steward', k],
-    ['factory-triage', k],
-    ['factory-queue', k],
-    ['factory-hygiene', k],
-    ['factory-screen', k],
-  ])
-  expect(calls[1]?.input).toEqual(fixture.steward.input)
-  expect(calls[3]?.input).toEqual(fixture.queue.input)
-  expect(calls[4]?.input).toEqual(fixture.hygiene.input)
-})
 
 const open = (n: number, title: string): OpenIssue => ({
   id: `issue_${n}` as IssueId,
@@ -151,29 +176,29 @@ const signal = {
 
 test('amend: the signal is sent scrubbed with the candidates, and the Issue it names must be one it was shown', async () => {
   const candidates = [open(12, 'Fix the checkout total'), open(15, 'Add a dark theme')]
-  const named = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: 'issue_12' } })
+  const named = fakePort({ amend: { ...fixture.triage.amendOutput, amend: 'issue_12' } })
   expect(await agwAmend(named.port).amendOrNew({ signal, candidates, settled: [] })).toEqual(
     ok({ amend: 'issue_12' as IssueId, settled: null, reason: fixture.triage.amendOutput.reason }),
   )
-  expect(named.calls[0]?.input).toMatchObject({
+  expect(named.calls[0]?.request).toMatchObject({
     mode: 'amend',
     repo: 'app',
     signal: { title: signal.title, text: 'token=[redacted] also happens with coupons', source: 'owner:hermes' },
   })
   expect(String(named.calls[0]?.key)).toStartWith('triage:amend:owner%3Ahermes:fp-1:')
 
-  const unseen = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: 'issue_99' } })
+  const unseen = fakePort({ amend: { ...fixture.triage.amendOutput, amend: 'issue_99' } })
   expect(await agwAmend(unseen.port).amendOrNew({ signal, candidates, settled: [] })).toMatchObject({
     ok: false,
     error: { kind: 'refused', detail: expect.stringContaining('issue_99') },
   })
 
-  const none = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: null } })
+  const none = fakePort({ amend: { ...fixture.triage.amendOutput, amend: null } })
   expect(await agwAmend(none.port).amendOrNew({ signal, candidates, settled: [] })).toEqual(
     ok({ amend: null, settled: null, reason: fixture.triage.amendOutput.reason }),
   )
 
-  const edges = fakePort({ 'factory-triage': { ...fixture.triage.settleOutput } })
+  const edges = fakePort({ amend: { ...fixture.triage.settleOutput } })
   expect(await agwAmend(edges.port).amendOrNew({ signal, candidates, settled: [] })).toMatchObject({ ok: false })
 })
 
@@ -188,20 +213,20 @@ test('amend: a settled answer must name an Issue it was shown as settled, and is
     },
   ]
   const candidates = [open(12, 'Fix the checkout total')]
-  const named = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: null, settled: 'issue_7' } })
+  const named = fakePort({ amend: { ...fixture.triage.amendOutput, amend: null, settled: 'issue_7' } })
   expect(await agwAmend(named.port).amendOrNew({ signal, candidates, settled })).toEqual(
     ok({ amend: null, settled: 'issue_7' as IssueId, reason: fixture.triage.amendOutput.reason }),
   )
-  expect(named.calls[0]?.input).toMatchObject({
+  expect(named.calls[0]?.request).toMatchObject({
     settled: [{ id: 'issue_7', title: 'Disk filling fast', outcome: 'healed', reason: 'token=[redacted] false alarm' }],
   })
 
-  const unseen = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: null, settled: 'issue_8' } })
+  const unseen = fakePort({ amend: { ...fixture.triage.amendOutput, amend: null, settled: 'issue_8' } })
   expect(await agwAmend(unseen.port).amendOrNew({ signal, candidates, settled })).toMatchObject({
     ok: false,
     error: { kind: 'refused', detail: expect.stringContaining('issue_8') },
   })
 
-  const both = fakePort({ 'factory-triage': { ...fixture.triage.amendOutput, amend: 'issue_12', settled: 'issue_7' } })
+  const both = fakePort({ amend: { ...fixture.triage.amendOutput, amend: 'issue_12', settled: 'issue_7' } })
   expect(await agwAmend(both.port).amendOrNew({ signal, candidates, settled })).toMatchObject({ ok: false })
 })

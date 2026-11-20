@@ -281,5 +281,47 @@
       "duplicateOf": "issue_31",
       "recommendation": null
     }
+  },
+  "errand": {
+    "input": {
+      "errand": {
+        "id": "e_7",
+        "summary": "Approve the sign-in prompt on the test device",
+        "detail": "The lead needs the test device signed in once to run the UI checks."
+      },
+      "issue": { "id": "issue_31", "repo": "example-app", "title": "Add a sign-in screen", "kind": "feature" }
+    },
+    "output": { "verdict": "pass", "reason": "A sign-in prompt on a device needs a person's hands" }
+  },
+  "errandNeeded": {
+    "input": {
+      "errand": {
+        "id": "e_8",
+        "source": "agent",
+        "summary": "Rotate the staging API key",
+        "detail": "The key in the portal expires this week.",
+        "command": null,
+        "host": "portal",
+        "raisedAt": "2026-11-17T09:00:00.000Z",
+        "ageHours": 30
+      },
+      "evidence": "e_5 (same source, closed done 2 days ago): Rotate the production API key"
+    },
+    "output": { "verdict": "needed", "reason": "the key is still the old one and the portal step is open" }
+  },
+  "specScreen": {
+    "input": {
+      "spec": {
+        "id": "artifact_4",
+        "revision": 1,
+        "title": "A retry rule for the export job",
+        "source": "lead",
+        "content": "Retry the export three times, five minutes apart; the defaults hold if no verdict comes in 24 hours.",
+        "format": "markdown"
+      },
+      "issue": { "id": "issue_31", "repo": "example-app", "title": "Make the export job retry", "kind": "feature" },
+      "precedents": []
+    },
+    "output": { "verdict": "settle", "reason": "a retry rule inside one job, the defaults are reversible" }
   }
 }

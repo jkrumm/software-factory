@@ -4,6 +4,7 @@ import { LOOP_NAMES, type LoopName } from '@software-factory/contract'
 import { REVIEW_POLL_MS } from '../../domains/loops/reviews.ts'
 import { DEFAULT_WAIT_GRACE_MS } from '../../domains/loops/selfwatch.ts'
 import { DEFAULT_STEWARD_RULES } from '../../domains/loops/stall.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 
 const ms = z.coerce.number().int().min(0)
 
@@ -57,7 +58,10 @@ export interface LoopSettings {
   minStallMs: number
   idleLeadMs: number
   idleBackgroundMs: number
+  /** the steward's, triage's settle and the queue's retry gap: each reads its entry in `WORKFLOWS` */
   retryMs: number
+  triageRetryMs: number
+  queueRetryMs: number
   queueGapMs: number
   settleTimeoutMs: number
   blockedChecks: number
@@ -136,7 +140,9 @@ export function loadLoopSettings(env: Environment): LoopSettings {
     minStallMs: e.FACTORY_STEWARD_MIN_STALL_MS ?? 2 * 60_000,
     idleLeadMs: e.FACTORY_STEWARD_IDLE_MS ?? DEFAULT_STEWARD_RULES.idleLeadMs,
     idleBackgroundMs: e.FACTORY_STEWARD_IDLE_BACKGROUND_MS ?? DEFAULT_STEWARD_RULES.idleBackgroundMs,
-    retryMs: 10 * 60_000,
+    retryMs: WORKFLOWS.steward.retry.backoffMs,
+    triageRetryMs: WORKFLOWS.settle.retry.backoffMs,
+    queueRetryMs: WORKFLOWS.queue.retry.backoffMs,
     queueGapMs: e.FACTORY_QUEUE_GAP_MS ?? 30 * 60_000,
     settleTimeoutMs: e.FACTORY_SETTLE_TIMEOUT_MS ?? 15 * 60_000,
     blockedChecks: 6,
@@ -144,7 +150,7 @@ export function loadLoopSettings(env: Environment): LoopSettings {
     recheckAfterMs: e.FACTORY_CHECKPOINT_RECHECK_MS ?? DEFAULT_RECHECK_MS,
     hygieneEveryMs: e.FACTORY_HYGIENE_EVERY_MS ?? 7 * 24 * 3_600_000,
     hygieneDailyMs: 24 * 3_600_000,
-    hygieneRetryMs: e.FACTORY_HYGIENE_RETRY_MS ?? 6 * 3_600_000,
+    hygieneRetryMs: e.FACTORY_HYGIENE_RETRY_MS ?? WORKFLOWS.hygiene.retry.backoffMs,
     selfwatchGraceMs: e.FACTORY_SELFWATCH_GRACE_MS ?? DEFAULT_WAIT_GRACE_MS,
     selfwatchBranch: e.FACTORY_SELFWATCH_BRANCH ?? null,
     heartbeatStaleMs: e.FACTORY_HEARTBEAT_STALE_MS ?? null,

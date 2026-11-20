@@ -1,13 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { ErrandNeededAnswer } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
+import { fakeAgw } from '../support/agw.ts'
 import { postgresCheckpointStore } from '../../src/adapters/postgres/checkpoint-store.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresUnitOfWork } from '../../src/adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import { finishErrand, requestErrand, type CheckpointDeps } from '../../src/app/checkpoints.ts'
 import { errandsPass, errandsSummary } from '../../src/app/loops/errands.ts'
-import type { CheckRunner, ErrandNeededPort } from '../../src/domains/checkpoints/ports.ts'
+import type { CheckRunner } from '../../src/domains/checkpoints/ports.ts'
 import type { CheckRun } from '../../src/domains/checkpoints/request.ts'
 import { type FixedClock, fixedClock } from '../../src/kernel/clock.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'
@@ -39,13 +40,13 @@ const runner: CheckRunner = {
     return Promise.resolve(checks[command] ?? { exit: 0, timedOut: false, output: '' })
   },
 }
-const judge: ErrandNeededPort = {
-  judge: (request) => {
+const judge = fakeAgw({
+  errandNeeded: (request) => {
     expect(deps.uow.inTransaction()).toBe(false)
     neededCalls.push({ id: request.errand.id, evidence: request.evidence })
     return Promise.resolve(needed(request.errand.id))
   },
-}
+})
 
 beforeAll(async () => {
   db = await startTestCluster()
@@ -80,7 +81,7 @@ const value = <T, E>(result: Result<T, E>): T => {
 }
 const request = async (raw: Record<string, unknown>) =>
   value(await requestErrand(deps, { raw: { source: 'test-agent', need: 'hands', ...raw } }))
-const pass = async () => value(await errandsPass({ uow: deps.uow, clock, checks: runner, needed: judge }))
+const pass = async () => value(await errandsPass({ uow: deps.uow, clock, checks: runner, agw: judge }))
 const errandRow = async (id: string) => (await db.sql`SELECT * FROM factory.errands WHERE id = ${id}`)[0]
 const since = async (at: Date) => (await readSince(db.sql, { now: clock.now(), since: at })).categories.errands
 
@@ -226,7 +227,7 @@ describe('the check', () => {
         return checks[command] as CheckRun
       },
     }
-    const result = value(await errandsPass({ uow: deps.uow, clock, checks: slow, needed: judge }))
+    const result = value(await errandsPass({ uow: deps.uow, clock, checks: slow, agw: judge }))
     expect(result.checkedOut).toBe(0)
     expect(await errandRow(made.errand.id)).toMatchObject({ closed_kind: 'done', closed_by: 'owner' })
   })

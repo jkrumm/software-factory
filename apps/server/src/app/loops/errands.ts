@@ -1,5 +1,5 @@
 import type { ErrandNeededAnswer } from '@software-factory/contract'
-import type { CheckRunner, CheckpointStore, ErrandNeededPort, ErrandRecord } from '../../domains/checkpoints/ports.ts'
+import type { CheckRunner, CheckpointStore, ErrandRecord } from '../../domains/checkpoints/ports.ts'
 import {
   brokenLine,
   CHECK_BROKEN_NOTE,
@@ -15,7 +15,8 @@ import {
 } from '../../domains/checkpoints/request.ts'
 import { exitedNote, STILL_NEEDED_NOTE } from '../../kernel/run.ts'
 import type { Clock } from '../../kernel/clock.ts'
-import { key } from '../../kernel/keys.ts'
+import type { AgwPort } from '../../kernel/agw.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
@@ -39,7 +40,7 @@ export interface CheckDeps {
 }
 
 export interface ErrandsDeps extends CheckDeps {
-  needed: ErrandNeededPort
+  agw: AgwPort
 }
 
 export interface ErrandsPass {
@@ -64,7 +65,7 @@ type Out<T> = Promise<Result<T, PortError>>
 /** Open standalone Errands read in one pass; a queue this long is a problem of its own. */
 const READ_LIMIT = 500
 /** A failed look of the still-needed workflow is tried again after this long, not after a whole day. */
-const NEEDED_RETRY_MS = 6 * 3_600_000
+const NEEDED_RETRY_MS = WORKFLOWS.errandNeeded.retry.backoffMs
 
 const cut = (text: string, max = 300): string => text.replace(/\s+/g, ' ').trim().slice(0, max)
 
@@ -160,7 +161,8 @@ async function lookAt(
   const now = deps.clock.now()
   pass.looks++
   const siblings = all.filter((other) => other.source === errand.source)
-  const answered = await deps.needed.judge(
+  const answered = await deps.agw.run(
+    'errandNeeded',
     {
       errand: {
         id: errand.id,
@@ -174,7 +176,7 @@ async function lookAt(
       },
       evidence: evidenceLines(errand.id, siblings, now, (text) => cut(scrub(text), 200)),
     },
-    key('factory-errand-needed', errand.id, Math.floor(now.getTime() / NEEDED_AFTER_MS)),
+    WORKFLOWS.errandNeeded.key(errand.id, Math.floor(now.getTime() / NEEDED_AFTER_MS)),
   )
   if (!answered.ok) {
     pass.problems.push(`${errand.id}: ${answered.error.kind}: ${answered.error.detail}`.slice(0, 300))

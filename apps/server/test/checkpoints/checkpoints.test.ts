@@ -41,7 +41,8 @@ import { JUDGE_BACKOFF_MS, type DecisionId, type JudgeVerdict } from '../../src/
 import { AUTO_RUN_NOTE } from '../../src/kernel/auto-run.ts'
 import { ERRAND_SCREEN_BACKOFF_MS, type ErrandId } from '../../src/domains/checkpoints/errand.ts'
 import type { ErrandScreenAnswer } from '@software-factory/contract'
-import type { ErrandScreenPort, Notifier, JudgePort } from '../../src/domains/checkpoints/ports.ts'
+import type { Notifier } from '../../src/domains/checkpoints/ports.ts'
+import { fakeAgw, type Handler } from '../support/agw.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
 import { type FixedClock, fixedClock } from '../../src/kernel/clock.ts'
 import { type IssueId, sequentialIds } from '../../src/kernel/ids.ts'
@@ -78,21 +79,22 @@ let sendResult: () => Result<void>
 /** what happens while a Judge call is out: the world moves on under it */
 let duringJudge: (() => Promise<unknown>) | null
 
-const judge: JudgePort = {
-  judge: async (input, key) => {
-    judgeCalls.push({ question: input.question, precedents: input.precedents.length, given: input.precedents, key })
-    await duringJudge?.()
-    return judgeAnswer()
-  },
+const judge: Handler<'judge'> = async (input, key) => {
+  judgeCalls.push({
+    question: input.question,
+    precedents: input.precedents.length,
+    given: input.precedents as never,
+    key,
+  })
+  await duringJudge?.()
+  return judgeAnswer()
 }
-const errandScreen: ErrandScreenPort = {
-  screen: (request, key) => {
-    // The port is never called inside a transaction.
-    expect(deps.uow.inTransaction()).toBe(false)
-    screenCalls.push({ errand: request.errand.id, key })
-    screenDetails.push(request.errand.detail)
-    return Promise.resolve(screenAnswer())
-  },
+let errandScreen: Handler<'errandScreen'> = (request, key) => {
+  // The port is never called inside a transaction.
+  expect(deps.uow.inTransaction()).toBe(false)
+  screenCalls.push({ errand: request.errand.id, key })
+  screenDetails.push(request.errand.detail)
+  return Promise.resolve(screenAnswer())
 }
 const notifier: Notifier = {
   send: (page) => {
@@ -127,9 +129,11 @@ beforeEach(async () => {
     blobs: fileBlobStore(blobDir),
     consoleUrl: 'https://console.example.test',
     checks: { run: async () => ({ exit: 0, timedOut: false, output: '' }) },
-    judge,
-    errandScreen,
-    specScreen: { screen: () => Promise.resolve(ok({ verdict: 'pass', reason: "the owner's to read" })) },
+    agw: fakeAgw({
+      judge,
+      errandScreen: (request, key) => errandScreen(request, key),
+      specScreen: () => Promise.resolve(ok({ verdict: 'pass', reason: "the owner's to read" })),
+    }),
     recheckAfterMs: 0,
     notifier,
   }
@@ -1893,15 +1897,15 @@ describe('errands', () => {
     const raised = await raise(issueId)
     screenAnswer = () => ok({ verdict: 'turn_away', reason: 'late' })
     // The owner finishes it while the call is out.
-    const screen = errandScreen.screen.bind(errandScreen)
-    errandScreen.screen = async (request, callKey) => {
+    const screen = errandScreen
+    errandScreen = async (request, callKey) => {
       value(await finishErrand(deps, { errandId: raised.errand.id, note: 'done by hand' }))
       return screen(request, callKey)
     }
     try {
       expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'dropped' }])
     } finally {
-      errandScreen.screen = screen
+      errandScreen = screen
     }
     expect(value(await raiseErrandRead(raised.errand.id))).toMatchObject({
       doneNote: 'done by hand',

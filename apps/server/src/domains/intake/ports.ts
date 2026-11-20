@@ -1,6 +1,5 @@
-import type { ScreenAnswer, ScreenRequest, Signal } from '@software-factory/contract'
+import type { Signal } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
-import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { ClosedIssue, HealRule, OpenIssue, Received, RepoSignals, Triaged } from './model.ts'
 import type { Topology } from './rules.ts'
@@ -215,11 +214,6 @@ export interface ProjectSignals {
 /** Which host each repo's alerts sit on: the projects' `signals:` and `config/infra.json`'s hosts. */
 export interface IntakeTopology {
   load(): Promise<Result<Topology>>
-}
-
-/** `factory-screen`: the Judge's look at one held signal. */
-export interface ScreenWorkflow {
-  screen(request: ScreenRequest, key: Key): Promise<Result<ScreenAnswer, PortError>>
 }
 
 /** The Issues of a repo that are not closed, to match a person's signal against. Reads another domain's tables. */

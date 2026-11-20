@@ -1,7 +1,8 @@
-import type { AgwCall, AgwPort } from '../../kernel/agw.ts'
+import type { AgwPort } from '../../kernel/agw.ts'
 import { AGW_IDLE_MS } from '../../kernel/agw.ts'
 import { killGroup } from '../process.ts'
-import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
+import { err, ok, portError } from '../../kernel/result.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 
 export interface AgwOptions {
   bin: string
@@ -102,54 +103,72 @@ function runIdOf(finished: Finished): string | null {
 }
 
 /**
- * `agw <workflow> --format json --idempotency-key <key>` with the input on stdin. Exit 10 is pending: the printed resume
- * command (`agw run wait <runId>`) runs until the run ends. The envelope's `output` is checked against the call's schema.
- * Every failure is a `PortError`; a process is killed only when it goes silent (`AGW_IDLE_MS`), never for taking long.
+ * What a workflow answers when its model failed: a valid neutral answer whose reason starts "<what> unavailable:" (judge,
+ * triage, steward, queue, hygiene). Until agw lets those runs fail, the factory reads that reason itself: such an answer is
+ * not an answer.
+ */
+const UNAVAILABLE = /^\s*(judge|triage|steward|queue|hygiene) unavailable\b/i
+
+/** True when the answer is the neutral one a failed model run leaves, not a judgment. */
+export const isUnavailable = (answer: { reason: string }): boolean => UNAVAILABLE.test(answer.reason)
+
+/**
+ * `agw <workflow> --format json --idempotency-key <key>` with the request on stdin, the workflow named by its entry in
+ * `WORKFLOWS`. Exit 10 is pending: the printed resume command (`agw run wait <runId>`) runs until the run ends. The
+ * envelope's `output` is checked against the entry's answer schema; for an entry that `failsWhenUnavailable` an answer
+ * that says so is a failed call (`gone`), which the callers already retry. Every failure is a `PortError`; a process is
+ * killed only when it goes silent (`AGW_IDLE_MS`), never for taking long.
  */
 export function agwPort(options: AgwOptions): AgwPort {
   const idleMs = options.idleMs ?? AGW_IDLE_MS
   return {
-    async run<T>(call: AgwCall<T>): Promise<Result<T, PortError>> {
+    async run(name, request, key) {
+      const entry = WORKFLOWS[name]
+      const workflow = entry.agw
       // agw takes 1 to 64 of [A-Za-z0-9_.-] as a purpose (a colon is refused with a 400)
-      const purpose = `software-factory.${call.workflow.replaceAll(' ', '.')}`
+      const purpose = `software-factory.${workflow}`
       try {
         let finished = await exec(
           options.bin,
-          [...call.workflow.split(' '), '--format', 'json', '--idempotency-key', call.key],
-          JSON.stringify(call.input),
+          [workflow, '--format', 'json', '--idempotency-key', key],
+          JSON.stringify(request),
           idleMs,
           purpose,
         )
         while (finished.code === 10 && !finished.hung) {
           const runId = runIdOf(finished)
-          if (!runId)
-            return err(portError('unreadable', `agw ${call.workflow} is pending and named no run to wait for`))
+          if (!runId) return err(portError('unreadable', `agw ${workflow} is pending and named no run to wait for`))
           finished = await exec(options.bin, ['run', 'wait', runId, '--format', 'json'], null, idleMs, purpose)
         }
         if (finished.hung) {
-          return err(portError('timeout', `agw ${call.workflow} went silent for ${Math.round(idleMs / 1000)} s`))
+          return err(portError('timeout', `agw ${workflow} went silent for ${Math.round(idleMs / 1000)} s`))
         }
         if (finished.code !== 0) {
           const said = finished.err.trim() || finished.out.trim()
-          return err(portError('gone', `agw ${call.workflow} exited ${finished.code}: ${said.slice(0, 300)}`))
+          return err(portError('gone', `agw ${workflow} exited ${finished.code}: ${said.slice(0, 300)}`))
         }
         const envelope = parseJson(finished.out)
-        if (!isRecord(envelope))
-          return err(portError('unreadable', `agw ${call.workflow} did not print a run envelope`))
+        if (!isRecord(envelope)) return err(portError('unreadable', `agw ${workflow} did not print a run envelope`))
         if (envelope.status !== 'done') {
-          return err(portError('gone', `agw ${call.workflow} run ${String(envelope.status)}`))
+          return err(portError('gone', `agw ${workflow} run ${String(envelope.status)}`))
         }
-        const parsed = call.output.safeParse(envelope.output)
+        const parsed = entry.answer.safeParse(envelope.output)
         if (!parsed.success) {
           const first = parsed.error.issues[0]
           return err(
             portError(
               'unreadable',
-              `agw ${call.workflow} output does not parse: ${first ? `${first.path.join('.') || 'output'} ${first.message}` : 'unknown'}`,
+              `agw ${workflow} output does not parse: ${first ? `${first.path.join('.') || 'output'} ${first.message}` : 'unknown'}`,
             ),
           )
         }
-        return ok(parsed.data)
+        if (entry.failsWhenUnavailable) {
+          const reason = (parsed.data as { reason?: unknown }).reason
+          if (typeof reason === 'string' && isUnavailable({ reason })) {
+            return err(portError('gone', `agw ${workflow} could not answer: ${reason.slice(0, 200)}`))
+          }
+        }
+        return ok(parsed.data as never)
       } catch (error) {
         return err(portError('gone', `agw could not run: ${error instanceof Error ? error.message : String(error)}`))
       }

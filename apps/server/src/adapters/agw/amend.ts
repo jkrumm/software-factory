@@ -1,11 +1,11 @@
-import { TriageAnswer, type TriageCandidate, type TriageSettled } from '@software-factory/contract'
+import type { TriageCandidate, TriageSettled } from '@software-factory/contract'
 import type { ClosedIssue, OpenIssue } from '../../domains/intake/model.ts'
 import type { TriageWorkflow } from '../../domains/intake/ports.ts'
 import type { AgwPort } from '../../kernel/agw.ts'
 import type { IssueId } from '../../kernel/ids.ts'
-import { key } from '../../kernel/keys.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 
 const digest = (text: string): string => new Bun.CryptoHasher('sha256').update(text).digest('hex').slice(0, 16)
 
@@ -30,9 +30,9 @@ export function agwAmend(agw: AgwPort): TriageWorkflow {
         reason: c.reason === null ? null : scrub(c.reason).slice(0, 300),
       }))
       const text = scrub(signal.text).slice(0, 8_000)
-      const answered = await agw.run({
-        workflow: 'factory-triage',
-        input: {
+      const answered = await agw.run(
+        'amend',
+        {
           mode: 'amend',
           repo: signal.repo ?? 'unknown',
           candidates: shown,
@@ -45,15 +45,12 @@ export function agwAmend(agw: AgwPort): TriageWorkflow {
             origin: signal.origin,
           },
         },
-        key: key(
-          'triage',
-          'amend',
+        WORKFLOWS.amend.key(
           signal.source,
           signal.fingerprint,
           digest(`${signal.title}\n${text}\n${closed.map((c) => c.id).join(',')}`),
         ),
-        output: TriageAnswer,
-      })
+      )
       if (!answered.ok) return answered
       const { amend, after, reason } = answered.value
       const settledId = answered.value.settled ?? null

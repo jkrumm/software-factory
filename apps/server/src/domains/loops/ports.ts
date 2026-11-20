@@ -1,19 +1,5 @@
-import type {
-  HygieneAnswer,
-  HygieneFinding,
-  HygieneRequest,
-  LoopName,
-  QueueAnswer,
-  QueueRequest,
-  SpecPrecedent,
-  StewardAnswer,
-  StewardStall,
-  TriageAnswer,
-  TriageCandidate,
-  TriageRequest,
-} from '@software-factory/contract'
+import type { HygieneFinding, LoopName, SpecPrecedent, TriageCandidate } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
-import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { MainCheckoutLook } from './checkout.ts'
 import type { EdgeNeed } from '../../kernel/edge-need.ts'
@@ -425,26 +411,6 @@ export interface LoopReads {
 /** The main checkout of a repo, read now (called outside any transaction). `null`: not locatable, not ours to look at. */
 export interface MainCheckouts {
   look(repo: string): Promise<Result<MainCheckoutLook | null, PortError>>
-}
-
-/** `factory-steward`: what a stalled Issue needs when the rules do not say. */
-export interface StewardWorkflow {
-  ask(stall: StewardStall, key: Key): Promise<Result<StewardAnswer, PortError>>
-}
-
-/** `factory-triage` for an Issue that is settling: the Issues it must wait for. */
-export interface SettleWorkflow {
-  settle(request: Extract<TriageRequest, { mode: 'settle' }>, key: Key): Promise<Result<TriageAnswer, PortError>>
-}
-
-/** `factory-queue`: edges and an order for a repo's queued Issues. */
-export interface QueueWorkflow {
-  ask(request: QueueRequest, key: Key): Promise<Result<QueueAnswer, PortError>>
-}
-
-/** `factory-hygiene`: the documents a sweep picked, read against the code they describe in a checkout. */
-export interface HygieneWorkflow {
-  ask(request: HygieneRequest, key: Key): Promise<Result<HygieneAnswer, PortError>>
 }
 
 /** The fix commits of one project's default branch, read from git (called outside any transaction). */

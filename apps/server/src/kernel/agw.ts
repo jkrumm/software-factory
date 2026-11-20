@@ -1,23 +1,18 @@
-import type { ZodType } from 'zod'
 import type { Key } from './keys.ts'
 import type { PortError, Result } from './result.ts'
-
-/** One run of an agw workflow: the object piped on stdin, the idempotency key, and the schema its output must have. */
-export interface AgwCall<T> {
-  workflow: string
-  input: unknown
-  /** the same key is the same run: a replayed call finds the run it started */
-  key: Key
-  output: ZodType<T>
-}
+import type { WorkflowAnswer, WorkflowName, WorkflowRequest } from './workflows.ts'
 
 /**
  * The factory's one way to ask a judgment of agw (`docs/architecture.md` §Loops and agw). The factory never calls a model;
  * a workflow does. An agent run takes as long as it takes: there is no wall-clock ceiling, only an idle watchdog
  * (`AGW_IDLE_MS`). Never called inside a transaction.
  */
+/** What a call of `WORKFLOWS[name]` returns. */
+export type AgwResult<N extends WorkflowName> = Result<WorkflowAnswer<N>, PortError>
+
 export interface AgwPort {
-  run<T>(call: AgwCall<T>): Promise<Result<T, PortError>>
+  /** Runs the workflow of `WORKFLOWS[name]`; the same key is the same run, so a replayed call finds the run it started. */
+  run<N extends WorkflowName>(name: N, request: WorkflowRequest<N>, key: Key): Promise<AgwResult<N>>
 }
 
 /**

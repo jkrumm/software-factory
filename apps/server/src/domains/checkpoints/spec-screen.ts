@@ -7,8 +7,8 @@ import {
 } from '@software-factory/contract'
 import * as z from 'zod'
 import { scrub } from '../../kernel/scrub.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 import type { Format, Verdict } from './artifact.ts'
-import { JUDGE_BACKOFF_MS, JUDGE_MAX_TRIES } from './decision.ts'
 
 /**
  * The Spec screen (Issue 1096): a Spec revision reaches the owner only when it is his to read. The owner said on 2026-11-14
@@ -18,8 +18,8 @@ import { JUDGE_BACKOFF_MS, JUDGE_MAX_TRIES } from './decision.ts'
  */
 
 /** Failed calls before the Spec reaches the owner unscreened; the wait between them. */
-export const SPEC_SCREEN_MAX_TRIES = JUDGE_MAX_TRIES
-export const SPEC_SCREEN_BACKOFF_MS = JUDGE_BACKOFF_MS
+export const SPEC_SCREEN_MAX_TRIES = WORKFLOWS.specScreen.retry.tries
+export const SPEC_SCREEN_BACKOFF_MS = WORKFLOWS.specScreen.retry.backoffMs
 
 const REASON_MAX = 300
 

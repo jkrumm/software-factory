@@ -1,14 +1,14 @@
 import { SPEC_SCREEN_PRECEDENTS, type TriageAnswer } from '@software-factory/contract'
 import type { CallPolicy } from '../../domains/loops/calls.ts'
 import { cycleThrough } from '../../domains/planning/chain.ts'
-import type { LoopReads, LoopStore, SettleWorkflow, SettlingRow } from '../../domains/loops/ports.ts'
+import type { LoopReads, LoopStore, SettlingRow } from '../../domains/loops/ports.ts'
 import { EDGE_NEED_DAYS, stopReason, stopsEdges } from '../../kernel/edge-need.ts'
 import { checkSettle, MAX_CANDIDATES, type Refinement, settleRequest, settleRule } from '../../domains/loops/settle.ts'
-import { MAX_ROUNDS } from '../../domains/loops/stall.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
 import { AGW_CALL_LEASE_MS } from '../../kernel/agw.ts'
 import type { IssueId } from '../../kernel/ids.ts'
-import { key } from '../../kernel/keys.ts'
+import type { AgwPort } from '../../kernel/agw.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import type { WriteDeps } from '../issues.ts'
@@ -21,7 +21,7 @@ export type TriageStores = { work: WorkStore; loops: LoopStore; loopReads: LoopR
 
 export interface TriageDeps extends WriteDeps {
   uow: UnitOfWork<TriageStores>
-  workflow: SettleWorkflow
+  agw: AgwPort
   /** planning's use cases: the edges, the cycle check and the `settled` event are one transaction there */
   planning: PlanningDeps
   retryMs: number
@@ -53,7 +53,7 @@ const PASS_LIMIT = 20
 type Out<T> = Promise<Result<T, PortError>>
 
 const policyOf = (deps: TriageDeps): CallPolicy => ({
-  maxRounds: MAX_ROUNDS,
+  maxRounds: WORKFLOWS.settle.retry.tries,
   retryMs: deps.retryMs,
   leaseMs: AGW_CALL_LEASE_MS,
 })
@@ -153,7 +153,7 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
         subject: 'settle',
         now,
         policy,
-        keyFor: (round) => key('triage', 'settle', row.issue, round),
+        keyFor: (round) => WORKFLOWS.settle.key(row.issue, round),
       }),
     ),
   )
@@ -179,7 +179,8 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
   const precedents = await deps.uow.run(async ({ loopReads }) =>
     ok(await loopReads.specPrecedents(SPEC_SCREEN_PRECEDENTS)),
   )
-  const answered = await deps.workflow.settle(
+  const answered = await deps.agw.run(
+    'settle',
     settleRequest(row, shown, scrub, precedents.ok ? precedents.value : []),
     plan.key,
   )

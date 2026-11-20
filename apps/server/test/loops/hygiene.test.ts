@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { MAX_SIGNALS_PER_PASS } from '../../src/domains/loops/budget.ts'
+import { fakeAgw } from '../support/agw.ts'
 import { loadLoopSettings } from '../../src/app/loops/settings.ts'
 import type { HygieneAnswer, HygieneRequest } from '@software-factory/contract'
 import {
@@ -317,7 +318,7 @@ function world(
     clock: { now: () => at },
     ids: sequentialIds(),
     checker,
-    workflow: { ask: async () => err(portError('gone', 'not asked')) },
+    agw: fakeAgw({ hygiene: async () => err(portError('gone', 'not asked')) }),
     file: async (body) => {
       if (!extra.findings) return err({ kind: 'refused' } as never)
       filedBodies.push(body.title)

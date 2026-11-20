@@ -18,6 +18,7 @@ import { readIssues } from '../../src/read/planning.ts'
 import { lightRule } from '../../src/domains/leads/light.ts'
 import { readLeadSeats, type SeatTable } from '../../src/read/seats.ts'
 import { startWorld, value, type World } from '../planning/support.ts'
+import { fakeAgw } from '../support/agw.ts'
 
 /**
  * NL51: an Issue whose filer stated its edges (`--alone`, `--after`, a plan row) is still asked for its size, so the light
@@ -63,12 +64,12 @@ const triageDeps = (): TriageDeps => {
     ids: world.deps.ids,
     uow: stores,
     planning: { uow: stores, clock: world.deps.clock, ids: world.deps.ids },
-    workflow: {
+    agw: fakeAgw({
       settle: async (request) => {
         requests.push(request)
         return ok(answer(request))
       },
-    },
+    }),
     retryMs: 0,
     changed: () => {},
   }

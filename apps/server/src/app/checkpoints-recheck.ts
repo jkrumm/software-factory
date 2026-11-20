@@ -19,7 +19,8 @@ import {
 } from '../domains/checkpoints/recheck.ts'
 import { type AppliedRecord, replay } from '../domains/work/machine.ts'
 import type { Issue } from '../domains/work/issue.ts'
-import { key } from '../kernel/keys.ts'
+import type { AgwResult } from '../kernel/agw.ts'
+import { WORKFLOWS } from '../kernel/workflows.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import {
   answerIn,
@@ -211,7 +212,7 @@ async function recordDecision(
   deps: SettleDeps,
   candidate: RecheckCandidate,
   looked: Extract<Looked, { action: 'decide' }>,
-  verdict: Awaited<ReturnType<SettleDeps['judge']['judge']>>,
+  verdict: AgwResult<'judge'>,
 ): Step<Recorded> {
   return deps.uow.run<Recorded, CheckpointError>(async (stores) => {
     const { decision, seen } = looked
@@ -258,7 +259,7 @@ async function recordErrand(
   deps: SettleDeps,
   candidate: RecheckCandidate,
   looked: Extract<Looked, { action: 'screen' }>,
-  answer: Awaited<ReturnType<SettleDeps['errandScreen']['screen']>>,
+  answer: AgwResult<'errandScreen'>,
 ): Step<Recorded> {
   return deps.uow.run<Recorded, CheckpointError>(async (stores) => {
     const { errand, seen } = looked
@@ -305,13 +306,14 @@ async function recheckOne(deps: SettleDeps, candidate: RecheckCandidate): Step<R
   if (looked.action === 'done') return ok(rechecked(looked.outcome))
 
   if (looked.action === 'decide') {
-    const verdict = await deps.judge.judge(looked.input, key('factory-ask', 'recheck', candidate.id, looked.seen))
+    const verdict = await deps.agw.run('judge', looked.input, WORKFLOWS.judge.key('recheck', candidate.id, looked.seen))
     const done = await recordDecision(deps, candidate, looked, verdict)
     return done.ok ? ok(rechecked(done.value)) : done
   }
-  const answer = await deps.errandScreen.screen(
+  const answer = await deps.agw.run(
+    'errandScreen',
     looked.request,
-    key('factory-errand', 'recheck', candidate.id, looked.seen),
+    WORKFLOWS.errandScreen.key('recheck', candidate.id, looked.seen),
   )
   const done = await recordErrand(deps, candidate, looked, answer)
   return done.ok ? ok(rechecked(done.value)) : done

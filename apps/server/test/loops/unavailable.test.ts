@@ -1,23 +1,41 @@
 import { expect, test } from 'bun:test'
-import * as z from 'zod'
-import { agwHygiene } from '../../src/adapters/agw/hygiene.ts'
-import { agwJudge } from '../../src/adapters/agw/judge.ts'
-import { agwQueue } from '../../src/adapters/agw/queue.ts'
-import { agwSettle, agwSteward } from '../../src/adapters/agw/steward.ts'
-import { failingOnUnavailable, isUnavailable } from '../../src/adapters/agw/unavailable.ts'
-import type { AgwCall, AgwPort } from '../../src/kernel/agw.ts'
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { afterAll, beforeAll } from 'bun:test'
+import { agwPort, isUnavailable } from '../../src/adapters/agw/port.ts'
 import { key } from '../../src/kernel/keys.ts'
-import { err, ok, portError } from '../../src/kernel/result.ts'
+import { WORKFLOWS, type WorkflowName } from '../../src/kernel/workflows.ts'
+import { readFile } from 'node:fs/promises'
 
 /** The five fail-closed workflows: an answer that says it is unavailable is a failed call; a real answer passes through. */
-const Output = z.object({ reason: z.string() })
-const call: AgwCall<{ reason: string }> = {
-  workflow: 'factory-queue',
-  input: {},
-  key: key('test', 'one'),
-  output: Output,
+const fixture = JSON.parse(
+  await readFile(
+    join(import.meta.dir, '..', '..', '..', '..', 'packages', 'contract', 'fixtures', 'loops.json'),
+    'utf8',
+  ),
+)
+const answers: Partial<Record<WorkflowName, { reason: string }>> = {
+  judge: fixture.judge.output,
+  steward: fixture.steward.output,
+  settle: fixture.triage.settleOutput,
+  amend: fixture.triage.amendOutput,
+  queue: fixture.queue.output,
+  hygiene: fixture.hygiene.output,
 }
-const answering = (reason: string): AgwPort => ({ run: async () => ok({ reason }) as never })
+
+let dir: string
+beforeAll(async () => {
+  dir = await mkdtemp('/tmp/factory-agw-unavailable-')
+})
+afterAll(() => rm(dir, { recursive: true, force: true }))
+
+/** A stand-in `agw` that prints a finished run with this output. */
+async function binAnswering(name: string, output: unknown): Promise<string> {
+  const path = join(dir, name)
+  await writeFile(path, `#!/bin/sh\ncat >/dev/null; echo '${JSON.stringify({ runId: 'r', status: 'done', output })}'\n`)
+  await chmod(path, 0o755)
+  return path
+}
 
 test('the reasons the five workflows give when their model failed are unavailable; a judgment is not', () => {
   for (const reason of [
@@ -37,38 +55,29 @@ test('the reasons the five workflows give when their model failed are unavailabl
     expect(isUnavailable({ reason })).toBe(false)
 })
 
-test('an unavailable answer is a failed call (gone), carrying the reason', async () => {
-  const result = await failingOnUnavailable(answering('queue unavailable: timeout')).run(call)
-  expect(result).toMatchObject({ ok: false, error: { kind: 'gone' } })
-  if (!result.ok) expect(result.error.detail).toContain('queue unavailable: timeout')
+test('the table marks the Judge, steward, settle, queue and hygiene as failing on an unavailable answer', () => {
+  const failing = (Object.keys(WORKFLOWS) as WorkflowName[]).filter((name) => WORKFLOWS[name].failsWhenUnavailable)
+  expect(failing).toEqual(['judge', 'steward', 'settle', 'queue', 'hygiene'])
 })
 
-test('an answer with a reason of its own, and a failure of the run, pass through as they are', async () => {
-  expect(await failingOnUnavailable(answering('the same files')).run(call)).toEqual({
+test('an unavailable answer is a failed call (gone) for each of them, carrying the reason; amend takes it as an answer', async () => {
+  for (const name of ['judge', 'steward', 'settle', 'queue', 'hygiene', 'amend'] as const) {
+    const reason = `${name === 'judge' ? 'judge' : name === 'settle' || name === 'amend' ? 'triage' : name} unavailable: timeout`
+    const bin = await binAnswering(name, { ...answers[name], reason })
+    const result = await agwPort({ bin }).run(name, {} as never, key('test', name))
+    if (name === 'amend') {
+      expect(result).toMatchObject({ ok: true, value: { reason } })
+      continue
+    }
+    expect(result).toMatchObject({ ok: false, error: { kind: 'gone' } })
+    if (!result.ok) expect(result.error.detail).toContain(reason)
+  }
+})
+
+test('an answer with a reason of its own passes through as it is', async () => {
+  const bin = await binAnswering('real', { ...answers.queue, reason: 'the same files' })
+  expect(await agwPort({ bin }).run('queue', {} as never, key('test', 'real'))).toMatchObject({
     ok: true,
     value: { reason: 'the same files' },
   })
-  const failed = err(portError('timeout', 'silent'))
-  expect(await failingOnUnavailable({ run: async () => failed }).run(call)).toEqual(failed)
-})
-
-test('every adapter of the five reads the answer: the Judge, steward, settle, queue and hygiene fail on it', async () => {
-  const seen: string[] = []
-  const agw: AgwPort = {
-    run: async (c) => {
-      seen.push(c.workflow)
-      const what = c.workflow === 'factory-ask' ? 'judge' : c.workflow.replace('factory-', '')
-      return ok({ reason: `${what} unavailable: timeout` }) as never
-    },
-  }
-  const k = key('test', 'adapters')
-  const results = [
-    await agwJudge(agw).judge({} as never, k),
-    await agwSteward(agw).ask({} as never, k),
-    await agwSettle(agw).settle({} as never, k),
-    await agwQueue(agw).ask({} as never, k),
-    await agwHygiene(agw).ask({} as never, k),
-  ]
-  expect(seen).toEqual(['factory-ask', 'factory-steward', 'factory-triage', 'factory-queue', 'factory-hygiene'])
-  expect(results.map((r) => r.ok)).toEqual([false, false, false, false, false])
 })

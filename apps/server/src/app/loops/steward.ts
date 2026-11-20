@@ -5,14 +5,7 @@ import { readDecisionForm } from '../../domains/checkpoints/decision.ts'
 import type { CallPolicy } from '../../domains/loops/calls.ts'
 import { checkoutOwner, judgeMainCheckout, type MainCheckoutLine } from '../../domains/loops/checkout.ts'
 import { type SlotRow, slotLiveIn } from '../../domains/capacity/slots.ts'
-import type {
-  CiLive,
-  ClaimHolder,
-  LoopReads,
-  LoopStore,
-  MainCheckouts,
-  StewardWorkflow,
-} from '../../domains/loops/ports.ts'
+import type { CiLive, ClaimHolder, LoopReads, LoopStore, MainCheckouts } from '../../domains/loops/ports.ts'
 import {
   checkAnswer,
   type Checked,
@@ -48,6 +41,8 @@ import { replay } from '../../domains/work/machine.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 import { key, type Key } from '../../kernel/keys.ts'
+import type { AgwPort } from '../../kernel/agw.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { AGW_CALL_LEASE_MS } from '../../kernel/agw.ts'
 import { askDecision, type CheckpointDeps } from '../checkpoints.ts'
@@ -61,7 +56,7 @@ export type StewardStores = { work: WorkStore; loops: LoopStore; loopReads: Loop
 
 export interface StewardDeps extends WriteDeps {
   uow: UnitOfWork<StewardStores>
-  workflow: StewardWorkflow
+  agw: AgwPort
   /** capacity's side of the leads' ports: the account an attempt runs on, and when its window opens again */
   seats: Seats
   windows: Windows
@@ -374,8 +369,8 @@ async function ask(deps: StewardDeps, facts: StallFacts): Out<Asking> {
         policy,
         keyFor: (round) =>
           facts.episode
-            ? key('steward', facts.issue, facts.since, facts.episode, round)
-            : key('steward', facts.issue, facts.since, round),
+            ? WORKFLOWS.steward.key(facts.issue, facts.since, facts.episode, round)
+            : WORKFLOWS.steward.key(facts.issue, facts.since, round),
       }),
     ),
   )
@@ -397,7 +392,7 @@ async function ask(deps: StewardDeps, facts: StallFacts): Out<Asking> {
       break
   }
 
-  const answered = await deps.workflow.ask(stallRequest(facts, now, scrub), plan.key)
+  const answered = await deps.agw.run('steward', stallRequest(facts, now, scrub), plan.key)
   const verdict = answered.ok ? judgeAnswer(facts, answered.value) : null
   const recorded = await deps.uow.run(async ({ loops }) => {
     const at = deps.clock.now()

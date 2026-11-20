@@ -3,8 +3,9 @@ import { SPEC_SCREEN_PRECEDENTS, SpecPrecedent } from './checkpoints.ts'
 
 /**
  * The shapes the factory sends the agw workflows and parses back, and the routes that show the loops. The workflow
- * side (`agent-workflows`, `packages/capabilities`) holds its own schemas of the same shapes; `fixtures/loops.json` is the
- * one set of examples both repos parse (`apps/server/test/loops/wire.test.ts` here, the host tests there).
+ * side (`agent-workflows`, `packages/capabilities`) holds its own schemas of the same shapes; `fixtures/loops.json` holds one
+ * example request and answer per entry of the factory's `WORKFLOWS` table (`apps/server/test/loops/wire.test.ts` parses them
+ * and the copy in agent-workflows, `packages/host/test/fixtures/software-factory-loops.json`, when it is checked out).
  */
 
 const IssueId = z.string().regex(/^issue_[1-9][0-9]*$/, 'an Issue id is issue_<n>')
@@ -110,35 +111,36 @@ const SettledCandidate = z.object({
 })
 export type TriageSettled = z.infer<typeof SettledCandidate>
 
-export const TriageRequest = z.discriminatedUnion('mode', [
-  z.object({
-    mode: z.literal('amend'),
-    repo: z.string().min(1),
-    candidates: z.array(Candidate).max(40),
-    settled: z.array(SettledCandidate).max(20).default([]),
-    signal: z.object({
-      title: z.string().min(1).max(500),
-      text: z.string().max(8_000),
-      source: z.string().min(1).max(100),
-      kind: z.enum(['alert', 'request', 'feedback', 'remark']),
-      origin: z.string().min(1).max(40),
-    }),
+export const TriageAmendRequest = z.object({
+  mode: z.literal('amend'),
+  repo: z.string().min(1),
+  candidates: z.array(Candidate).max(40),
+  settled: z.array(SettledCandidate).max(20).default([]),
+  signal: z.object({
+    title: z.string().min(1).max(500),
+    text: z.string().max(8_000),
+    source: z.string().min(1).max(100),
+    kind: z.enum(['alert', 'request', 'feedback', 'remark']),
+    origin: z.string().min(1).max(40),
   }),
-  z.object({
-    mode: z.literal('settle'),
-    repo: z.string().min(1),
-    candidates: z.array(Candidate).max(40),
-    issue: z.object({
-      id: IssueId,
-      title: z.string().min(1).max(500),
-      text: z.string().max(8_000),
-      kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']),
-      origin: z.string().min(1).max(40),
-    }),
-    /** the owner's newest needed-me marks on Specs (data): what made a Spec owed that did not need him, and what did */
-    precedents: z.array(SpecPrecedent).max(SPEC_SCREEN_PRECEDENTS).default([]),
+})
+
+export const TriageSettleRequest = z.object({
+  mode: z.literal('settle'),
+  repo: z.string().min(1),
+  candidates: z.array(Candidate).max(40),
+  issue: z.object({
+    id: IssueId,
+    title: z.string().min(1).max(500),
+    text: z.string().max(8_000),
+    kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']),
+    origin: z.string().min(1).max(40),
   }),
-])
+  /** the owner's newest needed-me marks on Specs (data): what made a Spec owed that did not need him, and what did */
+  precedents: z.array(SpecPrecedent).max(SPEC_SCREEN_PRECEDENTS).default([]),
+})
+
+export const TriageRequest = z.discriminatedUnion('mode', [TriageAmendRequest, TriageSettleRequest])
 export type TriageRequest = z.infer<typeof TriageRequest>
 
 export const TriageAnswer = z.object({

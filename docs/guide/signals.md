@@ -94,19 +94,6 @@ The rules decide first and in this order:
 
 Only when the rules cannot say does the factory call a workflow. `agwAmend` hands `factory-triage` the signal, the open Issues of the repo and the ones closed in the last day, and takes an Issue id back. The adapter refuses an id it did not show. The call's key is built from the source, the fingerprint and a digest of the text, so a replayed pass asks nothing twice.
 
-<!-- snippet: apps/server/src/adapters/agw/amend.ts key -->
-```ts
-        key: key(
-          'triage',
-          'amend',
-          signal.source,
-          signal.fingerprint,
-          digest(`${signal.title}\n${text}\n${closed.map((c) => c.id).join(',')}`),
-        ),
-        output: TriageAnswer,
-      })
-```
-
 An unanswered workflow files a new Issue. A duplicate costs a note; a lost request costs the work.
 
 ### Settling
@@ -129,7 +116,7 @@ The factory itself calls no model. Every judgment goes through an adapter in `ap
 
 - [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L826-L914): `receive`, the whole decision in order
 - [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L47-L62): `gate`, who may put work in which repo
-- [`adapters/agw/amend.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/agw/amend.ts#L17-L72): the `factory-triage` call in amend mode and its checks
+- [`adapters/agw/amend.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/agw/amend.ts#L17-L70): the `factory-triage` call in amend mode and its checks
 - [`domains/loops/settle.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/settle.ts#L39-L54): `settleRule`, deterministic first
 
 ## Incidents and amendments
@@ -186,7 +173,7 @@ A held signal is outside text the factory did not trust enough to turn into work
 <!-- snippet: apps/server/src/domains/intake/screen.ts MAX_SCREEN_ATTEMPTS -->
 ```ts
 /** A held signal whose screening failed this often is left unscreened for good: the owner sees it as it is. */
-export const MAX_SCREEN_ATTEMPTS = 5
+export const MAX_SCREEN_ATTEMPTS = WORKFLOWS.screen.retry.tries
 /** Signals the Judge looks at in one pass. */
 export const SCREEN_BATCH = 10
 ```
@@ -195,7 +182,7 @@ export const SCREEN_BATCH = 10
 
 - [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L700-L751): `hold` and `outsideIn`, the quarantine and its one exception
 - [`domains/intake/screen.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/screen.ts#L1-L61): the screen's limits, the backoff, the request the workflow sees
-- [`adapters/agw/screen.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/agw/screen.ts#L1-L10): `factory-screen` through the agw port
+- [`kernel/workflows.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/workflows.ts#L158-L167): the `screen` entry, `factory-screen` through the agw port
 
 ## The door
 
