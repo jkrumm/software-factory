@@ -408,7 +408,11 @@ class Lander {
     for (;;) {
       const stopped = this.stopped()
       if (stopped !== null) return stopped
-      const view = await pullRequest(this.sh, String(pr.number))
+      // the verb's first read already told a wrong account from a missing pull request; a later failure is a blip, so poll again
+      const view = await pullRequest(this.sh, String(pr.number)).catch((error: unknown) => {
+        if (error instanceof Refused) return null
+        throw error
+      })
       let state: string
       let anyCheck = false
       if (view?.headRefOid !== head) {
