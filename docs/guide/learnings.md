@@ -96,7 +96,7 @@ The lead's brief carries the two measurements, in these two lines (the source es
 
 - [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L28): the `find` rule, with its number.
 - [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L38): one check per worktree.
-- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/overload.ts#L43-L74): `load_over_ceiling`, the host's alarm.
+- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/overload.ts#L35-L67): `load_over_ceiling`, the host's alarm.
 
 ## Waits with no exit
 
@@ -184,7 +184,7 @@ The server never exited on SIGTERM, twice, in the first live window on 2026-11-0
 **Example files:**
 
 - [`shutdown.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/shutdown.ts#L27-L47): the steps and the deadline.
-- [`main.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/main.ts#L491-L500): the wiring, with `stop(true)` and why.
+- [`main.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/main.ts#L490-L498): the wiring, with `stop(true)` and why.
 
 **Read more:**
 

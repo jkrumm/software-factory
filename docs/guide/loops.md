@@ -135,7 +135,7 @@ A lead on sonnet at high effort shipped three commits at 03:04. Of three accepta
 **Example files:**
 
 - [`selfwatch-model.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/selfwatch-model.ts#L1-L16): the 12 kinds.
-- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/overload.ts#L76-L125): `slot_line`, with its two thresholds and its title.
+- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/overload.ts#L69-L118): `slot_line`, with its two thresholds and its title.
 
 ## Hygiene
 
