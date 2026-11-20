@@ -16,6 +16,7 @@ interface YieldIssue {
   filedAt: Date
   closedAt: Date | null
   outcome: 'done' | 'healed' | 'dropped' | 'cancelled' | null
+  verdict: 'moved' | 'flat' | 'worse' | 'unmeasured' | null
 }
 
 /** What a loop recorded over a window besides its Issues. `passes` is null for a loop that keeps no record of its passes. */
@@ -42,12 +43,15 @@ function yieldWindow(
     classes.set(i.class, row)
   }
   const count = (outcome: YieldIssue['outcome']): number => inWindow.filter((i) => i.outcome === outcome).length
+  const moved = inWindow.filter((i) => i.outcome === 'done' && i.verdict === 'moved')
   return {
     days: window.days,
     passes: record.passes,
     signals: record.signals,
     issues: inWindow.length,
     done: count('done'),
+    moved: moved.length,
+    movedShare: count('done') === 0 ? null : moved.length / count('done'),
     healed: count('healed'),
     dropped: count('dropped'),
     cancelled: count('cancelled'),
@@ -67,39 +71,29 @@ const Row = z.object({
   filed_at: z.date(),
   closed_at: z.date().nullable(),
   outcome: z.enum(['done', 'healed', 'dropped', 'cancelled']).nullable(),
+  verdict: z.enum(['moved', 'flat', 'worse', 'unmeasured']).nullable(),
 })
 
 const Count = z.object({ passes: z.coerce.number().int(), signals: z.coerce.number().int() })
 
 /**
- * What each signal-filing loop yielded over the last 7 and 30 days: the Issues its signals opened or reached (friction and
- * hygiene by `loop_findings`, selfwatch by the signal its row holds, throughput by its ledger), how they ended, how long
- * they took to close and which kinds of finding they were. No model; read-only SQL. A loop's Issue counts in the window it
+ * What each signal-filing loop yielded over the last 7 and 30 days: the Issues its signals opened or reached (all four loops
+ * by `loop_findings`), how they ended, whether the figure each was filed against moved once it closed, how long they took
+ * to close and which kinds of finding they were. No model; read-only SQL. A loop's Issue counts in the window it
  * was filed in, so a young Issue is `open` until it closes.
  */
 export async function readLoopYield(sql: SQL, options: { now: Date }): Promise<LoopYieldModel> {
   const { now } = options
   const widest = windowOf(now, Math.max(...YIELD_DAYS))
   const rows: unknown[] = await sql`
-    WITH found AS (
-      SELECT loop, class, issue_id FROM factory.loop_findings
-      UNION ALL
-      SELECT 'selfwatch', sw.kind, sw.issue_id FROM (
-        SELECT DISTINCT ON (s.issue_id) f.kind, s.issue_id
-        FROM factory.selfwatch_findings f JOIN factory.intake_signals s ON s.id = f.signal_id
-        WHERE s.issue_id IS NOT NULL
-        ORDER BY s.issue_id, f.first_seen_at) sw
-      UNION ALL
-      SELECT 'throughput', kpi, issue_id FROM factory.throughput_findings WHERE issue_id IS NOT NULL
-    )
-    SELECT found.loop, found.class, i.id AS issue, f.at AS filed_at, i.outcome,
+    SELECT lf.loop, lf.class, i.id AS issue, f.at AS filed_at, i.outcome, lf.verdict,
       (SELECT c.at FROM factory.issue_events c WHERE c.issue_id = i.id AND c.result = 'applied' AND c.to_state = 'closed'
         ORDER BY c.version DESC LIMIT 1) AS closed_at
-    FROM found
-    JOIN factory.issues i ON i.id = found.issue_id
+    FROM factory.loop_findings lf
+    JOIN factory.issues i ON i.id = lf.issue_id
     JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
     WHERE f.at >= ${widest.from} AND f.at < ${widest.to}
-    ORDER BY found.loop, found.class, i.id`
+    ORDER BY lf.loop, lf.class, i.id`
   const issues: YieldIssue[] = rows.map((raw) => {
     const row = Row.parse(raw)
     return {
@@ -109,6 +103,7 @@ export async function readLoopYield(sql: SQL, options: { now: Date }): Promise<L
       filedAt: row.filed_at,
       closedAt: row.closed_at,
       outcome: row.outcome,
+      verdict: row.verdict,
     }
   })
 
@@ -122,11 +117,8 @@ export async function readLoopYield(sql: SQL, options: { now: Date }): Promise<L
         : loop === 'hygiene'
           ? await sql`SELECT count(*) AS passes, coalesce(sum(jsonb_array_length(CASE WHEN jsonb_typeof(filed) = 'string' THEN (filed #>> '{}')::jsonb ELSE filed END)), 0) AS signals
               FROM factory.hygiene_passes WHERE at >= ${from} AND at < ${to}`
-          : loop === 'selfwatch'
-            ? await sql`SELECT 0 AS passes, count(*) AS signals
-                FROM factory.selfwatch_findings WHERE last_filed_at >= ${from} AND last_filed_at < ${to}`
-            : await sql`SELECT 0 AS passes, count(*) AS signals
-                FROM factory.throughput_findings WHERE filed_at >= ${from} AND filed_at < ${to}`
+          : await sql`SELECT 0 AS passes, count(*) AS signals
+              FROM factory.loop_findings WHERE loop = ${loop} AND filed_at >= ${from} AND filed_at < ${to}`
     const parsed = Count.parse(row)
     // selfwatch and throughput keep no row per pass
     return { passes: loop === 'friction' || loop === 'hygiene' ? parsed.passes : null, signals: parsed.signals }

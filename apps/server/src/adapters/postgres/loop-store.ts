@@ -6,7 +6,7 @@ import type { HygienePassRecord, LoopStore } from '../../domains/loops/ports.ts'
 import type { DigestAnswer } from '@software-factory/contract'
 import type { QueueAskRow } from '../../domains/loops/queue.ts'
 import { FINDING_KINDS } from '../../domains/loops/selfwatch-model.ts'
-import { THROUGHPUT_KPIS } from '../../domains/loops/throughput.ts'
+import { THROUGHPUT_KPIS, type FindingRow } from '../../domains/loops/throughput.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 
 const Row = z.object({
@@ -75,36 +75,53 @@ const AskRow = z.object({
 })
 
 const SelfwatchRowSchema = z.object({
-  subject_key: z.string(),
-  kind: z.enum(FINDING_KINDS),
+  issue_id: z.string(),
+  repo: z.string(),
+  key: z.string(),
+  class: z.enum(FINDING_KINDS),
+  figure: z.coerce.number().nullable(),
   first_seen_at: z.date(),
   last_seen_at: z.date(),
   evidence_hash: z.string(),
-  last_filed_at: z.date(),
+  filed_at: z.date(),
   signal_id: z.string().nullable(),
   cleared_at: z.date().nullable(),
 })
 
+/** A throughput finding as the ledger table holds it: the subject is the key after its kpi, the status is the verdict and the ship. */
 const ThroughputRowSchema = z.object({
-  id: z.string(),
-  project: z.string(),
-  kpi: z.enum(THROUGHPUT_KPIS),
-  subject: z.string(),
-  before: z.coerce.number(),
+  issue_id: z.string(),
+  repo: z.string(),
+  class: z.enum(THROUGHPUT_KPIS),
+  key: z.string(),
+  figure: z.coerce.number(),
   target: z.coerce.number(),
   direction: z.enum(['up', 'down']),
   unit: z.string(),
   cost_minutes: z.coerce.number(),
-  query: z.string(),
   signal_id: z.string().nullable(),
-  issue_id: z.string().nullable(),
   filed_at: z.date(),
   shipped_at: z.date().nullable(),
-  after: z.coerce.number().nullable(),
-  after_at: z.date().nullable(),
-  status: z.enum(['open', 'shipped', 'moved', 'flat', 'worse', 'dropped', 'unmeasured']),
+  measured: z.coerce.number().nullable(),
+  measured_at: z.date().nullable(),
+  verdict: z.enum(['moved', 'flat', 'worse', 'unmeasured']).nullable(),
   reopens: z.string().nullable(),
 })
+
+/** Open and shipped have no verdict yet; a dropped finding is an Issue closed without a ship, which no read of the figure follows. */
+function statusOf(row: { verdict: string | null; shipped_at: Date | null }): FindingRow['status'] {
+  if (row.verdict === null) return row.shipped_at === null ? 'open' : 'shipped'
+  if (row.verdict === 'unmeasured' && row.shipped_at === null) return 'dropped'
+  return row.verdict as FindingRow['status']
+}
+
+/** The verdict a ledger status stores; `open` and `shipped` have none. */
+const verdictOfStatus = (status: FindingRow['status'] | undefined): string | null =>
+  status === undefined || status === 'open' || status === 'shipped'
+    ? null
+    : status === 'dropped'
+      ? 'unmeasured'
+      : status
 
 const LatestDigestRow = z.object({ project: z.string(), at: z.date(), input_hash: z.string(), headline: z.string() })
 
@@ -528,9 +545,17 @@ export function postgresLoopStore(tx: SQL): LoopStore {
 
     async recordFinding(row) {
       await tx`
-        INSERT INTO factory.loop_findings (issue_id, loop, repo, class, key)
-        VALUES (${row.issue}, ${row.loop}, ${row.repo}, ${row.class}, ${row.key})
+        INSERT INTO factory.loop_findings (issue_id, loop, repo, class, key, filed_at, signal_id, figure)
+        VALUES (${row.issue}, ${row.loop}, ${row.repo}, ${row.class}, ${row.key}, ${row.filedAt}, ${row.signal}, ${row.figure})
         ON CONFLICT (issue_id) DO NOTHING`
+    },
+
+    async recordVerdicts(rows, at) {
+      for (const row of rows) {
+        await tx`
+          UPDATE factory.loop_findings SET verdict = ${row.verdict}, measured = ${row.measured}, measured_at = ${at}
+          WHERE issue_id = ${row.issue} AND verdict IS NULL`
+      }
     },
 
     async storedFixShas(repo) {
@@ -548,27 +573,27 @@ export function postgresLoopStore(tx: SQL): LoopStore {
     },
 
     async throughputFindings() {
-      const rows: unknown[] = await tx`SELECT * FROM factory.throughput_findings ORDER BY filed_at, id`
+      const rows: unknown[] = await tx`
+        SELECT * FROM factory.loop_findings WHERE loop = 'throughput' ORDER BY filed_at, issue_id`
       return rows.map((raw) => {
         const row = ThroughputRowSchema.parse(raw)
         return {
-          id: row.id,
-          project: row.project,
-          kpi: row.kpi,
-          subject: row.subject,
-          before: row.before,
+          id: row.issue_id,
+          project: row.repo,
+          kpi: row.class,
+          subject: row.key.slice(row.class.length + 1),
+          before: row.figure,
           target: row.target,
           direction: row.direction,
           unit: row.unit,
           costMinutes: row.cost_minutes,
-          query: row.query,
           signalId: row.signal_id,
           issueId: row.issue_id,
           filedAt: row.filed_at,
           shippedAt: row.shipped_at,
-          after: row.after,
-          afterAt: row.after_at,
-          status: row.status,
+          after: row.measured,
+          afterAt: row.measured_at,
+          status: statusOf(row),
           reopens: row.reopens,
         }
       })
@@ -576,33 +601,40 @@ export function postgresLoopStore(tx: SQL): LoopStore {
 
     async recordThroughputFinding(row) {
       await tx`
-        INSERT INTO factory.throughput_findings
-          (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, signal_id, issue_id, filed_at, status, reopens)
-          VALUES (${row.id}, ${row.project}, ${row.kpi}, ${row.subject}, ${row.before}, ${row.target}, ${row.direction}, ${row.unit}, ${row.costMinutes}, ${row.query}, ${row.signalId}, ${row.issueId}, ${row.filedAt}, ${row.status}, ${row.reopens})
-        ON CONFLICT (id) DO NOTHING`
+        INSERT INTO factory.loop_findings
+          (issue_id, loop, repo, class, key, filed_at, signal_id, figure, target, direction, unit, cost_minutes, reopens)
+        VALUES (${row.issueId}, 'throughput', ${row.project}, ${row.kpi}, ${`${row.kpi}:${row.subject}`}, ${row.filedAt}, ${row.signalId}, ${row.before}, ${row.target}, ${row.direction}, ${row.unit}, ${row.costMinutes}, ${row.reopens})
+        ON CONFLICT (issue_id) DO NOTHING`
     },
 
     async applyThroughputLedger(changes) {
       for (const { id, patch } of changes) {
         await tx`
-          UPDATE factory.throughput_findings SET
-            status = coalesce(${patch.status ?? null}, status), shipped_at = coalesce(${patch.shippedAt ?? null}, shipped_at),
-            after = coalesce(${patch.after ?? null}, after), after_at = coalesce(${patch.afterAt ?? null}, after_at)
-          WHERE id = ${id}`
+          UPDATE factory.loop_findings SET
+            verdict = coalesce(${verdictOfStatus(patch.status)}, verdict), shipped_at = coalesce(${patch.shippedAt ?? null}, shipped_at),
+            measured = coalesce(${patch.after ?? null}, measured), measured_at = coalesce(${patch.afterAt ?? null}, measured_at)
+          WHERE issue_id = ${id} AND loop = 'throughput'`
       }
     },
 
     async selfwatchRows() {
-      const rows: unknown[] = await tx`SELECT * FROM factory.selfwatch_findings ORDER BY subject_key`
+      // a subject's newest row is its memory; the Issues it filed before stay as the ledger of what each did
+      const rows: unknown[] = await tx`
+        SELECT DISTINCT ON (key) * FROM factory.loop_findings
+        WHERE loop = 'selfwatch' AND evidence_hash IS NOT NULL
+        ORDER BY key, filed_at DESC, issue_id DESC`
       return rows.map((raw) => {
         const row = SelfwatchRowSchema.parse(raw)
         return {
-          subjectKey: row.subject_key,
-          kind: row.kind,
+          issueId: row.issue_id,
+          repo: row.repo,
+          subjectKey: row.key,
+          kind: row.class,
+          figure: row.figure,
           firstSeenAt: row.first_seen_at,
           lastSeenAt: row.last_seen_at,
           evidenceHash: row.evidence_hash,
-          lastFiledAt: row.last_filed_at,
+          lastFiledAt: row.filed_at,
           signalId: row.signal_id,
           clearedAt: row.cleared_at,
         }
@@ -611,24 +643,39 @@ export function postgresLoopStore(tx: SQL): LoopStore {
 
     async applySelfwatch(change) {
       for (const row of change.filed) {
+        if (row.issueId === null) {
+          // intake took the signal as a repeat of an Issue closed lately: no Issue carries it, so the subject's own row learns it
+          await tx`
+            UPDATE factory.loop_findings SET
+              first_seen_at = ${row.firstSeenAt}, last_seen_at = ${row.lastSeenAt}, evidence_hash = ${row.evidenceHash},
+              filed_at = ${row.lastFiledAt}, cleared_at = NULL
+            WHERE issue_id = (
+              SELECT issue_id FROM factory.loop_findings WHERE loop = 'selfwatch' AND key = ${row.subjectKey}
+              ORDER BY filed_at DESC, issue_id DESC LIMIT 1)`
+          continue
+        }
         await tx`
-          INSERT INTO factory.selfwatch_findings
-            (subject_key, kind, first_seen_at, last_seen_at, evidence_hash, last_filed_at, signal_id, cleared_at)
-          VALUES (${row.subjectKey}, ${row.kind}, ${row.firstSeenAt}, ${row.lastSeenAt}, ${row.evidenceHash}, ${row.lastFiledAt}, ${row.signalId}, NULL)
-          ON CONFLICT (subject_key) DO UPDATE SET
+          INSERT INTO factory.loop_findings
+            (issue_id, loop, repo, class, key, filed_at, signal_id, figure, evidence_hash, first_seen_at, last_seen_at, cleared_at)
+          VALUES (${row.issueId}, 'selfwatch', ${row.repo}, ${row.kind}, ${row.subjectKey}, ${row.lastFiledAt}, ${row.signalId}, ${row.figure}, ${row.evidenceHash}, ${row.firstSeenAt}, ${row.lastSeenAt}, NULL)
+          ON CONFLICT (issue_id) DO UPDATE SET
             first_seen_at = EXCLUDED.first_seen_at, last_seen_at = EXCLUDED.last_seen_at,
-            evidence_hash = EXCLUDED.evidence_hash, last_filed_at = EXCLUDED.last_filed_at,
+            evidence_hash = EXCLUDED.evidence_hash, filed_at = EXCLUDED.filed_at,
             signal_id = EXCLUDED.signal_id, cleared_at = NULL`
+        // the subject's earlier Issue is no longer its memory
+        await tx`
+          UPDATE factory.loop_findings SET cleared_at = ${change.at}
+          WHERE loop = 'selfwatch' AND key = ${row.subjectKey} AND issue_id <> ${row.issueId} AND cleared_at IS NULL`
       }
       if (change.touched.length > 0) {
         await tx`
-          UPDATE factory.selfwatch_findings SET last_seen_at = ${change.at}
-          WHERE subject_key IN ${tx(change.touched)} AND cleared_at IS NULL`
+          UPDATE factory.loop_findings SET last_seen_at = ${change.at}
+          WHERE loop = 'selfwatch' AND key IN ${tx(change.touched)} AND cleared_at IS NULL`
       }
       if (change.cleared.length > 0) {
         await tx`
-          UPDATE factory.selfwatch_findings SET cleared_at = ${change.at}
-          WHERE subject_key IN ${tx(change.cleared)} AND cleared_at IS NULL`
+          UPDATE factory.loop_findings SET cleared_at = ${change.at}
+          WHERE loop = 'selfwatch' AND key IN ${tx(change.cleared)} AND cleared_at IS NULL`
       }
     },
   }

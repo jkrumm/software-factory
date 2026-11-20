@@ -5,6 +5,7 @@
  * the largest is the one worth a lead's time.
  */
 import { DEFAULT_TENANT_BUDGET_MIB } from '../../kernel/throughput-limits.ts'
+import { movedDown as movedBy } from './ledger.ts'
 import type { Finding } from './selfwatch-model.ts'
 import {
   BASELINE_DAYS,
@@ -358,7 +359,7 @@ export function figureOf(
   }
 }
 
-/** One finding as the ledger stores it (`migrations/1027_throughput_findings.sql`). */
+/** One finding as the ledger stores it (`loop_findings`, `migrations/1061_loop_ledger.sql`); `id` is its Issue. */
 export interface FindingRow {
   id: string
   project: string
@@ -369,9 +370,8 @@ export interface FindingRow {
   direction: 'up' | 'down'
   unit: string
   costMinutes: number
-  query: string
   signalId: string | null
-  issueId: string | null
+  issueId: string
   filedAt: Date
   shippedAt: Date | null
   after: number | null
@@ -382,9 +382,7 @@ export interface FindingRow {
 
 /** Better, flat or worse against `before`, down being better: a change of under `MOVED_SHARE` of `before` is flat. */
 export function movedDown(before: number, after: number): 'moved' | 'flat' | 'worse' {
-  const change = before === 0 ? (after === 0 ? 0 : 1) : (after - before) / Math.abs(before)
-  if (Math.abs(change) < MOVED_SHARE) return 'flat'
-  return change < 0 ? 'moved' : 'worse'
+  return movedBy(before, after, MOVED_SHARE)
 }
 
 /** An Issue as the ledger step sees it: how it ended and when it shipped. */

@@ -4,6 +4,7 @@ import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { createApp } from '../../src/api/app.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
+import { seedFinding } from '../seed-ledger.ts'
 import { readThroughput } from '../../src/read/throughput.ts'
 
 /**
@@ -119,13 +120,24 @@ async function seed() {
   await processRow(t('10:00'), 'kernel_task', 'system', null, null, 1500, null, 'top', null)
   await processRow(t('10:01'), 'kernel_task', 'system', null, null, 1400, 10, 'top', 120)
   await processRow(t('11:59', '11-06'), 'huge', 'other', null, null, 99_999, 99_999, 'large', null)
-  const finding = (id: string, project: string, kpi: string, before: number, status: string, filed: string) =>
-    sql`INSERT INTO factory.throughput_findings (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, filed_at, status)
-      VALUES (${id}, ${project}, ${kpi}, 'fast', ${before}, 2048, 'down', 'MiB', 90, 'factory read throughput', ${new Date(filed)}, ${status})`
-  await finding('finding_a', 'app', 'failed_run_minutes', 60, 'open', '2026-11-01T08:00:00Z')
-  await finding('finding_b', 'lib', 'step_peak_mib', 3000, 'moved', '2026-11-03T08:00:00Z')
-  await sql`UPDATE factory.throughput_findings SET issue_id = 'issue_9', shipped_at = '2026-11-04T08:00:00Z',
-    after = 1800, after_at = '2026-11-07T08:00:00Z' WHERE id = 'finding_b'`
+  const finding = (id: string, project: string, kpi: string, before: number, status: 'open' | 'moved', filed: string) =>
+    seedFinding(sql, {
+      id,
+      project,
+      kpi,
+      subject: 'fast',
+      before,
+      target: 2048,
+      unit: 'MiB',
+      costMinutes: 90,
+      filedAt: new Date(filed),
+      status,
+      ...(status === 'moved'
+        ? { shippedAt: new Date('2026-11-04T08:00:00Z'), after: 1800, afterAt: new Date('2026-11-07T08:00:00Z') }
+        : {}),
+    })
+  await finding('issue_8', 'app', 'failed_run_minutes', 60, 'open', '2026-11-01T08:00:00Z')
+  await finding('issue_9', 'lib', 'step_peak_mib', 3000, 'moved', '2026-11-03T08:00:00Z')
   for (let i = 0; i < 16; i++)
     await processRow(t('10:03'), `small${String(i).padStart(2, '0')}`, 'other', null, null, 10 + i, 1, 'top', null)
 }
@@ -337,11 +349,11 @@ describe('readThroughput', () => {
   test('improvements: the loop findings, newest filing first, whatever the window', async () => {
     const { improvements } = await read(1)
     expect(improvements.map((f) => [f.id, f.status])).toEqual([
-      ['finding_b', 'moved'],
-      ['finding_a', 'open'],
+      ['issue_9', 'moved'],
+      ['issue_8', 'open'],
     ])
     expect(improvements[0]).toEqual({
-      id: 'finding_b',
+      id: 'issue_9',
       project: 'lib',
       kpi: 'step_peak_mib',
       subject: 'fast',
@@ -358,7 +370,7 @@ describe('readThroughput', () => {
       shippedAt: '2026-11-04T08:00:00.000Z',
       afterAt: '2026-11-07T08:00:00.000Z',
     })
-    expect(improvements[1]).toMatchObject({ after: null, issue: null, shippedAt: null, afterAt: null })
+    expect(improvements[1]).toMatchObject({ after: null, issue: 'issue_8', shippedAt: null, afterAt: null })
   })
 
   test('byRepo: lead and step rows with a repo, split by class', async () => {

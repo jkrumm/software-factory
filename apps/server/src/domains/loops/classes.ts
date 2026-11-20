@@ -2,7 +2,7 @@
 // passes of a loop flood noise: the first friction pass filed 5 Issues of which 4 were noise, the co-change probe 11 of 11.
 // The outcomes of a class's Issues are the evidence: a class whose Issues are mostly dropped or cancelled stops filing.
 
-export type FindingLoop = 'friction' | 'hygiene'
+export type FindingLoop = 'friction' | 'hygiene' | 'selfwatch'
 
 /** The ten newest decided Issues of the current epoch are judged: old history ages out, a long record does not hold a class forever. */
 export const CLASS_WINDOW = 10

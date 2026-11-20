@@ -21,6 +21,8 @@ import {
   slotLineFindings,
 } from '../../domains/loops/overload.ts'
 import { MAX_SIGNALS_PER_PASS } from '../../domains/loops/budget.ts'
+import { readGate } from './gate.ts'
+import { settleClosed } from './ledger.ts'
 import { DEFAULT_STEWARD_RULES, idleClockStart } from '../../domains/loops/stall.ts'
 import {
   ciFindings,
@@ -118,6 +120,8 @@ export interface SelfwatchPass {
   filed: { key: string; title: string; why: string }[]
   /** due to be filed, left for the next tick by the cap */
   deferred: number
+  /** due to be filed and not: their class is held by the class gate (mostly noise) */
+  held: string[]
   cleared: number
   failed: { key: string; reason: string }[]
   /** sources not read this pass, each with why */
@@ -331,11 +335,33 @@ export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<Selfwat
   if (!gathered.ok) return gathered
 
   const plan = planSelfwatch(gathered.value.findings, read.value, now, gathered.value.unread)
-  const due = plan.file.slice(0, MAX_SIGNALS_PER_PASS)
+  // what the Issues of earlier findings did: a condition that no longer holds is at 0, one not read this pass waits
+  const seen = new Map(gathered.value.findings.map((finding) => [subjectKeyOf(finding), finding]))
+  const settled = await settleClosed(deps, {
+    loop: 'selfwatch',
+    now,
+    read: (row) => {
+      const finding = seen.get(row.key)
+      if (finding) return finding.figure ?? null
+      return gathered.value.unread.has(row.key.split(':')[0] ?? '') ? undefined : 0
+    },
+  })
+  if (!settled.ok) return settled
+  const gated = await readGate(deps, { loop: 'selfwatch', now })
+  if (!gated.ok) return gated
+  // a held class is named before the cap counts: it does not use up a slot
+  const held: string[] = []
+  const allowed = plan.file.filter((action) => {
+    if (gated.value.allows(subjectKeyOf(action.finding))) return true
+    held.push(subjectKeyOf(action.finding))
+    return false
+  })
+  const due = allowed.slice(0, MAX_SIGNALS_PER_PASS)
   const pass: SelfwatchPass = {
     seen: gathered.value.findings.length,
     filed: [],
-    deferred: plan.file.length - due.length,
+    deferred: allowed.length - due.length,
+    held,
     cleared: plan.clear.length,
     failed: [],
     notes: gathered.value.notes,
@@ -355,7 +381,11 @@ export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<Selfwat
         from: `agent:${finding.repo ?? deps.repo}`,
         kind: 'request',
         title: finding.title.slice(0, 512),
-        text: signalText(finding, finding.repo ?? deps.repo),
+        text: signalText(
+          finding,
+          finding.repo ?? deps.repo,
+          settled.value.lastTime(subjectKeyOf(finding), finding.figure ?? null),
+        ),
         repo: finding.repo ?? deps.repo,
         probe: false,
       },
@@ -373,6 +403,9 @@ export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<Selfwat
     }
     pass.filed.push({ key: id, title: finding.title, why: action.why })
     rows.push({
+      issueId: filed.value.issue,
+      repo: finding.repo ?? deps.repo,
+      figure: finding.figure ?? null,
       subjectKey: subjectKeyOf(finding),
       kind: finding.kind,
       firstSeenAt: action.firstSeenAt,
@@ -397,6 +430,7 @@ export const selfwatchSummary = (pass: SelfwatchPass): string =>
   [
     `saw ${pass.seen} condition(s): filed ${pass.filed.length}`,
     pass.deferred > 0 ? `${pass.deferred} left for the next tick` : null,
+    pass.held.length > 0 ? `held by the class gate: ${pass.held.join(', ')}` : null,
     `cleared ${pass.cleared}`,
     pass.failed.length > 0 ? `${pass.failed.length} failed` : null,
     ...pass.notes,

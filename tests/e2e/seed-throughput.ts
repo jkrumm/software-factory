@@ -77,11 +77,13 @@ export async function seedThroughput(sql: SQL, now = Date.now()): Promise<void> 
   ) => {
     const [before, target, after, unit] = values
     const shipped = status === 'open' ? null : new Date(now - (filedHoursAgo - 20) * HOUR)
-    await sql`INSERT INTO factory.throughput_findings
-      (id, project, kpi, subject, before, target, after, direction, unit, cost_minutes, query, filed_at, shipped_at, after_at, status)
-      VALUES (${id}, ${project}, ${kpi}, ${subject}, ${before}, ${target}, ${after}, 'down', ${unit}, 120,
-        'factory read throughput', ${new Date(now - filedHoursAgo * HOUR)}, ${shipped},
-        ${after === null || shipped === null ? null : new Date(shipped.getTime() + 72 * HOUR)}, ${status})`
+    // the ledger holds the verdict and the ship, not the status: open and shipped have no verdict yet
+    const verdict = ['moved', 'flat', 'worse'].includes(status) ? status : null
+    await sql`INSERT INTO factory.loop_findings
+      (issue_id, loop, repo, class, key, figure, target, measured, direction, unit, cost_minutes, filed_at, shipped_at, measured_at, verdict)
+      VALUES (${id}, 'throughput', ${project}, ${kpi}, ${`${kpi}:${subject}`}, ${before}, ${target}, ${after}, 'down', ${unit}, 120,
+        ${new Date(now - filedHoursAgo * HOUR)}, ${shipped},
+        ${after === null || shipped === null ? null : new Date(shipped.getTime() + 72 * HOUR)}, ${verdict})`
   }
   await finding('tpf_open', 'argo', 'failed_run_minutes', '*', [95, 48, null, 'minutes'], 'open', 20)
   await finding('tpf_moved', 'argo', 'step_peak_mib', 'full', [4300, 2048, 1900, 'MiB'], 'moved', 200)

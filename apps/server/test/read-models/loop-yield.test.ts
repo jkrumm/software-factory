@@ -3,6 +3,7 @@ import { LoopYieldModel, type RetroWasteSource } from '@software-factory/contrac
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { createApp } from '../../src/api/app.ts'
+import { seedFinding } from '../seed-ledger.ts'
 import { readLoopYield } from '../../src/read/loop-yield.ts'
 import { readClosedSince, readRetroOutcomes } from '../../src/read/retro-outcomes.ts'
 import { WAITS } from '../../src/domains/work/issue.ts'
@@ -34,8 +35,14 @@ async function issue(filedAgo: number, closedAfter: number | null, outcome?: str
   return id
 }
 
-const finding = (id: string, loop: string, cls: string) =>
-  db.sql`INSERT INTO factory.loop_findings (issue_id, loop, repo, class, key) VALUES (${id}, ${loop}, 'app', ${cls}, ${`${cls}:${id}`})`
+const finding = (
+  id: string,
+  loop: string,
+  cls: string,
+  over: { figure?: number; verdict?: string; filedAgo?: number } = {},
+) =>
+  db.sql`INSERT INTO factory.loop_findings (issue_id, loop, repo, class, key, figure, verdict, filed_at)
+    VALUES (${id}, ${loop}, 'app', ${cls}, ${`${cls}:${id}`}, ${over.figure ?? null}, ${over.verdict ?? null}, ${ago(over.filedAgo ?? 0)})`
 
 const signal = (id: string, issueId: string, text = 'words') =>
   db.sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id)
@@ -45,7 +52,7 @@ beforeAll(async () => {
   db = await startTestCluster()
   await migrate(db.sql, await loadMigrations())
   // friction: three Issues in the last week (done after 2 h, dropped after 4 h, open), one 10 days ago, done after 6 h
-  await finding(await issue(24, 2, 'done'), 'friction', 'stall')
+  await finding(await issue(24, 2, 'done'), 'friction', 'stall', { figure: 12, verdict: 'moved' })
   await finding(await issue(30, 4, 'dropped'), 'friction', 'stall')
   await finding(await issue(5, null), 'friction', 'touch')
   await finding(await issue(240, 6, 'done'), 'friction', 'refusal')
@@ -60,15 +67,21 @@ beforeAll(async () => {
   await finding(await issue(48, 1, 'healed'), 'hygiene', 'links')
   await db.sql`INSERT INTO factory.hygiene_passes (id, repo, at, ref, report, judgment, filed, over_budget, failed)
     VALUES ('hp1', 'app', ${ago(48)}, 'abc', '{}', '{}', '[{"key":"links:a","title":"t"}]', '[]', '[]')`
-  // selfwatch: two subjects reach the same Issue; the first one names the class
-  const sw = await issue(10, 3, 'done')
-  await signal('signal_sw', sw)
-  await db.sql`INSERT INTO factory.selfwatch_findings (subject_key, kind, first_seen_at, last_seen_at, evidence_hash, last_filed_at, signal_id)
-    VALUES ('ci:a', 'ci_red', ${ago(11)}, ${ago(10)}, 'h', ${ago(10)}, 'signal_sw'), ('ci:b', 'heartbeat', ${ago(9)}, ${ago(9)}, 'h', ${ago(9)}, 'signal_sw')`
+  // selfwatch: one Issue, done, its figure not moved
+  await finding(await issue(10, 3, 'done'), 'selfwatch', 'ci_red', { figure: 3, verdict: 'flat', filedAgo: 10 })
   // throughput: one finding whose Issue is open
   const th = await issue(20, null)
-  await db.sql`INSERT INTO factory.throughput_findings (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, issue_id, filed_at, status)
-    VALUES ('tf1', 'app', 'slot_minutes_per_issue', '*', 10, 5, 'down', 'min', 60, 'q', ${th}, ${ago(20)}, 'open')`
+  await seedFinding(db.sql, {
+    id: th,
+    project: 'app',
+    kpi: 'slot_minutes_per_issue',
+    before: 10,
+    target: 5,
+    unit: 'min',
+    costMinutes: 60,
+    filedAt: ago(20),
+    status: 'open',
+  })
 })
 afterAll(() => db.stop())
 
@@ -83,6 +96,8 @@ test('friction over 7 and 30 days: passes, signals, Issues by outcome, median ti
     signals: 4,
     issues: 3,
     done: 1,
+    moved: 1,
+    movedShare: 1,
     healed: 0,
     dropped: 1,
     cancelled: 0,
@@ -99,20 +114,24 @@ test('friction over 7 and 30 days: passes, signals, Issues by outcome, median ti
     signals: 5,
     issues: 4,
     done: 2,
+    moved: 1,
+    movedShare: 0.5,
     open: 1,
     medianCloseSeconds: 4 * 3600,
   })
   expect(month?.classes.map((c) => c.class)).toEqual(['stall', 'refusal', 'touch'])
 })
 
-test('hygiene counts a healed Issue; selfwatch one Issue for two subjects, classed by the first; throughput its ledger', async () => {
+test('hygiene counts a healed Issue; selfwatch and throughput read the same ledger; the moved share counts done Issues only', async () => {
   const model = LoopYieldModel.parse(await readLoopYield(db.sql, { now: NOW }))
   expect(byLoop(model, 'hygiene')?.[0]).toMatchObject({ passes: 1, signals: 1, issues: 1, healed: 1, done: 0 })
   expect(byLoop(model, 'selfwatch')?.[0]).toMatchObject({
     passes: null,
-    signals: 2,
+    signals: 1,
     issues: 1,
     done: 1,
+    moved: 0,
+    movedShare: 0,
     classes: [{ class: 'ci_red', issues: 1, noise: 0 }],
   })
   expect(byLoop(model, 'throughput')?.[0]).toMatchObject({
@@ -120,6 +139,7 @@ test('hygiene counts a healed Issue; selfwatch one Issue for two subjects, class
     signals: 1,
     issues: 1,
     open: 1,
+    movedShare: null,
     medianCloseSeconds: null,
     classes: [{ class: 'slot_minutes_per_issue', issues: 1, noise: 0 }],
   })
@@ -213,8 +233,18 @@ test('the retro’s outcomes count each signal once; Issues closed since a pass 
   // a throughput improvement ends in the same marker and is not a retro signal
   const improvement = await issue(30, null)
   await signal('signal_t1', improvement, mark)
-  await db.sql`INSERT INTO factory.throughput_findings (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, signal_id, issue_id, filed_at, status)
-    VALUES ('tf2', 'app', 'queued_minutes', '*', 10, 5, 'down', 'min', 60, 'q', 'signal_t1', ${improvement}, ${ago(30)}, 'open')`
+  await seedFinding(db.sql, {
+    id: improvement,
+    project: 'app',
+    kpi: 'queued_minutes',
+    before: 10,
+    target: 5,
+    unit: 'min',
+    costMinutes: 60,
+    filedAt: ago(30),
+    status: 'open',
+    signalId: 'signal_t1',
+  })
   await db.sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state)
     VALUES ('signal_r5', 'agent:app', 'request', 'factory', 'agent', 'app', 'fp-r5', 'T', ${mark}, ${ago(2)}, 'held')`
   expect(await readRetroOutcomes(db.sql, { now: NOW, days: 7 })).toEqual({

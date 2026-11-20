@@ -135,7 +135,7 @@ const signalsOf = async (kind: string, on: Lab = lab): Promise<Filed[]> =>
 
 const rowOf = async (key: string) =>
   (
-    (await sql()`SELECT * FROM factory.selfwatch_findings WHERE subject_key = ${key}`) as {
+    (await sql()`SELECT * FROM factory.loop_findings WHERE loop = 'selfwatch' AND key = ${key} ORDER BY filed_at DESC, issue_id DESC`) as {
       cleared_at: Date | null
       first_seen_at: Date
       evidence_hash: string
@@ -513,7 +513,7 @@ test('heartbeat_stale: a leads tick that never ran is filed once the limit passe
   await runLoop(beat, 'leads')
   await pass(beat)
   const [row] = await beat.world.db
-    .sql`SELECT cleared_at FROM factory.selfwatch_findings WHERE subject_key = 'heartbeat_stale:tick'`
+    .sql`SELECT cleared_at FROM factory.loop_findings WHERE loop = 'selfwatch' AND key = 'heartbeat_stale:tick'`
   expect(row?.cleared_at).not.toBeNull()
 })
 

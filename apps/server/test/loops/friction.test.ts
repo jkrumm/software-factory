@@ -13,6 +13,7 @@ import {
 } from '../../src/domains/loops/friction.ts'
 import type { LoopFinding } from '../../src/domains/intake/model.ts'
 import type { ClassIssue } from '../../src/domains/loops/classes.ts'
+import type { ClosedFinding, Judged } from '../../src/domains/loops/ledger.ts'
 import type { FrictionPassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
 import { frictionPass, frictionSummary, type FrictionDeps } from '../../src/app/loops/friction.ts'
 import { RETRO_TITLE, type RetroOutcomes } from '../../src/domains/loops/retro.ts'
@@ -204,18 +205,30 @@ const passNow = new Date('2026-11-20T12:00:00Z')
 function frictionWorld(
   classes: Record<string, ClassIssue[]>,
   failRetro = false,
-  extra: { last?: Date | null; closed?: number; outcomes?: RetroOutcomes; retroFiled?: Date | null } = {},
+  extra: {
+    last?: Date | null
+    closed?: number
+    outcomes?: RetroOutcomes
+    retroFiled?: Date | null
+    closedFindings?: ClosedFinding[]
+    counts?: FrictionCount[]
+  } = {},
 ) {
-  const recorded: { issue: string; class: string; key: string }[] = []
+  const recorded: { issue: string; class: string; key: string; figure: number | null }[] = []
+  const verdicts: Judged[] = []
   const records: FrictionPassRecord[] = []
   const loops = {
     lastFrictionPassAt: async () => extra.last ?? null,
     recordFrictionPass: async (r: FrictionPassRecord) => void records.push(r),
-    recordFinding: async (f: { issue: string; class: string; key: string }) => {
+    recordFinding: async (f: { issue: string; class: string; key: string; figure: number | null }) => {
       if (!recorded.some((r) => r.issue === f.issue)) recorded.push(f)
     },
+    recordVerdicts: async (rows: readonly Judged[]) => void verdicts.push(...rows),
   } as unknown as LoopStore
-  const loopReads = { classIssues: async () => classes } as unknown as LoopReads
+  const loopReads = {
+    classIssues: async () => classes,
+    closedFindings: async () => extra.closedFindings ?? [],
+  } as unknown as LoopReads
   let filed = 0
   const bodies: SignalRequest[] = []
   const finds: LoopFinding[] = []
@@ -230,7 +243,7 @@ function frictionWorld(
       since: null,
       issues: 40,
       closed: 40,
-      counts: [count('lead_gone', 'lead_gone', 9), count('regression', 'regression', 9)],
+      counts: extra.counts ?? [count('lead_gone', 'lead_gone', 9), count('regression', 'regression', 9)],
     }),
     evidence: async () => ({}),
     closedSince: async () => extra.closed ?? 0,
@@ -243,7 +256,7 @@ function frictionWorld(
       return ok({ outcome: 'filed', detail: 'new', issue: `issue_${++filed}`, signal: null, reason: null }) as never
     },
   }
-  return { deps, recorded, records, bodies, finds }
+  return { deps, recorded, records, bodies, finds, verdicts }
 }
 
 const noisyFriction = (): ClassIssue[] =>
@@ -378,5 +391,59 @@ test('a retro whose last filing cannot be read is named and not filed, and the p
   expect(w.records).toHaveLength(1)
   expect(pass.ok && pass.value.due && frictionSummary(pass.value)).toContain(
     'retro not filed: the last retro could not be read',
+  )
+})
+
+// ---- the ledger -------------------------------------------------------------------------------------------------------------
+
+const closedFinding = (over: Partial<ClosedFinding> = {}): ClosedFinding => ({
+  issue: 'issue_7',
+  loop: 'friction',
+  repo: 'software-factory',
+  key: 'regression',
+  figure: 12,
+  verdict: null,
+  outcome: 'done',
+  filedAt: new Date(passNow.getTime() - 10 * DAY),
+  closedAt: new Date(passNow.getTime() - 3 * DAY),
+  ...over,
+})
+
+test('a pattern is filed against its count; the next pass at 11 after a count of 12 records moved and says so in its signal', async () => {
+  const first = frictionWorld({}, false, { counts: [count('regression', 'regression', 12)] })
+  expect((await frictionPass(first.deps)).ok).toBe(true)
+  expect(first.recorded.map((r) => [r.key, r.figure])).toEqual([['regression', 12]])
+  expect(first.bodies.find((b) => b.text.includes('(regression)'))?.text).not.toContain('Last time')
+
+  const next = frictionWorld({}, false, {
+    counts: [count('regression', 'regression', 11)],
+    closedFindings: [closedFinding()],
+  })
+  expect((await frictionPass(next.deps)).ok).toBe(true)
+  expect(next.verdicts).toEqual([{ issue: 'issue_7', verdict: 'moved', measured: 11 }])
+  const text = next.bodies.find((b) => b.text.includes('(regression)'))?.text
+  expect(text).toContain('Last time: Issue issue_7 at figure 12, now 11 (moved).')
+})
+
+test('a pattern no longer counted is at 0, a count that did not fall is flat or worse, noise is unmeasured, and a read verdict is kept', async () => {
+  const w = frictionWorld({}, false, {
+    counts: [count('regression', 'regression', 9)],
+    closedFindings: [
+      closedFinding({ issue: 'issue_1', key: 'gone', figure: 5 }),
+      closedFinding({ issue: 'issue_2', key: 'regression', figure: 9 }),
+      closedFinding({ issue: 'issue_3', key: 'worse', figure: 4 }),
+      closedFinding({ issue: 'issue_4', key: 'noise', outcome: 'dropped' }),
+      closedFinding({ issue: 'issue_5', key: 'kept', verdict: 'moved' }),
+    ],
+  })
+  expect((await frictionPass(w.deps)).ok).toBe(true)
+  expect(w.verdicts).toEqual([
+    { issue: 'issue_1', verdict: 'moved', measured: 0 },
+    { issue: 'issue_2', verdict: 'flat', measured: 9 },
+    { issue: 'issue_3', verdict: 'moved', measured: 0 },
+    { issue: 'issue_4', verdict: 'unmeasured', measured: null },
+  ])
+  expect(w.bodies.find((b) => b.text.includes('(regression)'))?.text).toContain(
+    'Last time: Issue issue_2 at figure 9, now 9 (flat).',
   )
 })

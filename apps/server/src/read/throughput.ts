@@ -460,9 +460,11 @@ export async function readThroughput(
       SELECT at, busy::float8 AS busy, mem_b::float8 AS mem, swap_b::float8 AS swapb, load::float8 AS load
       FROM m ORDER BY at`
     const findingRows: unknown[] = await tx`
-      SELECT id, project, kpi, subject, before, target, after, direction, unit, cost_minutes, status, issue_id, filed_at,
-        shipped_at, after_at
-      FROM factory.throughput_findings ORDER BY filed_at DESC, id LIMIT ${TOP_FINDINGS}`
+      SELECT issue_id AS id, repo AS project, class AS kpi, substr(key, length(class) + 2) AS subject, figure AS before, target,
+        measured AS after, direction, unit, cost_minutes, issue_id, filed_at, shipped_at, measured_at AS after_at,
+        CASE WHEN verdict IS NULL THEN CASE WHEN shipped_at IS NULL THEN 'open' ELSE 'shipped' END
+          WHEN verdict = 'unmeasured' AND shipped_at IS NULL THEN 'dropped' ELSE verdict END AS status
+      FROM factory.loop_findings WHERE loop = 'throughput' ORDER BY filed_at DESC, issue_id LIMIT ${TOP_FINDINGS}`
 
     const newest = nowRows[0] === undefined ? null : NowRow.parse(nowRows[0])
     const seconds = (ms: number | null) => round((ms ?? 0) / 1000, 1)

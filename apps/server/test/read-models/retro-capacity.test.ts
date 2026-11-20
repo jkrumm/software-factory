@@ -11,6 +11,7 @@ import {
   tuneConstant,
   WAIT_HIGH_MS,
 } from '../../src/read/capacity-tuning.ts'
+import { seedFinding } from '../seed-ledger.ts'
 import { readRetro } from '../../src/read/retro.ts'
 
 /** The retro's capacity half: the figures against plain SQL, the ledger resolving a capacity key, the fixed tuning rules. */
@@ -76,8 +77,17 @@ describe('the retro bundle carries the capacity loop', () => {
   })
 
   test('the throughput part follows the window up to 14 days, drops the lead list and survives the redaction', async () => {
-    await sql`INSERT INTO factory.throughput_findings (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, filed_at, status)
-      VALUES ('finding_1', 'app', 'failed_run_minutes', '*', 60, 30, 'down', 'minutes', 120, 'factory read throughput', ${ago(30)}, 'open')`
+    await seedFinding(sql, {
+      id: 'finding_1',
+      project: 'app',
+      kpi: 'failed_run_minutes',
+      before: 60,
+      target: 30,
+      unit: 'minutes',
+      costMinutes: 120,
+      filedAt: ago(30),
+      status: 'open',
+    })
     const week = RetroModel.parse(await readRetro(sql, { now: NOW, days: DAYS }))
     expect(week.throughput.hours).toBe(168)
     const month = RetroModel.parse(await readRetro(sql, { now: NOW, days: 30, redact: true }))

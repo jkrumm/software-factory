@@ -27,6 +27,7 @@ import type {
   Scope,
 } from '../../src/domains/loops/hygiene-model.ts'
 import type { ClassIssue } from '../../src/domains/loops/classes.ts'
+import type { ClosedFinding, Judged } from '../../src/domains/loops/ledger.ts'
 import type { FindingIssue, LifecycleStep } from '../../src/domains/loops/hygiene-lifecycle.ts'
 import type { HygienePassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
 import { hygieneSummary, hygienePass, type HygieneDeps } from '../../src/app/loops/hygiene.ts'
@@ -239,6 +240,8 @@ interface Extra {
   classes?: Record<string, ClassIssue[]>
   /** the newest Issue of each finding key the project filed before (`LoopReads.findingIssues`) */
   issues?: FindingIssue[]
+  /** the closed findings of the repo the ledger judges (`LoopReads.closedFindings`) */
+  closedFindings?: ClosedFinding[]
   /** the runs a sweep reports */
   runs?: ProbeRun[]
   /** commits since the last full pass */
@@ -257,8 +260,10 @@ function world(
   projects: StoredProject[] = names.map((n) => project(n)),
   extra: Extra = {},
 ) {
-  const recorded: { issue: string; class: string; key: string; repo: string }[] = []
+  const recorded: { issue: string; class: string; key: string; repo: string; figure: number | null }[] = []
+  const verdicts: Judged[] = []
   const filedBodies: string[] = []
+  const filedTexts: string[] = []
   const rows: HygienePassRecord[] = []
   let at = now
   const sweeps: string[] = []
@@ -271,13 +276,15 @@ function world(
       return [...newest.values()]
     },
     recordHygienePass: async (r: HygienePassRecord) => void rows.push(r),
-    recordFinding: async (f: { issue: string; class: string; key: string; repo: string }) => {
+    recordFinding: async (f: { issue: string; class: string; key: string; repo: string; figure: number | null }) => {
       if (!recorded.some((r) => r.issue === f.issue)) recorded.push(f)
     },
+    recordVerdicts: async (rows: readonly Judged[]) => void verdicts.push(...rows),
   } as unknown as LoopStore
   const loopReads = {
     classIssues: async () => extra.classes ?? {},
     findingIssues: async () => extra.issues ?? [],
+    closedFindings: async () => extra.closedFindings ?? [],
   } as unknown as LoopReads
   const steps: LifecycleStep[] = []
   const scopes: (Scope | undefined)[] = []
@@ -322,6 +329,7 @@ function world(
     file: async (body) => {
       if (!extra.findings) return err({ kind: 'refused' } as never)
       filedBodies.push(body.title)
+      filedTexts.push(body.text)
       return ok({
         outcome: 'filed',
         detail: 'new',
@@ -349,7 +357,9 @@ function world(
     probes,
     onlys,
     recorded,
+    verdicts,
     filedBodies,
+    filedTexts,
     advance: (ms: number) => (at = new Date(at.getTime() + ms)),
   }
 }
@@ -614,6 +624,23 @@ test('a pass reopens the closed finding instead of filing it, and records what i
   expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:b.md'])
 })
 
+test('an Issue the lifecycle reopens is not judged: its verdict is the one of the close that ends it', async () => {
+  const issues = [issueOf('links:a.md', { issue: 'issue_9', state: 'closed', outcome: 'done', closedAt: ago(2 * DAY) })]
+  const w = world(['app'], new Set(), undefined, {
+    findings: [finding('links', 'links:a.md', 1)],
+    issues,
+    runs: [run('links', 'found')],
+    closedFindings: [
+      closedFinding({ issue: 'issue_9', key: 'links:a.md' }),
+      closedFinding({ issue: 'issue_8', key: 'links:b.md' }),
+    ],
+  })
+  await hygienePass(w.deps)
+  expect(w.steps.map((s) => [s.issue, s.action])).toEqual([['issue_9', 'reopened']])
+  // issue_8's key was not raised and links ran clean: judged; issue_9 stays open to a verdict
+  expect(w.verdicts).toEqual([{ issue: 'issue_8', verdict: 'moved', measured: 0 }])
+})
+
 test('a pass heals the finding whose probe ran green and files nothing', async () => {
   const issues = [issueOf('links:a.md', { issue: 'issue_7', state: 'queued' })]
   const w = world(['app'], new Set(), undefined, { findings: [], issues, runs: [run('links')] })
@@ -622,6 +649,50 @@ test('a pass heals the finding whose probe ran green and files nothing', async (
   expect(w.filedBodies).toEqual([])
   expect(w.rows[0]?.lifecycle[0]).toMatchObject({ key: 'links:a.md', issue: 'issue_7', action: 'healed' })
   expect(pass.ok && pass.value.due && hygieneSummary(pass.value)).toMatch(/; healed 1$/)
+})
+
+// ---- the ledger ------------------------------------------------------------------------------------------------------------
+
+const closedFinding = (over: Partial<ClosedFinding> = {}): ClosedFinding => ({
+  issue: 'issue_7',
+  loop: 'hygiene',
+  repo: 'app',
+  key: 'links:x.md',
+  figure: 3,
+  verdict: null,
+  outcome: 'done',
+  filedAt: ago(10 * DAY),
+  closedAt: ago(3 * DAY),
+  ...over,
+})
+
+test('a probe finding is filed against its count; a closed Issue of the key is judged against the sweep and named in the signal', async () => {
+  const w = world(['app'], new Set(), undefined, {
+    findings: [finding('links', 'links:x.md', 1)],
+    runs: [run('links')],
+    closedFindings: [closedFinding()],
+  })
+  expect((await hygienePass(w.deps)).ok).toBe(true)
+  expect(w.recorded.map((r) => [r.key, r.figure])).toEqual([['links:x.md', 1]])
+  expect(w.verdicts).toEqual([{ issue: 'issue_7', verdict: 'moved', measured: 1 }])
+  expect(w.filedTexts[0]).toContain('Last time: Issue issue_7 at figure 3, now 1 (moved).')
+})
+
+test('a key a run judged and did not raise is at 0; one no run spoke for waits; a finding with no figure is unmeasured', async () => {
+  const w = world(['app'], new Set(), undefined, {
+    findings: [],
+    runs: [run('links')],
+    closedFindings: [
+      closedFinding({ issue: 'issue_1' }),
+      closedFinding({ issue: 'issue_2', key: 'cochange:a|b' }),
+      closedFinding({ issue: 'issue_3', key: 'judgment:stale:docs/x.md', figure: null }),
+    ],
+  })
+  expect((await hygienePass(w.deps)).ok).toBe(true)
+  expect(w.verdicts).toEqual([
+    { issue: 'issue_1', verdict: 'moved', measured: 0 },
+    { issue: 'issue_3', verdict: 'unmeasured', measured: null },
+  ])
 })
 
 // ---- cadence: weekly full pass, daily cheap pass, busy repo ------------------------------------------------------------------
@@ -786,6 +857,28 @@ test('a deferred fix does not reopen the closed Issue of its key', async () => {
   await hygienePass({ ...w.deps, fixes: true })
   expect(w.steps).toEqual([])
   expect(w.filedBodies).toEqual([])
+})
+
+test('the Issue of a deferred fix is not judged either: it is reopened or healed later, and its verdict is the close that follows', async () => {
+  const closed: FindingIssue = {
+    key: 'stale:branches',
+    issue: 'issue_9',
+    state: 'closed',
+    outcome: 'done',
+    closedAt: new Date(now.getTime() - 3 * DAY),
+    reopens: 0,
+  }
+  const w = world(['a'], new Set(), undefined, {
+    findings: [stale],
+    issues: [closed],
+    closedFindings: [closedFinding({ issue: 'issue_9', key: 'stale:branches', repo: 'a' })],
+    fix: async (_co, report) => ({
+      report,
+      fixes: [{ key: 'stale:branches', outcome: 'deferred', detail: 'no test slot came in time' }],
+    }),
+  })
+  await hygienePass({ ...w.deps, fixes: true })
+  expect(w.verdicts).toEqual([])
 })
 
 // ---- read again before filing ----------------------------------------------------------------------------------------------

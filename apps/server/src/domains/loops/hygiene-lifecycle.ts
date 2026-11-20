@@ -67,6 +67,19 @@ function coveringRun(runs: readonly ProbeRun[], key: string): ProbeRun | undefin
   )
 }
 
+/**
+ * The figure of a key in this sweep: the count of its red finding, 0 when a run that judged it did not raise it, `undefined`
+ * when no run spoke for it (the probe did not run in this scope, or failed): the finding's Issue waits for a sweep that does.
+ */
+export function figureNow(
+  sweep: { findings: readonly ProbeFinding[]; runs: readonly ProbeRun[] },
+  key: string,
+): number | undefined {
+  const red = sweep.findings.find((finding) => finding.key === key)
+  if (red) return red.count
+  return coveringRun(sweep.runs, key) ? 0 : undefined
+}
+
 const lines = (finding: ProbeFinding | undefined): string =>
   finding ? finding.lines.map((line) => `  ${line}`).join('\n') : ''
 

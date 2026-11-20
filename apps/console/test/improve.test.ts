@@ -430,6 +430,8 @@ test('yieldWords: what a loop’s Issues came to, healed counted as done', () =>
     signals: 5,
     issues: 5,
     done: 2,
+    moved: 1,
+    movedShare: 0.5,
     healed: 1,
     dropped: 1,
     cancelled: 0,

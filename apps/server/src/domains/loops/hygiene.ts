@@ -128,11 +128,12 @@ const seatLine = (): string =>
   'Seat: light (the probe turning green proves the fix; a class whose Issues keep moving up starts on the standard lead)'
 
 /** A probe finding as a signal: the stable title, what was swept, the evidence lines and how to look again. */
-export function probeSignalText(finding: ProbeFinding, swept: Swept): string {
+export function probeSignalText(finding: ProbeFinding, swept: Swept, last: string | null = null): string {
   return [
     `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`,
     `Probe: ${finding.probe} (${finding.key})`,
     seatLine(),
+    ...(last === null ? [] : [last]),
     `Evidence (${finding.count} item(s), up to the first ${finding.lines.length} lines):`,
     ...finding.lines,
     ...(finding.plan ?? []),

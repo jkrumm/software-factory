@@ -293,6 +293,9 @@ const finding = (subject: string, facts: string[]): Finding => ({
 })
 
 const rowOf = (f: Finding, over: Partial<SelfwatchRow> = {}): SelfwatchRow => ({
+  issueId: 'issue_1',
+  repo: 'software-factory',
+  figure: null,
   subjectKey: `${f.kind}:${f.subject}`,
   kind: f.kind,
   firstSeenAt: minutes(60),

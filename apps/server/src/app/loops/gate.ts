@@ -11,8 +11,16 @@ import type { UnitOfWork } from '../unit-of-work.ts'
 export interface ClassGate {
   /** true when the finding's class may file now (and claims the class's slot for this pass) */
   allows(key: string): boolean
-  /** the finding stands as an Issue: remember which class filed it; the reason when that could not be stored; `repo` is stored as a fact, not part of the class */
-  record(issue: string | null, key: string, repo: string): Promise<string | null>
+  /**
+   * the finding stands as an Issue: remember which class filed it, with the figure it was filed against (null: it has none)
+   * and the signal; the reason when that could not be stored; `repo` is stored as a fact, not part of the class
+   */
+  record(
+    issue: string | null,
+    key: string,
+    repo: string,
+    filed: { figure: number | null; signal: string | null; at: Date },
+  ): Promise<string | null>
 }
 
 const OPEN: ClassVerdict = { status: 'open', decided: 0, noise: 0, share: null, open: 0, heldUntil: null }
@@ -32,10 +40,19 @@ export async function readGate(
       claimed.add(name)
       return true
     },
-    async record(issue, key, repo) {
+    async record(issue, key, repo, filed) {
       if (issue === null) return null
       const recorded = await deps.uow.run(async ({ loops }) => {
-        await loops.recordFinding({ issue, loop: input.loop, repo, class: classOf(input.loop, key), key })
+        await loops.recordFinding({
+          issue,
+          loop: input.loop,
+          repo,
+          class: classOf(input.loop, key),
+          key,
+          signal: filed.signal,
+          filedAt: filed.at,
+          figure: filed.figure,
+        })
         return ok(undefined)
       })
       return recorded.ok ? null : `${recorded.error.kind}: ${recorded.error.detail}`

@@ -812,7 +812,7 @@ export type RetroTaste = z.infer<typeof RetroTaste>
 
 export const FindingClass = z
   .strictObject({
-    loop: z.enum(['friction', 'hygiene']),
+    loop: z.enum(['friction', 'hygiene', 'selfwatch']),
     class: z.string(),
     status: z.enum(['open', 'probation', 'held']),
     /** every Issue the class filed */
@@ -889,6 +889,10 @@ export const LoopYieldWindow = z
     /** distinct Issues those signals opened or reached */
     issues: z.number().int(),
     done: z.number().int(),
+    /** of the done ones, those whose figure moved (the number the finding was filed against fell once its Issue closed) */
+    moved: z.number().int(),
+    /** moved / done; null with no Issue done: a done Issue whose figure was not read, or whose finding keeps none, is not moved */
+    movedShare: z.number().nullable(),
     healed: z.number().int(),
     dropped: z.number().int(),
     cancelled: z.number().int(),
@@ -1889,7 +1893,7 @@ export const ThroughputModel = z
       ),
     }),
     /**
-     * The throughput loop's findings (`throughput_findings`), the 50 newest by filing, whatever the window: what each measured
+     * The throughput loop's findings (its rows of `loop_findings`), the 50 newest by filing, whatever the window: what each measured
      * before it was filed, the target, the figure read three days after its Issue shipped, and where it stands.
      */
     improvements: z.array(

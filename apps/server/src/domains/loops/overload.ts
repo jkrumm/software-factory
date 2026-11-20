@@ -62,6 +62,7 @@ export function loadOverCeilingFindings(
     {
       kind: 'load_over_ceiling',
       subject: 'host',
+      figure: Number(peak.toFixed(1)),
       title: 'Self-watch: the one-minute load of the host has been over the load ceiling for ten samples in a row',
       facts: [`the one-minute load stayed over the load ceiling in ${LOAD_SAMPLES} consecutive host samples`],
       context: [
@@ -244,6 +245,7 @@ export function routesSlowFindings(latency: RouteLatency, now: Date): Finding[] 
     {
       kind: 'routes_slow',
       subject: 'routes',
+      figure: Math.round(latency.p95Ms),
       title: "Self-watch: the server's own routes answer slowly, their p95 is over two seconds",
       facts: [`the p95 of the server's route answer times over five minutes is above ${ROUTE_P95_LIMIT_MS / 1000} s`],
       context: [

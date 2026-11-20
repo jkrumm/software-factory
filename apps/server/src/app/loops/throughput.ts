@@ -127,7 +127,7 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
   const shapes = new Map(projects.flatMap((p) => (p.shape ? [[p.project, p.shape] as const] : [])))
 
   // 1. the ledger
-  const openIssues = rows.filter((r) => r.status === 'open' && r.issueId !== null).map((r) => r.issueId as string)
+  const openIssues = rows.filter((r) => r.status === 'open' && r.issueId !== null).map((r) => r.issueId)
   let fates: ReadonlyMap<string, IssueFate> = new Map()
   try {
     fates = await deps.fates(openIssues)
@@ -251,8 +251,13 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
       pass.failed.push({ key: id, reason: `${outcome}: ${detail}`.slice(0, 300) })
       continue
     }
+    // a repeat of an Issue closed lately has no Issue to carry the row: the ranking meets the subject again after the window
+    if (filed.value.issue === null) {
+      pass.notes.push(`${id} repeats an Issue closed lately: no row`)
+      continue
+    }
     const row: FindingRow = {
-      id,
+      id: filed.value.issue,
       project,
       kpi: candidate.kpi,
       subject: candidate.subject,
@@ -261,7 +266,6 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
       direction: 'down',
       unit: candidate.unit,
       costMinutes: candidate.costMinutes,
-      query: candidate.query,
       signalId: filed.value.signal,
       issueId: filed.value.issue,
       filedAt: now,
@@ -269,7 +273,7 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
       after: null,
       afterAt: null,
       status: 'open',
-      reopens: reopens?.id ?? null,
+      reopens: reopens?.issueId ?? null,
     }
     const recorded = await deps.uow.run(async ({ loops }) => {
       await loops.recordThroughputFinding(row)

@@ -80,10 +80,46 @@ test('recordFinding stores the class once; classIssues reads filed time, closure
   await db.sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
     VALUES ('ev_c_20', 'issue_20', 'k_c_20', 'closed', '{}'::jsonb, 'factory', ${at(5)}, 'applied', 2, 'closed')`
 
-  await loops.recordFinding({ issue: 'issue_20', loop: 'hygiene', repo: 'app', class: 'links', key: 'links:a.md' })
-  await loops.recordFinding({ issue: 'issue_20', loop: 'hygiene', repo: 'app', class: 'other', key: 'other:x' })
-  await loops.recordFinding({ issue: 'issue_21', loop: 'hygiene', repo: 'web', class: 'links', key: 'links:b.md' })
-  await loops.recordFinding({ issue: 'issue_21', loop: 'friction', repo: 'software-factory', class: 'x', key: 'x' })
+  await loops.recordFinding({
+    issue: 'issue_20',
+    loop: 'hygiene',
+    repo: 'app',
+    class: 'links',
+    key: 'links:a.md',
+    signal: null,
+    filedAt: at(1),
+    figure: null,
+  })
+  await loops.recordFinding({
+    issue: 'issue_20',
+    loop: 'hygiene',
+    repo: 'app',
+    class: 'other',
+    key: 'other:x',
+    signal: null,
+    filedAt: at(1),
+    figure: null,
+  })
+  await loops.recordFinding({
+    issue: 'issue_21',
+    loop: 'hygiene',
+    repo: 'web',
+    class: 'links',
+    key: 'links:b.md',
+    signal: null,
+    filedAt: at(1),
+    figure: null,
+  })
+  await loops.recordFinding({
+    issue: 'issue_21',
+    loop: 'friction',
+    repo: 'software-factory',
+    class: 'x',
+    key: 'x',
+    signal: null,
+    filedAt: at(1),
+    figure: null,
+  })
 
   expect(await reads.classIssues('hygiene')).toEqual({
     links: [
