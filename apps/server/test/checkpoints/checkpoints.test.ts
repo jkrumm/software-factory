@@ -1715,6 +1715,7 @@ describe('errands', () => {
       }).then(value)
       expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'reached_owner' }])
       expect(screenDetails[0]).toContain('The mini has no shell on it')
+      expect(screenDetails[0]?.length).toBeLessThanOrEqual(4000)
     })
 
     test('the first look by rule turns away a plain command without calling the screen', async () => {
