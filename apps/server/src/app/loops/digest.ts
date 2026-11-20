@@ -4,13 +4,14 @@ import type { PlanningStore } from '../../domains/planning/ports.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export interface DigestDeps {
   uow: UnitOfWork<{ loops: LoopStore; loopReads: LoopReads; planning: PlanningStore }>
   clock: Clock
 }
 
-export interface DigestPass {
+interface DigestPass {
   stored: number
   unchanged: number
   idle: number
@@ -23,7 +24,7 @@ type Out<T> = Promise<Result<T, PortError>>
  * whose digest, built in code from those Issues (`digestOf`), differs from its newest stored one gets a new row. Nothing is
  * called outside the database, so the pass is one read and one write.
  */
-export async function digestPass(deps: DigestDeps): Out<DigestPass> {
+async function digestPass(deps: DigestDeps): Out<DigestPass> {
   const now = deps.clock.now()
   return deps.uow.run(async ({ loops, loopReads, planning }) => {
     const plan = planDigests({
@@ -45,4 +46,8 @@ export async function digestPass(deps: DigestDeps): Out<DigestPass> {
   })
 }
 
-export const digestPassSummary = (pass: DigestPass): string => digestSummary(pass)
+const digestPassSummary = (pass: DigestPass): string => digestSummary(pass)
+
+/** A digest built in code for each project whose Issues changed: the summary the Console shows on Flow. Interval only. */
+export const digestLoop = (wiring: LoopWiring, deps: DigestDeps): LoopSpec =>
+  passLoop(wiring, { name: 'digest', pass: () => digestPass(deps), summary: digestPassSummary })

@@ -26,6 +26,7 @@ import { scrub } from '../../kernel/scrub.ts'
 import { addAfter, removeInferredEdge } from '../planning-chain.ts'
 import type { PlanningDeps } from '../planning-deps.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export type QueueStores = { loops: LoopStore; loopReads: LoopReads }
 
@@ -45,7 +46,7 @@ export interface QueueDeps {
   changed(): void
 }
 
-export interface QueuePass {
+interface QueuePass {
   /** repos with open Issues */
   looked: number
   asked: number
@@ -288,7 +289,7 @@ async function edgeFacts(deps: QueueDeps, pass: QueuePass): Promise<EdgeFacts> {
  * mostly not needed, never a pair the sweep took back) and added through planning; its order is stored and the admission
  * order reads it as the tie-break after size.
  */
-export async function queuePass(deps: QueueDeps): Out<QueuePass> {
+async function queuePass(deps: QueueDeps): Out<QueuePass> {
   const pass: QueuePass = { looked: 0, asked: 0, applied: 0, refused: 0, removed: 0, budget: 0, problems: [] }
   await sweep(deps, pass)
   const facts = await edgeFacts(deps, pass)
@@ -302,5 +303,15 @@ export async function queuePass(deps: QueueDeps): Out<QueuePass> {
   return ok(pass)
 }
 
-export const queueSummary = (pass: QueuePass): string =>
+const queueSummary = (pass: QueuePass): string =>
   `looked at ${pass.looked} repo(s); asked ${pass.asked}, applied ${pass.applied} edge(s), refused ${pass.refused}, took back ${pass.removed}, skipped for budget ${pass.budget}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`
+
+/** Deterministic first (cycles, real blockers, the queue's shape, a budget); `factory-queue` only for an unclear order. */
+export const queueLoop = (wiring: LoopWiring, deps: QueueDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'queue',
+    onChange: true,
+    pass: () => queuePass(deps),
+    problems: (pass) => pass.problems,
+    summary: queueSummary,
+  })

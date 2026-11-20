@@ -17,6 +17,9 @@ import { rescreenErrand, resolveErrand, retireErrand, tellCheckBroken, turnBackR
 import { runCheck } from './errands.ts'
 import type { SettleDeps } from '../checkpoints-settle.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { syncPlaceErrands, syncSummary } from '../checkpoints-sync.ts'
+import type { SyncPort } from '../../domains/checkpoints/ports.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 /** the composition asks it before it starts a pass, and imports no domain code */
 export { hasUnpushed }
@@ -198,9 +201,43 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   return ok(pass)
 }
 
-export const deskSummary = (pass: DeskPass): string =>
+const deskSummary = (pass: DeskPass): string =>
   pass.ran
     ? `${pass.looked} open Errands: ${pass.resolved} closed by their check, ${pass.turnedAway} turned back by the second screen, ${pass.retired} ended after a command failed twice, ${pass.ranBack} turned back after their command ran and the check still said needed, ${pass.pushed.length > 0 ? `${pass.pushed.length} pushed${pass.returned ? ' (he was back)' : ''}` : 'none pushed'}${
         pass.problems.length ? `: ${pass.problems.slice(0, 3).join(' | ')}` : ''
       }`
     : 'not due'
+
+/**
+ * The desk pass over the open Errands, when the owner is back after two hours or more (his Console read starts it at once;
+ * so does the MacBook answering after it was down, or his button) and every six hours: checks, a second screen, and the
+ * MacBook commands pushed, every pending one when he is back, one per pass while he is away, and a command that reached him
+ * and was never pushed makes one due (the settle loop starts it). The loop asks every 15 minutes whether one is due.
+ * `force()` is the owner's button: the next pass runs as if he had just come back.
+ */
+export function deskLoop(
+  wiring: LoopWiring,
+  deps: Omit<DeskDeps, 'force'> & { sync: SyncPort },
+): { spec: LoopSpec; force(): void } {
+  let forced = false
+  const spec = passLoop(wiring, {
+    name: 'desk',
+    pass: async () => {
+      const force = forced
+      forced = false
+      // a `place` Errand that is exactly the dotfiles sync is run through the MacBook's verb on every tick, not only when the pass is due
+      const synced = await syncPlaceErrands(deps.settle, deps.sync)
+      if (synced.ok) wiring.said('desk sync', synced.value.problems)
+      const pass = await deskPass({ settle: deps.settle, desk: deps.desk, push: deps.push, force })
+      return pass.ok ? ok({ pass: pass.value, sync: synced.ok ? syncSummary(synced.value) : '' }) : pass
+    },
+    problems: ({ pass }) => pass.problems,
+    summary: ({ pass, sync }) => (sync === '' ? deskSummary(pass) : `${deskSummary(pass)}; ${sync}`),
+  })
+  return {
+    spec,
+    force: () => {
+      forced = true
+    },
+  }
+}

@@ -47,6 +47,7 @@ import type { UnitOfWork } from '../unit-of-work.ts'
 import { classOf } from '../../domains/loops/classes.ts'
 import { readGate, type ClassGate } from './gate.ts'
 import { settleClosed } from './ledger.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export interface HygieneDeps {
   uow: UnitOfWork<{ loops: LoopStore; loopReads: LoopReads; planning: PlanningStore; work: WorkStore }>
@@ -611,3 +612,12 @@ export const hygieneSummary = (pass: HygienePass): string => {
     ...fixed,
   ].join('; ')
 }
+
+/** Deterministic sweep of one project a tick (probes in a throwaway checkout), `factory-hygiene` over the documents it picks. */
+export const hygieneLoop = (wiring: LoopWiring, deps: HygieneDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'hygiene',
+    pass: () => hygienePass(deps),
+    problems: (pass) => (pass.due ? pass.record.failed.map((f) => `${f.key}: ${f.reason}`) : null),
+    summary: hygieneSummary,
+  })

@@ -16,6 +16,7 @@ import { readChain, settleIssue } from '../planning-chain.ts'
 import type { PlanningDeps } from '../planning-deps.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 import { type Claimed, claimRound } from './claim.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export type TriageStores = { work: WorkStore; loops: LoopStore; loopReads: LoopReads }
 
@@ -253,5 +254,15 @@ export async function triagePass(deps: TriageDeps): Out<TriagePass> {
   return ok(pass)
 }
 
-export const triageSummary = (pass: TriagePass): string =>
+const triageSummary = (pass: TriagePass): string =>
   `looked at ${pass.looked} settling; settled ${pass.settled}, chained ${pass.chained}, refined ${pass.refined}, flagged ${pass.flagged}, asked ${pass.asked}, dropped ${pass.dropped}, refused ${pass.refused}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`
+
+/** Settles the Issues that wait on edges. Kicked by a change; the loop guard keeps its own change from firing it again. */
+export const triageLoop = (wiring: LoopWiring, deps: TriageDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'triage',
+    onChange: true,
+    pass: () => triagePass(deps),
+    problems: (pass) => pass.problems,
+    summary: triageSummary,
+  })

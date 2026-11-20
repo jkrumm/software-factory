@@ -6,36 +6,16 @@ import { askQueueDir, queuedAsksIn } from './adapters/checkpoints/queued-asks.ts
 import { shellCheckRunner } from './adapters/shell/check-runner.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
 import { makeNotifier } from './adapters/ntfy/ntfy.ts'
-import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
-import { hostReader } from './adapters/planning/host.ts'
-import { duSizer } from './adapters/planning/worktree-sizer.ts'
-import { readCapComment } from './adapters/planning/cap-comments.ts'
 import { ledgerQuotaReader } from './adapters/planning/accounts-source.ts'
-import { readCapFacts } from './read/cap-facts.ts'
-import { hostWatch } from './adapters/planning/host-watch.ts'
-import { textRunner } from './adapters/planning/process.ts'
-import { processTable, sharedCwds } from './adapters/planning/processes.ts'
-import { hostSnapshot } from './adapters/planning/snapshot.ts'
-import { postgresLoopStore } from './adapters/postgres/loop-store.ts'
-import { postgresVisitStore } from './adapters/postgres/visit-store.ts'
-import { postgresReviewStore } from './adapters/postgres/review-store.ts'
-import { postgresDeskStore } from './adapters/postgres/desk-store.ts'
-import { prReview } from './adapters/reviews/pr.ts'
-import { askHumanPush, askHumanSync, askHumanVerbs } from './adapters/shell/ask-human.ts'
+import { askHumanVerbs } from './adapters/shell/ask-human.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
-import { postgresCapacityStore } from './adapters/postgres/capacity-store.ts'
-import { postgresPlanningStore } from './adapters/postgres/planning-store.ts'
-import { postgresLeadStore } from './adapters/leads/store.ts'
 import { loadLeadSettings } from './adapters/leads/settings.ts'
-import { postgresUnitOfWork } from './adapters/postgres/unit-of-work.ts'
-import { postgresWorkStore } from './adapters/postgres/work-store.ts'
 import { GitCommits } from './adapters/quality/git.ts'
 import { githubCi } from './adapters/quality/ci.ts'
 import { makefileProjects } from './adapters/quality/projects.ts'
 import { MakeAndProbes } from './adapters/quality/proof.ts'
 import { AgwReview } from './adapters/quality/review.ts'
-import { postgresQualityStore } from './adapters/quality/store.ts'
 import { createApp } from './api/app.ts'
 import { apiForward, consoleHandler } from './api/console.ts'
 import { loadConsoleSettings } from './console-settings.ts'
@@ -43,47 +23,19 @@ import { loadNeedsSettings } from './read/needs-settings.ts'
 import { availableParallelism, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { APPROVED_RUN_HANG_GUARD_MS } from './app/checkpoints-approve.ts'
-import { endRequest, MAX_RUN_TRIES, tellCheckBroken } from './app/checkpoints-errands.ts'
-import { syncPlaceErrands, syncSummary } from './app/checkpoints-sync.ts'
+import { MAX_RUN_TRIES } from './app/checkpoints-errands.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
-import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { projectFileProjects } from './app/quality-projects.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
-import { frictionPass, frictionSummary, RETRO_SUBJECT } from './app/loops/friction.ts'
-import { fixClassesPass, fixClassesSummary } from './app/loops/fix-classes.ts'
-import { slotAimPass } from './app/capacity-aim.ts'
-import { freshHostMemory, hostPass, hostSummary } from './app/loops/host.ts'
-import { reaperPass, reaperSummary } from './app/loops/reaper.ts'
-import { processKiller, reaperProcesses } from './adapters/planning/reaper-processes.ts'
-import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
-import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
-import { ciLedgerPass, ciLedgerSummary } from './app/loops/ci-ledger.ts'
-import { githubCiLedger, githubCiLive, githubCiRuns, githubCiTimes } from './adapters/selfwatch/github.ts'
-import { gitMigrationFiles } from './adapters/selfwatch/git.ts'
-import { hostOverload } from './adapters/selfwatch/overload.ts'
+import { reaperProcesses } from './adapters/planning/reaper-processes.ts'
+import { githubCiTimes } from './adapters/selfwatch/github.ts'
 import { routeTimer } from './api/route-timer.ts'
-import { SHARED_NUMBERS } from './adapters/postgres/migrate.ts'
 import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
-import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
-import { stewardPass, stewardSummary } from './app/loops/steward.ts'
-import { queuePass, queueSummary } from './app/loops/queue.ts'
-import { digestPass, digestPassSummary } from './app/loops/digest.ts'
-import { deskPass, deskSummary, hasUnpushed } from './app/loops/desk.ts'
-import { errandsPass, errandsSummary } from './app/loops/errands.ts'
-import { reviewsPass, reviewsSummary } from './app/loops/reviews.ts'
-import { screenPass, screenSummary } from './app/loops/screen.ts'
-import { triagePass, triageSummary } from './app/loops/triage.ts'
-import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
-import { confirmedHeartbeat, DEFAULT_PROCESS_CAP } from './domains/loops/selfwatch.ts'
-import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
 import { composeRead } from './compose-read.ts'
-import { postgresIntakeStore } from './adapters/intake/store.ts'
 import { loadIntakeEnv } from './adapters/intake/settings.ts'
 import { composeIssues } from './compose-issues.ts'
 import { rootedRepos } from './adapters/git/repos.ts'
-import { createFixCommitReader } from './adapters/hygiene/fix-commits.ts'
 import { createDoctorReader } from './adapters/doctor/index.ts'
-import { createHygieneChecker } from './adapters/hygiene/index.ts'
 import { reapHygieneDir } from './adapters/hygiene/checkout.ts'
 import { fileRoles } from './adapters/leads/roles.ts'
 import { composeIntake } from './compose-intake.ts'
@@ -99,34 +51,27 @@ import { leadCheckoutOf } from './app/quality-checkout.ts'
 import { showQuality } from './app/quality-read.ts'
 import { reopenIssue } from './app/quality-reopen.ts'
 import { shipIssue } from './app/quality-ship.ts'
-import { checkWatches, DEFAULT_TIMING, startWatchPort } from './app/quality-watch.ts'
+import { startWatchPort } from './app/quality-watch.ts'
 import { factoryDataDir, loadCheckpointSettings } from './checkpoint-settings.ts'
 import { storedChecks } from './app/leads-checks.ts'
 import { composeLeads, lightReaders } from './compose-leads.ts'
 import { plannedSeatTable } from './app/leads-seat-table.ts'
 import { loginErrands } from './app/login-errands.ts'
-import { resumeRulesOf } from './app/leads-api-errors.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
 import type { Environment } from './kernel/env.ts'
 import { freshFor } from './kernel/fresh-for.ts'
-import { err, ok, portError } from './kernel/result.ts'
+import { ok } from './kernel/result.ts'
 import { type IssueId, systemIds } from './kernel/ids.ts'
 import { deployingSince } from './read/deploy-window.ts'
 import { healthOf, judgeTick } from './read/health.ts'
 import { startHealthProbe } from './read/health-probe.ts'
 import { hostRule, planningSettings } from './app/planning-settings.ts'
-import { postgresOpenIssues } from './read/open-issues.ts'
 import { queueMovedAt } from './read/queue.ts'
 import { queueReasonMap } from './api/read-models.ts'
-import { readFriction } from './read/friction.ts'
-import { readBudgetFacts, readIssueFates, readWindowFacts } from './read/throughput-loop.ts'
 import { loadEpoch } from './adapters/throughput-epoch.ts'
-import { projectBudgets as readProjectBudgets, throughputPass, throughputSummary } from './app/loops/throughput.ts'
-import { readFrictionEvidence } from './read/friction-evidence.ts'
-import { readClosedSince, readLastFiled, readRetroOutcomes } from './read/retro-outcomes.ts'
-import { loopReads } from './read/loops.ts'
-import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
+import { composeLoops } from './compose-loops.ts'
+import { composeUow } from './compose-store.ts'
 import { createShutdown, SHUTDOWN_DEADLINE_MS } from './shutdown.ts'
 
 /** The API and the Console's listener both bind loopback only; dotfiles-private's serve row publishes the Console's. */
@@ -170,21 +115,7 @@ async function main(env: Environment): Promise<void> {
   const migratedAtS = process.uptime()
 
   // The composition: each domain's store on the transaction's connection, the ports the use cases get.
-  const uow = postgresUnitOfWork(sql, (tx) => ({
-    work: postgresWorkStore(tx),
-    planning: postgresPlanningStore(tx),
-    capacity: postgresCapacityStore(tx),
-    reads: readIssues(tx),
-    checkpoints: postgresCheckpointStore(tx),
-    leads: postgresLeadStore(tx),
-    quality: postgresQualityStore(tx),
-    intake: postgresIntakeStore(tx),
-    loops: postgresLoopStore(tx),
-    loopReads: loopReads(tx),
-    visits: postgresVisitStore(tx),
-    reviews: postgresReviewStore(tx),
-    desk: postgresDeskStore(tx),
-  }))
+  const uow = composeUow(sql)
   // A test moves this clock to reach a date a real one would take 30 days to (settings refuse it outside test mode).
   const clock: Clock =
     settings.clockOffsetMs === 0 ? systemClock : { now: () => new Date(Date.now() + settings.clockOffsetMs) }
@@ -196,8 +127,6 @@ async function main(env: Environment): Promise<void> {
   if (lapsed.ok && lapsed.value > 0)
     console.log(`loops: ${lapsed.value} agw call(s) of an earlier process will be taken up again`)
   const startedAt = new Date()
-  /** The one repo the self-watch loop watches: the factory itself. */
-  const SELFWATCH_REPO = 'software-factory'
   /** Times the server's own routes: the self-watch's `routes_slow` and the heartbeat's `routeP95Ms` read the same figure. */
   const routes = routeTimer()
   const leadSettings = loadLeadSettings(env)
@@ -211,41 +140,7 @@ async function main(env: Environment): Promise<void> {
     repoRoots: leadSettings.repoRoots,
     repoAllow: leadSettings.repoAllow,
   })
-  // Its own reader: the swapout rate of a minute sample counts from the last sample, not from an admission's reading.
-  // One metered runner for every helper of the host loop: the CPU they take is the collector's cost, stored each minute.
-  const hostRunner = textRunner(5_000)
-  const { lsofBin, psBin } = planningEnv
-  const hostSamples = hostWatch({
-    host: hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 }),
-    sysctlBin: planningEnv.sysctlBin,
-    psBin,
-    topBin: planningEnv.topBin,
-    vmStatBin: planningEnv.vmStatBin,
-    runner: hostRunner,
-  })
-  const hostCwds = sharedCwds({ runner: hostRunner, lsofBin })
-  const hostProcesses = processTable({
-    rows: () => hostSamples.rows(),
-    footprints: () => hostSamples.footprints(),
-    lsofBin,
-    cwds: hostCwds,
-  })
-  const hostClasses = hostSnapshot({
-    top: () => hostSamples.topSnapshot(),
-    cwds: hostCwds,
-    runner: hostRunner,
-    psBin,
-    launchctlBin: planningEnv.launchctlBin,
-    lsofBin,
-    sysctlBin: planningEnv.sysctlBin,
-    vmVolume: planningEnv.vmVolume,
-  })
-  const diskHost = hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 })
-  const hostMemory = freshHostMemory()
-  // What each attempt's worktree takes on disk, measured by the host loop; the times it was last measured live here between passes.
-  const worktreeSizing = { reader: duSizer(), measuredAt: new Map<string, number>() }
-  const reaperProcessTable = reaperProcesses({ psBin, lsofBin })
-  const reaperKiller = processKiller({ psBin })
+  const reaperProcessTable = reaperProcesses({ psBin: planningEnv.psBin, lsofBin: planningEnv.lsofBin })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const roles = fileRoles(leadSettings.rolesFile)
   const light = lightReaders(sql, systemClock)
@@ -270,7 +165,6 @@ async function main(env: Environment): Promise<void> {
   const checkout = leadCheckoutOf(uow)
   const repos = rootedRepos(leadSettings.repoRoots, leadSettings.repoAllow)
   const mainCheckoutLines = new MainCheckoutLines()
-  const hygieneChecker = createHygieneChecker({ repos, workDir: factoryDataDir(env) })
   // the checkouts a killed pass left: no pass of this process exists yet, so they go (in the background)
   void reapHygieneDir(factoryDataDir(env))
   const projects = projectFileProjects({
@@ -368,548 +262,40 @@ async function main(env: Environment): Promise<void> {
     },
   }
 
-  // The loops: every recurring job of the server is one named loop on the runner, each with its interval
-  // (`FACTORY_TICK_MS` the default), its trigger and its single-flight pass. Intake's pollers keep their own schedules.
-  const watchSettledAt = new Date(startedAt.getTime() + settings.quality.settleMs)
-  const ciLive = githubCiLive({
-    locate: (repo) => repos.locate(repo),
-    token: intakeEnv.github.token,
-    apiUrl: intakeEnv.github.apiUrl,
-  })
-  const resumeRules = resumeRulesOf({
-    delaysMs: leadSettings.resumeDelaysMs,
-    staggerMs: leadSettings.resumeStaggerMs,
-  })
-  const stewardDeps = {
-    ...writes,
+  const dataDir = factoryDataDir(env)
+  const { runner, pushDesk, deskOnReturn, hostTop } = composeLoops({
+    sql,
     uow,
+    clock,
+    runnerClock: systemClock,
+    ids: systemIds,
+    settings,
+    loopSettings,
+    leadSettings,
+    planningEnv,
     agw,
-    seats: planning.leads.seats,
-    windows: planning.leads.windows,
-    checkpoints: {
-      ...writes,
-      blobs: fileBlobStore(checkpointSettings.blobDir),
-      consoleUrl: checkpointSettings.line.consoleUrl,
-      checks: shellCheckRunner(),
-    },
-    planning: writes,
-    claimQueued: planning.claimQueued,
-    claimStalled: planning.claimStalled,
-    claimStallMs: loopSettings.claimStallMs,
-    slots: () => uow.run(async ({ capacity }) => ok(await capacity.slots())),
-    ciLive,
-    rules: {
-      ...DEFAULT_STEWARD_RULES,
-      minStallMs: loopSettings.minStallMs,
-      idleLeadMs: loopSettings.idleLeadMs,
-      idleBackgroundMs: loopSettings.idleBackgroundMs,
-    },
-    retryMs: loopSettings.retryMs,
-    settleTimeoutMs: loopSettings.settleTimeoutMs,
-    blockedChecks: loopSettings.blockedChecks,
-    checkouts: gitMainCheckouts(repos),
-    findings: mainCheckoutLines,
-    resume: resumeRules,
-  }
-  const ciLedgerRefused = new Map<string, number>()
-  const lines = new Map<string, string>()
-  /** A problem that stands is said once, not on every pass. */
-  const said = (loop: string, problems: readonly string[]) => {
-    const text = problems.join('\n')
-    if (text !== (lines.get(loop) ?? '') && text) console.error(`${loop} loop: ${text}`)
-    lines.set(loop, text)
-  }
-  const passOf = async (run: () => Promise<{ ok: boolean; error?: unknown }>, what: string) => {
-    const result = await run()
-    return result.ok ? ok(`${what} ran`) : err(portError('refused', JSON.stringify(result.error)))
-  }
-  const projectBudgets = () => readProjectBudgets(uow)
-
-  /** set by the owner's button: the next desk pass runs as if he had just come back */
-  let deskForced = false
-  const specs: LoopSpec[] = [
-    {
-      name: 'leads',
-      intervalMs: loopSettings.intervalMs.leads,
-      onChange: true,
-      // A worktree made or removed takes minutes and must not hold the next pass back.
-      maxPasses: 4,
-      run: async () => {
-        const ticked = await leads.tick(draining.signal)
-        if (!ticked.ok) return ticked
-        const t = ticked.value
-        return ok(
-          `spool ${t.replayed} lines, ${t.lost} lead(s) lost, outbox ${JSON.stringify(t.outbox)}, api errors ${JSON.stringify(t.apiErrors)}`,
-        )
-      },
-    },
-    {
-      name: 'planning',
-      intervalMs: loopSettings.intervalMs.planning,
-      onChange: true,
-      run: async () => {
-        const problems = await planning.pass()
-        said('planning', problems)
-        return ok(
-          problems.length
-            ? `${problems.length} problem(s): ${problems.slice(0, 3).join(' | ')}`
-            : 'planned and admitted',
-        )
-      },
-    },
-    {
-      // The Watch's checks run on a loop of their own, so a `make verify` of minutes never holds the leads' tick.
-      name: 'watch',
-      intervalMs: loopSettings.intervalMs.watch,
-      onChange: false,
-      run: async () => {
-        const watched = await checkWatches({
-          ...writes,
-          projects,
-          checkout,
-          proof: new MakeAndProbes({ ci }),
-          timing: { ...DEFAULT_TIMING, retryMs: settings.quality.retryMs, recheckMs: settings.quality.recheckMs },
-          settledAt: watchSettledAt,
-          signal: draining.signal,
-        })
-        return watched.ok
-          ? ok(`checked ${watched.value.checked}, passed ${watched.value.passed}, regressed ${watched.value.regressed}`)
-          : watched
-      },
-    },
-    {
-      name: 'settle',
-      intervalMs: loopSettings.intervalMs.settle,
-      onChange: true,
-      run: async () => {
-        const settled = await passOf(() => checkpoints.settle(), 'the settle pass')
-        // an Errand this pass let through to the owner has its dialog pushed now: the desk pass is due for a command never pushed
-        const open = await uow.run(async ({ checkpoints: store }) => ok(await store.openErrands(500)))
-        if (open.ok && hasUnpushed(open.value)) deskOnReturn()
-        return settled
-      },
-    },
-    {
-      name: 'send',
-      intervalMs: loopSettings.intervalMs.send,
-      onChange: true,
-      run: () => passOf(() => checkpoints.send(), 'the send pass'),
-    },
-    {
-      name: 'steward',
-      intervalMs: loopSettings.intervalMs.steward,
-      onChange: true,
-      run: async () => {
-        const pass = await stewardPass({ ...stewardDeps, changed: () => runner.changed('steward') })
-        if (!pass.ok) return pass
-        said('steward', pass.value.problems)
-        return ok(stewardSummary(pass.value))
-      },
-    },
-    {
-      name: 'triage',
-      intervalMs: loopSettings.intervalMs.triage,
-      onChange: true,
-      run: async () => {
-        const pass = await triagePass({
-          ...writes,
-          uow,
-          agw,
-          planning: writes,
-          retryMs: loopSettings.triageRetryMs,
-          changed: () => runner.changed('triage'),
-        })
-        if (!pass.ok) return pass
-        said('triage', pass.value.problems)
-        return ok(triageSummary(pass.value))
-      },
-    },
-    {
-      // Deterministic first (cycles, real blockers, the queue's shape, a budget); `factory-queue` only for an unclear order.
-      name: 'queue',
-      intervalMs: loopSettings.intervalMs.queue,
-      onChange: true,
-      run: async () => {
-        const pass = await queuePass({
-          uow,
-          clock: writes.clock,
-          agw,
-          planning: writes,
-          retryMs: loopSettings.queueRetryMs,
-          minGapMs: loopSettings.queueGapMs,
-          changed: () => runner.changed('queue'),
-        })
-        if (!pass.ok) return pass
-        said('queue', pass.value.problems)
-        return ok(queueSummary(pass.value))
-      },
-    },
-    {
-      // Deterministic: the week's counts, one signal per pattern over its threshold. Due once a day or after 200 closed Issues, read from the table; asked every 15 minutes. A pattern whose Issue closed within the week is not filed again, the retro is filed once a week.
-      name: 'friction',
-      intervalMs: loopSettings.intervalMs.friction,
-      onChange: false,
-      run: async () => {
-        const pass = await frictionPass({
-          uow,
-          clock: writes.clock,
-          ids: systemIds,
-          friction: (now) => readFriction(sql, { now, days: FRICTION_WINDOW_DAYS, epoch }),
-          evidence: (now, keys) => readFrictionEvidence(sql, { now, days: FRICTION_WINDOW_DAYS, epoch }, keys),
-          closedSince: (since, now) => readClosedSince(sql, { since, now }),
-          retroFiledAt: () => readLastFiled(sql, RETRO_SUBJECT),
-          retroOutcomes: (now, days) => readRetroOutcomes(sql, { now, days }),
-          file: (body, finding) => intake.api.file(body, 'agent', finding),
-        })
-        if (!pass.ok) return pass
-        if (pass.value.due)
-          said(
-            'friction',
-            pass.value.record.failed.map((f) => `${f.key}: ${f.reason}`),
-          )
-        return ok(frictionSummary(pass.value))
-      },
-    },
-    {
-      // Deterministic sweep of one project a tick (probes in a throwaway checkout), `factory-hygiene` over the documents it picks.
-      name: 'hygiene',
-      intervalMs: loopSettings.intervalMs.hygiene,
-      onChange: false,
-      run: async () => {
-        const pass = await hygienePass({
-          uow,
-          clock: writes.clock,
-          ids: systemIds,
-          checker: hygieneChecker,
-          doctor,
-          agw,
-          file: (body, finding) => intake.api.file(body, 'agent', finding),
-          everyMs: loopSettings.hygieneEveryMs,
-          dailyMs: loopSettings.hygieneDailyMs,
-          fixes: true,
-          retryMs: loopSettings.hygieneRetryMs,
-          repos: null,
-        })
-        if (!pass.ok) return pass
-        if (pass.value.due)
-          said(
-            'hygiene',
-            pass.value.record.failed.map((f) => `${f.key}: ${f.reason}`),
-          )
-        return ok(hygieneSummary(pass.value))
-      },
-    },
-    {
-      // Fourteen deterministic conditions (a project `budgets:` breach among them, filed on that project repo, and four of the factory own capacity: load over the ceiling, the slot line, gates passed, slow routes) (red CI, a migration number clash, an overdue wait, an idle lead, a
-      // regression of inert paths, a stale heartbeat, a process growing without bound, swap growth, a process storm), filed once per subject as signals on the factory's own repo.
-      name: 'selfwatch',
-      intervalMs: loopSettings.intervalMs.selfwatch,
-      onChange: false,
-      run: async () => {
-        const pass = await selfwatchPass({
-          uow,
-          clock: writes.clock,
-          repo: SELFWATCH_REPO,
-          branch: loopSettings.selfwatchBranch,
-          graceMs: loopSettings.selfwatchGraceMs,
-          idleLeadMs: loopSettings.idleLeadMs,
-          idleBackgroundMs: loopSettings.idleBackgroundMs,
-          slots: stewardDeps.slots,
-          resume: resumeRules,
-          ciLive,
-          ci: githubCiRuns({
-            locate: (repo) => repos.locate(repo),
-            token: intakeEnv.github.token,
-            apiUrl: intakeEnv.github.apiUrl,
-          }),
-          migrations: gitMigrationFiles(repos),
-          sharedNumbers: SHARED_NUMBERS,
-          processCap: DEFAULT_PROCESS_CAP,
-          memoryCeilings: planningEnv.memoryCeilings,
-          serverPid: process.pid,
-          routes: () => routes.snapshot(),
-          overload: hostOverload({ dataDir }),
-          budgets: async (now) => readBudgetFacts(sql, { now, budgets: await projectBudgets(), epoch }),
-          heartbeat: () =>
-            confirmedHeartbeat(
-              async () => (await readHealth()).heartbeat,
-              (ms) => Bun.sleep(ms),
-            ),
-          file: (body, finding) => intake.api.file(body, 'agent', finding),
-        })
-        if (!pass.ok) return pass
-        said('selfwatch', [...pass.value.notes, ...pass.value.failed.map((f) => `${f.key}: ${f.reason}`)])
-        return ok(selfwatchSummary(pass.value))
-      },
-    },
-    {
-      // The finished CI runs of every stored project and of the factory's own repo, kept per head for `read throughput`. A repo GitHub or the checkout refuses is told once and left alone for a day.
-      name: 'ci-ledger',
-      intervalMs: loopSettings.intervalMs['ci-ledger'],
-      onChange: false,
-      run: async () => {
-        const pass = await ciLedgerPass({
-          uow,
-          clock: writes.clock,
-          projects: async () => (await projectBudgets()).map((b) => b.repo),
-          always: [SELFWATCH_REPO],
-          refused: ciLedgerRefused,
-          ledger: githubCiLedger({
-            locate: (repo) => repos.locate(repo),
-            token: intakeEnv.github.token,
-            apiUrl: intakeEnv.github.apiUrl,
-          }),
-        })
-        if (!pass.ok) return pass
-        said('ci-ledger', pass.value.notes)
-        return ok(ciLedgerSummary(pass.value))
-      },
-    },
-    {
-      // Once a day, without a model: the costs of the last 7 days ranked, one improvement signal per project with its measured before, and the ledger reading the after 3 days past a ship (moved, or the finding comes back).
-      name: 'throughput',
-      intervalMs: loopSettings.intervalMs.throughput,
-      onChange: false,
-      run: async () => {
-        const pass = await throughputPass({
-          uow,
-          clock: writes.clock,
-          tenants: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
-          epoch,
-          projects: async () =>
-            (await projectBudgets()).map((b) => ({
-              project: b.project,
-              repo: b.repo,
-              peakMib: b.peakMib,
-              shape: b.shape,
-              path: b.path,
-            })),
-          facts: (window, options) => readWindowFacts(sql, { ...window, ...options, epoch }),
-          caps: async (at, shapes) => {
-            const disk = await diskHost.disk?.()
-            const facts = await readCapFacts(sql, { to: at, shapes, disk: disk?.ok ? disk.value : null })
-            const paths = new Map((await projectBudgets()).map((b) => [b.project, b.path]))
-            return Promise.all(
-              facts.map(async (fact) => {
-                const path = paths.get(fact.project)
-                return { ...fact, comment: path ? await readCapComment(path, fact.lane) : null }
-              }),
-            )
-          },
-          fates: (ids) => readIssueFates(sql, ids),
-          file: (body, finding) => intake.api.file(body, 'agent', finding),
-        })
-        if (!pass.ok) return pass
-        said('throughput', [...pass.value.notes, ...pass.value.failed.map((f) => `${f.key}: ${f.reason}`)])
-        return ok(throughputSummary(pass.value))
-      },
-    },
-    {
-      // The Judge looks at held signals: promote, dismiss or leave with a recommendation. Interval only: a newly held signal waits for the next pass.
-      name: 'screen',
-      intervalMs: loopSettings.intervalMs.screen,
-      onChange: false,
-      run: async () => {
-        const pass = await screenPass({
-          uow,
-          clock: writes.clock,
-          agw,
-          openIssues: postgresOpenIssues(sql),
-          projects: planning.signals,
-          promote: intake.api.promote,
-          dismiss: intake.api.dismiss,
-        })
-        if (!pass.ok) return pass
-        said('screen', pass.value.problems)
-        return ok(screenSummary(pass.value))
-      },
-    },
-    {
-      // Fix commits of every project's default branch, classed by rule, stored for the Improve screen.
-      name: 'fix-classes',
-      intervalMs: loopSettings.intervalMs['fix-classes'],
-      onChange: false,
-      run: async () => {
-        const pass = await fixClassesPass({
-          uow,
-          clock: writes.clock,
-          reader: createFixCommitReader({ repos }),
-          repos: null,
-        })
-        if (!pass.ok) return pass
-        said('fix-classes', pass.value.problems)
-        return ok(fixClassesSummary(pass.value))
-      },
-    },
-    {
-      // One reading of the host a minute with its class snapshot, kept 14 days: the Live popover and `read throughput` draw it.
-      name: 'host',
-      intervalMs: loopSettings.intervalMs.host,
-      onChange: false,
-      run: async () => {
-        const pass = await hostPass({
-          uow,
-          clock: writes.clock,
-          sampler: hostSamples,
-          processes: hostProcesses,
-          snapshot: hostClasses,
-          memory: hostMemory,
-          sizer: worktreeSizing,
-          self: { pid: process.pid, dirs: [process.cwd()] },
-          facts: planning.capacityFacts,
-        })
-        if (!pass.ok) return pass
-        // the slot aim moves on the sample just stored; its failure is said, never a failed host pass
-        const aim = await slotAimPass({
-          ...writes,
-          slots: planningEnv.slots,
-          slotsMax: planningEnv.slotsMax,
-          loadCeiling: hostRule(planningEnv).loadCeiling,
-          swapoutCeilingMb: planningEnv.memoryCeilings.swapoutMbPer300s,
-          leadWaiters: async () => {
-            const view = await planning.capacity.queue()
-            return view.ok ? view.value.queue.filter((e) => e.reason?.part === 'aim').length : null
-          },
-        })
-        return ok(
-          aim.ok
-            ? `${hostSummary(pass.value)}; ${aim.value}`
-            : `${hostSummary(pass.value)}; slot aim: ${aim.error.detail}`,
-        )
-      },
-    },
-    {
-      // A digest built in code for each project whose Issues changed: the summary the Console shows on Flow. Interval only.
-      name: 'digest',
-      intervalMs: loopSettings.intervalMs.digest,
-      onChange: false,
-      run: async () => {
-        const pass = await digestPass({ uow, clock: writes.clock })
-        if (!pass.ok) return pass
-        return ok(digestPassSummary(pass.value))
-      },
-    },
-    {
-      // The open requests for the owner's hands (no Issue): each one's check runs, the expired close, and one with no check is read
-      // once a day by `factory-errand-needed`. Interval only: a new request waits for the next pass.
-      name: 'errands',
-      intervalMs: loopSettings.intervalMs.errands,
-      onChange: false,
-      run: async () => {
-        const pass = await errandsPass({
-          uow,
-          clock: writes.clock,
-          checks: shellCheckRunner(),
-          agw,
-          // a request an Issue joined ends for that Issue too
-          end: async (errand, how) => {
-            const ended = await endRequest(checkpointDeps, errand.id, how)
-            return ended.ok && ended.value
-          },
-          broken: async (errand, line) => {
-            await tellCheckBroken(checkpointDeps, errand, line)
-          },
-        })
-        if (!pass.ok) return pass
-        said('errands', pass.value.problems)
-        return ok(errandsSummary(pass.value))
-      },
-    },
-    {
-      // The Issues that wait on someone else's review of a pull request: each pull request is read through gh or glab, and an
-      // approval, a request for changes, a new review comment, a merge or a close wakes the lead.
-      name: 'reviews',
-      intervalMs: loopSettings.intervalMs.reviews,
-      onChange: false,
-      run: async () => {
-        const pass = await reviewsPass({
-          uow,
-          clock: writes.clock,
-          ids: writes.ids,
-          port: prReview({ workGhConfigDir: loopSettings.ghConfigDirWork }),
-        })
-        if (!pass.ok) return pass
-        said('reviews', pass.value.problems)
-        return ok(reviewsSummary(pass.value))
-      },
-    },
-    {
-      // The desk pass over the open Errands, when the owner is back after two hours or more (his Console read starts it at
-      // once; so does the MacBook answering after it was down, or his button) and every six hours: checks, a second screen,
-      // and the MacBook commands pushed, every pending one when he is back, one per pass while he is away, and a command
-      // that reached him and was never pushed makes one due (the settle loop starts it). The loop asks every 15 minutes
-      // whether one is due.
-      name: 'desk',
-      intervalMs: loopSettings.intervalMs.desk,
-      onChange: false,
-      run: async () => {
-        const force = deskForced
-        deskForced = false
-        // a `place` Errand that is exactly the dotfiles sync is run through the MacBook's verb on every tick, not only when the pass is due
-        const synced = await syncPlaceErrands(checkpointDeps, askHumanSync({ host: loopSettings.askHumanHost }))
-        if (synced.ok) said('desk sync', synced.value.problems)
-        const pass = await deskPass({
-          settle: checkpointDeps,
-          desk: uow,
-          push: askHumanPush({
-            bin: loopSettings.askHumanBin,
-            home: leadSettings.home,
-            host: loopSettings.askHumanHost,
-          }),
-          force,
-        })
-        if (!pass.ok) return pass
-        said('desk', pass.value.problems)
-        const syncLine = synced.ok ? syncSummary(synced.value) : ''
-        return ok(syncLine === '' ? deskSummary(pass.value) : `${deskSummary(pass.value)}; ${syncLine}`)
-      },
-    },
-    {
-      // Ends the processes of closed lead attempts (by session key and worktree, never by name): a browser a finished lead left
-      // behind lives on under launchd otherwise.
-      name: 'reaper',
-      intervalMs: loopSettings.intervalMs.reaper,
-      onChange: false,
-      run: async () => {
-        const pass = await reaperPass({
-          uow,
-          clock: writes.clock,
-          processes: reaperProcessTable,
-          killer: reaperKiller,
-          graceMs: loopSettings.reaperGraceMs,
-          protect: [1, process.pid],
-        })
-        if (!pass.ok) return pass
-        return ok(reaperSummary(pass.value))
-      },
-    },
-  ]
-  const runner: LoopRunner = createLoopRunner({
-    loops: specs,
-    clock: systemClock,
-    passes: {
-      load: async () => {
-        const passes = await uow.run(async ({ loops }) => ok(await loops.passes()))
-        if (!passes.ok) throw new Error(`${passes.error.kind}: ${passes.error.detail}`)
-        return passes.value
-      },
-      record: async (name, at) => {
-        const recorded = await uow.run(async ({ loops }) => ok(await loops.recordPass(name, at)))
-        if (!recorded.ok) throw new Error(`${recorded.error.kind}: ${recorded.error.detail}`)
-      },
-    },
+    planning,
+    leads,
+    intake,
+    github: intakeEnv.github,
+    checkpoints,
+    checkpointDeps,
+    checkpointSettings,
+    repos,
+    projects,
+    checkout,
+    ci,
+    draining: draining.signal,
+    epoch,
+    doctor,
+    mainCheckoutLines,
+    routes,
+    dataDir,
+    startedAt,
+    reaperProcesses: reaperProcessTable,
+    heartbeat: async () => (await readHealth()).heartbeat,
   })
   const leadsTick = loopSettings.intervalMs.leads
-  /** a desk pass in flight is not started again: the dialogs it pushes are the ones he gets */
-  const pushDesk = (): { started: boolean } => {
-    if (runner.view().some((loop) => loop.name === 'desk' && loop.running)) return { started: false }
-    deskForced = true
-    void runner.runNow('desk')
-    return { started: true }
-  }
-  const deskOnReturn = () => {
-    if (!runner.view().some((loop) => loop.name === 'desk' && loop.running)) void runner.runNow('desk')
-  }
 
   // Every read route asks for this, and the view behind it spawns `sysctl` a few times and may poll the account picker:
   // on a loaded host that made `/v1/projects` and its siblings answer in seconds (self-watch routes_slow, 2026-11-17).
@@ -942,7 +328,6 @@ async function main(env: Environment): Promise<void> {
       return { queueMovedAt: (await queueMovedAt(sql))?.toISOString() ?? null, doorLines: door }
     },
   })
-  const dataDir = factoryDataDir(env)
   const readHealth = async () => {
     const tickAt = runner.lastOkAt('leads')
     const probed = healthProbe.snapshot()
@@ -1052,7 +437,7 @@ async function main(env: Environment): Promise<void> {
       visits: uow,
       onReturn: deskOnReturn,
       longWaitMs: needsSettings.longWaitMs,
-      host: { version: settings.version, startedAt, top: () => hostSamples.top() },
+      host: { version: settings.version, startedAt, top: hostTop },
     },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
   // Where a restart's seconds go after the process exists (`scripts/deploy.sh` prints the whole of it as `started_s`): the lock

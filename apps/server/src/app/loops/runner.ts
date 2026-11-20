@@ -1,6 +1,6 @@
 import type { LoopName, LoopView } from '@software-factory/contract'
 import type { Clock } from '../../kernel/clock.ts'
-import type { PortError, Result } from '../../kernel/result.ts'
+import { ok, type PortError, type Result } from '../../kernel/result.ts'
 
 /**
  * A loop (`docs/language.md`): a named tick with a trigger (an interval, or a kick when something changed), a budget (the
@@ -15,6 +15,55 @@ export interface LoopSpec {
   /** passes that may run at once; 1 (single-flight) unless a pass can take minutes and must not hold the next back */
   maxPasses?: number
   run(): Promise<Result<string, PortError>>
+}
+
+/** Says a problem that stands once, not on every pass: `said(loop, problems)` logs the lines when they differ from the last time. */
+export type Said = (loop: string, problems: readonly string[]) => void
+
+export function createSaid(log: (message: string) => void = (message) => console.error(message)): Said {
+  const lines = new Map<string, string>()
+  return (loop, problems) => {
+    const text = problems.join('\n')
+    if (text !== (lines.get(loop) ?? '') && text) log(`${loop} loop: ${text}`)
+    lines.set(loop, text)
+  }
+}
+
+/** What the composition hands every loop: its interval (`loopSettings.intervalMs`) and the shared `said`. */
+export interface LoopWiring {
+  intervalMs: number
+  said: Said
+}
+
+/**
+ * A loop whose pass answers a record: the pass runs, a failed one is the loop's failure, the problems the record names are
+ * said once (`null`: nothing to say this time, the last saying stands), and the summary is the line the runner keeps.
+ */
+export function passLoop<P>(
+  wiring: LoopWiring,
+  spec: {
+    name: LoopName
+    /** an event (`changed`) kicks it besides the clock */
+    onChange?: boolean
+    maxPasses?: number
+    pass(): Promise<Result<P, PortError>>
+    problems?(pass: P): readonly string[] | null
+    summary(pass: P): string
+  },
+): LoopSpec {
+  return {
+    name: spec.name,
+    intervalMs: wiring.intervalMs,
+    onChange: spec.onChange ?? false,
+    ...(spec.maxPasses === undefined ? {} : { maxPasses: spec.maxPasses }),
+    run: async () => {
+      const pass = await spec.pass()
+      if (!pass.ok) return pass
+      const problems = spec.problems?.(pass.value)
+      if (problems) wiring.said(spec.name, problems)
+      return ok(spec.summary(pass.value))
+    },
+  }
 }
 
 export interface LoopRunner {

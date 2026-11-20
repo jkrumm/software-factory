@@ -19,6 +19,7 @@ import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import type { SignalRow } from '../../domains/intake/ports.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export interface ScreenDeps {
   uow: UnitOfWork<{ intake: IntakeStore }>
@@ -209,3 +210,12 @@ export function screenSummary(pass: ScreenPass): string {
     : ''
   return `${done}${pass.failed ? `, failed ${pass.failed}` : ''}${problems}`
 }
+
+/** The Judge looks at held signals: promote, dismiss or leave with a recommendation. Interval only: a newly held signal waits for the next pass. */
+export const screenLoop = (wiring: LoopWiring, deps: ScreenDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'screen',
+    pass: () => screenPass(deps),
+    problems: (pass) => pass.problems,
+    summary: screenSummary,
+  })

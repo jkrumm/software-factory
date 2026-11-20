@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import type { LoopName } from '@software-factory/contract'
-import { createLoopRunner, type LoopSpec } from '../../src/app/loops/runner.ts'
+import { createLoopRunner, createSaid, type LoopSpec, passLoop } from '../../src/app/loops/runner.ts'
 import { fixedClock } from '../../src/kernel/clock.ts'
-import { err, ok, portError } from '../../src/kernel/result.ts'
+import { err, ok, type PortError, portError, type Result } from '../../src/kernel/result.ts'
 
 const clock = fixedClock('2026-11-07T10:00:00Z')
 
@@ -348,4 +348,38 @@ test('view().lastPassAt is seeded from the record and moves with a pass', async 
   expect(runner.view().map((loop) => loop.lastPassAt)).toEqual([seeded.toISOString(), null])
   await runner.runNow('steward')
   expect(runner.view()[0]?.lastPassAt).toBe(clock.now().toISOString())
+})
+
+test('createSaid logs a problem that stands once, and again when it changes or returns', () => {
+  const lines: string[] = []
+  const said = createSaid((line) => lines.push(line))
+  said('steward', ['a'])
+  said('steward', ['a'])
+  said('steward', [])
+  said('steward', ['a'])
+  said('steward', ['a', 'b'])
+  said('triage', ['a'])
+  expect(lines).toEqual(['steward loop: a', 'steward loop: a', 'steward loop: a\nb', 'triage loop: a'])
+})
+
+test('passLoop: a failed pass is the loop failure, problems are said, null leaves the last saying', async () => {
+  const lines: string[] = []
+  const said = createSaid((line) => lines.push(line))
+  const wiring = { intervalMs: 5, said }
+  let next: Result<{ due: boolean }, PortError> = ok({ due: true })
+  const looped = passLoop(wiring, {
+    name: 'friction',
+    pass: async () => next,
+    problems: (p: { due: boolean }) => (p.due ? ['bad'] : null),
+    summary: (p) => `due ${p.due}`,
+  })
+  expect(looped).toMatchObject({ name: 'friction', intervalMs: 5, onChange: false })
+  expect(await looped.run()).toEqual(ok('due true'))
+  next = ok({ due: false })
+  expect(await looped.run()).toEqual(ok('due false'))
+  next = err(portError('gone', 'down'))
+  expect((await looped.run()).ok).toBe(false)
+  next = ok({ due: true })
+  await looped.run()
+  expect(lines).toEqual(['friction loop: bad'])
 })

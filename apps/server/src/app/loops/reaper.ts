@@ -4,6 +4,7 @@ import type { LoopStore, ProcessKiller, ReapedRow, ReaperProcesses } from '../..
 import type { Clock } from '../../kernel/clock.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export interface ReaperPassDeps {
   uow: UnitOfWork<{ loops: LoopStore }>
@@ -21,7 +22,7 @@ const REAPED_KEEP_MS = 30 * 86_400_000
 /** A SIGTERM is followed up by a SIGKILL only on a later pass that is within this long. */
 const ESCALATE_WITHIN_MS = 6 * 3_600_000
 
-export interface ReaperPass {
+interface ReaperPass {
   /** processes signalled */
   reaped: number
   /** the closed attempts they belonged to */
@@ -37,7 +38,7 @@ export interface ReaperPass {
  * and drops rows older than 30 days. A process of a closed attempt gets SIGTERM; one that survived an earlier pass's
  * SIGTERM gets SIGKILL.
  */
-export async function reaperPass(deps: ReaperPassDeps): Promise<Result<ReaperPass, PortError>> {
+async function reaperPass(deps: ReaperPassDeps): Promise<Result<ReaperPass, PortError>> {
   const now = deps.clock.now()
   const known = await deps.uow.run(async ({ loops }) =>
     ok({
@@ -91,7 +92,11 @@ export async function reaperPass(deps: ReaperPassDeps): Promise<Result<ReaperPas
   })
 }
 
-export const reaperSummary = (pass: ReaperPass): string =>
+const reaperSummary = (pass: ReaperPass): string =>
   pass.reaped === 0
     ? 'nothing to reap'
     : `reaped ${pass.reaped} process(es) of ${pass.attempts} closed attempt(s), ${pass.escalated} escalated`
+
+/** Ends the processes of closed lead attempts (by session key and worktree, never by name): a browser a finished lead left behind lives on under launchd otherwise. */
+export const reaperLoop = (wiring: LoopWiring, deps: ReaperPassDeps): LoopSpec =>
+  passLoop(wiring, { name: 'reaper', pass: () => reaperPass(deps), summary: reaperSummary })

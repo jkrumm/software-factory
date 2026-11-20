@@ -32,6 +32,7 @@ import { key } from '../../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 /** A project the loop works for: its name, the repo text intake files on, and its peak budget (null: the default). */
 export interface ThroughputProject {
@@ -356,3 +357,12 @@ export const throughputSummary = (pass: ThroughputPass): string =>
   ]
     .filter(Boolean)
     .join('; ')
+
+/** Once a day, without a model: the costs of the last 7 days ranked, one improvement signal per project with its measured before, and the ledger reading the after 3 days past a ship (moved, or the finding comes back). */
+export const throughputLoop = (wiring: LoopWiring, deps: ThroughputDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'throughput',
+    pass: () => throughputPass(deps),
+    problems: (pass) => [...pass.notes, ...pass.failed.map((f) => `${f.key}: ${f.reason}`)],
+    summary: throughputSummary,
+  })
