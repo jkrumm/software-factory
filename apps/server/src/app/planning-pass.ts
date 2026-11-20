@@ -81,7 +81,7 @@ export interface Filed {
 /**
  * Files one row as an Issue, if it is still filable in this transaction (decided again, so a replayed pass or a row
  * another pass filed meanwhile files nothing twice): `filed` with the row's key, the row's facts as the first note its
- * lead reads, `settled` (its `after` rows are all closed, so no edge is open), and the row's Issue recorded.
+ * lead reads, and the row's Issue recorded. The row is filed with its edges stated (its `after` rows are all closed, so none is open) and left `settling`: the triage loop takes its size and settles it.
  */
 async function fileRow(
   stores: PlanningStores,

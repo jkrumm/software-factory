@@ -470,8 +470,8 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   average (p90 5 s, 341 in 3 days), 20 per pass, so a plan of 40 rows is queued within a minute or so, not instantly. (3) The
   words triage and the light rule read now include the first note. (4) The planned seat (`readLeadSeats`) runs `lightRule` on
   the Issue as it stands (kind, size, spec flag, moved up, hygiene, signals and first note) and shows the `light` row with the
-  rule's name, or the `lead` row with `sizeKnown: false` while it has no size. (5) `factory issue schema` and
+  rule's name, or the `lead` row with `sizeKnown: false` while it is settling with no size. (5) `factory issue schema` and
   `docs/plan.md` say how the seat is chosen when none is filed. Not changed: the light gate (NL38, NL45), the move-up path,
-  `config/roles.json`. A filed seat, a Spec checkpoint and a move-up still keep an Issue off the light seat. Revert: return
+  `config/roles.json`. A filed seat, a Spec checkpoint and a move-up still keep an Issue off the light seat; such a stated-edge Issue is sized too (one rule is simpler than a second skip, and the size is read elsewhere). Revert: return
   `'now'` for `statedEdges` in `settleRule` and restore the plan pass's `settled` event. Count after a week: the share of
   lead-row starts with no size (above: 37.5 %) near zero outside alerts, and the light share of starts above the 15 % of 2026-11-20.

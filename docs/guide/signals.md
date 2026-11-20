@@ -107,11 +107,12 @@ An unanswered workflow files a new Issue. A duplicate costs a note; a lost reque
 
 ### Settling
 
-An Issue starts `settling`, and triage is not done until it settles. `settleRule` answers `now` or `ask`. An incident, an Issue an alert filed and an Issue whose filer stated its edges settle at once. A request from a person or an agent asks `factory-triage` again for the Issues it must wait for, its kind, its size and whether the lead owes a Spec first.
+An Issue starts `settling`, and triage is not done until it settles. `settleRule` answers `now`, `size` or `ask`. An incident and an Issue an alert filed settle at once. An Issue whose filer stated its edges (`--after`, `--alone`, a plan row) asks `factory-triage` for its kind and size alone, shown no Issue to wait for, so its edges stay as stated and its size can reach the light seat's rule. A request from a person or an agent asks `factory-triage` again for the Issues it must wait for, its kind, its size and whether the lead owes a Spec first.
 
 ```ts
-export function settleRule(facts: SettlingFacts, candidates: readonly TriageCandidate[]): 'now' | 'ask' {
-  if (facts.kind === 'incident' || facts.fromAlert || facts.statedEdges) return 'now'
+export function settleRule(facts: SettlingFacts, candidates: readonly TriageCandidate[]): 'now' | 'size' | 'ask' {
+  if (facts.kind === 'incident' || facts.fromAlert) return 'now'
+  if (facts.statedEdges) return 'size'
   if (refinable(facts)) return 'ask'
   return candidates.length === 0 ? 'now' : 'ask'
 }

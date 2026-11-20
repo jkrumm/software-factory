@@ -193,6 +193,11 @@ test('an incident is settled by rule: no call, no size', async () => {
   expect(pass).toMatchObject({ asked: 0, settled: 1 })
   expect(requests).toEqual([])
   expect(await settledOf(incident)).toEqual({})
+  // settled with no size, it will get none: the planned seat does not claim it waits for one
+  expect((await readLeadSeats(world.db.sql, [incident], table(true))).get(incident)).toMatchObject({
+    role: 'lead',
+    sizeKnown: true,
+  })
 })
 
 test('a plan row behaves like the --alone Issue: stated edges, a size from triage, then queued', async () => {

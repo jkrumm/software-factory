@@ -122,7 +122,7 @@ export async function readLeadSeats(
     else unstarted.push(id)
   }
   // What the light rule names now: the same facts and the same rule the lead's start reads (`seatOf` in `app/leads-start.ts`).
-  const light = table?.light
+  const light = unstarted.length > 0 ? table?.light : undefined
   const facts = light ? await planFacts(sql, unstarted) : new Map<string, PlanRow>()
   const lightRow = light ? await light.row().catch(() => null) : null
   const gate = light ? await light.gate().catch(() => false) : false
@@ -149,8 +149,16 @@ export async function readLeadSeats(
     if (rule && lightRow) {
       seats.set(id, { ...lightRow, role: light?.role ?? 'light', planned: true, rule, sizeKnown: true })
     } else if (lead) {
-      // no size yet and no rule that needs none: the seat may still change once triage sized it, and the badge says so
-      seats.set(id, { ...lead, role: 'lead', planned: true, rule: null, sizeKnown: size !== null || !light })
+      // still settling, no size yet and no rule that needs none: the seat may change once triage sized it, and the badge says
+      // so. A settled Issue with no size (settled by rule, or before the size was kept) will not get one.
+      const settling = byIssue.get(id)?.get('filed')?.state === 'settling'
+      seats.set(id, {
+        ...lead,
+        role: 'lead',
+        planned: true,
+        rule: null,
+        sizeKnown: size !== null || !settling || !light,
+      })
     }
   }
   return seats

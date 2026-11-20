@@ -38,7 +38,7 @@ export const LeadSeat = z
     planned: z.boolean(),
     /** the light rule that chose the `light` row (`hygiene:links`, `kind:docs`, `alert:route`, `triage:small`), null on any other seat */
     rule: z.string().nullable(),
-    /** false only on a planned seat that waits for the size: the Issue has none yet and no other rule names it, so it may still move to light */
+    /** false only on a planned seat that waits for the size: the Issue is still settling with none and no other rule names it, so it may still move to light */
     sizeKnown: z.boolean(),
   })
   .meta({ id: 'LeadSeat' })

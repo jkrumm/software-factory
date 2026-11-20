@@ -79,8 +79,8 @@ test('a row is filed once when its after row closes: replayed passes file nothin
   expect(
     issues.map((i: { id: string; repo: string; state: string }) => [i.id, i.repo.split('/').pop(), i.state]),
   ).toEqual([
-    ['issue_1', 'app', 'queued'],
-    ['issue_2', 'lib', 'queued'],
+    ['issue_1', 'app', 'settling'],
+    ['issue_2', 'lib', 'settling'],
   ])
   const [facts] = await lab.world.db.sql`
     SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = 'issue_1' AND kind = 'noted'`
