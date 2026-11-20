@@ -101,11 +101,14 @@ export function sshProbe(input: {
   // script itself does nothing while a step container runs
   const trim = async (): Promise<void> => {
     const result = await run([...ssh, trimScript({ stepLabel: STEP_LABEL })], TRIM_TIMEOUT_MS, helperEnv())
-    // stdout and stderr arrive joined: the script's own line is the last one that starts with `trim:`
+    // stdout and stderr arrive joined: the script's own lines are the ones that start with `trim:`
     const lines = result.stdout.trim().split('\n')
-    const summary = lines.findLast((line) => line.startsWith('trim:')) ?? lines.at(-1) ?? ''
-    if (result.exit !== 0) input.log?.(`step host trim failed (exit ${result.exit ?? 'timeout'}): ${summary}`)
-    else if (!summary.includes('removed 0 idle slot copies and 0 bun cache entries')) input.log?.(summary)
+    const said = lines.filter((line) => line.startsWith('trim:'))
+    if (result.exit !== 0) {
+      input.log?.(`step host trim failed (exit ${result.exit ?? 'timeout'}): ${said.at(-1) ?? lines.at(-1) ?? ''}`)
+      return
+    }
+    for (const line of said) if (!line.includes('removed 0 idle slot copies and 0 bun cache entries')) input.log?.(line)
   }
   const refresh = async (live: ReadonlySet<string> | null): Promise<void> => {
     const result = await run([...ssh, SCRIPT], PROBE_TIMEOUT_MS, helperEnv())

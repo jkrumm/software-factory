@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { trimScript } from '../../src/adapters/remote/trim.ts'
@@ -18,6 +18,18 @@ function slot(project: string, n: number, days: number): void {
   writeFileSync(join(dir, 'package.json'), '{}')
   mkdirSync(`${dir}.run`, { recursive: true })
   touch(`${dir}.run`, days)
+}
+
+/** A scratch directory of the home with one file last written `days` ago. */
+function exp(name: string, days: number): string {
+  const dir = join(home, name)
+  mkdirSync(join(dir, 'repo'), { recursive: true })
+  const file = join(dir, 'repo', 'bench.log')
+  writeFileSync(file, 'x')
+  utimesSync(file, ago(days), ago(days))
+  touch(join(dir, 'repo'), days)
+  touch(dir, days)
+  return dir
 }
 
 /** A bun cache entry (`<name>@<version>@@@1`, under `@scope/` for a scoped name) whose files were read `days` ago. */
@@ -95,6 +107,32 @@ describe('the step host trim', () => {
     expect(run('exit 1').out).toContain('docker did not answer')
     expect(existsSync(join(home, 'factory-steps/basalt-ui/1'))).toBe(true)
     expect(existsSync(stale)).toBe(true)
+  })
+
+  test('removes an exp<issue> directory idle past the age, keeps a busy one and anything not named so', () => {
+    const idle = exp('exp2251', 5)
+    const busy = exp('exp2614', 5)
+    // one file written an hour ago keeps the whole directory, however old the rest is
+    writeFileSync(join(busy, 'repo', 'fresh.log'), 'x')
+    const other = exp('expert', 30)
+    const named = exp('exp12-notes', 30)
+    const link = join(home, 'exp9')
+    const target = exp('target', 30)
+    symlinkSync(target, link)
+    const result = run('exit 0')
+    expect(existsSync(idle)).toBe(false)
+    expect(existsSync(busy)).toBe(true)
+    expect(existsSync(other)).toBe(true)
+    expect(existsSync(named)).toBe(true)
+    expect(existsSync(target)).toBe(true)
+    expect(result.out).toContain('trim: removed 1 idle exp dirs')
+  })
+
+  test('the exp part runs without a step directory, while a step runs and when docker does not answer', () => {
+    rmSync(join(home, 'factory-steps'), { recursive: true, force: true })
+    expect(existsSync(exp('exp1', 9))).toBe(true)
+    expect(run('exit 1').code).toBe(0)
+    expect(existsSync(join(home, 'exp1'))).toBe(false)
   })
 
   test('a host with no step directory is left alone', () => {
