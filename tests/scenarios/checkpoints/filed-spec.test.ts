@@ -132,7 +132,7 @@ test('filed with a Spec: stored once, queued behind its verdict, admitted after 
     needs: ((await cli('read', 'needs')).json as { items: { kind: string; id: string }[] }).items.filter(
       (item) => item.kind === 'review' && item.id === artifact?.id,
     ),
-    asks: ((await cli('read', 'asks')).json as { asks: { id: string }[] }).asks.filter(
+    asks: ((await cli('read', 'overview')).json as { asks: { id: string }[] }).asks.filter(
       (ask) => ask.id === artifact?.id,
     ),
   })

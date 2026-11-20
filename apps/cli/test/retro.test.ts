@@ -55,7 +55,6 @@ beforeAll(() => {
       kpis: [],
       seats: {
         rows: [],
-        attemptSeats: [],
         movedUpShare: null,
         delivery: {
           light: noDelivery,
@@ -96,7 +95,6 @@ beforeAll(() => {
           takesAll: false,
         },
       },
-      edges: { total: 0, open: 0, needed: 0, notNeeded: 0, neededShare: null, idleHours: 0 },
     },
     friction: { at: '', days: 7, window: { from: '', to: '' }, since: null, issues: 0, closed: 0, counts: [] },
     sessions: [

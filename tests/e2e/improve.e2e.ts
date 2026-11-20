@@ -28,7 +28,6 @@ import {
   REVIEWER_LABEL,
   reviewerTripwireWords,
   deliveryRows,
-  edgeWords,
   windowWords,
 } from '../../apps/console/src/lib/improve.ts'
 import type { CapacityLoopModel, Kpi, KpiModel } from '@software-factory/contract'
@@ -178,9 +177,7 @@ test('one card per KPI in the order the Console shows, each the figures the API 
     ...headings,
     'By seat',
     'What the light seat delivers',
-    'By attempt seat',
     'Reviewers',
-    'Inferred chain edges',
     'Fix commits',
     'Friction',
     'What the loops yielded',
@@ -526,16 +523,4 @@ test('the reviewers table shows both seats with the five measures, and the tripw
   ])
     await expect(section.getByRole('columnheader', { name })).toBeVisible()
   for (const line of reviewerTripwireWords(kpis.reviewers)) await expect(section.getByText(line)).toBeVisible()
-})
-
-test('the attempt-seat table and the inferred-edge line sit under the By seat section', async ({ page, apiUrl }) => {
-  const [kpis] = await read(apiUrl, 7)
-  await page.goto('/improve')
-  const seats = page.locator('[data-shot="improve-attempt-seats"]')
-  await expect(seats.getByRole('heading', { name: 'By attempt seat' })).toBeVisible()
-  await expect(seats.getByRole('columnheader', { name: 'First verification pass' })).toBeVisible()
-  for (const row of kpis.seats.attemptSeats)
-    await expect(seats.getByRole('rowheader', { name: `${row.tier} · ${row.effort}`, exact: true })).toBeVisible()
-  const edges = page.locator('[data-shot="improve-edges"]')
-  await expect(edges.getByText(edgeWords(kpis.edges))).toBeVisible()
 })

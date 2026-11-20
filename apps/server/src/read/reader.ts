@@ -1,8 +1,6 @@
 import {
-  type ChangeList,
   READ_API_VERSION,
   type ReadAccountQuota,
-  type ReadAskList,
   type ReadHealthLine,
   type ReadIssueCard,
   type ReadIssueDetail,
@@ -16,16 +14,9 @@ import { readAsks } from './asks.ts'
 import { DEFAULT_LIMIT, issueDetail, type IssueScope, listCards, MAX_LIMIT } from './issues.ts'
 import type { QueueReasons } from './flow.ts'
 import { type LineSources, readHealthLines } from './lines.ts'
-import {
-  redactAsk,
-  redactHealth,
-  redactIssueCard,
-  redactIssueDetail,
-  redactOverview,
-  redactSessionCard,
-} from './surface.ts'
+import { redactHealth, redactIssueCard, redactIssueDetail, redactOverview, redactSessionCard } from './surface.ts'
 import { deriveLeads, issueRefOf, loadAttempts, loadBriefs, type SessionDeps } from './sessions.ts'
-import { changesAfter, follow, formatCursor, resolveCursor, type StreamEvent } from './stream.ts'
+import { follow, resolveCursor, type StreamEvent } from './stream.ts'
 import { isWorkRepo, loadOpenProjects } from './work.ts'
 
 export interface ReadDeps extends SessionDeps, LineSources {
@@ -64,11 +55,8 @@ export interface ReadApi {
     input: Surface & { issue?: string; role?: string; live?: boolean; limit?: number; before?: Date },
   ): Promise<SessionPage | null>
   session(input: Surface & { id: string }): Promise<ReadSessionCard | null>
-  asks(input: Surface): Promise<ReadAskList>
   health(input: Surface): Promise<ReadHealthLine[]>
   accounts(): Promise<ReadAccountQuota[]>
-  /** `issue` is `issue_<n>`; the changes after `since` (none given: no changes, the current cursor); throws `CursorGone` */
-  changes(input: { since?: string; issue?: string; limit?: number }): Promise<ChangeList>
   /** opens the stream after validating its cursor, so a bad one is an error before any byte is sent */
   stream(input: { since?: string; issue?: string; signal: AbortSignal }): Promise<AsyncGenerator<StreamEvent>>
 }
@@ -187,11 +175,6 @@ export function createReader(deps: ReadDeps): ReadApi {
       return found?.sessions.find((card) => card.id === id) ?? null
     },
 
-    async asks({ redact }) {
-      const { asks, humanQueue } = await readAsks(sql, clock.now())
-      return redact ? { asks: asks.map(redactAsk), humanQueue: humanQueue.map(redactAsk) } : { asks, humanQueue }
-    },
-
     async health({ redact }) {
       const now = clock.now()
       const lines = await readHealthLines(sql, { now, accounts: await readAccounts(sql, now), sources: deps })
@@ -199,13 +182,6 @@ export function createReader(deps: ReadDeps): ReadApi {
     },
 
     accounts: () => readAccounts(sql, clock.now()),
-
-    async changes({ since, issue, limit }) {
-      const cursor = await resolveCursor(sql, since)
-      if (!since) return { changes: [], cursor: formatCursor(cursor) }
-      const { changes, next } = await changesAfter(sql, { cursor, issue: issue ?? null, limit: clampLimit(limit) })
-      return { changes, cursor: formatCursor(next) }
-    },
 
     async stream({ since, issue, signal }) {
       const cursor = await resolveCursor(sql, since)

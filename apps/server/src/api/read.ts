@@ -1,8 +1,6 @@
 import {
-  ChangeList,
   ErrorBody,
   ISSUE_ID_META,
-  ReadAskList,
   ReadHealthList,
   ReadIssueCards,
   ReadIssueDetail,
@@ -24,9 +22,6 @@ const failure = (status: number, error: string, code: string): Response =>
 const unavailable = () => failure(503, 'the read API is not wired in this process', 'unavailable')
 
 const gone = (error: CursorGone): Response => failure(410, error.message, 'cursor_gone')
-
-/** 410 on top of the 400, 404 and 503 the other routes declare. */
-const withGone = { ...errorResponses(400, 404, 503), 410: ErrorBody }
 
 const Id = z.object({ id: z.string() })
 
@@ -141,18 +136,6 @@ export const readRoutes = (read: ReadApi | undefined) =>
       },
     )
     .get(
-      '/asks',
-      async ({ request }) =>
-        read ? Response.json(ReadAskList.parse(await read.asks(surfaceOf(request)))) : unavailable(),
-      {
-        response: { 200: ReadAskList, ...errorResponses(503) },
-        detail: {
-          operationId: 'read.asks',
-          summary: 'what waits on the owner, and the open Errands',
-        },
-      },
-    )
-    .get(
       '/health',
       async ({ request }) =>
         read ? Response.json(ReadHealthList.parse({ health: await read.health(surfaceOf(request)) })) : unavailable(),
@@ -161,32 +144,6 @@ export const readRoutes = (read: ReadApi | undefined) =>
         detail: {
           operationId: 'read.health',
           summary: 'lines that need a look: the door, accounts, loops, a blocked checkout',
-        },
-      },
-    )
-    .get(
-      '/changes',
-      async ({ query }) => {
-        if (!read) return unavailable()
-        const issue = query.issue === undefined ? undefined : issueRefOf(query.issue)
-        if (issue === null) return failure(400, `${query.issue} is not an Issue (issue_12 or 12)`, 'invalid_request')
-        try {
-          return Response.json(ChangeList.parse(await read.changes({ since: query.since, issue, limit: query.limit })))
-        } catch (error) {
-          if (error instanceof CursorGone) return gone(error)
-          throw error
-        }
-      },
-      {
-        query: z.object({
-          since: z.string().optional(),
-          issue: z.string().meta(ISSUE_ID_META).optional(),
-          limit: z.coerce.number().int().min(1).max(500).optional(),
-        }),
-        response: { 200: ChangeList, ...withGone },
-        detail: {
-          operationId: 'read.changes',
-          summary: 'the changes after a cursor, as a poll; without since, no changes and the current cursor',
         },
       },
     )

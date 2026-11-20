@@ -213,16 +213,6 @@ export const REQUESTS: readonly ClientRequest[] = [
   },
   {
     client: 'hermes',
-    source: `${HERMES_SKILL}:24`,
-    call: 'factory read asks',
-    via: 'cli',
-    argv: ['read', 'asks'],
-    token: 'read',
-    root: { asks: 'array', humanQueue: 'array' },
-    each: { asks: { short: 'string', summary: 'string', issue: 'number|null', stale: 'boolean' }, humanQueue: ASK },
-  },
-  {
-    client: 'hermes',
     source: `${HERMES_SKILL}:25`,
     call: 'factory read sessions --live',
     via: 'cli',
@@ -252,16 +242,6 @@ export const REQUESTS: readonly ClientRequest[] = [
     token: 'owner',
     root: { builtAt: 'string', asks: 'array', health: 'array' },
     each: { asks: ASK, health: HEALTH },
-  },
-  {
-    client: 'iris',
-    source: `${IRIS}:169`,
-    call: 'GET /v1/asks',
-    via: 'http',
-    http: { method: 'GET', path: '/v1/asks' },
-    token: 'owner',
-    root: { asks: 'array' },
-    each: { asks: ASK },
   },
   {
     client: 'iris',

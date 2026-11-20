@@ -470,11 +470,6 @@ export const ReadOverview = z
   .meta({ id: 'ReadOverview' })
 export type ReadOverview = z.infer<typeof ReadOverview>
 
-export const ReadAskList = z
-  .object({ asks: z.array(ReadAsk), humanQueue: z.array(ReadAsk) })
-  .meta({ id: 'ReadAskList' })
-export type ReadAskList = z.infer<typeof ReadAskList>
-
 export const ReadHealthList = z.object({ health: z.array(ReadHealthLine) }).meta({ id: 'ReadHealthList' })
 export type ReadHealthList = z.infer<typeof ReadHealthList>
 
@@ -486,7 +481,7 @@ export type ReadAccountList = z.infer<typeof ReadAccountList>
 export const CHANGE_KINDS = ['issue', 'session', 'decision', 'artifact', 'errand', 'signal'] as const
 export type ChangeKind = (typeof CHANGE_KINDS)[number]
 
-/** The `data:` of one frame and one entry of `GET /v1/changes`: kinds, ids and states, never an Issue's text. */
+/** The `data:` of one frame of `GET /v1/stream`: kinds, ids and states, never an Issue's text. */
 export const ReadChange = z
   .object({
     /** the cursor that resumes after this change */
@@ -500,10 +495,6 @@ export const ReadChange = z
   })
   .meta({ id: 'ReadChange' })
 export type ReadChange = z.infer<typeof ReadChange>
-
-/** `GET /v1/changes`: the changes after a cursor and the cursor to ask with next (the one given, when there are none). */
-export const ChangeList = z.object({ changes: z.array(ReadChange), cursor: z.string() }).meta({ id: 'ChangeList' })
-export type ChangeList = z.infer<typeof ChangeList>
 
 /** The first frame of a stream: the cursor it starts from. */
 export const StreamHello = z

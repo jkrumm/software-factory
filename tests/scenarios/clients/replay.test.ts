@@ -198,7 +198,7 @@ describe('the ids legacy clients read', () => {
     const cards = (await (await http('/v1/issues')).json()) as { issues: { id: number; ref: string }[] }
     const card = cards.issues.find((c) => c.ref === working)
     expect(card?.id).toBe(Number(number(working)))
-    const asks = (await (await http('/v1/asks')).json()) as {
+    const asks = (await (await http('/v1/overview')).json()) as {
       asks: { issue: number | null; issueRef: string | null }[]
     }
     expect(asks.asks.some((ask) => ask.issue === Number(number(deciding)) && ask.issueRef === deciding)).toBe(true)
@@ -332,9 +332,16 @@ describe('Iris', () => {
     const last = seen.at(-1) ?? ''
 
     await call(v, ['issue', 'new', '--repo', 'example', '--title', 'Stream the second change', '--key', 'stream-2'])
-    const all = (await (await http(`/v1/changes?since=${hello.id}&limit=500`)).json()) as {
-      changes: { cursor: string }[]
-      cursor: string
+    const accept = { accept: 'text/event-stream' }
+    const head = frames(await http('/v1/stream', { headers: accept }))
+    const headCursor = (await head.until((frame) => frame.event === 'hello')).id ?? ''
+    await head.close()
+    const full = frames(await http(`/v1/stream?since=${hello.id}`, { headers: accept }))
+    await full.until((frame) => frame.id === headCursor)
+    await full.close()
+    const all = {
+      cursor: headCursor,
+      changes: full.seen.filter((frame) => frame.event !== 'hello').map((frame) => ({ cursor: frame.id ?? '' })),
     }
     const second = frames(await http(`/v1/stream?since=${last}`, { headers: { accept: 'text/event-stream' } }))
     await second.until((frame) => frame.id === all.cursor)
@@ -401,7 +408,6 @@ describe('auth', () => {
       '/v1/overview',
       '/v1/issues',
       `/v1/issues/${number(working)}`,
-      '/v1/asks',
       '/v1/sessions?live=1',
       '/v1/needs',
       '/v1/signals',

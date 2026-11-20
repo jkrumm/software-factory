@@ -1,10 +1,8 @@
 import type {
-  AttemptSeatRow,
   CapacityLoopModel,
   FindingClass,
   FixCommitsModel,
   FrictionCount,
-  InferredEdgeKpis,
   Kpi,
   KpiKey,
   LoopYieldWindow,
@@ -862,24 +860,4 @@ export function reviewerTripwireWords(reviewers: ReviewerKpis): string[] {
     `${seat('Cheap', t.cheap)}; ${seat('Reviewer', t.plain)}; ${seat(`Cheap, last ${t.windowDays} days`, t.window)}.`,
     `It takes all reviews at ${t.minReviews} reviews each (${t.enough ? 'reached' : 'not reached'}), regressions no more often (${test(t.regressOk)}), first pass within ${t.points} points (${test(t.passOk)}), and goes back if its last ${t.windowDays} days (at least ${t.windowMinIssues} Issues) break either (${t.windowBreaks === null ? 'too few Issues to say' : t.windowBreaks ? 'broken' : 'not broken'}). ${verdict}`,
   ]
-}
-
-/** An attempt-seat row's cells as text: the seat, its attempts and Issues, the first pass, and the cost per Issue. */
-export function attemptSeatCells(row: AttemptSeatRow) {
-  return {
-    seat: `${row.tier} · ${row.effort}`,
-    attempts: `${row.attempts}`,
-    issues: `${row.issues}`,
-    firstPass: row.firstPassRate === null ? '–' : `${rateWords(row.firstPassRate)} of ${row.firstWatches}`,
-    cost: row.costPerIssue === null ? '–' : formatValue('usd', row.costPerIssue),
-  }
-}
-
-/** The line under the edge figures: how many inferred edges were needed, how many held a ready Issue, and for how long. */
-export function edgeWords(edges: InferredEdgeKpis): string {
-  const settled = edges.needed + edges.notNeeded
-  if (edges.total === 0) return 'No inferred chain edge was created in this window.'
-  const open = edges.open === 0 ? '' : ` ${edges.open} still open.`
-  if (settled === 0) return `${edges.total} inferred chain edges, none settled yet.${open}`
-  return `Of ${settled} settled inferred chain edges ${edges.needed} were needed (${rateWords(edges.neededShare)}) and ${edges.notNeeded} held a ready Issue for ${hoursWords(edges.idleHours)} in all.${open}`
 }

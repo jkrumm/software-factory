@@ -438,30 +438,6 @@ export const SeatKpiRow = z
 export type SeatKpiRow = z.infer<typeof SeatKpiRow>
 
 /**
- * The attempts that started in the window, grouped by the tier and effort each ran on (`lead_attempts.tier`, `effort`).
- * Unlike `SeatKpiRow`, which follows an Issue's first lead, this follows every attempt: a retry on a stronger seat counts
- * for that seat, and a first watch counts for the seat of the attempt that shipped it.
- */
-export const AttemptSeatRow = z
-  .strictObject({
-    tier: z.enum(TIERS),
-    effort: z.enum(EFFORTS),
-    /** attempts that started on the seat in the window */
-    attempts: z.number().int(),
-    /** the Issues behind those attempts, each once */
-    issues: z.number().int(),
-    /** first watches (watch 1) of those attempts' ships that ended passed or regressed, and the share that passed (null with none) */
-    firstWatches: z.number().int(),
-    firstPassRate: z.number().nullable(),
-    /** dollars the usage schema priced for the Claude sessions the attempts' hooks reported; null while it cannot be read */
-    cost: z.number().nullable(),
-    /** `cost` per Issue of `issues`; null while `cost` is */
-    costPerIssue: z.number().nullable(),
-  })
-  .meta({ id: 'AttemptSeatRow' })
-export type AttemptSeatRow = z.infer<typeof AttemptSeatRow>
-
-/**
  * What one seat delivers, over a window, in the four figures the owner pays for (`definitions` says each in a line). `light`
  * follows the Issues the light rule seated, `lead` the Issues that started on the lead row; the fields that only a move-up
  * has are 0 or null on the lead row.
@@ -530,8 +506,6 @@ export const SEAT_DELIVERY_DEFINITIONS = {
 export const SeatKpis = z
   .strictObject({
     rows: z.array(SeatKpiRow),
-    /** the same window by the seat each attempt started on, the most attempts first */
-    attemptSeats: z.array(AttemptSeatRow),
     /** the light Issues moved up, of the light Issues; null with none light */
     movedUpShare: z.number().nullable(),
     /** the window's four figures for the light seat beside the lead row's, each defined in one line */
@@ -652,30 +626,6 @@ export const ReviewerKpis = z
   .meta({ id: 'ReviewerKpis' })
 export type ReviewerKpis = z.infer<typeof ReviewerKpis>
 
-/**
- * The `after` edges the factory inferred (`planning_edges.inferred_by` set) that were created in the window, by whether
- * they were needed. An edge is settled once its blocker closed. A settled edge with no `ready_since` was needed: no look
- * saw its Issue ready behind it. One with `ready_since` was not: the Issue sat ready, idle capacity, until the edge was
- * satisfied. Readiness is judged per Issue, so the idle hours of Issues held in one repo can overlap.
- */
-export const InferredEdgeKpis = z
-  .strictObject({
-    /** inferred edges created in the window */
-    total: z.number().int(),
-    /** of those, not yet satisfied: their value is not final */
-    open: z.number().int(),
-    /** satisfied with no look that saw the Issue ready */
-    needed: z.number().int(),
-    /** satisfied with the Issue ready from `ready_since` */
-    notNeeded: z.number().int(),
-    /** `needed` of the settled edges; null with none settled */
-    neededShare: z.number().nullable(),
-    /** hours the not needed edges held a ready Issue, from `ready_since` to `satisfied_at`, summed */
-    idleHours: z.number(),
-  })
-  .meta({ id: 'InferredEdgeKpis' })
-export type InferredEdgeKpis = z.infer<typeof InferredEdgeKpis>
-
 export const KpiModel = z
   .strictObject({
     at,
@@ -688,8 +638,6 @@ export const KpiModel = z
     seats: SeatKpis,
     /** the reviewer seats side by side, and the tripwire that hands the cheap one every review */
     reviewers: ReviewerKpis,
-    /** the inferred chain edges created in the window, needed or not */
-    edges: InferredEdgeKpis,
   })
   .meta({ id: 'KpiModel' })
 export type KpiModel = z.infer<typeof KpiModel>
@@ -704,77 +652,6 @@ export const DaysQuery = z.object({
 })
 export type DaysQuery = z.infer<typeof DaysQuery>
 export const DEFAULT_DAYS = 7
-
-// -- wait census ---------------------------------------------------------------------------------------------------------
-
-export const WAIT_ENDERS = ['owner', 'judge', 'steward', 'factory', 'open'] as const
-
-export const WaitCensusReason = z
-  .strictObject({
-    /** a `WAITS` key of the work domain */
-    reason: z.string(),
-    /** the wait's exit is a person */
-    person: z.boolean(),
-    count: z.number().int(),
-    /** of `count`, the waits still going (their duration runs to `at`) */
-    open: z.number().int(),
-    totalSeconds: z.number(),
-    p50Seconds: z.number().nullable(),
-    p90Seconds: z.number().nullable(),
-    /** the waits by length: under 30 minutes, under 2 hours, under 24 hours, 24 hours or more */
-    buckets: z.strictObject({
-      lt30m: z.number().int(),
-      lt2h: z.number().int(),
-      lt24h: z.number().int(),
-      gte24h: z.number().int(),
-    }),
-    /** who ended them: the actor of the event that left the wait */
-    endedBy: z.strictObject({
-      owner: z.number().int(),
-      judge: z.number().int(),
-      steward: z.number().int(),
-      factory: z.number().int(),
-      open: z.number().int(),
-    }),
-    /** the waits no person's hands were needed to end (a person wait the Judge, a default or a check ended): a lead could have gone on at once */
-    avoidableCount: z.number().int(),
-    avoidableSeconds: z.number(),
-  })
-  .meta({ id: 'WaitCensusReason' })
-
-export const WaitCensusLong = z
-  .strictObject({
-    issue: IssueRef,
-    reason: z.string(),
-    seconds: z.number(),
-    open: z.boolean(),
-    endedBy: z.enum(WAIT_ENDERS),
-    avoidable: z.boolean(),
-  })
-  .meta({ id: 'WaitCensusLong' })
-
-/**
- * The waits that began over the last `days` days, counted by reason and length (`GET /v1/waits`, `factory read waits`),
- * and which of them nobody's hands were needed to end. Computed from `issue_events`: a wait is the span from the applied
- * event that began it to the next applied event that left it. Ids, reasons and numbers only.
- */
-export const WaitCensusModel = z
-  .strictObject({
-    at,
-    days: z.number().int(),
-    window: z.strictObject({ from: at, to: at }),
-    waits: z.number().int(),
-    totalSeconds: z.number(),
-    avoidableSeconds: z.number(),
-    /** `avoidableSeconds` over `totalSeconds`; null with no wait */
-    avoidableShare: z.number().nullable(),
-    /** every reason, the one that cost most time first */
-    byReason: z.array(WaitCensusReason),
-    /** the 10 longest waits */
-    longest: z.array(WaitCensusLong),
-  })
-  .meta({ id: 'WaitCensusModel' })
-export type WaitCensusModel = z.infer<typeof WaitCensusModel>
 
 /** `?hours=24`: a whole number of hours, 1 to 336 (14 days, as long as the minute rows are kept). */
 export const HoursQuery = z.object({
