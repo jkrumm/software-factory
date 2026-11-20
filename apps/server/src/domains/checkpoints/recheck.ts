@@ -1,5 +1,7 @@
 import type { IssueId } from '../../kernel/ids.ts'
+import type { Host } from '../../kernel/hands.ts'
 import { scrub } from '../../kernel/scrub.ts'
+import { errandScreenDetail } from './errand.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import { type DecisionForm, guardVerdict, type JudgeInput, type JudgeVerdict } from './decision.ts'
 import type { DecisionRecord } from './ports.ts'
@@ -153,10 +155,18 @@ export function recheckJudgeInput(plain: JudgeInput, events: string, afterMs: nu
   return { ...plain, checked: `${plain.checked.slice(0, 1200)}\n\n${recheckPreface(afterMs)}${events}` }
 }
 
-/** An Errand's `detail` for a recheck: the lead's own words cut, then the events; within the screen request's 4000. */
-export function recheckErrandDetail(detail: string | null, events: string, afterMs: number): string {
-  const head = scrub(detail ?? '').slice(0, 600)
-  return `${head}\n\n${recheckPreface(afterMs)}${events}`.trim().slice(0, 4000)
+/**
+ * An Errand's `detail` for a recheck: the lead's own words cut, its command and the MacBook fact (`errandScreenDetail`, the
+ * same builder as the first screen), then the events; within the screen request's 4000.
+ */
+export function recheckErrandDetail(
+  errand: { detail: string | null; command: string | null; host: Host | null },
+  events: string,
+  afterMs: number,
+): string {
+  return (
+    errandScreenDetail(errand, { scrubbed: scrub(errand.detail ?? ''), preface: recheckPreface(afterMs), events }) ?? ''
+  )
 }
 
 /** What a recheck makes of the Judge's call: the Decision stays (`kept`, with why), or the Judge settles it. */

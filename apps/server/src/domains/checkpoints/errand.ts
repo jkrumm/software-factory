@@ -366,6 +366,50 @@ export function screenByReview(input: ErrandInput): { review: string; reason: st
   }
 }
 
+/** The screen request's `detail` holds this many characters (`ErrandScreenRequest`). */
+export const SCREEN_DETAIL_MAX = 4000
+
+/**
+ * What the screen is told about where a MacBook command runs: the mini has no way onto the MacBook (its ssh takes a fixed verb
+ * list only), so "run it yourself over ssh" is no route. The screen turned a MacBook-only `make deploy` away with exactly that.
+ */
+export const MACBOOK_FACT =
+  "This command runs on the owner's MacBook. The mini has no shell on it (ssh to the MacBook serves three fixed verbs only: a dotfiles sync, one read-only report and a git pull of one checkout, never an arbitrary command), so an agent cannot run it from the mini: turn it away only if the same command would run on the mini itself, with the repo, tool and credentials it needs there."
+
+/** The newer events a recheck adds to the screen request, with the sentence that introduces them. */
+export interface ScreenEvents {
+  preface: string
+  events: string
+}
+
+/**
+ * The one builder of the screen request's `detail`, for the first screen, the desk's rescreen and the recheck: the lead's
+ * words, the command to run with its host, the events a recheck adds, and for a MacBook command the fact that the mini cannot
+ * run it. The fact is reserved first, so a long detail, command or event list is cut for it and never pushes it out; the whole
+ * stays within `SCREEN_DETAIL_MAX`. An Errand with no command and no events is its detail, unchanged.
+ */
+export function errandScreenDetail(
+  errand: { detail: string | null; command: string | null; host: Host | null },
+  recheck?: ScreenEvents & { scrubbed: string },
+): string | null {
+  if (errand.command === null && !recheck) return errand.detail
+  const macbook = errand.command !== null && errand.host === 'macbook'
+  const room = macbook ? SCREEN_DETAIL_MAX - MACBOOK_FACT.length - 1 : SCREEN_DETAIL_MAX
+  const command =
+    errand.command === null ? '' : `Command to run${errand.host ? ` (${errand.host})` : ''}: ${errand.command}`
+  const body = recheck ? [recheck.scrubbed.slice(0, 600), command.slice(0, 800)] : [errand.detail ?? '', command]
+  const lead = body.join('\n').trim()
+  let asked: string
+  if (recheck) {
+    // the newest events are the last lines: when they do not fit, the oldest go
+    const left = Math.max(0, room - lead.length - 2 - recheck.preface.length)
+    const events = left === 0 ? '' : recheck.events.slice(-left)
+    asked = `${lead}\n\n${recheck.preface}${events}`.trim()
+  } else asked = lead
+  asked = asked.slice(0, room)
+  return macbook ? `${asked}\n${MACBOOK_FACT}` : asked
+}
+
 export type ErrandScreenChecked =
   | { action: 'pass'; note: string; need: Need | null }
   | { action: 'turn_away'; reason: string }

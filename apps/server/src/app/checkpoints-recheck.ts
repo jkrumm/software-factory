@@ -136,7 +136,7 @@ async function lookErrand(deps: SettleDeps, seen: Seen, errand: ErrandRecord): P
       errand: {
         id: errand.id,
         summary: errand.summary,
-        detail: recheckErrandDetail(errand.detail, eventLines(events, 2800), deps.recheckAfterMs),
+        detail: recheckErrandDetail(errand, eventLines(events, 2800), deps.recheckAfterMs),
       },
       issue: { id: issue.id, repo: issue.repo, title: issue.title, kind: issue.kind },
     },

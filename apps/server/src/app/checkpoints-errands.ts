@@ -4,6 +4,7 @@ import {
   ERRAND_SCREEN_BACKOFF_MS,
   ERRAND_SCREEN_MAX_TRIES,
   type ErrandId,
+  errandScreenDetail,
   screenByReview,
   screenByNeed,
   screenByRule,
@@ -86,26 +87,6 @@ async function openUnder(
   await checkpoints.finishErrand(errand.id, at, 'the Issue no longer waits for it')
   await checkpoints.cancelPages(errand.id, at)
   return 'finished'
-}
-
-/**
- * What the screen is told about where a MacBook command runs: the mini has no way onto the MacBook (its ssh takes a fixed verb
- * list only), so "run it yourself over ssh" is no route. The screen turned a MacBook-only `make deploy` away with exactly that.
- */
-const MACBOOK_FACT =
-  "This command runs on the owner's MacBook. The mini has no shell on it (ssh to the MacBook serves three fixed verbs only: a dotfiles sync, one read-only report and a git pull of one checkout, never an arbitrary command), so an agent cannot run it from the mini: turn it away only if the same command would run on the mini itself, with the repo, tool and credentials it needs there."
-
-/** A request carries the command to run too; the screen sees it, the first look by rule reads the words only. */
-const screenedDetail = (errand: ErrandRecord): string | null => {
-  if (errand.command === null) return errand.detail
-  const macbook = errand.host === 'macbook'
-  // the screen request holds 4000 characters (`ErrandScreenRequest`): the fact is reserved, so a long detail and command are
-  // cut for it and never push it out
-  const room = macbook ? 4000 - MACBOOK_FACT.length - 1 : 4000
-  const asked = `${errand.detail ?? ''}\nCommand to run${errand.host ? ` (${errand.host})` : ''}: ${errand.command}`
-    .trim()
-    .slice(0, room)
-  return macbook ? `${asked}\n${MACBOOK_FACT}` : asked
 }
 
 /** The Errand reaches the owner: recorded and paged (the page's key is the Errand's) in one transaction. */
@@ -243,7 +224,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     return ok({
       errand,
       request: {
-        errand: { id: errand.id, summary: errand.summary, detail: screenedDetail(errand) },
+        errand: { id: errand.id, summary: errand.summary, detail: errandScreenDetail(errand) },
         issue: { id: found.issueId ?? errand.id, repo: found.repo, title: found.title, kind: found.kind },
       },
     })
@@ -399,7 +380,7 @@ export async function rescreenErrand(deps: SettleDeps, id: ErrandId): Step<Rescr
     if (turned) return ok({ rule: turned.reason })
     return ok({
       request: {
-        errand: { id: errand.id, summary: errand.summary, detail: screenedDetail(errand) },
+        errand: { id: errand.id, summary: errand.summary, detail: errandScreenDetail(errand) },
         issue: {
           id: errand.issueId ?? errand.id,
           repo: issue?.repo ?? errand.source ?? 'unknown',

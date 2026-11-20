@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type DecisionForm, type DecisionId, judgeInputOf } from '../../src/domains/checkpoints/decision.ts'
+import { errandScreenDetail, MACBOOK_FACT } from '../../src/domains/checkpoints/errand.ts'
 import {
   eventLines,
   type LogEntry,
@@ -117,8 +118,34 @@ describe('what the Judge and the screen are given', () => {
     expect({ ...input, checked: '' }).toEqual({ ...plain, checked: '' })
   })
   test('an Errand detail stays within the request limit', () => {
-    const detail = recheckErrandDetail('dd '.repeat(1400), eventLines([event(2, 0, 'qq '.repeat(90))], 2800), 6 * H)
+    const detail = recheckErrandDetail(
+      { detail: 'dd '.repeat(1400), command: null, host: null },
+      eventLines([event(2, 0, 'qq '.repeat(90))], 2800),
+      6 * H,
+    )
     expect(detail.length).toBeLessThanOrEqual(4000)
     expect(detail).toContain('Rechecked after 6 h')
+  })
+  test('a MacBook command Errand keeps its command and the MacBook fact, within the limit', () => {
+    const command = `cd ~/SourceRoot/x && make deploy ${'z'.repeat(2000)}`
+    const detail = recheckErrandDetail(
+      { detail: 'dd '.repeat(1400), command, host: 'macbook' },
+      eventLines([event(2, 0, 'qq '.repeat(90))], 2800),
+      6 * H,
+    )
+    expect(detail.length).toBeLessThanOrEqual(4000)
+    expect(detail).toContain('Command to run (macbook): cd ~/SourceRoot/x && make deploy')
+    expect(detail).toContain('Rechecked after 6 h')
+    expect(detail.endsWith(MACBOOK_FACT)).toBe(true)
+  })
+  test('the first screen, the rescreen and the recheck build the same MacBook fact', () => {
+    const errand = { detail: 'go', command: 'make deploy', host: 'macbook' as const }
+    expect(errandScreenDetail(errand)).toBe(`go\nCommand to run (macbook): make deploy\n${MACBOOK_FACT}`)
+    expect(recheckErrandDetail(errand, 'v2 line', 6 * H)).toContain(MACBOOK_FACT)
+  })
+  test('a mini command carries no MacBook fact', () => {
+    expect(recheckErrandDetail({ detail: 'go', command: 'make x', host: 'any' }, 'v2', 6 * H)).not.toContain(
+      MACBOOK_FACT,
+    )
   })
 })
