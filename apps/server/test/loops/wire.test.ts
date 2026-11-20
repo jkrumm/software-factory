@@ -135,6 +135,23 @@ test('the steward, triage and queue gaps are their own entries', () => {
     WORKFLOWS.settle.retry.backoffMs,
     WORKFLOWS.queue.retry.backoffMs,
   ])
+  // Triage and queue share a backoff in the table, so a swap of their two settings would pass the check above.
+  // Give each its own gap for this check only, and restore the table after.
+  const { settle, queue } = WORKFLOWS
+  const [savedSettle, savedQueue] = [settle.retry, queue.retry]
+  try {
+    settle.retry = { ...savedSettle, backoffMs: 11 * 60_000 }
+    queue.retry = { ...savedQueue, backoffMs: 12 * 60_000 }
+    const swapped = loadLoopSettings({})
+    expect([swapped.retryMs, swapped.triageRetryMs, swapped.queueRetryMs]).toEqual([
+      WORKFLOWS.steward.retry.backoffMs,
+      11 * 60_000,
+      12 * 60_000,
+    ])
+  } finally {
+    settle.retry = savedSettle
+    queue.retry = savedQueue
+  }
 })
 
 /** An agw port that records its calls and answers from a script keyed by workflow name. */
