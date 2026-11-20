@@ -889,6 +889,27 @@ describe('artifacts', () => {
     expect(last).toMatchObject({ result: 'replayed', verdict: { verdict: 'changes', by: 'owner' } })
   })
 
+  test("the owner reopens his delegate's verdict after the Issue closed: the verdict is replaced, and no lead is told", async () => {
+    const issueId = await workingIssue()
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    value(
+      await giveVerdict(deps, {
+        artifactId: artifact.id,
+        verdict: 'looks_good',
+        note: null,
+        revision: null,
+        by: 'orchestrator',
+      }),
+    )
+    await record(issueId, 'cancelled', { kind: 'cancelled', payload: { reason: 'not needed' }, actor: 'owner' })
+    const reopened = value(
+      await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: 'No.', revision: null }),
+    )
+    expect(reopened).toMatchObject({ result: 'applied', verdict: { verdict: 'changes', by: 'owner' } })
+    const [row] = await db.sql`SELECT verdict, by FROM factory.verdicts WHERE artifact_id = ${artifact.id}`
+    expect(row).toMatchObject({ verdict: 'changes', by: 'owner' })
+  })
+
   test('the delegate gives no verdict on an owner gate, a Concept or a Report', async () => {
     const gated = await workingIssue('example', { checkpoint: 'gate' })
     const gate = value(await submitArtifact(deps, { issueId: gated, attempt: 1, raw: SPEC }))

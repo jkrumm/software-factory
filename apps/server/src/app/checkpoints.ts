@@ -1026,8 +1026,8 @@ export async function verdictIn(
       )
     }
     if (reopens) {
-      // his delegate's verdict already ended the wait: the lead only hears that he took it back
-      const noted = await verdictNote()
+      // his delegate's verdict already ended the wait: a lead still on the Issue only hears that he took it back, and a closed Issue has none
+      const noted = issue?.state === 'closed' ? ok(null) : await verdictNote()
       if (!noted.ok) return noted
     } else if (heldInQueue) {
       const noted = await verdictNote()
