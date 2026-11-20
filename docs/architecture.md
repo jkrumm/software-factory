@@ -470,7 +470,7 @@ owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step r
   (`CACHE_IDLE_DAYS`, by access time: the mount is `relatime`), tightening to 7, 3 and 1 day while the cache is over 3 GiB
   (`CACHE_CAP_GIB`). The same script removes a scratch directory `~/exp<issue>` of the VPS home (a lead's experiment; 13 GB at
   8 of them, 2026-11-20) in which no file or directory changed for 2 days (`EXP_IDLE_DAYS`); that part needs neither the step
-  directory nor docker. A removed copy costs the slot's next step one checkout and install, a removed entry one download.
+  directory nor docker (files a container left root-owned are removed by a container when docker answers). A removed copy costs the slot's next step one checkout and install, a removed entry one download.
   A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini. The server logs a
   line when something was removed (`steps: trim: removed ...`). The step images carry `factory.image=step` (set at build;
   an image built before it has none), so the host's daily `docker image prune` can keep them with
