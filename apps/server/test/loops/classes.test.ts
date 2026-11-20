@@ -42,7 +42,7 @@ test('classOf: a judgment is classed by its kind, any other key by its first seg
   expect(classOf('hygiene', 'links:docs/x.md')).toBe('links')
   expect(classOf('hygiene', 'check')).toBe('check')
   expect(classOf('friction', 'touch:woken')).toBe('touch')
-  expect(classOf('friction', 'refusal:noted:why')).toBe('refusal')
+  expect(classOf('friction', 'refusal:closed')).toBe('refusal')
   expect(classOf('friction', 'lead_gone')).toBe('lead_gone')
   expect(classOf('friction', 'judgment:x')).toBe('judgment')
 })

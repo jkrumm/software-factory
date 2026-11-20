@@ -3,7 +3,7 @@ import * as z from 'zod'
 import { orchestratorSteer, ownerTouch, ownerVerdict, TOUCH_EVENTS, type Window } from './kpis.ts'
 import { frictionWindow } from './friction.ts'
 import { specSourceSql } from './spec-screen.ts'
-import { plain } from './words.ts'
+import { refusalClass } from './refusal-class.ts'
 
 /** Refs shown per pattern. */
 const LIMIT = 5
@@ -40,15 +40,13 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
   const tail = rest.join(':')
 
   if (head === 'refusal') {
-    const kind = rest[0] ?? ''
-    const reason = rest.slice(1).join(':')
     const rows: unknown[] = await sql`
-      SELECT issue_id, kind, detail FROM factory.issue_events
-      WHERE result = 'refused' AND kind = ${kind} AND at >= ${w.from} AND at < ${w.to} ORDER BY at DESC`
+      SELECT issue_id, NULL::text AS kind, detail FROM factory.issue_events
+      WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to} ORDER BY at DESC`
     return recent(
       rows
         .map((raw) => Row.parse(raw))
-        .filter((row) => plain(row.detail ?? 'no reason given', 80) === reason)
+        .filter((row) => refusalClass(row.detail).id === tail)
         .map((row) => row.issue_id),
     )
   }
@@ -59,7 +57,7 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
     return recent(
       rows
         .map((raw) => Row.parse(raw))
-        .filter((row) => plain(row.detail ?? 'no reason given', 80) === tail)
+        .filter((row) => refusalClass(row.detail).id === tail)
         .map((row) => row.issue_id),
     )
   }

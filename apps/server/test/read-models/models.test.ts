@@ -764,9 +764,9 @@ describe('the fixture', () => {
     expect(count('touch:cancelled')?.count).toBe(1)
     expect(count('touch:reopened')?.count).toBe(0)
     expect(count('refusal:total')?.count).toBe(1)
-    expect(count('refusal:closed:not working')).toMatchObject({
+    expect(count('refusal:other:not working')).toMatchObject({
       count: 1,
-      label: 'A closed event was refused: not working',
+      label: 'An event was refused: not working',
     })
     expect(count('ship_refused:total')?.count).toBe(1)
     expect(count('stall:wall')?.count).toBe(1)

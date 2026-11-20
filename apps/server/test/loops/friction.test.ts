@@ -63,8 +63,8 @@ test('a serious pattern is a finding by its count alone, at any sample', () => {
 
 test('a rate-judged pattern needs its count, its rate and the minimum sample', () => {
   const cases: [string, FrictionCount['group']][] = [
-    ['refusal:noted:why', 'refusal'],
-    ['ship_refused:why', 'refusal'],
+    ['refusal:closed', 'refusal'],
+    ['ship_refused:commit_not_on_base', 'refusal'],
     ['unreviewed_ship', 'unreviewed_ship'],
     ['unstated_acceptance', 'unstated_acceptance'],
     ['unproven_ci', 'unproven_ci'],
@@ -123,11 +123,11 @@ test('owner notes and cancels, the owner steering, need a far higher rate than a
 })
 
 test('a retired pattern, the review gate that is gone, is never a finding', () => {
-  const key = 'ship_refused:ship refused, review missing: review v4 at the tier `agw review route`…'
+  const key = 'ship_refused:review_gate_retired'
   expect(isRetired(key)).toBe(true)
-  expect(isRetired('ship_refused:ship names no merged commit')).toBe(false)
+  expect(isRetired('ship_refused:no_commit_named')).toBe(false)
   expect(over([count(key, 'refusal', 50)])).toEqual([])
-  expect(over([count('ship_refused:ship names no merged commit', 'refusal', 50)])).toHaveLength(1)
+  expect(over([count('ship_refused:no_commit_named', 'refusal', 50)])).toHaveLength(1)
 })
 
 test('patterns come most frequent first, ties by key', () => {

@@ -5,7 +5,7 @@ import { readEdgeIncidents } from './api-errors.ts'
 import { avoidableTouches, issuesFiled, orchestratorSteering, ownerVerdict, type Window } from './kpis.ts'
 import { specSourceSql } from './spec-screen.ts'
 import { per, windowOf } from './stats.ts'
-import { plain } from './words.ts'
+import { refusalClass } from './refusal-class.ts'
 
 /** A note of a lead that is still there and not typed this long after it was claimed is undelivered. */
 const NOTE_GRACE_MS = 10 * 60_000
@@ -53,6 +53,18 @@ const SETTLERS: Record<string, string> = {
 
 const Count = z.object({ n: z.coerce.number().int() })
 const Grouped = Count.extend({ key: z.string().nullable(), detail: z.string().nullable() })
+
+/** Rows of one refusal class summed, most frequent first (ties by class). */
+function byClass(rows: readonly { detail: string | null; n: number }[]): { id: string; words: string; n: number }[] {
+  const classes = new Map<string, { id: string; words: string; n: number }>()
+  for (const row of rows) {
+    const { id, words } = refusalClass(row.detail)
+    const seen = classes.get(id)
+    if (seen) seen.n += row.n
+    else classes.set(id, { id, words, n: row.n })
+  }
+  return [...classes.values()].sort((a, b) => b.n - a.n || (a.id < b.id ? -1 : 1))
+}
 
 const one = async (rows: Promise<unknown[]>): Promise<number> => Count.parse((await rows)[0]).n
 const grouped = async (rows: Promise<unknown[]>) => (await rows).map((raw) => Grouped.parse(raw))
@@ -105,31 +117,25 @@ async function countsOf(
     add('orchestrator_steer', `steer:${kind}`, label, steers[kind] ?? 0)
 
   const refused = await grouped(sql`
-    SELECT kind AS key, detail, count(*) AS n FROM factory.issue_events
-    WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to} GROUP BY kind, detail ORDER BY n DESC, kind`)
+    SELECT NULL::text AS key, detail, count(*) AS n FROM factory.issue_events
+    WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to} GROUP BY detail`)
   add(
     'refusal',
     'refusal:total',
     'Events the state machine refused',
     refused.reduce((sum, row) => sum + row.n, 0),
   )
-  for (const row of refused) {
-    const reason = plain(row.detail ?? 'no reason given', 80)
-    add('refusal', `refusal:${row.key}:${reason}`, `A ${row.key} event was refused: ${reason}`, row.n)
-  }
+  for (const row of byClass(refused)) add('refusal', `refusal:${row.id}`, `An event was refused: ${row.words}`, row.n)
   const ships = await grouped(sql`
     SELECT NULL::text AS key, detail, count(*) AS n FROM factory.quality_ships
-    WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to} GROUP BY detail ORDER BY n DESC`)
+    WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to} GROUP BY detail`)
   add(
     'refusal',
     'ship_refused:total',
     'Ships the gate refused',
     ships.reduce((sum, row) => sum + row.n, 0),
   )
-  for (const row of ships) {
-    const reason = plain(row.detail ?? 'no reason given', 80)
-    add('refusal', `ship_refused:${reason}`, `A ship was refused: ${reason}`, row.n)
-  }
+  for (const row of byClass(ships)) add('refusal', `ship_refused:${row.id}`, `A ship was refused: ${row.words}`, row.n)
 
   // A stall the next event of the Issue moved up (the light seat's own rule, `moveUpIfDue`: the attempt ends and the Issue
   // queues on the lead row) is the seat's cost, which `read finding-classes` and the seat KPIs already count: no loop.
