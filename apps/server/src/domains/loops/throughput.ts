@@ -4,6 +4,7 @@
  * the host's capacity (slot-minutes of failed or over-budget runs, minutes of queue or of a process that kept growing), so
  * the largest is the one worth a lead's time.
  */
+import { DEFAULT_TENANT_BUDGET_MIB } from '../../kernel/throughput-limits.ts'
 import type { Finding } from './selfwatch-model.ts'
 import {
   BASELINE_DAYS,
@@ -531,7 +532,7 @@ export function improvementText(c: Candidate, input: { date: string; reopens: Fi
   if (c.kpi === 'tenant_class_mib' || c.kpi === 'tenant_growth_mib')
     lines.push(
       c.kpi === 'tenant_class_mib'
-        ? `The memory is the host's, not this repo's: a tenant is a launchd job or a VM this repo configures. The target is the tenant class's budget (\`FACTORY_TENANT_BUDGET_MIB\`). The cost counts the excess as slot-minutes: the minutes a test slot of ${SLOT_MEMORY_MIB} MiB could have held it over ${RANK_DAYS} days.`
+        ? `The memory is the host's, not this repo's: a tenant is a launchd job or a VM this repo configures. The target is the tenant class's budget (${DEFAULT_TENANT_BUDGET_MIB} MiB). The cost counts the excess as slot-minutes: the minutes a test slot of ${SLOT_MEMORY_MIB} MiB could have held it over ${RANK_DAYS} days.`
         : `The memory is the host's, not this repo's: a tenant is a launchd job or a VM this repo configures. The rule needs no list of tenants: a tenant ${TENANT_GROWTH_MIB} MiB or more above its own median fires it, and the target is that median. The cost counts the excess as slot-minutes over the ${TENANT_DAY_HOURS} hours.`,
     )
   if (input.reopens) {

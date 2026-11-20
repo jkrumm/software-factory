@@ -49,7 +49,7 @@ export interface ThroughputDeps {
   clock: Clock
   /** the counting epoch: a finding filed before it is not measured, and a ranking window shorter than a day after it files nothing */
   epoch?: Date | null
-  /** the tenant class's budget and the repo its findings are filed on (`FACTORY_TENANT_BUDGET_MIB`, `FACTORY_TENANT_PROJECT`) */
+  /** the tenant class's budget and the repo its findings are filed on (`DEFAULT_TENANT_BUDGET_MIB`, `DEFAULT_TENANT_PROJECT`) */
   tenants: TenantPolicy
   projects(): Promise<ThroughputProject[]>
   /** the host over a window (`readWindowFacts`); `baseline` adds the 14-day median per Issue */

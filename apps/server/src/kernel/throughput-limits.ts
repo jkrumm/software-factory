@@ -33,9 +33,9 @@ export const MIN_FAIL_RUNS = 5
 /** The project the queue's wait is filed on (the queue is the factory's), and a process of no repo. */
 export const QUEUE_PROJECT = 'software-factory'
 
-/** The tenant class's budget when `FACTORY_TENANT_BUDGET_MIB` is not set: what the dotfiles program aims at with its work profile up. */
+/** The tenant class's budget: what the dotfiles program aims at with its work profile up. */
 export const DEFAULT_TENANT_BUDGET_MIB = 6144
-/** The repo that owns the host's configuration, where a tenant finding is filed when `FACTORY_TENANT_PROJECT` is not set. */
+/** The repo that owns the host's configuration, where a tenant finding is filed. */
 export const DEFAULT_TENANT_PROJECT = 'dotfiles'
 /** A tenant whose 24 h average footprint is this far above its own median of the 14 days before has grown. */
 export const TENANT_GROWTH_MIB = 1024

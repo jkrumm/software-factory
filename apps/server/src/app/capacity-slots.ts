@@ -107,7 +107,7 @@ export interface SlotDeps extends PlanningDeps {
   cores: number
   /** the lead admission's load ceiling: under the aim, the tripwire for a slot beyond the base is set at it */
   loadCeiling: number
-  /** `FACTORY_SLOT_PASS_MIN` in ms: how long a waiter may be passed by smaller steps before its memory is reserved for it */
+  /** The slot-pass window in ms: how long a waiter may be passed by smaller steps before its memory is reserved for it */
   slotPassMs?: number
   /** the swapout rate above which a finished run's peak is not learned from */
   swapoutCeilingMb?: number
