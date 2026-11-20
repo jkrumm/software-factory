@@ -1,5 +1,6 @@
 import type { AgwCall, AgwPort } from '../../kernel/agw.ts'
 import { AGW_IDLE_MS } from '../../kernel/agw.ts'
+import { killGroup } from '../process.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 
 export interface AgwOptions {
@@ -18,19 +19,6 @@ interface Finished {
 
 /** After the kill, the pipes get this long to drain before the call lets them go. */
 const PIPE_GRACE_MS = 500
-
-/** Kills the program and everything it started: it leads its own process group (`detached`). */
-function killGroup(proc: { pid: number; kill: (signal: NodeJS.Signals) => void }): void {
-  try {
-    process.kill(-proc.pid, 'SIGKILL')
-  } catch {
-    try {
-      proc.kill('SIGKILL')
-    } catch {
-      // already gone
-    }
-  }
-}
 
 /**
  * Runs `agw` to the end or until it goes silent. The program leads its own process group, so the watchdog kills what it
@@ -71,7 +59,7 @@ async function exec(
     () => {
       if (hung || Date.now() - lastActivity < idleMs) return
       hung = true
-      killGroup(proc)
+      killGroup(proc.pid)
     },
     Math.max(10, Math.min(idleMs / 4, 5_000)),
   )

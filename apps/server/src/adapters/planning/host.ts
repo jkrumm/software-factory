@@ -9,7 +9,7 @@ import {
 } from '../../domains/capacity/host.ts'
 import type { HostReader } from '../../domains/capacity/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
-import { CannotStart, runProcess } from './process.ts'
+import { CannotExecute, runProcess } from '../process.ts'
 
 export interface HostOptions {
   /** `sysctl`, the macOS tool whose counters the readings are */
@@ -43,13 +43,13 @@ export function hostReader(options: HostOptions): HostReader {
 
   const sysctl = async (name: string): Promise<Result<string, PortError>> => {
     try {
-      const out = await runProcess([options.sysctlBin, '-n', name], { timeoutMs })
+      const out = await runProcess([options.sysctlBin, '-n', name], timeoutMs, { group: true })
       const text = out.stdout.trim()
       if (out.timedOut) return err(portError('timeout', `sysctl ${name} did not answer within ${timeoutMs} ms`))
-      if (out.code !== 0 || text === '') return err(portError('unreadable', `sysctl ${name} gave no answer`))
+      if (out.exitCode !== 0 || text === '') return err(portError('unreadable', `sysctl ${name} gave no answer`))
       return ok(text)
     } catch (error) {
-      if (error instanceof CannotStart) return err(portError('gone', error.message))
+      if (error instanceof CannotExecute) return err(portError('gone', error.message))
       throw error
     }
   }

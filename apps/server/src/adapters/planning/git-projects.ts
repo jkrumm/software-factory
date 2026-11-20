@@ -7,7 +7,7 @@ import type { ProjectSource, RepoRef } from '../../domains/planning/ports.ts'
 import { isProjectDirName, MAX_PROJECT_BYTES } from '@software-factory/contract/project'
 import type { FileRead, RepoRead } from '../../domains/planning/sync.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
-import { CannotStart, runProcess } from './process.ts'
+import { CannotExecute, GitTimeout, gitIn } from '../process.ts'
 
 export interface GitProjectsOptions {
   /** directories whose direct children are repos */
@@ -29,14 +29,16 @@ export { parseYamlText }
  * checked out, an edit not committed, or a checkout that is behind is not what the factory runs on.
  */
 export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
-  const git = async (repo: string, args: string[]) => {
+  const git = async (
+    repo: string,
+    args: string[],
+  ): Promise<{ code: number; stdout: string; stderr: string; timedOut: boolean }> => {
     try {
-      return await runProcess(['git', '-C', repo, ...args], {
-        timeoutMs: options.timeoutMs,
-        env: { GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' },
-      })
+      const done = await gitIn(repo, args, { timeoutMs: options.timeoutMs, group: true, env: { LC_ALL: 'C' } })
+      return { code: done.exitCode, stdout: done.stdout, stderr: done.stderr ?? '', timedOut: false }
     } catch (error) {
-      if (error instanceof CannotStart) return { code: 127, stdout: '', stderr: error.message, timedOut: false }
+      if (error instanceof GitTimeout) return { code: -1, stdout: '', stderr: '', timedOut: true }
+      if (error instanceof CannotExecute) return { code: 127, stdout: '', stderr: error.message, timedOut: false }
       throw error
     }
   }

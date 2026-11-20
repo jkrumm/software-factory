@@ -5,7 +5,7 @@ import type { StartTerminal, TerminalInfo, Terminals } from '../../domains/leads
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { appSpaces, nameTab as nameTabInDoc, real, seedSpace, type Rpc } from './app-doc.ts'
 import { CannotExecute, HcClient, HcError } from './client.ts'
-import { DEFAULT_PROCESS_TIMEOUT_MS, runProcess, withStderr } from './process.ts'
+import { DEFAULT_PROCESS_TIMEOUT_MS, runProcess, withStderr } from '../process.ts'
 import { apiErrorAbove, atPrompt, inputBoxText } from './screen.ts'
 
 export interface HcTerminalsOptions {

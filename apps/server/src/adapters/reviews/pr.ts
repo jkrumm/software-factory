@@ -1,7 +1,7 @@
 import * as z from 'zod'
 import { type PrLook, prNumber, type ReviewPort } from '../../domains/loops/reviews.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
-import { childEnv, type Run, runProcess } from '../quality/process.ts'
+import { childEnv, type Run, runProcess } from '../process.ts'
 
 const TIMEOUT_MS = 30_000
 

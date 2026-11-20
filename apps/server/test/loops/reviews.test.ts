@@ -4,7 +4,7 @@ import { screenByReview } from '../../src/domains/checkpoints/errand.ts'
 import { deskDue, pushQueue } from '../../src/domains/checkpoints/desk.ts'
 import type { ErrandRecord } from '../../src/domains/checkpoints/ports.ts'
 import { wakeReason } from '../../src/domains/loops/reviews.ts'
-import type { Run } from '../../src/adapters/quality/process.ts'
+import type { Run } from '../../src/adapters/process.ts'
 
 describe('the review screen', () => {
   const screen = (summary: string, detail: string | null = null) => screenByReview({ summary, detail })

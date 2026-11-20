@@ -1,4 +1,6 @@
-/** What a process run came to; a timeout is `exit: null`. */
+import { CannotExecute, runProcess } from '../process.ts'
+
+/** What a helper run came to; a timeout is `exit: null`. */
 export interface ProcessResult {
   exit: number | null
   stdout: string
@@ -21,26 +23,13 @@ export function helperEnv(extra: Record<string, string> = {}): Record<string, st
   }
 }
 
-export const runProcess: RunProcess = async (command, timeoutMs, env = helperEnv()) => {
-  let proc: ReturnType<typeof Bun.spawn>
+/** The shared `runProcess` in the shape intake reads: stderr after stdout in one text, a timeout `null`, a failed start the message. */
+export const runHelper: RunProcess = async (command, timeoutMs, env = helperEnv()) => {
   try {
-    proc = Bun.spawn([...command], { env, stdout: 'pipe', stderr: 'pipe', stdin: 'ignore' })
+    const done = await runProcess(command, timeoutMs, { env, stderr: 'capture' })
+    return { exit: done.timedOut ? null : done.exitCode, stdout: done.stdout + done.stderr }
   } catch (error) {
-    return { exit: -1, stdout: error instanceof Error ? error.message : String(error) }
-  }
-  let timedOut = false
-  const timer = setTimeout(() => {
-    timedOut = true
-    proc.kill('SIGKILL')
-  }, timeoutMs)
-  try {
-    const [stdout, stderr, exit] = await Promise.all([
-      new Response(proc.stdout as ReadableStream).text(),
-      new Response(proc.stderr as ReadableStream).text(),
-      proc.exited,
-    ])
-    return { exit: timedOut ? null : exit, stdout: stdout + stderr }
-  } finally {
-    clearTimeout(timer)
+    if (!(error instanceof CannotExecute)) throw error
+    return { exit: -1, stdout: error.message }
   }
 }

@@ -3,7 +3,7 @@ import { condense } from '../../domains/quality/output.ts'
 import { type Check, ciCheck, NO_VERSION_TARGET } from '../../domains/quality/watch.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
 import { type CheckoutSync, deployedHolds, inScratchWorktree, syncCheckout } from './git.ts'
-import { CannotExecute, childEnv, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from './process.ts'
+import { CannotExecute, childEnv, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from '../process.ts'
 
 const MAKE_TIMEOUT_MS = 10 * 60_000
 const VERSION_TIMEOUT_MS = 30_000

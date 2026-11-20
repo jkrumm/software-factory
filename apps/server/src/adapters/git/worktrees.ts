@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Worktree, WorktreeRemoval, WorktreeRemovalInput, Worktrees } from '../../domains/leads/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
-import { CannotExecute, childEnv, EXIT_TIMEOUT, runProcess } from '../hc/process.ts'
+import { CannotExecute, EXIT_TIMEOUT, GitTimeout, gitIn as runGit, runProcess } from '../process.ts'
 
 const FETCH_TIMEOUT_MS = 90_000
 const GIT_TIMEOUT_MS = 30_000
@@ -54,14 +54,18 @@ export interface GitWorktreesOptions {
 export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
   const git = options.git ?? 'git'
 
-  async function probe(cmd: string[], cwd?: string): Promise<string | undefined> {
-    const result = await runProcess(cmd, GIT_TIMEOUT_MS, childEnv(), undefined, cwd)
-    return result.exitCode === 0 ? result.stdout.trim() : undefined
+  async function gitIn(repo: string, ...args: string[]): Promise<string | undefined> {
+    try {
+      const result = await runGit(repo, args, { git, timeoutMs: GIT_TIMEOUT_MS })
+      return result.exitCode === 0 ? result.stdout.trim() : undefined
+    } catch (error) {
+      if (error instanceof GitTimeout) return undefined
+      throw error
+    }
   }
-  const gitIn = (repo: string, ...args: string[]) => probe([git, '-C', repo, ...args])
 
   async function run(cmd: string[], timeoutMs: number, what: string, cwd?: string): Promise<string> {
-    const result = await runProcess(cmd, timeoutMs, childEnv(), undefined, cwd)
+    const result = await runProcess(cmd, timeoutMs, { cwd })
     if (result.exitCode === EXIT_TIMEOUT) {
       throw new Failed(`${what} did not finish in ${Math.round(timeoutMs / 1000)} s`, 'timeout')
     }
@@ -208,7 +212,7 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     const path = await find(repo, branch, input.path)
     if (path && (await gitIn(path, 'status', '--porcelain')) !== '') return { kept: 'it has uncommitted changes', path }
     // A failed fetch reads what the last one left, which can only keep more.
-    await probe([git, '-C', repo, 'fetch', '-q', 'origin'])
+    await gitIn(repo, 'fetch', '-q', 'origin')
     const base = await originDefault(repo)
     if (!base) return { kept: `${repo} has no origin default branch to check it against`, path }
     // The tree's own HEAD counts as much as the branch: a detached lead's commits sit on no branch.

@@ -1,7 +1,7 @@
 import { type FixCommit, BODY_CHARS, FILES_MAX, parseFixSubject } from '../../domains/loops/fix-classes.ts'
 import type { FixCommitReader } from '../../domains/loops/ports.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
-import { CannotExecute } from '../hc/process.ts'
+import { CannotExecute } from '../process.ts'
 import { originDefault, type RepoLocator } from './checkout.ts'
 import { defaultTools, gitOut, ProcessFailed, type Tools } from './git.ts'
 

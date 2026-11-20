@@ -1,4 +1,4 @@
-import { EXIT_TIMEOUT } from '../../hc/process.ts'
+import { EXIT_TIMEOUT } from '../../process.ts'
 import type { Tools } from '../git.ts'
 import { CHECK_TIMEOUT_MS, makeTarget } from './check.ts'
 import { type Outcome, failed, finding, found, clean, skipped } from './finding.ts'

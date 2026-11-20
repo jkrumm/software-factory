@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { OverloadHost } from '../../domains/loops/ports.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
-import { CannotExecute, EXIT_TIMEOUT, type Run, runProcess } from '../quality/process.ts'
+import { CannotExecute, EXIT_TIMEOUT, type Run, runProcess } from '../process.ts'
 
 /** A host at load 200 answers a `ps` slowly; one that takes longer than this is the finding, not a reason to hold the pass. */
 const PS_TIMEOUT_MS = 20_000

@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type { MacbookVerbPort, PushPort, SyncPort } from '../../domains/checkpoints/ports.ts'
 import { verbWords } from '../../domains/checkpoints/triage.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
-import { type Run, runProcess } from '../quality/process.ts'
+import { type Run, runProcess } from '../process.ts'
 
 /** A dialog waits for a click; this is a hang guard on the script, never a budget. */
 const HANG_GUARD_MS = 30 * 60_000

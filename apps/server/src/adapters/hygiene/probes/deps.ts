@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { EXIT_TIMEOUT } from '../../hc/process.ts'
+import { EXIT_TIMEOUT } from '../../process.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
 import type { DependencyEcosystem, DependencyRow, ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
 import { type UpgradePlan, type UpgradeRow, planUpgrades } from '../../../domains/loops/upgrades.ts'

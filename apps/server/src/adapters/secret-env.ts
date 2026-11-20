@@ -1,7 +1,7 @@
 /**
  * What the factory holds is not for a child, which would pass its environment on: the one list of the secrets the server's
- * own environment carries, and the one way a child's environment is made from it. Both process adapters (`hc/process.ts`,
- * `quality/process.ts`) build their `childEnv` here.
+ * own environment carries, and the one way a child's environment is made from it (`childEnv` in
+ * `adapters/process.ts`).
  *
  * Every bearer token is on it, the agent token and the door's included: a child of the server (a `make verify`, a git hook, the
  * `hc` client) must not be able to call the API as a lead or post as the door. A lead gets its token on purpose, from the code that

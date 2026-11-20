@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { childEnv as hcChildEnv } from '../src/adapters/hc/process.ts'
-import { childEnv as qualityChildEnv } from '../src/adapters/quality/process.ts'
+import { childEnv } from '../src/adapters/process.ts'
 import { SECRET_ENV, withoutSecrets } from '../src/adapters/secret-env.ts'
 
 /** Every setting of `settings.ts` whose name says it is a token or a password. */
@@ -31,12 +30,12 @@ test('every token setting of settings.ts is on the one list of secrets a child n
   expect(settings.filter((name) => !SECRET_ENV.includes(name))).toEqual([])
 })
 
-test('both process adapters strip every secret from a child and keep the rest', () => {
+test('the one child environment strips every secret from a child and keep the rest', () => {
   const base = Object.fromEntries(SECRET_ENV.map((name) => [name, `secret-${name}`]))
   const before = { ...process.env }
   Object.assign(process.env, base, { FACTORY_TEST_KEEP: 'kept' })
   try {
-    for (const env of [hcChildEnv(), qualityChildEnv()]) {
+    for (const env of [childEnv()]) {
       expect(SECRET_ENV.filter((name) => env[name] !== undefined)).toEqual([])
       expect(env.FACTORY_TEST_KEEP).toBe('kept')
     }

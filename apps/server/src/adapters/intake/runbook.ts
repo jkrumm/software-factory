@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import type { Runbook } from '../../domains/intake/ports.ts'
 import { ok } from '../../kernel/result.ts'
-import { type RunProcess, runProcess } from './process.ts'
+import { type RunProcess, runHelper } from './process.ts'
 
 const RUNBOOK_TIMEOUT_MS = 120_000
 const PROBE_TIMEOUT_MS = 10_000
@@ -12,7 +12,7 @@ const PROBE_TIMEOUT_MS = 10_000
  * not an error to run, it is a rule that cannot help).
  */
 export function makeRestartRunbook(options: { sourceRoot: string; run?: RunProcess }): Runbook {
-  const run = options.run ?? runProcess
+  const run = options.run ?? runHelper
   return {
     async run({ repo }) {
       const dir = join(options.sourceRoot, repo)

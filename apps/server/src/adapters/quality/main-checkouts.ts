@@ -1,7 +1,7 @@
 import type { MainCheckouts } from '../../domains/loops/ports.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
-import { GitTimeout, readMainCheckout } from './git.ts'
-import { CannotExecute, type Run } from './process.ts'
+import { CannotExecute, GitTimeout, type Run } from '../process.ts'
+import { readMainCheckout } from './git.ts'
 
 /** The main checkout of a repo the factory may look at (inside the allowed roots); one it may not is no finding. */
 export function gitMainCheckouts(
