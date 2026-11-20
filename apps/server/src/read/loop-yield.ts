@@ -95,13 +95,17 @@ export async function readLoopYield(sql: SQL, options: { now: Date }): Promise<L
   const { now } = options
   const widest = windowOf(now, Math.max(...YIELD_DAYS))
   const rows: unknown[] = await sql`
-    SELECT DISTINCT ON (lf.loop, lf.class, i.id) lf.loop, lf.class, i.id AS issue, f.at AS filed_at, i.outcome, lf.verdict,
+    SELECT lf.loop, lf.class, i.id AS issue, f.at AS filed_at, i.outcome,
+      -- an Issue with several keys of one class is as moved as its least moved key (a key not read yet is the least)
+      (array_agg(lf.verdict ORDER BY CASE WHEN lf.verdict IS NULL THEN 0 WHEN lf.verdict = 'worse' THEN 1
+        WHEN lf.verdict = 'flat' THEN 2 WHEN lf.verdict = 'unmeasured' THEN 3 ELSE 4 END))[1] AS verdict,
       (SELECT c.at FROM factory.issue_events c WHERE c.issue_id = i.id AND c.result = 'applied' AND c.to_state = 'closed'
         ORDER BY c.version DESC LIMIT 1) AS closed_at
     FROM factory.loop_findings lf
     JOIN factory.issues i ON i.id = lf.issue_id
     JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
     WHERE f.at >= ${widest.from} AND f.at < ${widest.to}
+    GROUP BY lf.loop, lf.class, i.id, f.at, i.outcome
     ORDER BY lf.loop, lf.class, i.id`
   const issues: YieldIssue[] = rows.map((raw) => {
     const row = Row.parse(raw)

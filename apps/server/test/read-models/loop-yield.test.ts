@@ -273,3 +273,22 @@ test('the stall and owner reasons the waste read uses are the work domain’s', 
     entries.filter(([reason, w]) => w.exit === 'person' && reason !== 'paused').map(([reason]) => reason),
   )
 })
+
+test('an Issue with several keys of one class counts once, and moved only when every key moved', async () => {
+  const hygiene = async () =>
+    (await readLoopYield(db.sql, { now: NOW })).loops.find((l) => l.loop === 'hygiene')?.windows[0]
+  const before = await hygiene()
+  const keyed = (id: string, key: string, verdict: string) =>
+    db.sql`INSERT INTO factory.loop_findings (issue_id, loop, repo, class, key, figure, verdict, filed_at)
+      VALUES (${id}, 'hygiene', 'app', 'multi', ${key}, 3, ${verdict}, ${ago(3)})`
+  const mixed = await issue(3, 1, 'done')
+  await keyed(mixed, 'multi:a', 'moved')
+  await keyed(mixed, 'multi:b', 'worse')
+  const allMoved = await issue(3, 1, 'done')
+  await keyed(allMoved, 'multi:a', 'moved')
+  await keyed(allMoved, 'multi:b', 'moved')
+  const after = await hygiene()
+  expect((after?.issues ?? 0) - (before?.issues ?? 0)).toBe(2)
+  expect((after?.moved ?? 0) - (before?.moved ?? 0)).toBe(1)
+  expect(after?.classes.find((c) => c.class === 'multi')?.issues).toBe(2)
+})

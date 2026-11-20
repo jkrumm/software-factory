@@ -126,8 +126,7 @@ export interface Swept {
 const shortRef = (ref: string): string => ref.slice(0, 7)
 
 /** The seat the finding's Issue starts on: every hygiene finding is a probe's, and the probe turning green proves the fix. */
-const seatLine = (): string =>
-  'Seat: light (the probe turning green proves the fix; a class whose Issues keep moving up starts on the standard lead)'
+const seatLine = (): string => 'Seat: light (the probe turning green proves the fix)'
 
 const sweptLine = (swept: Swept): string => `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`
 
