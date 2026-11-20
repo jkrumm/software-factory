@@ -35,7 +35,14 @@ function yieldWindow(
 ): LoopYieldWindow {
   const rows = issues.filter((i) => i.filedAt >= window.from && i.filedAt < window.to)
   // an Issue may carry findings of several classes (a hygiene batch): it counts once in the totals and once in each class
-  const inWindow = [...new Map(rows.map((i) => [i.issue, i])).values()]
+  // its verdict is moved only when every one of its findings moved
+  const byIssue = new Map<string, YieldIssue>()
+  for (const i of rows) {
+    const seen = byIssue.get(i.issue)
+    if (!seen) byIssue.set(i.issue, i)
+    else if (seen.verdict === 'moved' && i.verdict !== 'moved') byIssue.set(i.issue, { ...seen, verdict: i.verdict })
+  }
+  const inWindow = [...byIssue.values()]
   const closes = inWindow.flatMap((i) => (i.closedAt ? [(i.closedAt.getTime() - i.filedAt.getTime()) / 1000] : []))
   const classes = new Map<string, { issues: number; noise: number }>()
   for (const i of rows) {

@@ -141,11 +141,11 @@ A lead on sonnet at high effort shipped three commits at 03:04. Of three accepta
 
 Hygiene is the standing check on a project's health: per-repo probes read a throwaway checkout of the default branch.
 
-- **Probes from a catalogue.** 16 deterministic probes (`check`, `advisories`, `links`, `deps`, `ci`, `agentsmd`, `stale`, `deadcode`, and more) and one agent judgment of the documents. The catalogue is one list in `packages/contract`, and `docs/hygiene.md` is generated from it.
+- **Probes from a catalogue.** 15 deterministic probes (`check`, `advisories`, `links`, `deps`, `ci`, `agentsmd`, `stale`, `deadcode`, and more) and one agent judgment of the documents. The catalogue is one list in `packages/contract`, and `docs/hygiene.md` is generated from it.
 - **Daily and weekly.** A full pass weekly, a daily pass of the probes marked daily. A repo with 30 commits since its last full pass is promoted to a full one.
 - **A project declares its own.** `hygiene.probes` in `project.yaml` names a `make` target that is red on any exit but 0.
 - **Skips state a reason.** A project skips a probe by name with a reason, and the pass shows it.
-- **Budget:** of the 5 signals per pass, the judgment keeps 2, so probes file at most 3.
+- **Budget:** a pass files its findings as one Issue with a section each; of its 5 sections the judgment keeps 2, so probes fill at most 3.
 
 <!-- snippet: apps/server/src/domains/loops/hygiene.ts JUDGMENT_RESERVE -->
 ```ts

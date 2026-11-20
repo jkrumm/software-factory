@@ -19,7 +19,7 @@ concurrency:
 #
 # One matrix, fail-fast: the first job that goes red cancels the ones still queued or running, and the run ends
 # `failure`. (A red `static` is known minutes before the test jobs end. `gh run cancel` from a step does the same but
-# ends the run `cancelled`, which merge-guard and the selfwatch `ci_red` read as superseded, so a red head or master
+# ends the run `cancelled`, which merge-guard reads as superseded, so a red head or master
 # would not show as red.) Job names are the matrix entries' `name`.
 jobs:
   ci:

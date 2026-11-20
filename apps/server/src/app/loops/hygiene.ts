@@ -558,7 +558,7 @@ async function redDoctor(deps: HygieneDeps, project: StoredProject): Promise<str
 /**
  * One tick of the hygiene loop: at most one project. A project with no pass in the last `everyMs` is swept (probes in a
  * throwaway checkout, then `factory-hygiene` over the documents the sweep picked); otherwise a project whose judgment failed
- * is judged again at the stored commit. Both file through intake, at most `MAX_SIGNALS_PER_PASS` signals a project and pass,
+ * is judged again at the stored commit. Both file through intake, at most `MAX_SIGNALS_PER_PASS` findings a project and pass (one signal, a section each),
  * the rest named in the record. A checkout that fails on a full pass is recorded as a sweep with no runs, retried after `retryMs`.
  * A crash between filing and recording replays safely: intake's finding key turns a repeat into a note or a drop.
  */
