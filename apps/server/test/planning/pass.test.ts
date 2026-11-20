@@ -150,6 +150,45 @@ describe('the plan files its rows', () => {
     ])
   })
 
+  test('a filed row whose facts change reaches its open Issue as one note of the changed facts; unchanged and closed get none', async () => {
+    const texts = async (id: string) =>
+      (
+        await world.db.sql`
+          SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${id} AND kind = 'noted' ORDER BY version`
+      ).map((e: { text: string }) => e.text)
+    world.source.add('app', {
+      project: PROJECT('app'),
+      plan: plan('p1', [
+        row('first', { facts: { why: 'because', acceptance: 'it works' } }),
+        row('second', { after: ['first'] }),
+      ]),
+    })
+    value(await planningPass(world.deps))
+    value(await planningPass(world.deps))
+    expect(await texts('issue_1')).toEqual(['Plan row first.\nwhy: because\nacceptance: it works'])
+
+    world.source.set('app', {
+      plan: plan('p2', [
+        row('first', { facts: { why: 'because', acceptance: 'it works twice' } }),
+        row('second', { after: ['first'] }),
+      ]),
+    })
+    value(await planningPass(world.deps))
+    value(await planningPass(world.deps))
+    expect(await texts('issue_1')).toEqual([
+      'Plan row first.\nwhy: because\nacceptance: it works',
+      'Plan row first changed.\nacceptance: it works twice',
+    ])
+
+    // a closed Issue hears nothing of a later change
+    await world.send(issueId(1), 'cancelled', 'cancelled', { reason: 'not needed' }, 'owner')
+    world.source.set('app', {
+      plan: plan('p3', [row('first', { facts: { why: 'changed again' } }), row('second', { after: ['first'] })]),
+    })
+    value(await planningPass(world.deps))
+    expect(await texts('issue_1')).toHaveLength(2)
+  })
+
   test('a row with a seat files an Issue that carries it: tier and effort as given, a role resolved from the table', async () => {
     world.source.add('app', {
       project: PROJECT('app'),

@@ -1,5 +1,8 @@
 import { newlySatisfied } from '../domains/planning/chain.ts'
 import {
+  changedFactsNote,
+  factsChangeHead,
+  factsHead,
   factsNote,
   filable,
   type PlanKind,
@@ -154,6 +157,46 @@ async function fileFor(
   return ok({ project: source, row: row.key, issue })
 }
 
+/**
+ * Tells the lead of every open Issue a plan row filed which of the row's facts changed since the notes it holds: one
+ * note naming the changed facts with their new text, keyed by row and content so a replayed pass sends nothing twice.
+ * A closed Issue, a row nobody filed (an adopted one) and an unchanged row get nothing.
+ */
+async function resendFacts(stores: PlanningStores, deps: PlanningDeps): Promise<Result<number, PortError>> {
+  const views = await planViews(stores, deps.clock.now())
+  const projects = await stores.planning.projects()
+  const filed = await stores.planning.filedRows()
+  let sent = 0
+  for (const view of views) {
+    for (const status of view.rows) {
+      if (status.state !== 'open' || status.issue === null || !filed.has(`${status.project}:${status.key}`)) continue
+      const row = projects.find((p) => p.name === status.project)?.plan?.rows.find((r) => r.key === status.key)
+      const history = await stores.work.history(status.issue)
+      if (!row || !history) continue
+      const heads = new Set([factsHead(row.key), factsChangeHead(row.key)])
+      const texts = history.flatMap((record) => {
+        const text = (record.payload as { text?: unknown } | null)?.text
+        const first = typeof text === 'string' ? text.split('\n', 1)[0] : undefined
+        return record.kind === 'noted' && record.actor === 'factory' && first && heads.has(first)
+          ? [text as string]
+          : []
+      })
+      if (!texts.some((text) => text.split('\n', 1)[0] === factsHead(row.key))) continue
+      const text = changedFactsNote(row, texts)
+      if (text === null) continue
+      const digest = new Bun.CryptoHasher('sha256').update(text).digest('hex').slice(0, 12)
+      const noted = await recordIn(stores.work, deps, {
+        issueId: status.issue,
+        key: key('plan', status.project, row.key, 'facts', digest),
+        event: { kind: 'noted', payload: { text }, actor: 'factory' },
+      })
+      if (!noted.ok) return err(portError('refused', JSON.stringify(noted.error)))
+      if (noted.value.result === 'applied') sent++
+    }
+  }
+  return ok(sent)
+}
+
 export interface PassResult {
   sync: SyncResult | null
   /** rows filed as Issues by this pass */
@@ -286,7 +329,7 @@ async function replanHeld(deps: PlanningDeps): Promise<string[]> {
 
 /**
  * The planning part of a tick: read the projects, file the plan rows whose `after` rows have closed, mark the chain's
- * satisfied edges and wake the leads that waited on them or on a time. Every step is replay-safe, so a pass run twice does nothing
+ * satisfied edges, tell a lead of a row whose facts changed and wake the leads that waited on them or on a time. Every step is replay-safe, so a pass run twice does nothing
  * twice; a long wait with Issues behind it gets a Replan filed for its project. A failing step is an entry in `errors`; the others still go.
  */
 export async function planningPass(
@@ -309,6 +352,9 @@ export async function planningPass(
     if (!result.ok) errors.push(`${at.project}:${at.row}: ${result.error.detail}`)
     else if (result.value) filed.push(result.value)
   }
+
+  const resent = await deps.uow.run((stores) => resendFacts(stores, deps))
+  if (!resent.ok) errors.push(`facts: ${resent.error.detail}`)
 
   const chain = await deps.uow.run(async (stores) => {
     const satisfied = await satisfyEdges(stores, deps.clock.now())
