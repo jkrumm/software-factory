@@ -1,4 +1,4 @@
-import { FILING, PLAN_LIMITS } from '@software-factory/contract'
+import { FILING, PLAN_LIMITS, SPEC_WAIT_HOURS } from '@software-factory/contract'
 import type { OperationExtension } from './operation.ts'
 import {
   artifactListPlain,
@@ -83,16 +83,21 @@ const decisionHelp = [
   '  --options is a JSON array of 2 to 10 objects {"label","reversible","cost"}: every label different, reversible true or false',
   '  --no-answer is {"consequence","default","waitMinutes"}: the default is the label of a reversible option and needs waitMinutes (1 to 10080); with neither, nothing is taken without an answer',
   '  each text at most 4000 characters; --call <id> makes a repeated call one Decision',
+  "A Decision is for product direction, spend, irreversible data loss, other people or security policy. An architecture or look-and-feel choice that later Issues build on is a Spec (`factory artifact submit --kind spec`), never a Decision. A person's chore (approve a pull request, rotate a key, click in a UI) is an Errand (`factory errand raise`), and a Decision whose recommendation or default is to keep waiting is refused with that pointer.",
+  'It carries your recommendation, what you checked (--checked), the cost of each option and what happens with no answer. Asking again on a question still open amends the open Decision. The Judge sees every Decision before the owner, and it reaches him only if the Judge passes it on. The answer comes back to you as a note.',
+  "A Spec's Decisions may be raised before or after you submit it; raised after, they wait together with the review, and you hear the verdict and the answers in one note.",
+  'A Decision that names a default and that you already went on with is settled by you, not waited out: `factory decision take-default <decision id>` closes it as the default taken and ends the wait, so `ship` is not refused for the time it would have run.',
 ].join('\n')
 
 const errandHelp = [
   "An Errand is a person's hands (a device, a portal, a physical step) and nothing a token can do. --tried says what you ran first.",
   '--need secret|hands|place is required: secret is 1Password, a biometric, a password or a passphrase; hands is a device, a portal, a physical step or a look; place is a command that must run on his MacBook and holds no secret (give it with --cmd). Without it the raise is refused.',
   "The factory decides some Errands before they reach the owner, and says why. A command that runs wholly on the mini or over keyless ssh (an `ssh` to the mini or to a server such as the homelab or the vps) is refused: run it yourself (only a reboot, a core update, the deploy gate's release or a recursive delete stays his yes). A MacBook command that runs a mini-only CLI (`factory`, `secrets-run`) is refused too: run it yourself. A need he turned back in the last 3 days is refused with his note. A MacBook command that is exactly one of the fixed read-only reports (`mount | grep smbfs`, `ntfy-mac update --check`) or `git -C ~/SourceRoot/<repo> pull --ff-only` runs through the MacBook's gate with no dialog, and its output comes back to you as a note. A bot check on a page is not an Errand: report the page as blocked and go on with other sources.",
+  "Never raise an Errand to approve or merge a pull request, or to bypass a review rule: it is turned back and the Issue waits on the review anyway. A pull request from the owner's own account cannot be approved by him; a review by someone else is waited on with `factory issue defer <id> --review <pull request>`.",
   'The host does these for you, so an Errand that asks for one is refused with the route:',
   '  a door token: `factory door token new <source>`; a door route into your own repo: `factory door route-set`; into another repo: `factory signal file --repo <that repo>`',
-  '  an install: a Makefile target of the repo (`brew install` through it)',
-  "  a secret read: `secrets-run`; a sudo step: a way without root first, else the owner's MacBook command (`--cmd`, `--host macbook`, `sudo -S` with the password piped in, never `ssh -t`); the mini's sudo password is MacBook-only, never read it",
+  '  an install (exiftool, ImageMagick): add a Makefile target of the repo that runs `brew install` and run it with `make -C <worktree> <target>`',
+  "  a secret read: `secrets-run read op://...` or `secrets-run run --env-file=<tpl> -- <cmd>`, never `op` (it hangs on the mini); a sudo step (say in --tried what you looked for): a way without root first, else the owner's MacBook command (`--cmd`, `--host macbook`, `sudo -S` with the password piped in, never `ssh -t`); the mini's sudo password is MacBook-only, never read it",
   '  a Report that does not show in Needs you: a signal on software-factory',
   "A step on the owner's MacBook (a sudo prompt, a Touch ID, a `hc run`): `--cmd '<the command he runs>' --host macbook`. The factory pushes it to the MacBook as a dialog as soon as it reaches him, one at a time, and the answer closes the Errand. The dialog has no terminal: `ssh -t` and `sudo` without `-S` are refused (pipe the password into `sudo -S`). Never queue an `ask-human.sh` request beside an Errand: an Errand with no command beside your queued request is refused.",
   "The Errand's need is set from its shape, not from your wording: a command addressed to the mini (`ssh <the mini's alias> '...'`) or the deploy gate's release is an `approval` (Needs you shows an Approve button, the server runs it, no MacBook dialog); a secret word (1Password, a biometric, sudo) is a `secret`; another MacBook command with no secret is a `place` (shown to copy; a dialog only on his button); the rest is `hands`. An open Errand of the repo with the same command, the same check, the same one-line `summary` or the same `needKey` (your own short lowercase name for the need, e.g. `census-ua-contact`, a field of the `--body` JSON) as yours is joined: you wait on that one, he is paged once, and you hear the one answer. State a `needKey` when the same need may be worded differently by another Issue. A command that came back unsuccessful twice ends the Errand with a note: raise it again with a corrected command and a new `--call` id.",
@@ -107,7 +112,15 @@ const htmlHelp =
 const imagesHelp =
   'Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); any other host, such as raw.githubusercontent.com, shows its alt text. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days; it refuses .svg, so rasterise a diagram to png first) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL.'
 
+const specHelp = [
+  'A Spec is due before you build when the Issue carries the checkpoint `spec` or `gate` (the ship is refused without one), and when the change is a new public surface (an API route, a CLI verb, a contract or schema others call or read), a new data model or a migration that changes meaning, a new dependency of weight, an architecture or look-and-feel choice that later Issues build on, or a UI screen the owner has not seen. A choice that a look at the repo settles, or that the repo\'s own standards (AGENTS.md, its design guide, its lint and type rules) rank, is yours to take without a Spec or a Decision: the owner\'s standing instruction is "the best outcome and best design".',
+  "A Spec is one page: what you will build, then at most three open choices, each with your default and what changing it later costs. It states the smallest design that solves the stated problem first (an MVP whose learnings are kept) and names what it leaves out on purpose. It adds no new instance, tier, isolation layer, budget, guardrail, cap, fixed limit or slot count without a measured need it cites; the extras go in one line as later work, and a number it fixes is replaced by a rule that reads what is free now, or cites the measurement that sets it. Where it weighs keeping history, old runs, copies or a legacy path against dropping them, its default is to drop and keep only what a named KPI or use needs (users' data is another matter). When it proposes a mechanism of its own (an updater, a release feed, a pipeline, a docs framework), it first names what the field standard tools do, from research and not memory, and why they do not fit, measured where it can be.",
+  'It is written for a reader with no context: what the problem is, what the owner has to do or decide in concrete steps (which form fields, which commands), in plain prose with a short diagram or table where a structure helps; the investigation goes as deep as the decision it asks for and states what was checked, not only the conclusion.',
+  `Submit it before you write the code it governs, and state in it that with no verdict in ${SPEC_WAIT_HOURS} hours you go on with your defaults: the factory then records that verdict for you and you read it as a note. Read the verdict and annotations before you build (\`factory artifact show <artifact-id>\`); build on the defaults only once you have heard or the ${SPEC_WAIT_HOURS} hours are past. A gate Spec waits for the owner's own verdict, with no default.`,
+].join(' ')
+
 const submitHelp = [
+  specHelp,
   'Limits: --title at most 200 characters, --content at most 1000000 characters. A Concept or Spec waits for its verdict (end the turn); a Report never waits.',
   imagesHelp,
   htmlHelp,
@@ -138,13 +151,26 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
     help: 'Narrow it with --kind concept|spec|decision|report and --issue <id>; --format plain prints one line per artifact (id, issue, kind, date, title).',
     plain: artifactListPlain,
   },
-  'issue.ship': { notice: shipNotice },
+  'issue.ship': {
+    help: "One --acceptance per acceptance line of the Issue, each starting `met: ` or `not met: `; over 500 characters is cut, and a refusal prints the line it wants. A `not met` with its why is allowed and honest; a ship stating nothing is counted as friction, like one without a /review at standard or deep (the factory never refuses a ship for a review). The factory finds what your branch, or an earlier attempt's, landed on the default branch: you type no commit.",
+    notice: shipNotice,
+  },
+  'issue.defer': {
+    help: "A deferral is for a short, named event, and it gives up your place until it ends; never defer to watch something over time. --review <pull request URL or #number> waits on someone else's review (a required review by a team or another person, work repos above all): the factory polls it every 15 minutes through `gh` or `glab` and wakes you when it is approved, gets changes requested or a new review comment, merges or closes; it shows as waiting on others, never in Needs you. A /review that agw answers `held` is deferred --until the reset time it prints.",
+  },
+  'decision.take-default': {
+    help: 'Settles your own open Decision with the default it names, once you built on it: it closes as the default taken and ends the wait, so `ship` is not refused for the time it would have run.',
+  },
+  'artifact.annotation-reply': {
+    help: "The owner's annotations are comments, often wider than the page: answer each one. A deferral's --note names the Issue or signal you filed for it, a decline's its reason. `factory issue ship` and `factory issue close --outcome done` are refused while one is unanswered.",
+  },
   'issue.ask': { help: decisionHelp },
   'errand.raise': { help: errandHelp },
   'artifact.submit': { help: submitHelp },
   'artifact.new': { help: [imagesHelp, htmlHelp].join(' ') },
   'artifact.revise': {
     help: [
+      'A verdict of `changes` is answered by a revision, not only by a push: until you revise, the Issue waits on it. A revision or a second `artifact submit` opens a new verdict wait in which `ship`, `close` and `defer` are refused (409): ship or close what is already done before you revise, and if the revision is needed first, end the turn and ship from the verdict note.',
       'A Concept or Spec a lead submitted needs --attempt (your attempt number); a Spec filed with an Issue that no lead works yet (`issue new --spec`) is revised without one, and the screen then passes the new revision to the owner. A Report never needs it.',
       imagesHelp,
       htmlHelp,
