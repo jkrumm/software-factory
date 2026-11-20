@@ -223,6 +223,14 @@ describe('the flags of a body', () => {
     ).toThrow('rename it in the contract')
   })
 
+  test('an operation is tagged for the agent caller when policy.ts lists it', async () => {
+    const operations = operationsOf(await openapiDocument())
+    const agent = (id: string) => operations.find((op) => op.operationId === id)?.agent
+    expect([agent('issue.close'), agent('issue.show'), agent('health.get')]).toEqual([true, true, true])
+    expect([agent('issue.new'), agent('issue.cancel'), agent('queue.get')]).toEqual([false, false, false])
+    expect(render(operations).match(/^ {4}agent: true,$/gm)?.length).toBe(operations.filter((op) => op.agent).length)
+  })
+
   test('the generated file carries the fields of the real document', async () => {
     const operations = operationsOf(await openapiDocument())
     const close = operations.find((op) => op.operationId === 'issue.close')

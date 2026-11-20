@@ -8,6 +8,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import * as contract from '@software-factory/contract'
 import { createApp, OPENAPI_PATH } from '@software-factory/server/app'
+import { ruleFor } from '@software-factory/server/policy'
 import * as z from 'zod'
 import type { BodyField, QueryFlag } from '../src/operation.ts'
 
@@ -55,6 +56,8 @@ interface Generated {
   body: boolean
   bodyFields: BodyField[]
   args: string[]
+  /** the agent caller may call it: the row of `apps/server/src/api/policy.ts` for this route lists `agent` (or is public) */
+  agent: boolean
   /** the contract schema of the request body */
   bodySchema: string | null
   responses: [number, string][]
@@ -182,6 +185,12 @@ function bodyRefOf(requestBody: unknown): string | undefined {
   return isJson(media) && isJson(media.schema) && typeof media.schema.$ref === 'string' ? media.schema.$ref : undefined
 }
 
+/** Whether the policy table lets the agent caller (a lead's session) in: the OpenAPI path's `{id}` is Elysia's `:id`. A route with no row is refused. */
+function agentMayCall(method: string, path: string): boolean {
+  const rule = ruleFor(method, path.replace(/\{([^}]+)\}/g, ':$1'))
+  return rule !== undefined && (rule.callers === 'public' || rule.callers.includes('agent'))
+}
+
 /** Every operation of the document, checked; throws one message per broken operation. */
 export function operationsOf(document: unknown): Generated[] {
   const doc = Document.parse(document)
@@ -265,6 +274,7 @@ export function operationsOf(document: unknown): Generated[] {
         body: op.requestBody !== undefined,
         bodyFields,
         args,
+        agent: agentMayCall(method.toUpperCase(), path),
         bodySchema: bodyName && contractSchema(bodyName) ? bodyName : null,
         responses,
       })
@@ -308,6 +318,7 @@ export function render(operations: Generated[]): string {
       `    queryFlags: [${op.queryFlags.map(flagText).join(', ')}],`,
       `    bodyFields: [${op.bodyFields.map(fieldText).join(', ')}],`,
       `    args: ${list(op.args)},`,
+      ...(op.agent ? ['    agent: true,'] : []),
       ...(op.bodySchema ? [`    bodySchema: ${op.bodySchema},`] : []),
       `    responses: { ${op.responses.map(([status, name]) => `${status}: ${name}`).join(', ')} },`,
       '  },',

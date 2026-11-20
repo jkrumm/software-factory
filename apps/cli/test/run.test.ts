@@ -5,6 +5,7 @@ import type { Health } from '@software-factory/contract'
 import * as z from 'zod'
 import { FactoryError } from '../src/exit.ts'
 import { type BodyField, LONG_OPERATION_TIMEOUT_MS, type Operation, runOperation, timeoutOf } from '../src/operation.ts'
+import { OPERATIONS } from '../src/generated/operations.ts'
 import { run } from '../src/run.ts'
 
 const healthy: Health = {
@@ -367,6 +368,26 @@ describe('the command line of a generated command', () => {
     expect(sent()).toEqual({ attempt: 2, outcome: 'done', reason: 'it works' })
   })
 
+  test("a lead's session fills --attempt; a flag wins; outside a session it stays required", async () => {
+    answer = { status: 200, body: { ok: true } }
+    const close = ['issue', 'close', 'issue_7', '--outcome', 'done', '--reason', 'it works']
+    await cli(close, { FACTORY_SESSION: 'lead-7-3' })
+    expect(sent()).toEqual({ attempt: 3, outcome: 'done', reason: 'it works' })
+    await cli([...close, '--attempt', '5'], { FACTORY_SESSION: 'lead-7-3' })
+    expect(sent().attempt).toBe(5)
+    const bare = await cli(close)
+    expect(bare.code).toBe(2)
+    expect(errorOf(bare.err).message).toContain('attempt')
+    // a session that is not a lead's names no attempt
+    expect((await cli(close, { FACTORY_SESSION: 'orchestrator' })).code).toBe(2)
+  })
+
+  test("an optional attempt (a revision) is filled from the lead's session too", async () => {
+    answer = { status: 200, body: { ok: true } }
+    await cli(['artifact', 'revise', 'artifact_1', '--content', 'x'], { FACTORY_SESSION: 'lead-12-1' })
+    expect(sent().attempt).toBe(1)
+  })
+
   test('a repeatable flag collects every value', async () => {
     answer = { status: 200, body: { ok: true } }
     await cli(['planning', 'settle', '--issue', 'issue_1', '--after', 'issue_2', '--after', 'issue_3'])
@@ -419,9 +440,42 @@ describe('the command line of a generated command', () => {
     expect(defer.out).toContain('--after <issue-id>  repeatable')
   })
 
+  test('in a session the help lists only the verbs the agent caller may call, in under 6 KB; --all and no session list every verb', async () => {
+    const verbsOf = (text: string) => {
+      const rows = text.split('\n').slice(3, text.split('\n').indexOf('aliases:') - 1)
+      const pairs: string[] = []
+      let group = ''
+      for (const row of rows) {
+        const head = /^ {2}(\S+) {2,}(.*)$/.exec(row)
+        if (head) group = head[1] ?? ''
+        const verbs = (head ? (head[2] ?? '') : row.trim()).replace(/,$/, '')
+        for (const item of verbs.split(', ')) pairs.push(`${group} ${item.trim().split(' ')[0]}`)
+      }
+      return pairs
+    }
+    const session = (await cli(['--help'], { FACTORY_SESSION: 'lead-12-1' })).out
+    expect(Buffer.byteLength(session)).toBeLessThan(6000)
+    const listed = verbsOf(session)
+    for (const op of OPERATIONS) {
+      expect(listed.includes(op.command.join(' '))).toBe(op.agent === true)
+    }
+    expect(listed).toContain('issue ship')
+    expect(listed).not.toContain('issue new')
+    const full = verbsOf((await cli(['--help'])).out)
+    expect(full).toEqual(verbsOf((await cli(['--help', '--all'], { FACTORY_SESSION: 'lead-12-1' })).out))
+    for (const op of OPERATIONS) expect(full).toContain(op.command.join(' '))
+  })
+
+  test('a group --help lists its verbs with their summaries, filtered like the top-level help', async () => {
+    const session = (await cli(['issue', '--help'], { FACTORY_SESSION: 'lead-12-1' })).out
+    expect(session).toContain('issue ship <id>')
+    expect(session).not.toContain('issue new')
+    expect((await cli(['issue', '--help'])).out).toContain('issue new')
+  })
+
   test('the top-level help lists commands, not their flags', async () => {
     const out = (await cli(['--help'])).out
-    expect(out).toContain('issue close <id>')
-    expect(out).not.toContain('--attempt')
+    expect(out).toContain('close <id>')
+    expect(out).not.toContain('--attempt <')
   })
 })

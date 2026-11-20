@@ -191,9 +191,11 @@ describe('positional body arguments', () => {
     expect(help).not.toContain('--text')
     expect(help).toContain('--kind <text>')
     const top = (await fixtureCli(['--help'])).out
-    expect(top).toContain('thing note <id> <text>')
-    expect(top).toContain('add a note\n')
-    expect(top).not.toContain('It is read')
+    expect(top).toContain('note <id> <text>')
+    const group = (await fixtureCli(['thing', '--help'])).out
+    expect(group).toContain('thing note <id> <text>')
+    expect(group).toContain('add a note\n')
+    expect(group).not.toContain('It is read')
   })
 })
 
@@ -310,15 +312,12 @@ describe('aliases', () => {
   test('the help lists them, follow, door token new and the environment', async () => {
     const out = (await cli(['--help'])).out
     for (const text of [
-      'issue show <id>',
-      'issue list ',
+      'show <id>',
       'aliases:',
-      'follow [--issue',
-      'door token new <source>',
-      'slot run',
-      'deploy-lock --project <name>',
-      'merge-lock --project <name>',
-      'hook <event>',
+      'token new <source>',
+      'also ',
+      'deploy-lock, follow, merge-lock',
+      '<event>',
       'FACTORY_READ_TOKEN',
       'FACTORY_ROLES_FILE',
       'rate limited',
