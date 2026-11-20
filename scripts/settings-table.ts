@@ -25,6 +25,7 @@ const plain = (text: string): string =>
     .split(BT)
     .join('')
     .replace(/\$\{e\.HOME\}/g, '$HOME')
+    .replace(/\boptions\.home\b/g, '$HOME')
     .replace(/\$\{([^}]+)\}/g, '$1')
 
 /** The expression starting at a position: up to a comma or semicolon, or the bracket that closes the call around it. */
@@ -147,6 +148,13 @@ export function problemsIn(table: string, declared: Setting[]): string[] {
     .map((s) => ['docs/settings.md lacks ', s.name, ' (declared in ', s.loader, ')'].join(''))
   for (const name of listed) {
     if (!names.has(name)) problems.push(['docs/settings.md names ', name, ', which no loader declares'].join(''))
+  }
+  const owners = new Map<string, string[]>()
+  for (const s of declared) owners.set(s.name, [...(owners.get(s.name) ?? []), s.loader])
+  for (const [name, loaders] of owners) {
+    if (loaders.length > 1) {
+      problems.push(['one loader owns each name: ', name, ' is declared by ', loaders.join(' and ')].join(''))
+    }
   }
   if (!problems.length && table !== render(declared)) {
     problems.push('docs/settings.md is stale: run bun scripts/settings-table.ts --write')

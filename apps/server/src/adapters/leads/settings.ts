@@ -8,7 +8,7 @@ import { MAX_REVIVE_TRIES, QUIESCE_AFTER_MS } from '../../domains/leads/quiesce.
 import { TYPE_GAP_MS } from '../../domains/leads/type-gap.ts'
 
 const Env = z.object({
-  /** the home directory the defaults are built from */
+  /** the home directory the defaults are built from; the one reader of it: the checkpoints, the intake and the ask queue take `home` from these settings */
   HOME: z.string().min(1),
   /** the herdr-core client (hc) that a lead terminal runs through */
   HC_BIN: z.string().min(1).optional(),
@@ -16,9 +16,9 @@ const Env = z.object({
   HC_SESSION: z.string().min(1).optional(),
   /** the claude binary a lead runs; unset, the one on PATH */
   FACTORY_CLAUDE_BIN: z.string().min(1).optional(),
-  /** colon-separated directories a lead repo must be inside */
+  /** colon-separated directories a lead repo must be inside; the one reader of it: planning takes `repoRoots` from these settings */
   FACTORY_REPO_ROOTS: z.string().min(1).optional(),
-  /** colon-separated single repos a lead may work in, outside the roots */
+  /** colon-separated single repos a lead may work in, outside the roots; the one reader of it: planning takes `repoAllow` from these settings */
   FACTORY_REPO_ALLOW: z.string().min(1).optional(),
   /** the role table; config/roles.json of this checkout when unset */
   FACTORY_ROLES_FILE: z.string().min(1).optional(),
@@ -47,10 +47,6 @@ const Env = z.object({
   FACTORY_API_PROBE_MS: z.coerce.number().int().min(0).optional(),
   /** a waiting lead is dormant (its `claude` ended) after this long */
   FACTORY_QUIESCE_AFTER_MS: z.coerce.number().int().min(0).optional(),
-  /** the token a lead's `factory` calls the API with (`settings.ts`) */
-  FACTORY_AGENT_TOKEN: z.string().min(1).optional(),
-  /** the port the API listens on, on loopback */
-  PORT: z.coerce.number().int().min(1).max(65_535).optional(),
 })
 
 /** A lead's start is given up on after this long. */
@@ -95,12 +91,18 @@ export interface LeadSettings {
   maxReviveTries: number
   /** `FACTORY_TOKEN` of a lead's terminal: the agent token, never the owner's; unset, the lead's CLI will answer 401 */
   agentToken: string | undefined
-  /** `FACTORY_URL` of a lead's terminal: the API's loopback address; unset without a `PORT` */
+  /** `FACTORY_URL` of a lead's terminal: the API's loopback address; unset without a port */
   apiUrl: string | undefined
 }
 
+/** What a lead's terminal reaches the API with: the server's own settings (`settings.ts` reads `FACTORY_AGENT_TOKEN` and `PORT`). */
+export interface LeadApi {
+  agentToken?: string | undefined
+  port?: number | undefined
+}
+
 /** The leads' settings from the environment; throws one message naming every bad key. */
-export function loadLeadSettings(env: Record<string, string | undefined>): LeadSettings {
+export function loadLeadSettings(env: Record<string, string | undefined>, api: LeadApi = {}): LeadSettings {
   const e = parseEnv(Env, env)
   const roots = (e.FACTORY_REPO_ROOTS ?? `${e.HOME}/SourceRoot`).split(':')
   if (roots.some((root) => !root.startsWith('/'))) {
@@ -134,7 +136,7 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
     apiErrorProbeMs: e.FACTORY_API_PROBE_MS ?? 20_000,
     quiesceAfterMs: e.FACTORY_QUIESCE_AFTER_MS ?? QUIESCE_AFTER_MS,
     maxReviveTries: MAX_REVIVE_TRIES,
-    agentToken: e.FACTORY_AGENT_TOKEN,
-    apiUrl: e.PORT ? `http://127.0.0.1:${e.PORT}` : undefined,
+    agentToken: api.agentToken,
+    apiUrl: api.port ? `http://127.0.0.1:${api.port}` : undefined,
   }
 }

@@ -69,10 +69,10 @@ const FINGERPRINT_WINDOW_MS = 24 * 3_600_000
 const SHIPPED_INFRA = join(import.meta.dir, '..', '..', '..', '..', '..', 'config', 'infra.json')
 
 /** The intake's settings from the environment; throws one message naming every bad key. */
-export function loadIntakeEnv(env: Environment): IntakeEnv {
+export function loadIntakeEnv(env: Environment, options: { home: string }): IntakeEnv {
   const e = parseEnv(Env, env)
   return {
-    sourceRoot: e.FACTORY_SOURCE_ROOT ?? join(env.HOME ?? '/', 'SourceRoot'),
+    sourceRoot: e.FACTORY_SOURCE_ROOT ?? join(options.home, 'SourceRoot'),
     projectsFile: e.FACTORY_INTAKE_PROJECTS_FILE ?? null,
     infraFile: e.FACTORY_INFRA_FILE ?? SHIPPED_INFRA,
     homeRepo: e.FACTORY_HOME_REPO ?? null,

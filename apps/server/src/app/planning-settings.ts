@@ -1,5 +1,4 @@
 import { availableParallelism } from 'node:os'
-import { isAbsolute } from 'node:path'
 import * as z from 'zod'
 import { parseEnv, type Environment } from '../kernel/env.ts'
 import {
@@ -15,10 +14,6 @@ import { DEFAULT_TENANT_BUDGET_MIB, DEFAULT_TENANT_PROJECT } from '../kernel/thr
 const whole = (min: number, max: number) => z.coerce.number().int().min(min).max(max)
 
 const Env = z.object({
-  /** `FACTORY_REPO_ROOTS`: directories whose direct children are the repos the factory may read as projects */
-  FACTORY_REPO_ROOTS: z.string().optional(),
-  /** `FACTORY_REPO_ALLOW`: single repos outside the roots the factory may read as projects (absolute paths) */
-  FACTORY_REPO_ALLOW: z.string().optional(),
   /** the cap of an account `FACTORY_ACCOUNT_LEADS` does not name */
   FACTORY_LEADS_PER_ACCOUNT: whole(1, 64).optional(),
   /** an account's own cap: `iu=20,me=10,me2=10` */
@@ -111,30 +106,18 @@ function accountLeadsOf(text: string | undefined): Map<string, number> {
   return caps
 }
 
-/** The planning and capacity settings from the environment; throws one message naming every bad key. */
+/**
+ * The planning and capacity settings from the environment; throws one message naming every bad key. The repo roots and
+ * the allowed repos are the leads' settings (`FACTORY_REPO_ROOTS`, `FACTORY_REPO_ALLOW`): this loader reads neither.
+ */
 export function planningSettings(
   env: Environment,
   options: { repoRoots?: readonly string[]; repoAllow?: readonly string[]; cores?: number } = {},
 ): PlanningSettings {
   const e = parseEnv(Env, env)
-  // One setting, one meaning: the leads read FACTORY_REPO_ROOTS too, and their default stands when it is not set.
-  const repoRoots = e.FACTORY_REPO_ROOTS
-    ? e.FACTORY_REPO_ROOTS.split(':')
-        .map((root) => root.trim())
-        .filter(Boolean)
-    : [...(options.repoRoots ?? [])]
-  const relative = repoRoots.find((root) => !isAbsolute(root))
-  if (relative) throw new Error(`FACTORY_REPO_ROOTS: ${relative} is not an absolute path`)
-  const repoAllow = e.FACTORY_REPO_ALLOW
-    ? e.FACTORY_REPO_ALLOW.split(':')
-        .map((repo) => repo.trim())
-        .filter(Boolean)
-    : [...(options.repoAllow ?? [])]
-  const relativeAllow = repoAllow.find((repo) => !isAbsolute(repo))
-  if (relativeAllow) throw new Error(`FACTORY_REPO_ALLOW: ${relativeAllow} is not an absolute path`)
   return {
-    repoRoots,
-    repoAllow,
+    repoRoots: [...(options.repoRoots ?? [])],
+    repoAllow: [...(options.repoAllow ?? [])],
     gitTimeoutMs: 20_000,
     sysctlBin: e.FACTORY_SYSCTL_BIN ?? '/usr/sbin/sysctl',
     lsofBin: e.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
