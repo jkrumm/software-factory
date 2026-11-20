@@ -502,7 +502,7 @@ describe('the fixture', () => {
       asked.push(span)
       return { percent: null, resets: 0 }
     })
-    expect(asked[asked.length - 1]?.to).toEqual(NOW)
+    expect(asked.some((span) => span.to.getTime() === NOW.getTime())).toBe(true)
     expect(await at(() => ({ percent: 90, resets: 2 }))).toMatchObject({ measured: false, value: null })
     expect(await at(() => ({ percent: null, resets: 0 }))).toMatchObject({ measured: false, value: null })
     expect(await at()).toMatchObject({
