@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { parseRemote } from '../../src/adapters/intake/github.ts'
+import { parseRemote } from '../../src/adapters/github/reader.ts'
 
 test('an origin on github.com is owner/name over https, with or without a user part, and over ssh', () => {
   const want = { owner: 'o', name: 'r' }

@@ -1,13 +1,12 @@
 import * as z from 'zod'
 import type { BranchCleaning, LeadBranches } from '../../domains/leads/ports.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
-import { parseRemote } from '../intake/github.ts'
+import { githubReader } from '../github/reader.ts'
 import { gitIn as runGit, type Run } from '../process.ts'
 import { type GitProbe, originDefaultOf, refOnBase } from './worktrees.ts'
 
 const FETCH_TIMEOUT_MS = 90_000
 const PUSH_TIMEOUT_MS = 60_000
-const HTTP_TIMEOUT_MS = 15_000
 const NOT_MERGED = 'its commits are not on origin/master and no merged PR or shipped commit'
 
 const Pulls = z.array(z.looseObject({ merged_at: z.string().nullish() }))
@@ -29,8 +28,7 @@ const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\
  * never a branch of another number. Nothing here throws: a failure on a branch keeps that branch and says why.
  */
 export function gitBranches(options: GitBranchesOptions): LeadBranches {
-  const api = options.apiUrl.replace(/\/+$/, '')
-  const doFetch = options.fetch ?? fetch
+  const { api, read, slugOf } = githubReader(options)
   const withRun = options.run ? { run: options.run } : {}
 
   async function raw(repo: string, args: string[], timeoutMs?: number): Promise<{ exitCode: number; stdout: string }> {
@@ -58,27 +56,11 @@ export function gitBranches(options: GitBranchesOptions): LeadBranches {
   }
 
   async function mergedPull(repo: string, branch: string): Promise<boolean> {
-    if (!options.token) return false
-    const url = await git(repo, 'remote', 'get-url', 'origin')
-    const remote = url ? parseRemote(url) : undefined
-    if (!remote) return false
-    const head = encodeURIComponent(`${remote.owner}:${branch}`)
-    try {
-      const response = await doFetch(`${api}/repos/${remote.owner}/${remote.name}/pulls?head=${head}&state=all`, {
-        headers: {
-          Authorization: `Bearer ${options.token}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'software-factory',
-        },
-        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-      })
-      if (response.status !== 200) return false
-      const pulls = Pulls.safeParse(await response.json().catch(() => undefined))
-      return pulls.success && pulls.data.some((pull) => Boolean(pull.merged_at))
-    } catch {
-      return false
-    }
+    const slug = await slugOf(repo)
+    if (!slug.ok) return false
+    const head = encodeURIComponent(`${slug.value.split('/')[0]}:${branch}`)
+    const pulls = await read(`${api}/repos/${slug.value}/pulls?head=${head}&state=all`, Pulls)
+    return pulls.ok && pulls.value.some((pull) => Boolean(pull.merged_at))
   }
 
   async function clean(input: Parameters<LeadBranches['clean']>[0]): Promise<Result<BranchCleaning>> {

@@ -18,9 +18,9 @@ export const CommitStatus = z.looseObject({
   statuses: z.array(z.looseObject({ context: z.string(), state: z.string(), target_url: z.string().nullish() })),
 })
 
-/** The headers of an authenticated GitHub REST call. */
+/** The headers of a GitHub REST call; without a token the call is unauthenticated. */
 export const githubHeaders = (token: string | null): Record<string, string> => ({
-  Authorization: `Bearer ${token ?? ''}`,
+  ...(token ? { Authorization: `Bearer ${token}` } : {}),
   Accept: 'application/vnd.github+json',
   'X-GitHub-Api-Version': '2022-11-28',
   'User-Agent': 'software-factory',
@@ -36,14 +36,20 @@ export async function githubGet<T>(
   url: string,
   schema: z.ZodType<T>,
   timeoutMs: number,
-): Promise<{ ok: true; value: T } | { ok: false; failure: GithubReadFailure }> {
+): Promise<{ ok: true; value: T } | { ok: false; failure: GithubReadFailure; limited?: true }> {
   let response: Response
   try {
     response = await doFetch(url, { headers: githubHeaders(token), signal: AbortSignal.timeout(timeoutMs) })
   } catch (error) {
     return { ok: false, failure: error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'error' }
   }
-  if (response.status !== 200) return { ok: false, failure: response.status }
+  if (response.status !== 200) {
+    // a 403 or 429 that GitHub says is its rate limit passes by itself
+    const limited =
+      (response.status === 403 || response.status === 429) &&
+      (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after'))
+    return { ok: false, failure: response.status, ...(limited ? { limited: true as const } : {}) }
+  }
   const parsed = schema.safeParse(await response.json().catch(() => undefined))
   return parsed.success ? { ok: true, value: parsed.data } : { ok: false, failure: 'unparsable' }
 }

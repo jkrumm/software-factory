@@ -3,12 +3,9 @@ import { type CiLine, type CiRead, type CiState, ciStateOf } from '../../domains
 import type { Ci } from '../../domains/quality/ports.ts'
 import { statusVerdict } from '../../kernel/checks.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
-import { CheckRuns, CommitStatus, githubGet } from '../github/checks.ts'
-import { parseRemote } from '../intake/github.ts'
-import { gitIn, type Run } from '../process.ts'
+import { CheckRuns, CommitStatus } from '../github/checks.ts'
+import { githubReader, type GithubReaderOptions } from '../github/reader.ts'
 
-const HTTP_TIMEOUT_MS = 15_000
-const REMOTE_TIMEOUT_MS = 10_000
 const PAGE_SIZE = 100
 /** A ship names its commits, and a pull request is looked for through the first few only. */
 const MAX_COMMITS_ASKED = 3
@@ -24,14 +21,8 @@ const Pulls = z.array(
   }),
 )
 
-export interface GithubCiOptions {
-  /** `FACTORY_GITHUB_TOKEN`; without it nothing is read */
-  token: string | null
-  /** the API base (`FACTORY_GITHUB_API_URL`); a scenario points it at a local fake */
-  apiUrl: string
-  run?: Run
-  fetch?: typeof fetch
-}
+/** The reader's options, without `locate`: the repo is the checkout's path. */
+export type GithubCiOptions = Omit<GithubReaderOptions, 'locate'>
 
 /**
  * CI as GitHub's REST API has it, for the repo's `origin` (named by the raw `remote.origin.url`, so a rewrite of the
@@ -40,28 +31,7 @@ export interface GithubCiOptions {
  * one not finished is running, and at least one success with none of the others is green.
  */
 export function githubCi(options: GithubCiOptions): Ci {
-  const api = options.apiUrl.replace(/\/+$/, '')
-  const doFetch = options.fetch ?? fetch
-
-  async function read<T>(url: string, schema: z.ZodType<T>): Promise<Result<T, PortError>> {
-    const done = await githubGet(doFetch, options.token, url, schema, HTTP_TIMEOUT_MS)
-    if (done.ok) return ok(done.value)
-    const { failure } = done
-    if (typeof failure === 'number') return err(portError('unreadable', `github ${failure}`))
-    if (failure === 'unparsable') return err(portError('unreadable', 'github answered with an unexpected body'))
-    return err(portError(failure === 'timeout' ? 'timeout' : 'unreadable', `github did not answer: ${failure}`))
-  }
-
-  async function slugOf(repo: string): Promise<Result<string, PortError>> {
-    if (!options.token) return err(portError('refused', 'no token'))
-    const done = await gitIn(repo, ['config', '--get', 'remote.origin.url'], {
-      timeoutMs: REMOTE_TIMEOUT_MS,
-      ...(options.run ? { run: options.run } : {}),
-    }).catch(() => undefined)
-    const remote = done?.exitCode === 0 ? parseRemote(done.stdout.trim()) : undefined
-    if (!remote) return err(portError('refused', `${repo} has no github.com origin`))
-    return ok(`${remote.owner}/${remote.name}`)
-  }
+  const { api, read, slugOf } = githubReader(options)
 
   async function stateOf(slug: string, sha: string): Promise<Result<CiState, PortError>> {
     const ref = `${api}/repos/${slug}/commits/${encodeURIComponent(sha)}`
