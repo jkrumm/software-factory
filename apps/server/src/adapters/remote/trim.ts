@@ -14,7 +14,8 @@
  *   tightens to 7, 3 and then 1 day. The mount is `relatime`, so a read marks a file's access time within a day.
  *
  * The slot and cache parts do nothing while a step container runs or when docker does not answer, so they never remove what
- * an install is reading; the exp part touches neither and runs regardless. A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini.
+ * an install is reading; the exp part runs regardless of a running step or an unanswering docker, and uses docker only for the
+ * root-owned fallback. A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini.
  */
 import { CACHE_CAP_GIB, CACHE_IDLE_DAYS, COPY_IDLE_DAYS, EXP_IDLE_DAYS } from '../../domains/capacity/remote.ts'
 
