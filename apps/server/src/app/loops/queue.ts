@@ -1,6 +1,6 @@
 import { QueueAnswer } from '@software-factory/contract'
 import { type CallPlan, type CallPolicy, planCall } from '../../domains/loops/calls.ts'
-import type { LoopReads, LoopStore, QueueWorkflow } from '../../domains/loops/ports.ts'
+import type { LoopReads, LoopStore } from '../../domains/loops/ports.ts'
 import {
   byRepo,
   candidatesOf,
@@ -16,10 +16,11 @@ import {
 } from '../../domains/loops/queue.ts'
 import { sweepEdges } from '../../domains/loops/edge-need.ts'
 import { EDGE_NEED_DAYS, type EdgeNeed, stopReason, stopsEdges } from '../../kernel/edge-need.ts'
-import { MAX_ROUNDS } from '../../domains/loops/stall.ts'
 import { AGW_CALL_LEASE_MS } from '../../kernel/agw.ts'
 import type { Clock } from '../../kernel/clock.ts'
-import { type Key, key } from '../../kernel/keys.ts'
+import type { Key } from '../../kernel/keys.ts'
+import type { AgwPort } from '../../kernel/agw.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import { addAfter, removeInferredEdge } from '../planning-chain.ts'
@@ -31,7 +32,7 @@ export type QueueStores = { loops: LoopStore; loopReads: LoopReads }
 export interface QueueDeps {
   uow: UnitOfWork<QueueStores>
   clock: Clock
-  workflow: QueueWorkflow
+  agw: AgwPort
   /** planning's `addAfter`: the blocker check and the cycle check are one transaction there */
   planning: PlanningDeps
   /** a failed ask of a shape is asked again this long on */
@@ -69,7 +70,7 @@ interface EdgeFacts {
 }
 
 const policyOf = (deps: QueueDeps): CallPolicy => ({
-  maxRounds: MAX_ROUNDS,
+  maxRounds: WORKFLOWS.queue.retry.tries,
   retryMs: deps.retryMs,
   leaseMs: AGW_CALL_LEASE_MS,
 })
@@ -90,7 +91,7 @@ async function claimQueueRound(
     return taken ? { kind: 'claimed', key: plan.row.key as Key } : { kind: 'in_flight' }
   }
   if (plan.kind !== 'claim') return plan
-  const claimKey = key('queue', input.repo, input.shape, plan.round)
+  const claimKey = WORKFLOWS.queue.key(input.repo, input.shape, plan.round)
   const won = await loops.claimQueueAsk({
     key: claimKey,
     repo: input.repo,
@@ -207,7 +208,7 @@ async function queueRepo(
   if (!request) return
   const claimKey = decision.claim.key
   pass.asked++
-  const answered = await deps.workflow.ask(request, claimKey)
+  const answered = await deps.agw.run('queue', request, claimKey)
   const recorded = await deps.uow.run(async ({ loops }) => {
     const at = deps.clock.now()
     if (answered.ok) {

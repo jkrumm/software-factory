@@ -17,6 +17,7 @@ import { deepLink, errandPage } from '../domains/checkpoints/page.ts'
 import type { ErrandRecord, MacbookVerbPort } from '../domains/checkpoints/ports.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
+import { WORKFLOWS } from '../kernel/workflows.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import {
   applied,
@@ -251,7 +252,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
   }
 
   const { request, errand } = first.value
-  const answer = await deps.errandScreen.screen(request, key('factory-errand', id, errand.screenTries + 1))
+  const answer = await deps.agw.run('errandScreen', request, WORKFLOWS.errandScreen.key(id, errand.screenTries + 1))
   let verdict: Verdict
   if (!answer.ok) verdict = { kind: 'failed', why: `${answer.error.kind}: ${answer.error.detail}` }
   else {
@@ -406,9 +407,10 @@ export async function rescreenErrand(deps: SettleDeps, id: ErrandId): Step<Rescr
     )
     return done.ok ? ok(done.value === 'turned_away' ? 'turned_away' : 'dropped') : done
   }
-  const answer = await deps.errandScreen.screen(
+  const answer = await deps.agw.run(
+    'errandScreen',
     first.value.request,
-    key('factory-errand', id, 'desk', Math.floor(deps.clock.now().getTime() / 3_600_000)),
+    WORKFLOWS.errandScreen.key(id, 'desk', Math.floor(deps.clock.now().getTime() / 3_600_000)),
   )
   if (!answer.ok) return ok('kept')
   const checked = checkErrandScreen(answer.value)

@@ -268,5 +268,7 @@ export {
   type TriageCandidate,
   type TriageSettled,
   TriageAnswer,
+  TriageAmendRequest,
   TriageRequest,
+  TriageSettleRequest,
 } from './loops.ts'

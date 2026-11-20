@@ -11,16 +11,14 @@ import {
 import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
 import {
-  type ErrandScreenPort,
   type MacbookVerbPort,
-  type SpecScreenPort,
-  type JudgePort,
   type DecisionRecord,
   type DecisionStatus,
   type StepClaim,
   statusOf,
 } from '../domains/checkpoints/ports.ts'
-import { key } from '../kernel/keys.ts'
+import type { AgwPort } from '../kernel/agw.ts'
+import { WORKFLOWS } from '../kernel/workflows.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import {
   type CheckpointDeps,
@@ -33,11 +31,10 @@ import {
 } from './checkpoints.ts'
 
 export interface SettleDeps extends CheckpointDeps {
-  judge: JudgePort
-  errandScreen: ErrandScreenPort
+  /** the Judge, the Errand screen and the Spec screen are workflows of this one port */
+  agw: AgwPort
   /** the MacBook's fixed verbs, which run a report or a pull for an Errand with no dialog; absent: every such Errand reaches the owner as before */
   macbook?: MacbookVerbPort
-  specScreen: SpecScreenPort
   /** a checkpoint at the owner this long is looked at once more (`FACTORY_CHECKPOINT_RECHECK_MS`); 0 is off */
   recheckAfterMs: number
 }
@@ -176,9 +173,10 @@ async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: stri
     precedents: claimed.value.precedents,
   })
   // The key names the try and the form: a retry or a re-judge of an amended form must not find the earlier run.
-  const verdict = await deps.judge.judge(
+  const verdict = await deps.agw.run(
+    'judge',
     input,
-    key('factory-ask', decision.id, claimed.value.tries, formDigest(decision.form)),
+    WORKFLOWS.judge.key(decision.id, claimed.value.tries, formDigest(decision.form)),
   )
 
   const recorded = await deps.uow.run<Stepped, CheckpointError>(async (stores) => {

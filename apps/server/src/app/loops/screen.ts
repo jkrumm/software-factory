@@ -1,5 +1,5 @@
 import type { Intake } from '../intake.ts'
-import type { IntakeStore, OpenIssues, ScreenWorkflow, Screening } from '../../domains/intake/ports.ts'
+import type { IntakeStore, OpenIssues, Screening } from '../../domains/intake/ports.ts'
 import {
   checkScreen,
   decideFinal,
@@ -12,7 +12,9 @@ import {
   screenTarget,
 } from '../../domains/intake/screen.ts'
 import type { Clock } from '../../kernel/clock.ts'
-import { key, type Key } from '../../kernel/keys.ts'
+import type { AgwPort } from '../../kernel/agw.ts'
+import type { Key } from '../../kernel/keys.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import type { SignalRow } from '../../domains/intake/ports.ts'
@@ -21,7 +23,7 @@ import type { UnitOfWork } from '../unit-of-work.ts'
 export interface ScreenDeps {
   uow: UnitOfWork<{ intake: IntakeStore }>
   clock: Clock
-  workflow: ScreenWorkflow
+  agw: AgwPort
   openIssues: OpenIssues
   /** planning's project reader: which repos are projects (and not work repos), and their names */
   projects: {
@@ -64,7 +66,7 @@ async function record(deps: ScreenDeps, id: string, screening: Screening): Promi
  * A `leave` keeps `attempts`, so both looks of one attempt send different input, and agw refuses one key with two inputs.
  */
 export const screenKey = (id: string, attempt: number, final: boolean): Key =>
-  final ? key('screen', id, attempt, 'final') : key('screen', id, attempt)
+  final ? WORKFLOWS.screen.key(id, attempt, 'final') : WORKFLOWS.screen.key(id, attempt)
 
 async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass: ScreenPass): Promise<void> {
   const signal = row.received.signal
@@ -99,7 +101,8 @@ async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass
 
   const attempt = row.screening.attempts
   const final = isFinalScreen(row, deps.clock.now())
-  const answered = await deps.workflow.screen(
+  const answered = await deps.agw.run(
+    'screen',
     screenRequest(row, open.value, names, scrub, final),
     screenKey(row.id, attempt, final),
   )

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { mkdtemp, rm } from 'node:fs/promises'
 import { KpiModel, type SpecScreenAnswer, type SpecScreenRequest } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
+import { fakeAgw } from '../support/agw.ts'
 import { fileBlobStore } from '../../src/adapters/blobs/filesystem.ts'
 import { postgresCheckpointStore } from '../../src/adapters/postgres/checkpoint-store.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
@@ -134,16 +135,15 @@ beforeEach(async () => {
     blobs: fileBlobStore(blobDir),
     consoleUrl: 'https://console.example.test',
     checks: { run: async () => ({ exit: 0, timedOut: false, output: '' }) },
-    judge: { judge: () => Promise.resolve(err(portError('gone', 'no judge'))) },
-    errandScreen: { screen: () => Promise.resolve(err(portError('gone', 'no screen'))) },
-    specScreen: {
-      screen: (request, callKey) => {
+    // the Judge and the Errand screen are not scripted: a call of either fails
+    agw: fakeAgw({
+      specScreen: (request, callKey) => {
         // The port is never called inside a transaction.
         expect(deps.uow.inTransaction()).toBe(false)
         calls.push({ request, key: callKey })
         return Promise.resolve(answer(request))
       },
-    },
+    }),
     recheckAfterMs: 0,
     notifier: { send: () => Promise.resolve(ok(undefined)) },
   }

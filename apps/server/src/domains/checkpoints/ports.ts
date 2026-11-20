@@ -1,20 +1,10 @@
-import type {
-  ImageAnchor,
-  ErrandNeededAnswer,
-  ErrandNeededRequest,
-  ErrandScreenAnswer,
-  ErrandScreenRequest,
-  SpecPrecedent,
-  SpecScreenAnswer,
-  SpecScreenRequest,
-  SpecSource,
-} from '@software-factory/contract'
+import type { ImageAnchor, SpecPrecedent, SpecSource } from '@software-factory/contract'
 import type { SpecOrigin } from './spec-screen.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { ArtifactId, ArtifactKind, CollectionId, Disposition, Format, Verdict } from './artifact.ts'
-import type { DecisionForm, DecisionId, JudgeInput, JudgeVerdict, Precedent, Settler, StepName } from './decision.ts'
+import type { DecisionForm, DecisionId, Precedent, Settler, StepName } from './decision.ts'
 import type { ErrandId } from './errand.ts'
 import type { Need } from './need.ts'
 import type { RunStatus } from '../../kernel/run.ts'
@@ -469,26 +459,6 @@ export interface CheckpointStore {
 export interface BlobStore {
   put(content: string): Promise<Result<{ path: string; sha256: string; bytes: number }>>
   get(path: string): Promise<Result<string>>
-}
-
-/** The Judge: the `factory-ask` agw workflow, package 7's. The key is the Decision's, so a call asked again finds its run. */
-export interface JudgePort {
-  judge(input: JudgeInput, key: Key): Promise<Result<JudgeVerdict>>
-}
-
-/** The Errand screen: the `factory-errand` agw workflow. The key names the Errand and the try. */
-export interface ErrandScreenPort {
-  screen(request: ErrandScreenRequest, key: Key): Promise<Result<ErrandScreenAnswer>>
-}
-
-/** The Spec screen: the `factory-spec-screen` agw workflow. The key names the artifact, the revision and the try. */
-export interface SpecScreenPort {
-  screen(request: SpecScreenRequest, key: Key): Promise<Result<SpecScreenAnswer>>
-}
-
-/** The still-needed look: the `factory-errand-needed` agw workflow. The key names the Errand and the day. */
-export interface ErrandNeededPort {
-  judge(request: ErrandNeededRequest, key: Key): Promise<Result<ErrandNeededAnswer>>
 }
 
 /** Runs an Errand's `check` command: one shell, a timeout, the output cut. Never throws; a command that could not run says so in the run. */

@@ -1,8 +1,9 @@
 import type { Id } from '../../kernel/ids.ts'
 import { type Host, HOSTS } from '../../kernel/hands.ts'
 import { err, ok, type Result } from '../../kernel/result.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 import type { ErrandScreenAnswer } from '@software-factory/contract'
-import { JUDGE_BACKOFF_MS, JUDGE_MAX_TRIES, type MissingFields } from './decision.ts'
+import type { MissingFields } from './decision.ts'
 import { NEED_KEY_RE } from './match.ts'
 import { type Need, needByRule } from './need.ts'
 import { STATED_NEEDS, type StatedNeed } from './triage.ts'
@@ -206,8 +207,8 @@ export function refuseQueuedAsk(queued: readonly QueuedAsk[]): string {
 }
 
 /** Failed calls of the screen before the Errand reaches the owner unscreened; the wait between them. */
-export const ERRAND_SCREEN_MAX_TRIES = JUDGE_MAX_TRIES
-export const ERRAND_SCREEN_BACKOFF_MS = JUDGE_BACKOFF_MS
+export const ERRAND_SCREEN_MAX_TRIES = WORKFLOWS.errandScreen.retry.tries
+export const ERRAND_SCREEN_BACKOFF_MS = WORKFLOWS.errandScreen.retry.backoffMs
 
 const REASON_MAX = 300
 

@@ -1,17 +1,9 @@
 import { REVIEWER_CHEAP_ROLE, REVIEWER_ROLE } from '@software-factory/contract'
 import { connect } from './adapters/postgres/connection.ts'
 import { agwAmend } from './adapters/agw/amend.ts'
-import { agwErrandScreen } from './adapters/agw/errand.ts'
-import { agwJudge } from './adapters/agw/judge.ts'
 import { agwPort } from './adapters/agw/port.ts'
-import { agwErrandNeeded } from './adapters/agw/errand-needed.ts'
 import { askQueueDir, queuedAsksIn } from './adapters/checkpoints/queued-asks.ts'
 import { shellCheckRunner } from './adapters/shell/check-runner.ts'
-import { agwHygiene } from './adapters/agw/hygiene.ts'
-import { agwQueue } from './adapters/agw/queue.ts'
-import { agwScreen } from './adapters/agw/screen.ts'
-import { agwSpecScreen } from './adapters/agw/spec-screen.ts'
-import { agwSettle, agwSteward } from './adapters/agw/steward.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
 import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
@@ -210,7 +202,7 @@ async function main(env: Environment): Promise<void> {
   const routes = routeTimer()
   const leadSettings = loadLeadSettings(env)
   const loopSettings = loadLoopSettings(env)
-  // The one way to ask agw for a judgment: the Judge, the steward and triage all go through it.
+  // The one way to ask agw for a judgment: every workflow in `WORKFLOWS` goes through it.
   const agw = agwPort({ bin: settings.agwBin })
   // The counting epoch: a missing or bad `config/throughput.json` stops the start, so no read quietly counts everything.
   const epoch = loadEpoch(settings.throughputFile)
@@ -319,12 +311,10 @@ async function main(env: Environment): Promise<void> {
     commands: shellCheckRunner(undefined, APPROVED_RUN_HANG_GUARD_MS),
     queuedAsks: queuedAsksIn(askQueueDir(env)),
     notifier: makeNotifier(checkpointSettings.line),
-    // The Judge asks `factory-ask` through the agw port.
-    judge: agwJudge(agw),
-    errandScreen: agwErrandScreen(agw),
+    // The Judge, the Errand screen and the Spec screen are workflows of the one agw port.
+    agw,
     // an Errand that is exactly a report or a pull of the MacBook's fixed verbs runs through them, with no dialog
     macbook: askHumanVerbs({ host: loopSettings.askHumanHost }),
-    specScreen: agwSpecScreen(agw),
     recheckAfterMs: loopSettings.recheckAfterMs,
   }
   const checkpoints = checkpointUses(checkpointDeps)
@@ -393,7 +383,7 @@ async function main(env: Environment): Promise<void> {
   const stewardDeps = {
     ...writes,
     uow,
-    workflow: agwSteward(agw),
+    agw,
     seats: planning.leads.seats,
     windows: planning.leads.windows,
     checkpoints: {
@@ -524,9 +514,9 @@ async function main(env: Environment): Promise<void> {
         const pass = await triagePass({
           ...writes,
           uow,
-          workflow: agwSettle(agw),
+          agw,
           planning: writes,
-          retryMs: loopSettings.retryMs,
+          retryMs: loopSettings.triageRetryMs,
           changed: () => runner.changed('triage'),
         })
         if (!pass.ok) return pass
@@ -543,9 +533,9 @@ async function main(env: Environment): Promise<void> {
         const pass = await queuePass({
           uow,
           clock: writes.clock,
-          workflow: agwQueue(agw),
+          agw,
           planning: writes,
-          retryMs: loopSettings.retryMs,
+          retryMs: loopSettings.queueRetryMs,
           minGapMs: loopSettings.queueGapMs,
           changed: () => runner.changed('queue'),
         })
@@ -592,7 +582,7 @@ async function main(env: Environment): Promise<void> {
           ids: systemIds,
           checker: hygieneChecker,
           doctor,
-          workflow: agwHygiene(agw),
+          agw,
           file: (body, finding) => intake.api.file(body, 'agent', finding),
           everyMs: loopSettings.hygieneEveryMs,
           dailyMs: loopSettings.hygieneDailyMs,
@@ -723,7 +713,7 @@ async function main(env: Environment): Promise<void> {
         const pass = await screenPass({
           uow,
           clock: writes.clock,
-          workflow: agwScreen(agw),
+          agw,
           openIssues: postgresOpenIssues(sql),
           projects: planning.signals,
           promote: intake.api.promote,
@@ -810,7 +800,7 @@ async function main(env: Environment): Promise<void> {
           uow,
           clock: writes.clock,
           checks: shellCheckRunner(),
-          needed: agwErrandNeeded(agw),
+          agw,
           // a request an Issue joined ends for that Issue too
           end: async (errand, how) => {
             const ended = await endRequest(checkpointDeps, errand.id, how)

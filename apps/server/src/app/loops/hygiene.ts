@@ -29,13 +29,7 @@ import type {
   SweepOptions,
   SweepReport,
 } from '../../domains/loops/hygiene-model.ts'
-import type {
-  HygieneJudgment,
-  HygienePassRecord,
-  HygieneWorkflow,
-  LoopReads,
-  LoopStore,
-} from '../../domains/loops/ports.ts'
+import type { HygieneJudgment, HygienePassRecord, LoopReads, LoopStore } from '../../domains/loops/ports.ts'
 import type { LoopFinding, Triaged } from '../../domains/intake/model.ts'
 import { type DoctorReader, doctorMessage } from '../../domains/capacity/doctor.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
@@ -44,6 +38,8 @@ import { repoTextOf, type StoredProject } from '../../domains/planning/sync.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import type { IdSource, IssueId } from '../../kernel/ids.ts'
 import { key } from '../../kernel/keys.ts'
+import type { AgwPort } from '../../kernel/agw.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { recordIn } from '../issues.ts'
 import type { IntakeError } from '../intake.ts'
@@ -58,7 +54,7 @@ export interface HygieneDeps {
   checker: HygieneChecker
   /** the projects' own doctors: a red one skips the project's `check` probe with its lines as the reason; absent: none is asked */
   doctor?: DoctorReader
-  workflow: HygieneWorkflow
+  agw: AgwPort
   /** intake's entry for a loop (`intake.api.file` with the finding): the finding's key decides a repeat, never its words */
   file(body: SignalRequest, finding: LoopFinding): Promise<Result<Triaged, IntakeError>>
   /** a project is swept in full (every probe, the document judgment) when its newest full pass is older than this */
@@ -228,7 +224,11 @@ async function judge(
   })
   if (!request) return skipped(nothingToRead(report))
 
-  const asked = await deps.workflow.ask(request, key('hygiene', target.repoText, target.passId, input.attempt))
+  const asked = await deps.agw.run(
+    'hygiene',
+    request,
+    WORKFLOWS.hygiene.key(target.repoText, target.passId, input.attempt),
+  )
   const judgedAt = deps.clock.now()
   if (!asked.ok) {
     return {

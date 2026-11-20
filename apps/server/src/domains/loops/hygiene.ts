@@ -6,6 +6,7 @@ import {
 } from '@software-factory/contract'
 import { HYGIENE_DEFAULTS } from '@software-factory/contract'
 import type { HygieneJudgment, HygienePassRecord } from './ports.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 import { MAX_SIGNALS_PER_PASS } from './budget.ts'
 import { isIdle, PROBES, type ProbeFinding, type Scope, type SweepReport } from './hygiene-model.ts'
 
@@ -14,7 +15,7 @@ const JUDGMENT_RESERVE = 2
 export const MAX_PROBE_SIGNALS = MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE
 
 /** A failed judgment is asked again until this many attempts have been made. */
-const MAX_JUDGMENT_ATTEMPTS = 3
+const MAX_JUDGMENT_ATTEMPTS = WORKFLOWS.hygiene.retry.tries
 
 /** The key prefix of a filed or over-budget judgment finding, so a probe key and a judgment key never meet. */
 export const JUDGMENT_PREFIX = 'judgment:'

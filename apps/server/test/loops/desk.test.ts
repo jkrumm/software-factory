@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { ErrandScreenAnswer } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
+import { fakeAgw } from '../support/agw.ts'
 import { postgresCheckpointStore } from '../../src/adapters/postgres/checkpoint-store.ts'
 import { postgresDeskStore } from '../../src/adapters/postgres/desk-store.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
@@ -131,15 +132,13 @@ beforeEach(async () => {
         return Promise.resolve(commandRuns[command] ?? commandExit)
       },
     },
-    judge: { judge: () => Promise.resolve(err(portError('gone', 'no judge'))) },
-    errandScreen: {
-      screen: (request) => {
+    agw: fakeAgw({
+      errandScreen: (request) => {
         expect(deps.uow.inTransaction()).toBe(false)
         screened.push(request.errand.id)
         return Promise.resolve(screenAnswer())
       },
-    },
-    specScreen: { screen: () => Promise.resolve(err(portError('gone', 'no screen'))) },
+    }),
     recheckAfterMs: 0,
   }
 })
@@ -1004,7 +1003,7 @@ describe('an Errand that needs only his yes', () => {
         uow: deps.uow,
         clock,
         checks: deps.checks,
-        needed: { judge: () => Promise.resolve(err(portError('gone', 'no look'))) },
+        agw: fakeAgw({ errandNeeded: () => Promise.resolve(err(portError('gone', 'no look'))) }),
         end: async (errand, how) => {
           const ended = await endRequest(deps, errand.id, how)
           return ended.ok && ended.value

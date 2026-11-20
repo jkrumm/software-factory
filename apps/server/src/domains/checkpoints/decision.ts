@@ -1,6 +1,7 @@
 import type { Id } from '../../kernel/ids.ts'
 import { err, ok, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 
 export { scrub }
 
@@ -42,7 +43,7 @@ export interface DecisionForm {
 
 export { JUDGE_MAX_TRIES } from '../../kernel/judge-tries.ts'
 /** The wait after a failed Judge call before the next try. */
-export const JUDGE_BACKOFF_MS = 5 * 60_000
+export const JUDGE_BACKOFF_MS = WORKFLOWS.judge.retry.backoffMs
 
 const MAX_OPTIONS = 10
 const MAX_TEXT = 4000

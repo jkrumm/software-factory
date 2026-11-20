@@ -12,6 +12,7 @@ import {
   screenRequest,
 } from '../../src/domains/intake/screen.ts'
 import { err, ok } from '../../src/kernel/result.ts'
+import { fakeAgw } from '../support/agw.ts'
 
 const answer = (over: Partial<ScreenAnswer>): ScreenAnswer => ({
   verdict: 'leave',
@@ -107,7 +108,7 @@ test('a signal the owner dismissed meanwhile is counted, not an error', async ()
   const pass = await screenPass({
     uow: { run: async (fn) => fn({ intake: store as unknown as IntakeStore }), inTransaction: () => false },
     clock: { now: () => new Date('2026-11-08T11:00:00Z') },
-    workflow: { screen: async () => ok(answer({ verdict: 'dismiss', reason: 'noise' })) },
+    agw: fakeAgw({ screen: async () => ok(answer({ verdict: 'dismiss', reason: 'noise' })) }),
     openIssues: { inRepo: async () => ok([]), closedSince: async () => ok([]) },
     projects: { find: async () => ok(null), names: async () => ok(['app']) },
     promote: async () => err({ kind: 'not_held', detail: 'x' }),
@@ -128,11 +129,11 @@ test('a held signal of a work repo is left to the owner without a workflow call'
   const pass = await screenPass({
     uow: { run: async (fn) => fn({ intake: store as unknown as IntakeStore }), inTransaction: () => false },
     clock: { now: () => new Date('2026-11-12T11:00:00Z') },
-    workflow: {
+    agw: fakeAgw({
       screen: async () => {
         throw new Error('a work repo’s words go to no workflow')
       },
-    },
+    }),
     openIssues: { inRepo: async () => ok([]), closedSince: async () => ok([]) },
     projects: { find: async () => ok({ work: true }), names: async () => ok(['app']) },
     promote: async () => err({ kind: 'not_held', detail: 'x' }),
@@ -154,7 +155,7 @@ test('a promote the factory refuses at act time records the attempt with a backo
   const pass = await screenPass({
     uow: { run: async (fn) => fn({ intake: store as unknown as IntakeStore }), inTransaction: () => false },
     clock: { now: () => new Date('2026-11-08T11:00:00Z') },
-    workflow: { screen: async () => ok(answer({ verdict: 'promote' })) },
+    agw: fakeAgw({ screen: async () => ok(answer({ verdict: 'promote' })) }),
     openIssues: { inRepo: async () => ok([]), closedSince: async () => ok([]) },
     projects: { find: async () => ok({ work: false }), names: async () => ok(['app']) },
     promote: async () => err({ kind: 'unknown_project', detail: 'app is gone' }),
@@ -223,12 +224,12 @@ test('a held signal older than 72 h is screened again with final, a leave is pro
   const pass = await screenPass({
     uow: { run: async (fn) => fn({ intake: store as unknown as IntakeStore }), inTransaction: () => false },
     clock: { now: () => new Date('2026-11-13T08:00:00Z') },
-    workflow: {
+    agw: fakeAgw({
       screen: async (request) => {
         asked.push(request.final)
         return ok(answer({ verdict: 'leave', reason: 'a stranger asks' }))
       },
-    },
+    }),
     openIssues: { inRepo: async () => ok([]), closedSince: async () => ok([]) },
     projects: { find: async () => ok({ work: false }), names: async () => ok(['app']) },
     promote: async (id, body, by, steer) => {
@@ -259,12 +260,12 @@ test('the first and the last look of one attempt use different keys, a replayed 
     await screenPass({
       uow: { run: async (fn) => fn({ intake: store as unknown as IntakeStore }), inTransaction: () => false },
       clock: { now: () => new Date(now) },
-      workflow: {
+      agw: fakeAgw({
         screen: async (_request, key) => {
           keys.push(key)
           return ok(answer({ verdict: 'leave' }))
         },
-      },
+      }),
       openIssues: { inRepo: async () => ok([]), closedSince: async () => ok([]) },
       projects: { find: async () => ok({ work: false }), names: async () => ok(['app']) },
       promote: async () => err({ kind: 'not_held', detail: 'x' }),

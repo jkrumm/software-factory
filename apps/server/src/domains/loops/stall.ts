@@ -1,6 +1,7 @@
 import type { StewardAnswer, StewardStall } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
 import { holdUntil } from '../../kernel/hold.ts'
+import { WORKFLOWS } from '../../kernel/workflows.ts'
 
 /** Why an Issue stalled (`docs/language.md`, Stall): a wait with a machine cause, the steward's to end. */
 export type StallCause = StewardStall['cause']
@@ -409,7 +410,7 @@ export function checkAnswer(facts: Pick<StallFacts, 'cause'>, answer: StewardAns
 }
 
 /** The calls the steward makes for one stall before it gives up asking and raises the Decision below. */
-export const MAX_ROUNDS = 3
+export const MAX_ROUNDS = WORKFLOWS.steward.retry.tries
 
 const PLAIN: Record<StallCause, string> = {
   wall: "the account's window is closed",

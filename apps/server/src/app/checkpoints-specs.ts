@@ -12,7 +12,7 @@ import {
   specScreenRequest,
   specSourceOf,
 } from '../domains/checkpoints/spec-screen.ts'
-import { key } from '../kernel/keys.ts'
+import { WORKFLOWS } from '../kernel/workflows.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { type CheckpointError, type CheckpointStores, issueOf, verdictIn } from './checkpoints.ts'
 import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
@@ -172,7 +172,11 @@ async function screenSpec(deps: SettleDeps, id: ArtifactId, revision: number): S
     verdict = { kind: 'decided', outcome: look.value.rule.outcome, by: 'rule', reason: look.value.rule.reason }
   } else {
     const tries = facts.value.spec.screen?.tries ?? 0
-    const answer = await deps.specScreen.screen(look.value.request, key('factory-spec-screen', id, revision, tries + 1))
+    const answer = await deps.agw.run(
+      'specScreen',
+      look.value.request,
+      WORKFLOWS.specScreen.key(id, revision, tries + 1),
+    )
     if (!answer.ok) verdict = { kind: 'failed', why: `${answer.error.kind}: ${answer.error.detail}` }
     else {
       const checked = checkSpecScreen(answer.value)
