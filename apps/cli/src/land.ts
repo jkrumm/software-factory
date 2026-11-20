@@ -241,9 +241,21 @@ async function readRepo(sh: Shell, options: Options): Promise<Repo> {
   }
 }
 
+/** What gh prints when the repo was read and holds no such pull request (by branch, or by number). */
+const NO_PULL_REQUEST = /no pull requests? found|could not resolve to a pullrequest/i
+
+/** The pull request, or null when gh read the repo and found none; any other gh failure refuses with gh's own words. */
 async function pullRequest(sh: Shell, ref: string): Promise<PullRequest | null> {
   const ran = await sh.run(['gh', 'pr', 'view', ref, '--json', 'number,state,url,headRefOid,mergeCommit'])
-  return ran.code === 0 ? json<PullRequest>(ran.out) : null
+  if (ran.code === 0) return json<PullRequest>(ran.out)
+  const said = ran.err.trim() || ran.out.trim()
+  if (NO_PULL_REQUEST.test(said)) return null
+  const config = sh.io.env.GH_CONFIG_DIR
+  throw new Refused(
+    'pr',
+    `gh could not read the pull request for ${/^\d+$/.test(ref) ? `#${ref}` : ref}: ${lastLines(said) || `gh exited ${ran.code} with no output`}`,
+    `check the gh account first (gh auth status; GH_CONFIG_DIR is ${config ? config : 'unset'}), then factory land again`,
+  )
 }
 
 class Lander {
