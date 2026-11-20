@@ -78,6 +78,8 @@ factory never edits another repo's file. The server also serves the schema it pa
   lead starts and again when a dormant one is resumed, so a change reaches leads started after the project syncs. Only
   what a CLI of the repo needs to behave for an agent; the file is public, so never a secret, and a name the factory or
   the host owns (`FACTORY_*`, `CLAUDE*`, `PATH`, `HOME`) is refused. A value is a quoted string: `1` and `true` are errors.
+  A work repo's lead also gets `GH_CONFIG_DIR` from the host's `FACTORY_GH_CONFIG_DIR_WORK`, so `gh` and `factory land`
+  run as the work account; a `GH_CONFIG_DIR` of the project's own `env` wins.
 - **`steps`**: one entry per step the Makefile runs through `factory slot run --name "<project> <step>"`, keyed by
   `<step>`: `{ make: test, needs: [git], remote: true, carry: [packages/x/dist] }`. `remote: true` lets the factory run
   the step on its Linux step host when the mini's line would make it wait longer than that host takes. Set it only for a

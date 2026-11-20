@@ -223,7 +223,7 @@ async function main(env: Environment): Promise<void> {
     ids: systemIds,
     settings: leadSettings,
     capacity: planning.leads,
-    checks: storedChecks(uow),
+    checks: storedChecks(uow, { workGhConfigDir: loopSettings.ghConfigDirWork }),
     startWatch: startWatchPort({ uow, clock, projects, checkout }),
     github: intakeEnv.github,
     loginErrands: loginErrands(checkpoints),
