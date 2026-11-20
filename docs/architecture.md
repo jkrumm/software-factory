@@ -680,9 +680,8 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   `routeP95Ms` and `routeSamples` (additive: the four names stay): the p95 in ms of the answer times of the server's own routes over the last 5 minutes
   and how many requests that is (`api/route-timer.ts`, in the process, from memory; `/health`, the event stream and the routes that wait on a port by design (`POST /signals` with `/alerts` and `/feedback`, which wait up to 8 s for triage, and `POST /issues/:id/ship`, which waits for git, agw and GitHub) and the report reads (`GET /v1/retro`, `/v1/throughput`, `/v1/kpis`, `/v1/seats`, which scan days of history and take seconds by design) are not timed, a request still
   unanswered counts at its age; requests begun in the first 120 s after the process starts are not timed, since a deploy's cold, loaded restart is not a useless server; null with no request). The reader outside the server is the dev host's Uptime Kuma push monitor (the heartbeat pusher in
-  the dotfiles repo), which today reads the four names: it should push down while `routeP95Ms` is over 2000 with `routeSamples` of 20 or more (below 20 the nearest-rank p95 is the one slowest answer, which a cold request after a deploy is), the
-  same line `routes_slow` draws inside the server. That change is the pusher's repo's (a signal was filed there); until it lands the figure is read by hand
-  and by the self-watch, which runs in the process that starves.
+  the dotfiles repo), which today reads the four names: it should push down while `routeP95Ms` is over 2000 with `routeSamples` of 20 or more (below 20 the nearest-rank p95 is the one slowest answer, which a cold request after a deploy is).
+  That monitor is the one filer of slow routes (the self-watch no longer watches them: one fact, one detector); the change to the pusher is the pusher's repo's (a signal was filed there); until it lands the figure is read by hand.
 - The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, stdout empty bar the compaction line) is the
   hook's, not the API's.
 
