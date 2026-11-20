@@ -4,7 +4,7 @@ const MINUTE = 60_000
 const HOUR = 60 * MINUTE
 
 /**
- * What the capacity loop leaves behind, for Improve's Capacity section: host minutes with capacity facts (older than the
+ * What the capacity loop leaves behind, for Throughput's capacity cards: host minutes with capacity facts (older than the
  * 24 hours `seedHost` fills, so no minute is shared), test-slot steps, lead samples of two repos and the reaper's rows,
  * all inside the 7-day window. Over the ceiling: 2 minutes. Idle seat-hours with work queued: 120 seat-minutes, 2 hours.
  * Slot wait over 6 steps: median 2 s, 90th percentile 55 s. The reaper ended 3 processes; one more row was a dry decision.

@@ -8,7 +8,7 @@ import { DEFAULT_TENANT_BUDGET_MIB, DEFAULT_TENANT_PROJECT } from '../kernel/thr
 import type { QueueReasons } from './flow.ts'
 import { readAccount } from './throughput-account.ts'
 import { answersOf, readAnswerFacts } from './throughput-answers.ts'
-import { readSeries, readStored } from './throughput-series.ts'
+import { readSeries } from './throughput-series.ts'
 import { BASELINE_WINDOW_MS, pressureThreshold } from '../kernel/remote-pressure.ts'
 import { activeHold, HOLD_LOOKBACK_MS, holdOf } from '../kernel/remote-hold.ts'
 
@@ -512,7 +512,6 @@ export async function readThroughput(
     })
     const account = await readAccount(tx, from, to)
     const series = await readSeries(tx, { from, to, bucketMinutes })
-    const stored = await readStored(tx)
     const tenantBudget = { budgetMib, footprintMib: tenantMib, over: tenantMib > budgetMib }
     const answers = answersOf({
       window: { from, to },
@@ -529,7 +528,6 @@ export async function readThroughput(
     })
     return {
       ...account,
-      stored,
       series,
       host: {
         minutes,

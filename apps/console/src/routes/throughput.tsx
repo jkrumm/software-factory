@@ -1,6 +1,8 @@
-import type { ThroughputModel } from '@software-factory/contract'
+import type { CapacityLoopModel, ThroughputModel } from '@software-factory/contract'
 import {
+  ArmchairIcon,
   ArrowRightIcon,
+  CheckCircleIcon,
   CpuIcon,
   GaugeIcon,
   HardDrivesIcon,
@@ -12,19 +14,25 @@ import {
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useWindowKeys } from '@/components/shortcuts'
 import { type ReactNode, useState } from 'react'
-import { Fold, MeterBar, Section, Sparkline, StatCard, TimeChart } from '@/components/kit'
+import { Fold, InfoHint, MeterBar, Section, Sparkline, StatCard, TimeChart } from '@/components/kit'
 import { TONE_TEXT, TONE_TINT } from '@/components/kit/tone'
 import { buttonVariants } from '@/components/ui/button'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { SidebarEntry, SidebarSection, useSidebarCollapsed } from '@/components/sidebar'
 import { ThroughputSkeleton } from '@/components/skeletons'
-import { useThroughput } from '@/lib/queries'
+import { useCapacityLoop, useThroughput } from '@/lib/queries'
 import { useScreen, useScreenNote } from '@/lib/screen'
 import {
+  CAPACITY_HINT,
   CLASS_LABEL,
   classRows,
+  constantRows,
   DEFAULT_THROUGHPUT_WINDOW,
+  dayLabels,
+  dayValues,
   dayWords,
+  dayXLabels,
+  edgeSourceWords,
   epochLine,
   hostFigures,
   hostTrends,
@@ -32,16 +40,19 @@ import {
   issueNumber,
   kpiLabel,
   kpiValue,
+  leadsWords,
   levelHeight,
   levelWords,
   mibWords,
   msWords,
   percentWords,
+  perDayWords,
   progress,
   queueWords,
   RECENT_SPAN,
   secondsWords,
   splitRows,
+  stampWords,
   STATUS,
   THROUGHPUT_WINDOWS,
   throughputWindowOf,
@@ -345,6 +356,215 @@ function Answers({ model }: { model: Model }) {
         />
       </div>
     </section>
+  )
+}
+
+const CAPACITY_TITLE = {
+  throughput: 'Issues closed',
+  idle: 'Idle seat-hours with work ready',
+  over: 'Minutes over the load ceiling',
+  wait: 'Test slot wait',
+} as const
+
+/** The idle seat-hours of each day with the drained queue's share taken out. */
+const notDrainPerDay = (model: CapacityLoopModel) =>
+  model.idleSeatHours.perDay.map((d) => ({
+    day: d.day,
+    value: Math.max(0, (d.value ?? 0) - (model.idleSeatHoursDrain.perDay.find((x) => x.day === d.day)?.value ?? 0)),
+  }))
+
+/** What the capacity loop did over the window: Issues closed, idle seats, minutes over the load ceiling, test slot wait. */
+function CapacityCards({ model }: { model: CapacityLoopModel }) {
+  const { constants } = model
+  const subtitle = `${model.days} ${model.days === 1 ? 'day' : 'days'}, UTC days`
+  const wait = model.slotWait
+  const notDrain = notDrainPerDay(model)
+  const spark = (points: CapacityLoopModel['throughput']['perDay'], name: string, format: (v: number) => string) => (
+    <Sparkline values={dayValues(points)} labels={dayLabels(points)} tone="neutral" name={name} format={format} />
+  )
+  return (
+    <section aria-labelledby="throughput-capacity" className="min-w-0">
+      <h2 id="throughput-capacity" className="sr-only">
+        Capacity
+      </h2>
+      <div aria-label="Capacity figures" role="group" className="grid gap-4 sm:grid-cols-2 @7xl:grid-cols-4">
+        <StatCard
+          icon={CheckCircleIcon}
+          title={CAPACITY_TITLE.throughput}
+          hint="issues closed"
+          subtitle={subtitle}
+          value={perDayWords(model.throughput.total, model.days)}
+          sub={`${model.throughput.total} closed in the window`}
+          chart={spark(model.throughput.perDay, 'Issues closed per day', (v) => `${v} closed`)}
+          xLabels={dayXLabels(model.throughput.perDay)}
+          footer={[
+            { label: 'Closed', value: String(model.throughput.total) },
+            { label: 'Window', value: `${model.days} ${model.days === 1 ? 'day' : 'days'}` },
+          ]}
+        />
+        <StatCard
+          icon={ArmchairIcon}
+          title={CAPACITY_TITLE.idle}
+          hint="idle seat-hours"
+          subtitle={subtitle}
+          value={hoursWords(Math.max(0, model.idleSeatHours.total - model.idleSeatHoursDrain.total))}
+          sub={`Seats no lead held while Issues waited; ${hoursWords(model.idleSeatHoursDrain.total)} behind a drained queue left out`}
+          chart={spark(notDrain, 'Idle seat-hours per day', hoursWords)}
+          xLabels={dayXLabels(model.idleSeatHours.perDay)}
+          footer={[
+            { label: 'Leads per account', value: leadsWords(constants) },
+            { label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
+          ]}
+        />
+        <StatCard
+          icon={GaugeIcon}
+          title={CAPACITY_TITLE.over}
+          hint="load ceiling"
+          subtitle={subtitle}
+          value={String(model.minutesOverCeiling.total)}
+          sub="Host minutes above the ceiling in force"
+          chart={spark(model.minutesOverCeiling.perDay, 'Minutes over the load ceiling per day', (v) => `${v} min`)}
+          xLabels={dayXLabels(model.minutesOverCeiling.perDay)}
+          footer={[
+            { label: 'Load ceiling', value: String(constants.loadCeiling) },
+            { label: 'Extra slot below load', value: String(constants.slotExtraLoad) },
+          ]}
+        />
+        <StatCard
+          icon={HourglassIcon}
+          title={CAPACITY_TITLE.wait}
+          hint="test slot wait"
+          subtitle={subtitle}
+          value={wait.n === 0 ? 'No data' : msWords(wait.p50Ms)}
+          sub={wait.n === 0 ? 'No steps recorded yet' : `Median; 90th percentile ${msWords(wait.p90Ms)}`}
+          chart={wait.n === 0 ? null : spark(wait.perDayP50, 'Median test slot wait per day', msWords)}
+          xLabels={wait.n === 0 ? undefined : dayXLabels(wait.perDayP50)}
+          footer={[
+            {
+              label: '90th percentile',
+              value: wait.n === 0 ? null : msWords(wait.p90Ms),
+              note: 'No steps recorded yet',
+            },
+            { label: 'Steps recorded', value: String(wait.n) },
+          ]}
+        />
+      </div>
+    </section>
+  )
+}
+
+/** The test-slot steps that peaked highest, and the `after` edges the factory added against the files the Issues shared. */
+function CapacityTables({ model }: { model: CapacityLoopModel }) {
+  return (
+    <div className="grid gap-8">
+      <Section
+        level={3}
+        title="Steps by peak memory"
+        aside="Test-slot steps with the largest peak memory in the window"
+      >
+        {model.topSteps.length === 0 ? (
+          <Nothing>No steps recorded yet.</Nothing>
+        ) : (
+          <Table
+            label="Test-slot steps with the largest peak memory in the window"
+            head={
+              <>
+                <th className={TH}>Step</th>
+                <th className={cn(TH, NUM)}>Runs</th>
+                <th className={cn(TH, NUM)}>Peak</th>
+                <th className={cn(TH, NUM)}>80th pct</th>
+                <th className={cn(TH, NUM)}>Duration</th>
+                <th className={cn(TH, NUM)}>Wait</th>
+              </>
+            }
+          >
+            {model.topSteps.map((step) => (
+              <tr key={step.name}>
+                <th scope="row" className={cn(TD, 'text-left font-medium')}>
+                  {step.name}
+                </th>
+                <td className={cn(TD, NUM)}>{step.runs}</td>
+                <td className={cn(TD, NUM)}>{mibWords(step.maxPeakMib)}</td>
+                <td className={cn(TD, NUM)}>{mibWords(step.p80PeakMib)}</td>
+                <td className={cn(TD, NUM)}>{msWords(step.medianDurationMs)}</td>
+                <td className={cn(TD, NUM)}>{msWords(step.medianWaitMs)}</td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Section>
+      <Section
+        level={3}
+        title="Edges by shared files"
+        aside="After edges that triage and the queue loop added, and whether the two Issues touched a file in common"
+      >
+        {model.edges.bySource.length === 0 ? (
+          <Nothing>No edge added in the window.</Nothing>
+        ) : (
+          <Table
+            label="After edges the factory added, by who added them"
+            head={
+              <>
+                <th className={TH}>Added by</th>
+                <th className={cn(TH, NUM)}>Edges</th>
+                <th className={cn(TH, NUM)}>Needed</th>
+                <th className={cn(TH, NUM)}>Not needed</th>
+                <th className={cn(TH, NUM)}>Not measured</th>
+                <th className={cn(TH, NUM)}>Taken back</th>
+                <th className={cn(TH, NUM)}>Share not needed</th>
+              </>
+            }
+          >
+            {model.edges.bySource.map((source) => (
+              <tr key={source.source}>
+                <th scope="row" className={cn(TD, 'text-left font-medium')}>
+                  {edgeSourceWords(source.source)}
+                  {source.stopped ? ' (no new edges)' : ''}
+                </th>
+                <td className={cn(TD, NUM)}>{source.added}</td>
+                <td className={cn(TD, NUM)}>{source.needed}</td>
+                <td className={cn(TD, NUM)}>{source.notNeeded}</td>
+                <td className={cn(TD, NUM)}>{source.unknown}</td>
+                <td className={cn(TD, NUM)}>{source.removed}</td>
+                <td className={cn(TD, NUM)}>
+                  {source.notNeededShare === null ? 'none measured' : percentWords(source.notNeededShare)}
+                </td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Section>
+      <CapacityReaped model={model} />
+      <dl aria-label="Settings in force" className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+        {constantRows(model.constants).map((row) => (
+          <div key={row.key} className="flex gap-1.5">
+            <dt>{row.label}</dt>
+            <dd className="text-foreground tabular-nums">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+function CapacityReaped({ model }: { model: CapacityLoopModel }) {
+  const newest = model.reaped.newest[0]
+  return (
+    <p className="flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
+      <span>
+        <span className="text-foreground tabular-nums">{model.reaped.total}</span> processes of closed attempts ended by
+        the
+      </span>
+      <span className="inline-flex items-center">
+        reaper
+        <InfoHint word={CAPACITY_HINT.reaped} className="-my-1" />
+      </span>
+      <span>
+        {newest
+          ? `in the window; the newest ${newest.comm} (by ${newest.reason}) at ${stampWords(newest.at)}`
+          : 'in the window'}
+      </span>
+    </p>
   )
 }
 
@@ -945,6 +1165,7 @@ function Throughput() {
   const screen = useScreen(query)
   const note = useScreenNote(screen, query.error)
   const model = query.data
+  const capacity = useCapacityLoop(Math.max(1, Math.round(hours / 24)))
   if (!model) {
     return (
       <Page fluid>
@@ -963,6 +1184,7 @@ function Throughput() {
       <div className="grid gap-8 @container">
         <HostRow model={model} />
         <Answers model={model} />
+        {capacity.data ? <CapacityCards model={capacity.data} /> : null}
         <Section title="Detail" aside="One step from each answer">
           <div className="grid gap-2">
             <Detail title="The host over time: CPU, memory, swap, pressure and load, and the largest processes">
@@ -992,6 +1214,11 @@ function Throughput() {
             <Detail title="The cost: steps by host" count={model.tests.byHost.length}>
               <StepsByHost model={model} />
             </Detail>
+            {capacity.data ? (
+              <Detail title="The capacity loop: steps by peak memory, edges by shared files, the reaper and the settings">
+                <CapacityTables model={capacity.data} />
+              </Detail>
+            ) : null}
             <Detail title="The cost: improvements ledger" count={model.improvements.length}>
               <Improvements model={model} />
             </Detail>

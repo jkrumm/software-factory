@@ -1,15 +1,19 @@
-import type { ThroughputModel } from '@software-factory/contract'
+import type { CapacityLoopModel, ThroughputModel } from '@software-factory/contract'
 import type { Page } from '@playwright/test'
 import {
+  CAPACITY_HINT,
   CLASS_LABEL,
   classRows,
+  constantRows,
   epochLine,
   hostFigures,
   hoursWords,
   kpiLabel,
   kpiValue,
   mibWords,
+  msWords,
   percentWords,
+  perDayWords,
   queueWords,
   secondsWords,
   splitRows,
@@ -17,6 +21,7 @@ import {
   windowName,
 } from '../../apps/console/src/lib/throughput.ts'
 import { expect, test } from './fixtures.ts'
+import { expectHint } from './hints.ts'
 import { api } from './seed.ts'
 
 const read = (apiUrl: string, hours: number) => api<ThroughputModel>(apiUrl, `/v1/throughput?hours=${hours}`)
@@ -236,4 +241,66 @@ test('the window is in the sidebar and the page has no switch of its own at desk
   const section = page.locator('aside').getByRole('group', { name: 'Window' })
   await expect(section.getByRole('link', { name: '24 hours' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('navigation', { name: 'Window' })).toBeHidden()
+})
+
+test('the capacity section reads what the API computed: four cards, then steps, edges, the reaper and the settings', async ({
+  page,
+  apiUrl,
+}) => {
+  const model = await api<CapacityLoopModel>(apiUrl, '/v1/capacity-loop?days=7')
+  // the seed's figures, so a read that drifted from the rows fails here and not only against itself
+  expect(model.minutesOverCeiling.total).toBe(2)
+  expect(model.idleSeatHours.total).toBeCloseTo(2, 9)
+  expect(model.slotWait.n).toBe(6)
+  expect(model.slotWait.p50Ms).toBeCloseTo(2000, 6)
+  expect(model.slotWait.p90Ms).toBeCloseTo(55_000, 6)
+  expect(model.reaped.total).toBe(3)
+  expect(model.topSteps.map((s) => s.name)).toEqual([
+    'software-factory check',
+    'software-factory e2e',
+    'software-factory test',
+  ])
+
+  await page.goto('/throughput?hours=168')
+  const section = page.getByRole('region', { name: 'Capacity' })
+  await expect(section).toBeVisible()
+  const cards = section.getByRole('group', { name: 'Capacity figures' })
+  await expect(cards.getByRole('heading')).toHaveText([
+    'Issues closed',
+    'Idle seat-hours with work ready',
+    'Minutes over the load ceiling',
+    'Test slot wait',
+  ])
+  const cardOf = (title: string) => cards.locator('article').filter({ has: page.getByRole('heading', { name: title }) })
+  await expect(cardOf('Issues closed').getByText(perDayWords(model.throughput.total, model.days))).toBeVisible()
+  await expect(
+    cardOf('Idle seat-hours with work ready').getByText(hoursWords(2), { exact: true }).first(),
+  ).toBeVisible()
+  await expect(cardOf('Minutes over the load ceiling').getByText('2', { exact: true }).first()).toBeVisible()
+  const wait = cardOf('Test slot wait')
+  await expect(wait.getByText(msWords(2000), { exact: true }).first()).toBeVisible()
+  await expect(wait.getByText(`Median; 90th percentile ${msWords(55_000)}`, { exact: true })).toBeVisible()
+  await expectHint(cardOf('Idle seat-hours with work ready'), 'idle seat-hours')
+  await expectHint(wait, 'test slot wait')
+
+  await open(page, /^The capacity loop/)
+  const steps = table(page, 'Test-slot steps with the largest peak memory in the window')
+  const check = steps
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: 'software-factory check', exact: true }) })
+  const top = model.topSteps[0]
+  if (!top) throw new Error('no step in the API answer')
+  await expect(check.getByRole('cell')).toHaveText([
+    String(top.runs),
+    mibWords(top.maxPeakMib),
+    mibWords(top.p80PeakMib),
+    msWords(top.medianDurationMs),
+    msWords(top.medianWaitMs),
+  ])
+  await expect(page.getByText(/^3 processes of closed attempts ended by the/)).toBeVisible()
+  await expectHint(page.getByRole('main'), CAPACITY_HINT.reaped)
+  const settings = page.getByLabel('Settings in force')
+  const rows = constantRows(model.constants)
+  await expect(settings.locator('dt')).toHaveText(rows.map((r) => r.label))
+  await expect(settings.locator('dd')).toHaveText(rows.map((r) => r.value))
 })

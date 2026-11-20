@@ -1,5 +1,6 @@
-import type { ThroughputModel } from '@software-factory/contract'
+import type { CapacityLoopModel, ThroughputModel } from '@software-factory/contract'
 import { meterTone, type Tone } from '../components/kit/tone'
+import type { LANGUAGE } from './language.gen'
 
 /** The windows the page reads, in hours: a day, a week, two weeks (the minute rows are kept 14 days). */
 export const THROUGHPUT_WINDOWS = [24, 168, 336] as const
@@ -344,4 +345,57 @@ export function epochLine(model: ThroughputModel): string | null {
   return model.epoch.cut
     ? `Counting since ${since}: the ${windowName(model.hours)} window starts there, and a median over earlier days waits for 3 days.`
     : `Counting since ${since}.`
+}
+
+// ---- the capacity section: what the capacity loop did, all figures computed by the API -------------------------------------
+
+/** The domain word the reaper line carries an InfoHint for. */
+export const CAPACITY_HINT = { reaped: 'reaper' } as const satisfies Record<string, keyof typeof LANGUAGE>
+
+type CapacityDays = CapacityLoopModel['throughput']['perDay']
+
+const EDGE_SOURCE_WORDS: Record<string, string> = { triage: 'Triage', queue: 'Queue loop' }
+
+/** Who added an `after` edge, in words; a source the Console does not know reads as itself. */
+export const edgeSourceWords = (source: string): string => EDGE_SOURCE_WORDS[source] ?? source
+
+/** Per-day points as a chart reads them: the values (a null is a gap) and the tooltip lines. */
+export const dayValues = (points: CapacityDays): (number | null)[] => points.map((p) => p.value)
+export const dayLabels = (points: CapacityDays): string[] => points.map((p) => dayWords(p.day))
+
+/** Start, what a point is, end: the three x labels of a per-day chart. */
+export function dayXLabels(points: CapacityDays): [string, string, string] {
+  const first = points[0]
+  const last = points.at(-1)
+  return [first ? dayWords(first.day) : '', 'UTC days', last ? dayWords(last.day) : '']
+}
+
+/** Issues closed per day over the window, one decimal. */
+export const perDayWords = (total: number, days: number): string => `${(total / days).toFixed(1)} per day`
+
+/** "2026-11-05 09:01" from an ISO time (UTC, as the API says it). */
+export const stampWords = (iso: string): string => iso.slice(0, 16).replace('T', ' ')
+
+/** "2, iu 20, me 10": the cap of an account that has no cap of its own, then each one that has. */
+export const leadsWords = (constants: CapacityLoopModel['constants']): string =>
+  [
+    String(constants.leadsPerAccount),
+    ...Object.entries(constants.accountLeads).map(([name, cap]) => `${name} ${cap}`),
+  ].join(', ')
+
+/** The settings in force, in the order the retro reads them, each with its words. */
+export function constantRows(
+  constants: CapacityLoopModel['constants'],
+): { key: string; label: string; value: string }[] {
+  return [
+    { key: 'leadsPerAccount', label: 'Leads per account', value: leadsWords(constants) },
+    { key: 'seatsMaxBonus', label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
+    { key: 'loadCeiling', label: 'Load ceiling', value: String(constants.loadCeiling) },
+    { key: 'slots', label: 'Test slots', value: String(constants.slots) },
+    { key: 'slotsMax', label: 'Test slots at most', value: String(constants.slotsMax) },
+    { key: 'slotExtraLoad', label: 'Extra slot below load', value: String(constants.slotExtraLoad) },
+    { key: 'swapoutCeilingMb', label: 'Swapout ceiling', value: `${constants.swapoutCeilingMb} MiB per 5 min` },
+    { key: 'swapCeilingPct', label: 'Swap in use ceiling', value: `${constants.swapCeilingPct} % of RAM` },
+    { key: 'reaperGraceMs', label: 'Reaper grace', value: msWords(constants.reaperGraceMs) },
+  ]
 }

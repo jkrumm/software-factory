@@ -1,5 +1,4 @@
 import type {
-  CapacityLoopModel,
   FindingClassesModel,
   FixCommitsModel,
   FrictionModel,
@@ -10,18 +9,17 @@ import type {
   SeatsModel,
 } from '@software-factory/contract'
 import {
-  CheckCircleIcon,
   FileTextIcon,
   GaugeIcon,
   HandPointingIcon,
   HourglassIcon,
-  ArmchairIcon,
   type Icon,
   SealCheckIcon,
   TimerIcon,
   WrenchIcon,
 } from '@phosphor-icons/react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 import { useWindowKeys } from '@/components/shortcuts'
 import { Fold, InfoHint, MenuPopover, Section, Skeleton, Sparkline, StackedBars, StatCard } from '@/components/kit'
 import { EmptyState, Page, PageHeader } from '@/components/page'
@@ -29,12 +27,7 @@ import { SidebarEntry, SidebarSection, useSidebarCollapsed } from '@/components/
 import { TONE_MARK, TONE_TEXT } from '@/components/kit/tone'
 import { buttonVariants } from '@/components/ui/button'
 import {
-  CAPACITY_HINT,
   chartTarget,
-  constantRows,
-  dayLabels,
-  dayValues,
-  dayXLabels,
   classIsQuiet,
   classWords,
   closeWords,
@@ -46,10 +39,6 @@ import {
   FIX_HINT,
   FIX_MEANING,
   fixCard,
-  fixClassRows,
-  fixWeekLabel,
-  fixWeeksOldestFirst,
-  fixWeekTotals,
   formatKpi,
   formatValue,
   frictionRanking,
@@ -57,18 +46,12 @@ import {
   historyLabels,
   historyValues,
   historyXLabels,
-  hoursWords,
-  queueReasonWords,
-  edgeSourceWords,
   kpiChange,
   KPI_HINT,
   kpiFooter,
   partWords,
   subWords,
   lineTone,
-  mibWords,
-  msWords,
-  perDayWords,
   SEAT_LABEL,
   seatCells,
   shortDate,
@@ -82,24 +65,13 @@ import {
   REVIEWER_LABEL,
   tripwireWords,
   deliveryRows,
-  leadsWords,
-  stampWords,
   WINDOW_DAYS,
   windowOf,
   windowWords,
 } from '@/lib/improve'
-import { percentWords } from '@/lib/throughput'
 import { ImproveSkeleton } from '@/components/skeletons'
 import { useScreen, useScreenNote } from '@/lib/screen'
-import {
-  useCapacityLoop,
-  useFindingClasses,
-  useFixCommits,
-  useFriction,
-  useKpis,
-  useLoopYield,
-  useSeats,
-} from '@/lib/queries'
+import { useFindingClasses, useFixCommits, useFriction, useKpis, useLoopYield, useSeats } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/improve')({
@@ -444,58 +416,30 @@ function LoopYieldSection({ model }: { model: LoopYieldModel | undefined }) {
         {model === undefined ? (
           <p className="text-sm text-muted-foreground">Loading</p>
         ) : (
-          <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-            <table aria-label="What the loops yielded" className="w-full text-sm">
-              <thead className="text-left text-xs text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-2 font-medium">
-                    Loop
+          <PanelTable
+            caption="What the loops yielded"
+            heads={['Loop', 'Days', 'Passes', 'Signals', 'Issues', 'How they ended', 'Median to close', 'Most filed']}
+            left={[1, 5, 7]}
+          >
+            {model.loops.flatMap((loop) =>
+              loop.windows.map((window, index) => (
+                <tr key={`${loop.loop}/${window.days}`} className="border-t">
+                  <th scope="row" className={ROW_HEAD}>
+                    {index === 0 ? loop.loop : ''}
                   </th>
-                  <th scope="col" className="px-2.5 py-2 font-medium">
-                    Days
-                  </th>
-                  <th scope="col" className="px-2.5 py-2 text-right font-medium">
-                    Passes
-                  </th>
-                  <th scope="col" className="px-2.5 py-2 text-right font-medium">
-                    Signals
-                  </th>
-                  <th scope="col" className="px-2.5 py-2 text-right font-medium">
-                    Issues
-                  </th>
-                  <th scope="col" className="px-2.5 py-2 font-medium">
-                    How they ended
-                  </th>
-                  <th scope="col" className="px-2.5 py-2 text-right font-medium">
-                    Median to close
-                  </th>
-                  <th scope="col" className="px-2.5 py-2 font-medium">
-                    Most filed
-                  </th>
+                  <td className="px-4 py-2 tabular-nums">{window.days}</td>
+                  <td className={CELL}>{window.passes ?? '–'}</td>
+                  <td className={CELL}>{window.signals}</td>
+                  <td className={CELL}>{window.issues}</td>
+                  <td className="px-4 py-2">{yieldWords(window)}</td>
+                  <td className={CELL}>{closeWords(window.medianCloseSeconds)}</td>
+                  <td className="px-4 py-2 text-muted-foreground">
+                    {window.classes.map((c) => `${c.class} (${c.issues})`).join(', ') || '–'}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y">
-                {model.loops.flatMap((loop) =>
-                  loop.windows.map((window, index) => (
-                    <tr key={`${loop.loop}/${window.days}`}>
-                      <th scope="row" className="px-4 py-2 text-left font-medium">
-                        {index === 0 ? loop.loop : ''}
-                      </th>
-                      <td className="px-2.5 py-2 tabular-nums">{window.days}</td>
-                      <td className="px-2.5 py-2 text-right tabular-nums">{window.passes ?? '–'}</td>
-                      <td className="px-2.5 py-2 text-right tabular-nums">{window.signals}</td>
-                      <td className="px-2.5 py-2 text-right tabular-nums">{window.issues}</td>
-                      <td className="px-2.5 py-2">{yieldWords(window)}</td>
-                      <td className="px-2.5 py-2 text-right tabular-nums">{closeWords(window.medianCloseSeconds)}</td>
-                      <td className="px-2.5 py-2 text-muted-foreground">
-                        {window.classes.map((c) => `${c.class} (${c.issues})`).join(', ') || '–'}
-                      </td>
-                    </tr>
-                  )),
-                )}
-              </tbody>
-            </table>
-          </div>
+              )),
+            )}
+          </PanelTable>
         )}
       </Section>
     </div>
@@ -529,474 +473,15 @@ function FindingClassesSection({ model }: { model: FindingClassesModel | undefin
   )
 }
 
-function FixClassesPanel({ model }: { model: FixCommitsModel }) {
-  const rows = fixClassRows(model)
-  return (
-    <section
-      aria-label="Fix commits by class"
-      className={cn(PANEL, 'flex min-w-0 flex-col overflow-x-auto')}
-      style={PANEL_SHADOW}
-    >
-      <h3 className="flex items-baseline gap-2 px-4 pt-3 pb-1 text-sm font-medium">
-        Fix commits by class
-        <span className="text-muted-foreground tabular-nums">{fixWeekTotals(model).reduce((a, b) => a + b, 0)}</span>
-      </h3>
-      <table className="h-full w-full flex-1 text-sm">
-        <caption className="sr-only">Fix commits per class, by the week ending on the date shown</caption>
-        <thead className="text-left text-xs text-muted-foreground">
-          <tr>
-            <th scope="col" className="w-px px-4 py-2 font-medium whitespace-nowrap">
-              Class
-            </th>
-            {fixWeeksOldestFirst(model).map((week) => (
-              <th
-                key={fixWeekLabel(week)}
-                scope="col"
-                title={fixWeekLabel(week)}
-                className="px-2.5 py-2 text-right font-medium whitespace-nowrap"
-              >
-                {shortDate(week.to)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.key} className="border-t">
-              <th scope="row" className="w-px px-4 py-2 text-left font-medium whitespace-nowrap" title={row.meaning}>
-                {row.key}
-              </th>
-              {row.counts.map((n, i) => (
-                <td key={i} className="px-2.5 py-2 text-right tabular-nums">
-                  {n}
-                </td>
-              ))}
-            </tr>
-          ))}
-          <tr className="border-t font-medium">
-            <th scope="row" className="w-px px-4 py-2 text-left whitespace-nowrap">
-              Total
-            </th>
-            {fixWeekTotals(model).map((n, i) => (
-              <td key={i} className="px-2.5 py-2 text-right tabular-nums">
-                {n}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </table>
-    </section>
-  )
-}
-
 function FixBand({ model, pending }: { model: FixCommitsModel | undefined; pending: boolean }) {
   return (
     <div data-shot="improve-fix">
       <Section title="Fix commits">
         <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-2">
           <FixCard model={model} pending={pending} />
-          {model?.measured ? <FixClassesPanel model={model} /> : null}
         </div>
       </Section>
     </div>
-  )
-}
-
-const CAPACITY_TITLE = {
-  throughput: 'Issues closed',
-  idle: 'Idle seat-hours with work ready',
-  over: 'Minutes over the load ceiling',
-  wait: 'Test slot wait',
-} as const
-
-/** The idle seat-hours of each day with the drained queue's share taken out. */
-const notDrainPerDay = (model: CapacityLoopModel) =>
-  model.idleSeatHours.perDay.map((d) => ({
-    day: d.day,
-    value: Math.max(0, (d.value ?? 0) - (model.idleSeatHoursDrain.perDay.find((x) => x.day === d.day)?.value ?? 0)),
-  }))
-
-function CapacityCards({ model }: { model: CapacityLoopModel }) {
-  const { constants } = model
-  const subtitle = `${model.days} days, UTC days`
-  const wait = model.slotWait
-  return (
-    <div className="@container">
-      <div
-        aria-label="Capacity figures"
-        role="group"
-        className="grid grid-cols-[repeat(auto-fill,minmax(21rem,1fr))] gap-4"
-      >
-        <StatCard
-          icon={CheckCircleIcon}
-          title={CAPACITY_TITLE.throughput}
-          hint={CAPACITY_HINT.throughput}
-          subtitle={subtitle}
-          value={perDayWords(model.throughput.total, model.days)}
-          sub={`${model.throughput.total} closed in the window`}
-          chart={
-            <Sparkline
-              values={dayValues(model.throughput.perDay)}
-              labels={dayLabels(model.throughput.perDay)}
-              tone="neutral"
-              name="Issues closed per day"
-              format={(value) => `${value} closed`}
-            />
-          }
-          xLabels={dayXLabels(model.throughput.perDay)}
-          footer={[
-            { label: 'Closed', value: String(model.throughput.total) },
-            { label: 'Window', value: `${model.days} days` },
-          ]}
-        />
-        <StatCard
-          icon={ArmchairIcon}
-          title={CAPACITY_TITLE.idle}
-          hint={CAPACITY_HINT.idle}
-          subtitle={subtitle}
-          value={hoursWords(Math.max(0, model.idleSeatHours.total - model.idleSeatHoursDrain.total))}
-          sub={`Seats no lead held while Issues waited; ${hoursWords(model.idleSeatHoursDrain.total)} behind a drained queue left out`}
-          chart={
-            <Sparkline
-              values={dayValues(notDrainPerDay(model))}
-              labels={dayLabels(notDrainPerDay(model))}
-              tone="neutral"
-              name="Idle seat-hours per day"
-              format={hoursWords}
-            />
-          }
-          xLabels={dayXLabels(model.idleSeatHours.perDay)}
-          footer={[
-            { label: 'Leads per account', value: leadsWords(constants) },
-            { label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
-          ]}
-        />
-        <StatCard
-          icon={GaugeIcon}
-          title={CAPACITY_TITLE.over}
-          hint="load ceiling"
-          subtitle={subtitle}
-          value={String(model.minutesOverCeiling.total)}
-          sub="Host minutes above the ceiling in force"
-          chart={
-            <Sparkline
-              values={dayValues(model.minutesOverCeiling.perDay)}
-              labels={dayLabels(model.minutesOverCeiling.perDay)}
-              tone="neutral"
-              name="Minutes over the load ceiling per day"
-              format={(value) => `${value} min`}
-            />
-          }
-          xLabels={dayXLabels(model.minutesOverCeiling.perDay)}
-          footer={[
-            { label: 'Load ceiling', value: String(constants.loadCeiling) },
-            { label: 'Extra slot below load', value: String(constants.slotExtraLoad) },
-          ]}
-        />
-        <StatCard
-          icon={HourglassIcon}
-          title={CAPACITY_TITLE.wait}
-          hint={CAPACITY_HINT.wait}
-          subtitle={subtitle}
-          value={wait.n === 0 ? 'No data' : msWords(wait.p50Ms)}
-          sub={wait.n === 0 ? 'No steps recorded yet' : `Median; 90th percentile ${msWords(wait.p90Ms)}`}
-          chart={
-            wait.n === 0 ? null : (
-              <Sparkline
-                values={dayValues(wait.perDayP50)}
-                labels={dayLabels(wait.perDayP50)}
-                tone="neutral"
-                name="Median test slot wait per day"
-                format={(value) => msWords(value)}
-              />
-            )
-          }
-          xLabels={wait.n === 0 ? undefined : dayXLabels(wait.perDayP50)}
-          footer={[
-            {
-              label: '90th percentile',
-              value: wait.n === 0 ? null : msWords(wait.p90Ms),
-              note: 'No steps recorded yet',
-            },
-            { label: 'Steps recorded', value: String(wait.n) },
-          ]}
-        />
-      </div>
-    </div>
-  )
-}
-
-function CapacityTables({ model }: { model: CapacityLoopModel }) {
-  return (
-    <div className="grid items-start gap-8 xl:grid-cols-2">
-      <section aria-label="Steps by memory">
-        <Fold title="Steps by peak memory" count={model.topSteps.length} defaultOpen>
-          {model.topSteps.length === 0 ? (
-            <p className="py-2 text-sm text-muted-foreground">No steps recorded yet.</p>
-          ) : (
-            <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-              <table className="w-full text-sm">
-                <caption className="sr-only">Test-slot steps with the largest peak memory in the window</caption>
-                <thead className="text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th scope="col" className="px-4 py-2 font-medium">
-                      Step
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Runs
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Peak
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      80th pct
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Duration
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Wait
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {model.topSteps.map((step) => (
-                    <tr key={step.name} className="border-t">
-                      <th scope="row" className="px-4 py-2 text-left font-medium">
-                        {step.name}
-                      </th>
-                      <td className="px-4 py-2 text-right tabular-nums">{step.runs}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{mibWords(step.maxPeakMib)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{mibWords(step.p80PeakMib)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{msWords(step.medianDurationMs)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{msWords(step.medianWaitMs)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Fold>
-      </section>
-      <section aria-label="Queue waits by reason">
-        <Fold title="Queue waits by reason" count={model.queueByReason.length} defaultOpen>
-          {model.queueByReason.length === 0 ? (
-            <p className="py-2 text-sm text-muted-foreground">No queue wait recorded in the window.</p>
-          ) : (
-            <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-              <table className="w-full text-sm">
-                <caption className="sr-only">
-                  Hours Issues waited to start, and idle seat-hours that fell in minutes they waited, by the reason that
-                  kept them from starting
-                </caption>
-                <thead className="text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th scope="col" className="px-4 py-2 font-medium">
-                      Reason
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Issues
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Hours
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Idle seats
-                    </th>
-                    <th scope="col" className="px-4 py-2 font-medium">
-                      Repos, most hours first
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {model.queueByReason.map((reason) => (
-                    <tr key={reason.kind} className="border-t">
-                      <th scope="row" className="px-4 py-2 text-left font-medium">
-                        {queueReasonWords(reason.kind)}
-                      </th>
-                      <td className="px-4 py-2 text-right tabular-nums">{reason.issues}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{hoursWords(reason.queuedHours)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{hoursWords(reason.idleSeatHours)}</td>
-                      <td className="px-4 py-2 text-muted-foreground">
-                        {reason.byRepo.length === 0
-                          ? 'none'
-                          : reason.byRepo
-                              .slice(0, 4)
-                              .map((r) => `${r.repo} ${hoursWords(r.queuedHours)}`)
-                              .join(', ') + (reason.byRepo.length > 4 ? `, ${reason.byRepo.length - 4} more` : '')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Fold>
-      </section>
-      <section aria-label="Edges by shared files">
-        <Fold title="Edges by shared files" count={model.edges.bySource.length} defaultOpen>
-          {model.edges.bySource.length === 0 ? (
-            <p className="py-2 text-sm text-muted-foreground">No edge added in the window.</p>
-          ) : (
-            <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-              <table className="w-full text-sm">
-                <caption className="sr-only">
-                  After edges that triage and the queue loop added, and whether the two Issues touched a file in common
-                  in the end. Only edges whose Issues both shipped are measured.
-                </caption>
-                <thead className="text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th scope="col" className="px-4 py-2 font-medium">
-                      Added by
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Edges
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Needed
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Not needed
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Not measured
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Taken back
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Share not needed
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {model.edges.bySource.map((source) => (
-                    <tr key={source.source} className="border-t">
-                      <th scope="row" className="px-4 py-2 text-left font-medium">
-                        {edgeSourceWords(source.source)}
-                        {source.stopped ? ' (no new edges)' : ''}
-                      </th>
-                      <td className="px-4 py-2 text-right tabular-nums">{source.added}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{source.needed}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{source.notNeeded}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{source.unknown}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{source.removed}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {source.notNeededShare === null ? 'none measured' : percentWords(source.notNeededShare)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Fold>
-      </section>
-      <section aria-label="Lead cost per repo">
-        <Fold title="Lead cost per repo" count={model.leadCosts.length} defaultOpen>
-          {model.leadCosts.length === 0 ? (
-            <p className="py-2 text-sm text-muted-foreground">No lead samples recorded yet.</p>
-          ) : (
-            <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-              <table className="w-full text-sm">
-                <caption className="sr-only">
-                  Memory a lead takes per repo, from its process tree samples, as summed resident memory and as physical
-                  footprint
-                </caption>
-                <thead className="text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th scope="col" className="px-4 py-2 font-medium">
-                      Repo
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Attempts
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      80th pct
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Last
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Footprint 80th pct
-                    </th>
-                    <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Footprint / RSS
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {model.leadCosts.map((cost) => (
-                    <tr key={cost.repo} className="border-t">
-                      <th scope="row" className="px-4 py-2 text-left font-medium">
-                        {cost.repo}
-                      </th>
-                      <td className="px-4 py-2 text-right tabular-nums">{cost.attempts}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{mibWords(cost.peakMibP80)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{mibWords(cost.lastPeakMib)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {cost.footprintMibP80 === null ? 'none yet' : mibWords(cost.footprintMibP80)}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {cost.footprintToRss === null ? 'none yet' : `${Math.round(cost.footprintToRss * 100)} %`}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Fold>
-      </section>
-    </div>
-  )
-}
-
-function CapacityReaped({ model }: { model: CapacityLoopModel }) {
-  const newest = model.reaped.newest[0]
-  return (
-    <p className="flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
-      <span>
-        <span className="text-foreground tabular-nums">{model.reaped.total}</span> processes of closed attempts ended by
-        the
-      </span>
-      <span className="inline-flex items-center">
-        reaper
-        <InfoHint word={CAPACITY_HINT.reaped} className="-my-1" />
-      </span>
-      <span>
-        {newest
-          ? `in the window; the newest ${newest.comm} (by ${newest.reason}) at ${stampWords(newest.at)}`
-          : 'in the window'}
-      </span>
-    </p>
-  )
-}
-
-function CapacitySection({ model, pending }: { model: CapacityLoopModel | undefined; pending: boolean }) {
-  return (
-    <section aria-labelledby="improve-capacity" className="mt-10 grid gap-4">
-      <h2 id="improve-capacity" className="text-sm font-medium text-muted-foreground">
-        Capacity
-      </h2>
-      {model ? (
-        <>
-          <CapacityCards model={model} />
-          <CapacityTables model={model} />
-          <CapacityReaped model={model} />
-          <dl aria-label="Settings in force" className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-            {constantRows(model.constants).map((row) => (
-              <div key={row.key} className="flex gap-1.5">
-                <dt>{row.label}</dt>
-                <dd className="text-foreground tabular-nums">{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </>
-      ) : (
-        <p className="text-sm text-muted-foreground">{pending ? 'Loading' : 'No data yet'}</p>
-      )}
-    </section>
   )
 }
 
@@ -1023,45 +508,69 @@ const REVIEWER_COLUMNS = [
   { key: 'wall', label: 'Wall time p50' },
 ] as const
 
+/** A panel holding one table: a caption for screen readers, the column heads (the first reads left, the rest right) and the body rows. */
+function PanelTable({
+  caption,
+  heads,
+  left = [],
+  children,
+}: {
+  caption: string
+  heads: ReactNode[]
+  /** the indexes of the heads after the first that read left */
+  left?: number[]
+  children: ReactNode
+}) {
+  return (
+    <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
+      <table className="w-full text-sm">
+        <caption className="sr-only">{caption}</caption>
+        <thead className="text-left text-xs text-muted-foreground">
+          <tr>
+            {heads.map((head, i) => (
+              <th
+                key={i}
+                scope="col"
+                className={cn('px-4 py-2 font-medium', i > 0 && !left.includes(i) && 'text-right')}
+              >
+                {head}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+const ROW_HEAD = 'px-4 py-2 text-left font-medium'
+const CELL = 'px-4 py-2 text-right tabular-nums'
+
 function ReviewerSection({ model }: { model: SeatsModel }) {
-  const { rows } = model.reviewers
   return (
     <div data-shot="improve-reviewers" className="mt-6">
       <Section title="Reviewers" aside="The two reviewer seats over the reviews recorded in the window">
-        <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-          <table className="w-full text-sm">
-            <caption className="sr-only">Reviews recorded in the window, by the seat they ran on</caption>
-            <thead className="text-left text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  Reviewer
+        <PanelTable
+          caption="Reviews recorded in the window, by the seat they ran on"
+          heads={['Reviewer', ...REVIEWER_COLUMNS.map((c) => c.label)]}
+        >
+          {model.reviewers.rows.map((row) => {
+            const cells = reviewerCells(row)
+            return (
+              <tr key={row.seat} className="border-t">
+                <th scope="row" className={ROW_HEAD}>
+                  {REVIEWER_LABEL[row.seat]}
                 </th>
                 {REVIEWER_COLUMNS.map((column) => (
-                  <th key={column.key} scope="col" className="px-4 py-2 text-right font-medium">
-                    {column.label}
-                  </th>
+                  <td key={column.key} className={CELL}>
+                    {cells[column.key]}
+                  </td>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const cells = reviewerCells(row)
-                return (
-                  <tr key={row.seat} className="border-t">
-                    <th scope="row" className="px-4 py-2 text-left font-medium">
-                      {REVIEWER_LABEL[row.seat]}
-                    </th>
-                    {REVIEWER_COLUMNS.map((column) => (
-                      <td key={column.key} className="px-4 py-2 text-right tabular-nums">
-                        {cells[column.key]}
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+            )
+          })}
+        </PanelTable>
         {reviewerTripwireWords(model.reviewers).map((line) => (
           <p key={line} className="mt-2 text-sm text-muted-foreground">
             {line}
@@ -1077,79 +586,53 @@ function SeatSection({ model }: { model: SeatsModel }) {
   return (
     <div data-shot="improve-seats">
       <Section title="By seat" aside="Issues by the seat their first lead ran on">
-        <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-          <table className="w-full text-sm">
-            <caption className="sr-only">Issues whose first lead started in the window, by the seat it ran on</caption>
-            <thead className="text-left text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  <span className="inline-flex items-center gap-1">
-                    Seat
-                    <InfoHint word="light seat" className="-my-1" />
-                  </span>
+        <PanelTable
+          caption="Issues whose first lead started in the window, by the seat it ran on"
+          heads={[
+            <span key="seat" className="inline-flex items-center gap-1">
+              Seat
+              <InfoHint word="light seat" className="-my-1" />
+            </span>,
+            ...SEAT_COLUMNS.map((c) => c.label),
+          ]}
+        >
+          {rows.map((row) => {
+            const cells = seatCells(row)
+            return (
+              <tr key={row.seat} className="border-t">
+                <th scope="row" className={ROW_HEAD}>
+                  {SEAT_LABEL[row.seat]}
                 </th>
                 {SEAT_COLUMNS.map((column) => (
-                  <th key={column.key} scope="col" className="px-4 py-2 text-right font-medium">
-                    {column.label}
-                  </th>
+                  <td key={column.key} className={CELL}>
+                    {cells[column.key]}
+                  </td>
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const cells = seatCells(row)
-                return (
-                  <tr key={row.seat} className="border-t">
-                    <th scope="row" className="px-4 py-2 text-left font-medium">
-                      {SEAT_LABEL[row.seat]}
-                    </th>
-                    {SEAT_COLUMNS.map((column) => (
-                      <td key={column.key} className="px-4 py-2 text-right tabular-nums">
-                        {cells[column.key]}
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+            )
+          })}
+        </PanelTable>
         <p className="mt-2 text-sm text-muted-foreground">{tripwireWords(tripwire)}</p>
       </Section>
       <div data-shot="improve-light-delivery" className="mt-6">
         <Section title="What the light seat delivers" aside="Four figures beside the lead row's, over the window">
-          <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-            <table className="w-full text-sm">
-              <caption className="sr-only">The light seat's delivery against the lead row's, over the window</caption>
-              <thead className="text-left text-xs text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-2 font-medium">
-                    Figure
-                  </th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">
-                    Light
-                  </th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">
-                    Lead
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {deliveryRows(delivery).map((row) => (
-                  <tr key={row.key} className="border-t align-top">
-                    <th scope="row" className="px-4 py-2 text-left font-medium">
-                      {row.label}
-                      <span className="mt-0.5 block max-w-prose text-xs font-normal text-muted-foreground">
-                        {row.definition}
-                      </span>
-                    </th>
-                    <td className="px-4 py-2 text-right tabular-nums">{row.light}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{row.lead}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PanelTable
+            caption="The light seat's delivery against the lead row's, over the window"
+            heads={['Figure', 'Light', 'Lead']}
+          >
+            {deliveryRows(delivery).map((row) => (
+              <tr key={row.key} className="border-t align-top">
+                <th scope="row" className={ROW_HEAD}>
+                  {row.label}
+                  <span className="mt-0.5 block max-w-prose text-xs font-normal text-muted-foreground">
+                    {row.definition}
+                  </span>
+                </th>
+                <td className={CELL}>{row.light}</td>
+                <td className={CELL}>{row.lead}</td>
+              </tr>
+            ))}
+          </PanelTable>
         </Section>
       </div>
     </div>
@@ -1167,7 +650,6 @@ function Improve() {
   const classes = useFindingClasses()
   const yields = useLoopYield()
   const fixes = useFixCommits()
-  const capacity = useCapacityLoop(days)
   const seats = useSeats(days)
 
   if (!kpis.data) {
@@ -1201,7 +683,6 @@ function Improve() {
           <FindingClassesSection model={classes.data} />
         </div>
       </div>
-      <CapacitySection model={capacity.data} pending={capacity.isPending} />
     </Page>
   )
 }

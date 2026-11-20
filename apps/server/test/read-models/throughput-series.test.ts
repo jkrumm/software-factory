@@ -11,7 +11,7 @@ import { redactThroughput } from '../../src/read/throughput-redact.ts'
 
 /**
  * The series a retro needs, over rows seeded by hand: leads running and Issues queued at each bucket start (by repo and by
- * reason), the host samples' peaks and CPU split, the maxima beside the p90s, what is stored, and session paging.
+ * reason), the host samples' peaks and CPU split, the maxima beside the p90s, and session paging.
  */
 let db: TestCluster
 const NOW = new Date('2026-11-07T12:00:00Z')
@@ -113,15 +113,6 @@ describe('the series', () => {
     expect(point?.queuedByRepo).toEqual({ app: 1, private: 1 })
     expect(point?.runningByRepo).toEqual({ app: 1 })
   })
-})
-
-test('stored: the oldest and newest row of each source, whatever the window', async () => {
-  const { stored } = await readThroughput(db.sql, { now: NOW, hours: 1 })
-  expect(stored.hostSamples).toEqual({ from: t('10:03').toISOString(), to: t('10:12').toISOString() })
-  expect(stored.queueIntervals).toEqual({ from: t('10:00').toISOString(), to: t('10:11').toISOString() })
-  expect(stored.leadAttempts).toEqual({ from: t('10:01').toISOString(), to: t('10:30').toISOString() })
-  expect(stored.stepCosts).toEqual({ from: t('10:20').toISOString(), to: t('10:22').toISOString() })
-  expect(stored.hostClassSamples).toBeNull()
 })
 
 test('the host signals carry the CPU split; the slot wait and the merge-lock wait carry their maximum', async () => {

@@ -607,7 +607,7 @@ test('classCpu: the CPU of each class and repo over the window, ranked, with the
   await db.sql`DELETE FROM factory.host_class_samples`
 })
 
-test('readLeadCosts: per repo, the attempts, the p80 of the newest ten attempt peaks and the newest peak', async () => {
+test('readLeadCosts: per repo, the attempts and the p80 of the newest ten attempt peaks', async () => {
   const at = (min: number) => new Date(Date.UTC(2026, 10, 10, 12, min))
   const rows: [number, string, string, number][] = [
     // repo a: five attempts, peaks 100..500; the newest (w5) peaks at 500 in its last sample
@@ -626,17 +626,9 @@ test('readLeadCosts: per repo, the attempts, the p80 of the newest ten attempt p
   for (const [min, repo, worktree, mib] of rows) {
     await db.sql`INSERT INTO factory.lead_samples (at, worktree, repo, rss_mib, procs) VALUES (${at(min)}, ${worktree}, ${repo}, ${mib}, 2)`
   }
-  const none = {
-    footprintAttempts: 0,
-    footprintMibP80: null,
-    lastFootprintMib: null,
-    footprintToRss: null,
-    restMibP50: null,
-    restMinutes: 0,
-  }
   expect(await readLeadCosts(db.sql)).toEqual([
-    { repo: 'a', attempts: 5, peakMibP80: 400, lastPeakMib: 500, ...none },
-    { repo: 'b', attempts: 2, peakMibP80: 90, lastPeakMib: 90, ...none },
+    { repo: 'a', attempts: 5, peakMibP80: 400 },
+    { repo: 'b', attempts: 2, peakMibP80: 90 },
   ])
   await db.sql`DELETE FROM factory.lead_samples`
 })
@@ -646,39 +638,7 @@ test('readLeadCosts: rows from before the slots were left out (outside_slots fal
   await db.sql`INSERT INTO factory.lead_samples (at, worktree, repo, rss_mib, procs, outside_slots) VALUES
     (${at(0)}, 'o1', 'z', 9000, 2, false), (${at(1)}, 'o2', 'z', 9000, 2, false),
     (${at(2)}, 'n1', 'z', 500, 2, true), (${at(3)}, 'n2', 'z', 600, 2, true), (${at(4)}, 'o3', 'y', 9000, 2, false)`
-  expect(await readLeadCosts(db.sql)).toMatchObject([{ repo: 'z', attempts: 2, peakMibP80: 600, lastPeakMib: 600 }])
-  await db.sql`DELETE FROM factory.lead_samples`
-})
-
-test('readLeadCosts: the footprint figures come from the attempts that have one, and the ratio is their median', async () => {
-  const at = (min: number) => new Date(Date.UTC(2026, 10, 10, 12, min))
-  // repo c: w1 and w2 predate the footprint; w3..w5 have one (peak 60 of 100, 100 of 200, 150 of 300), w6 lost it to a failed top
-  const rows: [number, string, number, number | null][] = [
-    [0, 'w1', 100, null],
-    [1, 'w2', 100, null],
-    [2, 'w3', 100, 40],
-    [3, 'w3', 90, 60],
-    [4, 'w4', 200, 100],
-    [5, 'w5', 300, 150],
-    [6, 'w6', 400, null],
-  ]
-  for (const [min, worktree, rss, footprint] of rows) {
-    await db.sql`INSERT INTO factory.lead_samples (at, worktree, repo, rss_mib, footprint_mib, procs) VALUES (${at(min)}, ${worktree}, 'c', ${rss}, ${footprint}, 2)`
-  }
-  expect(await readLeadCosts(db.sql)).toEqual([
-    {
-      repo: 'c',
-      attempts: 6,
-      peakMibP80: 300,
-      lastPeakMib: 400,
-      footprintAttempts: 3,
-      footprintMibP80: 150,
-      lastFootprintMib: 150,
-      footprintToRss: 0.5,
-      restMibP50: null,
-      restMinutes: 0,
-    },
-  ])
+  expect(await readLeadCosts(db.sql)).toEqual([{ repo: 'z', attempts: 2, peakMibP80: 600 }])
   await db.sql`DELETE FROM factory.lead_samples`
 })
 
