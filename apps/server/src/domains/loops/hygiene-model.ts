@@ -99,7 +99,7 @@ export interface ProbeFinding {
   probe: Probe
   /** `links:docs/a.md`, `deps`, `check`: one subject, one key */
   key: string
-  /** one line, no counts or dates in it: intake's fingerprint is made of the title */
+  /** one line, no counts or dates in it; intake matches the finding by its key, never by this title */
   title: string
   /** the evidence, at most `MAX_EVIDENCE_LINES` lines of at most 240 characters */
   lines: string[]

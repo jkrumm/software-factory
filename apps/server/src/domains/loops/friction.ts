@@ -180,7 +180,7 @@ export function withinBudget(patterns: readonly Pattern[]): { file: Pattern[]; o
 
 export const hasIssueRefs = (pattern: Pattern): boolean => !WITHOUT_ISSUES.has(pattern.group)
 
-/** Stable per pattern: the fingerprint drops digits and punctuation, and the count is not in it, so a repeat dedups. */
+/** Stable per pattern for the lead's reading; intake matches a repeat by the pattern key, never by this title. */
 export const signalTitle = (pattern: Pattern): string => `Friction: ${pattern.label}`.slice(0, 512)
 
 export interface PassFacts {

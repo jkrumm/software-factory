@@ -107,7 +107,7 @@ export function checkAnswer(answer: HygieneAnswer, request: HygieneRequest): Che
 export const judgmentKey = (finding: Pick<HygieneFinding, 'kind' | 'path'>): string =>
   `${JUDGMENT_PREFIX}${finding.kind}:${finding.path}`
 
-/** Built from the kind and the path, never from the model's wording: intake fingerprints the title, so the same document is one pattern. */
+/** Built from the kind and the path, never from the model's wording, so the same document reads as one pattern. */
 export const judgmentTitle = (finding: Pick<HygieneFinding, 'kind' | 'path'>): string =>
   `Hygiene: ${finding.kind} document ${finding.path}`.slice(0, 512)
 

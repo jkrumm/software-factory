@@ -28,9 +28,9 @@ const oneLine = (text: string, max = 160): string => text.replace(/\s+/g, ' ').t
 
 const DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 /**
- * An id in words: intake's fingerprint drops digits, so "issue_470" and "issue_471" would be one subject. A subject Issue's
- * own title stays out of the title too (intake amends an open Issue whose title shares 60% of its words, and the subject
- * Issue is open): the title names the Issue by its spelled id, the text carries its title.
+ * An id in words, so the title reads the same in every pass whatever the digits (intake matches the finding by its kind and
+ * subject, never by the title). A subject Issue's own title stays out of the title too: the title names the Issue by its
+ * spelled id, the text carries its title.
  */
 const spelled = (id: string): string =>
   id
@@ -114,7 +114,7 @@ function uncheckedFinding(unchecked: string[]): Finding {
   return {
     kind: 'migration_clash',
     subject: 'refs-unchecked',
-    // no digits in the title: intake's fingerprint drops them, and the count moves from pass to pass
+    // no count in the title: it moves from pass to pass, and the kind and subject are the finding's key
     title: `Self-watch: migration check skipped ${names.length} refs over its limit`,
     facts: ['refs over the comparison limit were not compared with origin/master'],
     // the count and the names move from pass to pass: context is never hashed
@@ -463,7 +463,7 @@ export interface SelfwatchPlan {
 
 /**
  * Once per subject, amended while it stays open. A new or cleared subject is filed; an open one with the same evidence
- * only moves `last_seen_at`; one whose evidence changed is filed again under the same title (intake's repeat path
+ * only moves `last_seen_at`; one whose evidence changed is filed again under the same key (intake's finding path
  * amends the open Issue); an open row whose subject is absent is cleared. A kind in `unread` was not looked at in this
  * pass: its rows are left as they are.
  */

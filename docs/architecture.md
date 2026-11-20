@@ -116,7 +116,8 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **Amend or new.** A loop's finding (friction, hygiene, selfwatch, throughput: `intake.api.file` with a `LoopFinding`) is
   matched by its key alone (loop, class, repo, subject; `findingKeyOf`, a subject row `finding:…`): an open Issue of
   that key takes it as a note, one closed within the fingerprint window counts it as a repeat, else it files anew; no
-  title match and no workflow call, and an agent's own signal is never matched or offered to an Issue a finding filed. An
+  title match and no workflow call (an open Issue filed before the key existed is taken over once by its title's
+  fingerprint), and an agent's own signal is never matched or offered for amending to an open Issue a finding filed. An
   amend by title match or workflow keeps a subject row for the signal's fingerprint, so the same words again are a repeat.
   A repeat of a fingerprint inside its window changes nothing. A signal that carries the retro marker (`Retro: <date> kpi=…`, the last words of its text) is one recommendation with its own number to move: it skips the title match and the workflow and files its own Issue (only its own fingerprint folds it into an open one). An owner or agent signal that matches an
   open Issue clearly (title overlap) amends it and reaches its lead as a note. Otherwise, unless a fingerprint, subject or

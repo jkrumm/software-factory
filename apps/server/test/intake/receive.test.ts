@@ -1421,6 +1421,20 @@ describe("a loop's finding is matched by its key alone", () => {
     })
   })
 
+  test('an open Issue a loop filed before its key existed is taken over once by its fingerprint, then by the key', async () => {
+    const title = 'Friction: leads stopped reporting before they ended'
+    done(await intake.file(finding(title, 's'), 'agent'))
+    const key = { loop: 'friction' as const, class: 'stall', subject: 'stall:unreported' }
+    expect(done(await intake.file(finding(title, 's', 'the next pass'), 'agent', key))).toMatchObject({
+      outcome: 'amended',
+      issue: 'issue_1',
+    })
+    const renamed = finding('Friction: leads end their turn silently', 's', 'a pass after that')
+    expect(done(await intake.file(renamed, 'agent', key))).toMatchObject({ outcome: 'amended', issue: 'issue_1' })
+    expect(await issues()).toHaveLength(1)
+    expect(triageCalls).toBe(0)
+  })
+
   test("an agent's words never land on a loop's Issue, by title match or by the workflow", async () => {
     const title = 'Friction: leads stopped reporting before they ended'
     done(

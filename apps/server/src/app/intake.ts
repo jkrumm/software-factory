@@ -641,8 +641,14 @@ export function createIntake(deps: IntakeDeps) {
   async function findingIn(s: Stores, r: Received, findingKey: Key): Out<Triaged> {
     const { signal } = r
     const now = clock.now()
-    const match = await s.intake.latestSubject(signal.source, findingKey)
-    const issue = match ? await loadIssue(s.work, match.issueId) : null
+    const keyed = await s.intake.latestSubject(signal.source, findingKey)
+    // An Issue a loop filed before its findings carried a key has only its title's fingerprint row: while it is open it
+    // is taken over once under the key, so the first pass after the change notes it instead of filing it twice.
+    const adopted = keyed ? null : await s.intake.latestByFingerprint(signal.source, signal.fingerprint)
+    const adoptable = adopted ? await loadIssue(s.work, adopted.issueId) : null
+    if (adopted && isOpen(adoptable)) await keepFingerprint(s, signal, adoptable.id, findingKey)
+    const match = keyed ?? (isOpen(adoptable) ? adopted : null)
+    const issue = keyed ? await loadIssue(s.work, keyed.issueId) : adoptable
     if (match && isOpen(issue)) {
       const said = new Bun.CryptoHasher('sha256').update(signal.text).digest('hex').slice(0, 12)
       const amendKey = keyOf('amended', 'finding', findingKey, issue.id, said)
