@@ -19,8 +19,8 @@ export interface Commits {
     reported: readonly string[]
   }): Promise<Result<CommitRead>>
   /**
-   * For a ship that names no commit: what of the Issue's branches is on the remote's default branch, each attempt's
-   * branch newest first, the first that landed. Empty `commits` with `held`: some branch has work, none of it landed.
+   * For a ship that names no commit: what of the Issue's branches is on the remote's default branch, every attempt's
+   * branch that landed, newest attempt first. Empty `commits` with `held`: some branch has work, none of it landed.
    */
   landed(input: { repo: string; branches: readonly BranchCut[] }): Promise<Result<LandedRead>>
 }
