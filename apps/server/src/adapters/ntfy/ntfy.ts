@@ -17,8 +17,8 @@ const Env = z.object({
   FACTORY_NTFY_TOPIC: z.string().regex(TOPIC).default('factory'),
   /** the bearer token for the ntfy server, when it needs one */
   NTFY_TOKEN: z.string().optional(),
-  /** where a checkpoint is answered; a placeholder until the Console exists */
-  FACTORY_CONSOLE_URL: z.string().min(1).default('http://127.0.0.1:7793/console'),
+  /** the Console's base URL, where a checkpoint is answered; the default is the Console listener (FACTORY_CONSOLE_PORT) on loopback */
+  FACTORY_CONSOLE_URL: z.string().min(1).default('http://127.0.0.1:7795'),
 })
 
 export interface OwnersLine {
