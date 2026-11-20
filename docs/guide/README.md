@@ -50,7 +50,7 @@ Six nouns carry the design. Every chapter is about one of them.
 |-|-|-|
 | **Signal** | Anything that arrives and may become work | Nobody files around triage; text from outside is held until it is let through |
 | **Issue** | One unit of work: one repo, one branch, one ship | Its state is derived from its stored events, by one total table |
-| **Event** | A fact recorded on an Issue, one of 24 kinds | Only an event moves a state, and each kind has a list of who may send it |
+| **Event** | A fact recorded on an Issue, one of 25 kinds | Only an event moves a state, and each kind has a list of who may send it |
 | **Lead** | The Claude Code session that owns an Issue; an attempt is its *n*th try | One Issue, one lead, from root cause to verified production |
 | **Checkpoint** | Where the factory stops for a person: a Decision, a Concept or Spec, an Errand | Code decides first, then a workflow, then the owner. Never a merge |
 | **Loop** | A named recurring pass with one way to act | Claim, commit, call, record: a replayed pass acts once |
@@ -59,17 +59,17 @@ Six nouns carry the design. Every chapter is about one of them.
 
 ![An Issue's states and the events that move between them.](./diagrams/issue-lifecycle.svg)
 
-**The 24 events,** by where in an Issue's life they fall ([`events.ts`](https://github.com/jkrumm/software-factory/blob/d83ba1e8040a4d8aa3c0639bf659f773f09b67b8/apps/server/src/domains/work/events.ts) holds the kinds and `SENDERS`, who may send each):
+**The 25 events,** by where in an Issue's life they fall ([`events.ts`](https://github.com/jkrumm/software-factory/blob/d83ba1e8040a4d8aa3c0639bf659f773f09b67b8/apps/server/src/domains/work/events.ts) holds the kinds and `SENDERS`, who may send each):
 
 | Phase | Events | Sent by |
 |-|-|-|
 | Arrive | `filed`, `settled` | the factory; the owner or his delegate can file directly |
 | Start | `admitted`, `lead_started`, `seated`, `moved_up`, `lead_gone` | the factory; the owner or his delegate sets a seat |
-| Work | `noted`, `deferred`, `stalled`, `woken` | the lead defers or reports a stall; the owner, the steward, the Judge and the factory note and wake |
+| Work | `noted`, `paused`, `deferred`, `stalled`, `woken` | the lead defers or reports a stall; the owner pauses; the owner, the steward, the Judge and the factory note and wake |
 | Ask a person | `asked`, `answered`, `submitted`, `verdict_given`, `errand_raised`, `errand_done`, `errand_turned_back` | the lead asks, or the steward for it; the Judge, a default or the owner answers |
 | Finish | `shipped`, `watch_passed`, `regressed`, `closed`, `reopened`, `cancelled` | the lead ships or closes, the factory watches, the owner or the factory reopens or cancels |
 
-**A wait names its exit.** A waiting Issue says why it waits and what ends the wait ([`WAITS`](https://github.com/jkrumm/software-factory/blob/d83ba1e8040a4d8aa3c0639bf659f773f09b67b8/apps/server/src/domains/work/issue.ts)). Eight of the eleven waits end by a machine: a timer, a dependency, an outside review, and the five stalls the steward ends. Three need a person: a Decision, a review, an Errand.
+**A wait names its exit.** A waiting Issue says why it waits and what ends the wait ([`WAITS`](https://github.com/jkrumm/software-factory/blob/d83ba1e8040a4d8aa3c0639bf659f773f09b67b8/apps/server/src/domains/work/issue.ts)). Eight of the twelve waits end by a machine: a timer, a dependency, an outside review, and the five stalls the steward ends. Four need a person: a Decision, a review, an Errand, and the owner's own pause.
 
 **The three checkpoints,** and who settles each before the owner is asked:
 

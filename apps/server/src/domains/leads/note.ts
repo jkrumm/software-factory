@@ -64,7 +64,9 @@ function item(record: HistoryRecord): string | null {
  */
 export function noteText(issue: IssueId, records: readonly HistoryRecord[]): string {
   const head = `Factory, Issue ${issueNumber(issue)}:`
-  const items = records.flatMap((record) => item(record) ?? [])
+  // A pause the same note ends (a resume) is no news to a lead that is waking: the wake says it.
+  const ended = records.some((record) => record.kind === 'woken')
+  const items = records.flatMap((record) => (ended && record.kind === 'paused' ? [] : (item(record) ?? [])))
   const body = items.length > 0 ? items.join(' | ') : `there is news; read it with \`factory issue show ${issue}\``
   const text = `${head} ${body}`
   return text.length > MAX_NOTE_CHARS ? `${text.slice(0, MAX_NOTE_CHARS - 1)}…` : text

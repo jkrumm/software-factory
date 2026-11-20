@@ -122,7 +122,7 @@ async function readLeadSplits(tx: SQL, from: Date, to: Date) {
     owner AS (
       SELECT w.issue_id, w.closed_at, range_agg(tstzrange(s.s, greatest(s.s, s.e), '[)') * w.wall) AS mr
       FROM walls w JOIN states s ON s.issue_id = w.issue_id AND s.to_state = 'waiting' AND s.e IS NOT NULL
-        AND s.reason IN ('decision', 'review', 'errand', 'external', 'paused')
+        AND s.reason IN ('decision', 'review', 'errand', 'external')
       GROUP BY w.issue_id, w.closed_at),
     cwd_issue AS MATERIALIZED (
       SELECT c.cwd, (SELECT a.issue_id FROM factory.lead_attempts a

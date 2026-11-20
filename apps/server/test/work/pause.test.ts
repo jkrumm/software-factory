@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { noteText } from '../../src/domains/leads/note.ts'
 import { apply } from '../../src/domains/work/machine.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
 import { filedIssue } from '../../src/domains/work/explore.ts'
@@ -143,4 +144,20 @@ test('an unstarted, a shipped and a closed Issue refuse a pause, and a past time
   expect(pause(closed).result).toBe('refused')
   expect(pause(running(), new Date(T0.getTime() - MIN).toISOString()).result).toBe('refused')
   expect(apply(running(), e('paused', { reason: 'hold' }, 'lead'), { now: T0 }).result).toBe('refused')
+})
+
+test('the lead is told of a pause when it runs, and not again in the note that ends it', () => {
+  const record = (kind: string, payload: unknown, version: number) => ({
+    kind,
+    payload,
+    actor: 'owner',
+    at: T0,
+    version,
+  })
+  const paused = record('paused', { reason: 'hold for the release' }, 5)
+  const woken = record('woken', { since: 5, detail: 'the owner said go' }, 6)
+  expect(noteText(id, [paused])).toContain('the owner paused this Issue')
+  const resume = noteText(id, [paused, woken])
+  expect(resume).not.toContain('paused')
+  expect(resume).toContain('your wait is over')
 })
