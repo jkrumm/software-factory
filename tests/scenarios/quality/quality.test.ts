@@ -164,7 +164,7 @@ describe('ship: the server finds the merged commits', () => {
     const unmerged = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1' })
     expect(unmerged.code).toBe(5)
     expect(unmerged.refusal).toContain(`nothing of ${branch} is on origin/master yet`)
-    expect(unmerged.refusal).toContain('factory merge-lock --project example --')
+    expect(unmerged.refusal).toContain('land it first with `factory land` in the worktree')
     expect(await stateOf(it.lw.world, id)).toBe('working')
 
     const squashed = await squashMerge(it.lw, branch)

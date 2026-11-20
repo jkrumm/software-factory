@@ -47,7 +47,7 @@ fails on any raw colour.
 ## The CLI
 
 - Help and body validation derive from the contract schemas (`--schema` prints one).
-- `hook`, `slot`, `deploy-lock`, `merge-lock`, `follow`, `retro` (the weekly retro bundle: the retro read plus a pass over
+- `hook`, `slot`, `deploy-lock`, `merge-lock`, `land`, `follow`, `retro` (the weekly retro bundle: the retro read plus a pass over
   the lead transcripts), `role`, `issue schema` (the filing contract, offline), `project schema`, `project check` (`docs/project.md`
   and a line-numbered check of a `project.yaml`, offline), `plan schema`, `plan check` (a line-numbered check of a plan
   file, offline) and `plan merge` are hand-written. `plan merge` is the git merge driver
@@ -110,23 +110,43 @@ runs it); to reproduce one CI failure, run that suite alone inside a slot.
 
 ## Merging
 
-Parallel leads share one master, so before a lead merges its PR it rebases on the current `origin/master`, takes the next
-free migration number if it adds a migration (`make check` prints it; `scripts/merge-guard.ts --next-migration` too) and
-pushes. `make check` runs locally before the first push and after every change the lead authors; a rebase that only
-brings in master's commits is not re-run locally, CI on the rebased head is that check (NL28). Then `make merge-guard`
-(`MERGE_GUARD_ARGS=--wait` waits for the head's CI), merging only on exit 0.
+Parallel leads share one master, so a lead lands its branch with `factory land` in its worktree
+(`apps/cli/src/land.ts`), started in the background with its exit code written out. `make check` runs locally before the
+first push and after every change the lead authors; a rebase that only brings in master's commits is not re-run locally,
+CI on the rebased head is that check (NL28). A new migration takes the next free number (`make check` prints it;
+`scripts/merge-guard.ts --next-migration` too).
 
-The rebase, push, CI wait, guard and merge run inside `factory merge-lock --project <repo> -- sh -c '…'`
-(`apps/cli/src/deploy-lock.ts`, the deploy lock's mechanism under `<project>.merge.lock`, waits up to 90 min, closed; the
-finished call is reported to `POST /merge-windows` afterwards, best effort, and never changes the lock or the exit code).
+The verb reads the ship mode from `project.yaml` (`ship:` with any `via: pr` lands by pull request; no file or only
+`via: push` pushes to the default branch) and runs, inside the repo's merge window:
+
+| Step | Pull request | Push |
+|-|-|-|
+| lock | the merge lock of `merge-lock` (`<project>.merge.lock`, waits up to 90 min, then exit 75) | same |
+| rebase | `git fetch`, `git rebase origin/<default>` with the plan merge driver, `factory plan check` where `.gitattributes` declares `merge=plan`; a conflict aborts the rebase and refuses | same |
+| review | `agw review covered` on the range: a commit uncovered at standard or deep refuses with the `/review` command | same |
+| push | `git push --force-with-lease` (skipped when origin has the head); no open pull request refuses before the lock | `git push origin HEAD:<default>` |
+| ci | the pull request shows the head, then every check's bucket is `pass` or `skipping`; a `fail` or `cancel` refuses with the checks, no check after 3 min refuses (`--no-ci` for a head every workflow's path filter skips: `make check` on the rebased head before the push, no CI wait, no guard), 45 min refuses | none |
+| guard | `make merge-guard` where the Makefile has it; else the same rule: the head contains the default branch, which is not red | none |
+| merge | `gh pr merge --<method> --match-head-commit <head>` by the method GitHub allows (squash, then rebase, then merge; `--method` overrides), never `--admin` | none |
+| report | the landed commits, and a squash commit `agw review covered` lists stale with the `/review` command for it | the landed commits |
+
+A refusal is exit 1 with `land: <step>: refused: <why>` and `land: next: <command>`, the lock released and nothing
+merged. Every step is safe to repeat, so a second run resumes (a rebased branch is not rebased again, a pushed head is not
+pushed again, a merged pull request prints its commit and exits 0). It does not deploy and does not ship. A remote that is
+not GitHub is refused with the by-hand steps. `FACTORY_LAND_POLL_MS`, `FACTORY_LAND_NO_RUN_MS` and
+`FACTORY_LAND_CI_MINUTES` tune the CI wait.
+
+The lock is `factory merge-lock --project <repo> -- <cmd>`'s (`apps/cli/src/deploy-lock.ts`, the deploy lock's mechanism
+under `<project>.merge.lock`, closed; the finished window is reported to `POST /merge-windows` afterwards, best effort, and
+never changes the lock or the exit code); `merge-lock` stays for a pass that lands by its own steps (the hygiene fix).
 With several leads a CI run (5.3 min p50, 6.2 p90 over 167 runs from 2026-11-13, before the shards were rebalanced)
 outlasts the gap between merges, so unserialised leads rebased against each other forever (NL29).
 
 The guard refuses, with the reason: a branch that does not contain `origin/master`, a new migration whose number master (or
 the branch) already uses, a head with no finished green CI run on its exact sha, and a master whose last finished CI run is
 red (a cancelled run was superseded and is skipped; an unreadable `gh` refuses too; a master run still running is not a
-refusal). `MERGE_GUARD_ARGS=--allow-red` is for the one change that fixes a red master and never skips the head's CI. The
-lead's brief (`domains/leads/brief.ts`) states the same rule, and by hand for a repo with no `make merge-guard`.
+refusal). `factory land --allow-red` (`MERGE_GUARD_ARGS=--allow-red`) is for the one change that fixes a red master and
+never skips the head's CI.
 
 ## Deploy
 

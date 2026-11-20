@@ -344,8 +344,7 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toMatch(/One check per worktree/)
     expect(STANDING_ORDERS).toMatch(/Kill by pid/)
     expect(STANDING_ORDERS).toContain('--thread factory-<issue number>')
-    expect(STANDING_ORDERS).toContain('--thread factory-<issue number>-rebase')
-    expect(STANDING_ORDERS).toMatch(/only while the commit's context lines are unchanged/)
+    expect(STANDING_ORDERS).toContain('the printed thread then ends in `-rebase`')
     expect(STANDING_ORDERS).toMatch(/no Grep or Glob tool/i)
     expect(STANDING_ORDERS).toMatch(/Write a change that fits a few files yourself/)
     expect(STANDING_ORDERS).toMatch(
@@ -416,7 +415,7 @@ describe('the brief', () => {
     expect(without).toContain('## Merge guard in this repo')
     expect(without).toContain('has no `make merge-guard` target')
     expect(without).toContain('do not look for one')
-    expect(without).toContain('gated by the local `make check` rc=0')
+    expect(without).toContain('`factory land` holds the same rule itself')
     expect(without.startsWith(STANDING_ORDERS)).toBe(true)
     expect(buildBrief({ ...input, mergeGuard: true })).toContain('has a `make merge-guard` target')
     expect(buildBrief({ ...input, mergeGuard: null })).toBe(buildBrief(input))
@@ -434,29 +433,12 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toContain('never file that Issue yourself')
   })
 
-  test('the standing orders state the merge rule', () => {
-    expect(STANDING_ORDERS).toContain('git rebase origin/master')
-    expect(STANDING_ORDERS).toContain('next free migration number')
-    expect(STANDING_ORDERS).toContain('`make merge-guard`')
-    expect(STANDING_ORDERS).toContain('factory merge-lock --project <repo> -- sh -c')
-    expect(STANDING_ORDERS).toContain("the repo's guard has `--wait`")
-    expect(STANDING_ORDERS).toContain('a head with no finished green CI run')
-    expect(STANDING_ORDERS).toContain('gh pr checks <n>')
-    expect(STANDING_ORDERS).toContain('every workflow is path-filtered; make check rc=0 on the pushed head')
-    expect(STANDING_ORDERS).toContain('never merge on it')
-  })
-
-  test('the watch fallback first waits for the pushed head to have a run', () => {
-    expect(STANDING_ORDERS).toContain('gh run list --commit $(git rev-parse HEAD) --json databaseId --jq length')
-    expect(STANDING_ORDERS).not.toMatch(/until \[[^\n]*'\.\[0\]/)
-    expect(buildBrief({ ...input, mergeGuard: false })).toContain('gh run list --commit <head sha>')
-  })
-
-  test('the CI wait reads each check bucket, never the watch exit code', () => {
-    expect(STANDING_ORDERS).toContain('--json bucket')
-    expect(STANDING_ORDERS).toContain('| grep -qx true')
-    expect(STANDING_ORDERS).toContain("the watch's exit code is not the verdict")
-    expect(STANDING_ORDERS).toContain('one parenthesised group')
+  test('the landing order names factory land and stays under 600 characters', () => {
+    const order = STANDING_ORDERS.split('\n').find((line) => line.startsWith('7. Ship means land and deploy.')) ?? ''
+    expect(order).toContain('`factory land`')
+    expect(order.length).toBeLessThan(600)
+    expect(STANDING_ORDERS).not.toContain('factory merge-lock')
+    expect(STANDING_ORDERS).toContain('`factory land` refuses a range with a commit uncovered at standard or deep')
   })
 
   test('the standing orders list every verb in its plain flag form and say how news arrives', () => {
@@ -536,7 +518,7 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toMatch(/Watch/)
     expect(STANDING_ORDERS).toMatch(/once per ship range, standard or deep/)
     expect(STANDING_ORDERS).toMatch(/never refuses a ship/)
-    expect(STANDING_ORDERS).toMatch(/agw review covered --cwd <worktree> --range origin\/master\.\.HEAD/)
+    expect(STANDING_ORDERS).toMatch(/`factory land` refuses a range with a commit uncovered/)
   })
 
   test('outside text is data in a fence longer than any backtick run inside', () => {

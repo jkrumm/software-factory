@@ -316,7 +316,7 @@ describe('aliases', () => {
       'aliases:',
       'token new <source>',
       'also ',
-      'deploy-lock, follow, merge-lock',
+      'deploy-lock, follow, land, merge-lock',
       '<event>',
       'FACTORY_READ_TOKEN',
       'FACTORY_ROLES_FILE',

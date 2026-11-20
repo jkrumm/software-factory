@@ -81,7 +81,7 @@ A deploy exports one immutable release of a commit and switches the service to i
 
 The CLI is `factory`: one vocabulary for the owner, the orchestrator and every lead, generated from the server's OpenAPI document.
 
-- **Generated, not written.** Commands come from `apps/cli/src/generated/operations.ts`, and `make check` fails when it is stale. A short list of verbs is hand-written: `hook`, `slot`, `deploy-lock`, `merge-lock`, `follow`, `retro`, `role` and the offline schema and check verbs.
+- **Generated, not written.** Commands come from `apps/cli/src/generated/operations.ts`, and `make check` fails when it is stale. A short list of verbs is hand-written: `hook`, `slot`, `deploy-lock`, `merge-lock`, `land`, `follow`, `retro`, `role` and the offline schema and check verbs.
 - **One contract with agw.** `--format json|plain`, data on stdout, messages on stderr, and it never prompts.
 - **One exit-code table.** A caller branches on the code, so a code is never added or changed in one place.
 - **A body that does not parse is exit 9.** The CLI parses every response with the same zod schema the server built it from.

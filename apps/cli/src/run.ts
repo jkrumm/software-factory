@@ -3,6 +3,7 @@ import type { RoleEntry } from '@software-factory/contract'
 import pkg from '../package.json' with { type: 'json' }
 import { bodyJsonSchema, fieldNotes, KIND_HINT } from './body-schema.ts'
 import { deployLockVerb } from './deploy-lock.ts'
+import { landVerb } from './land.ts'
 import { doorTokenVerb } from './door.ts'
 import { EXIT, FactoryError, usage } from './exit.ts'
 import { filingContract, filingGuide } from './filing.ts'
@@ -55,6 +56,10 @@ const HAND_WRITTEN: readonly [string, string][] = [
   [
     'merge-lock --project <name> -- <cmd>',
     'run <cmd> holding the host-local merge lock of <name>, the one rebase-push-CI-merge window of a repo (waits up to 90 min for a live holder; exit 75: no lock in time or unreadable, closed)',
+  ],
+  [
+    'land [--pr <n>] [--method squash|rebase|merge] [--allow-red] [--no-ci] [--project <name>]',
+    "land the worktree's branch inside the repo's merge window: rebase, review check, push, CI, merge guard, merge, the landed commits; a refusal names the step and the next command, a rerun resumes (exit 1: refused, 75: no window in time)",
   ],
   [
     'follow [--issue <id>] [--since <cursor>] [--until-closed]',
@@ -396,6 +401,7 @@ export async function run(argv: string[], io: Io, operations: readonly Operation
     if (argv[0] === 'slot') return await slotVerb(argv.slice(1), io)
     if (argv[0] === 'deploy-lock') return await deployLockVerb(argv.slice(1), io)
     if (argv[0] === 'merge-lock') return await deployLockVerb(argv.slice(1), io, 'merge')
+    if (argv[0] === 'land') return await landVerb(argv.slice(1), io)
     if (argv[0] === 'follow') return await followVerb(argv.slice(1), io)
     if (argv[0] === 'retro') return await retroVerb(argv.slice(1), io)
     if (argv[0] === 'issue' && argv[1] === 'schema') return issueSchemaVerb(argv.slice(2), io)

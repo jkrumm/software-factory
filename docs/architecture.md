@@ -11,7 +11,7 @@ What is not built is the last section.
 apps/
   server/     Elysia app: domains, application services, adapters, read models; migrations in apps/server/migrations
   door/       the alert door: loopback, one token (`machine`), posts alerts and refusal reports to the server
-  cli/        `factory`: commands generated from the OpenAPI document, plus the hook, slot, deploy-lock, merge-lock, follow, role and issue schema verbs
+  cli/        `factory`: commands generated from the OpenAPI document, plus the hook, slot, deploy-lock, merge-lock, land, follow, role and issue schema verbs
   console/    the Console: a Vite and React PWA (shadcn on Base UI, Tailwind 4 with Basalt tokens, TanStack Router and Query); the server's second listener serves its build
 packages/
   contract/   zod schemas: every request, response and event; the OpenAPI source; the spool format the hook shares
