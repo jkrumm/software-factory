@@ -103,6 +103,11 @@ test('migration_clash: one number on two names with one on the base, from the ba
   expect(found[0]?.title).toContain('0997_base.sql and 0997_one.sql and 0997_two.sql')
 })
 
+test('migration_clash: a number repeated on the base alone still files', () => {
+  const found = migrationFindings({ base: ['0996_a.sql', '0996_b.sql'], refs: [], unchecked: [] }, new Set())
+  expect(found.map((f) => f.subject)).toEqual(['0996'])
+})
+
 test('migration_clash: two open refs that take one number with a clean base file nothing', () => {
   expect(
     migrationFindings(
