@@ -72,6 +72,7 @@ let rules: PolicyRule[]
 let judgeCalls: { question: string; precedents: number; key: string }[]
 let judgeAnswer: () => Result<JudgeVerdict>
 let screenCalls: { errand: string; key: string }[]
+let screenDetails: (string | null)[]
 let screenAnswer: () => Result<ErrandScreenAnswer>
 let sent: string[]
 let sendResult: () => Result<void>
@@ -91,6 +92,7 @@ const errandScreen: ErrandScreenPort = {
     // The port is never called inside a transaction.
     expect(deps.uow.inTransaction()).toBe(false)
     screenCalls.push({ errand: request.errand.id, key })
+    screenDetails.push(request.errand.detail)
     return Promise.resolve(screenAnswer())
   },
 }
@@ -112,6 +114,7 @@ beforeEach(async () => {
   judgeCalls = []
   judgeAnswer = () => ok({ verdict: 'owner', answer: '', reason: 'a taste question', source: '' })
   screenCalls = []
+  screenDetails = []
   screenAnswer = () => ok({ verdict: 'pass', reason: 'a person must approve it' })
   sent = []
   sendResult = () => ok(undefined)
@@ -1682,6 +1685,36 @@ describe('errands', () => {
         screenBy: 'judge',
       })
       expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
+    })
+
+    test('a MacBook command reaches the screen with the fact that the mini cannot run it, and a pass reaches the owner', async () => {
+      const made = await requestErrand(deps, {
+        raw: {
+          source: 'ask-human',
+          need: 'hands',
+          text: 'Deploy Tinycast Home Lights',
+          command: 'cd ~/SourceRoot/tinycast-extensions && git pull --ff-only && make deploy',
+          where: 'macbook',
+        },
+      }).then(value)
+      expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'reached_owner' }])
+      const [detail] = screenDetails
+      expect(detail).toContain('Command to run (macbook): cd ~/SourceRoot/tinycast-extensions')
+      expect(detail).toContain('The mini has no shell on it')
+    })
+
+    test('a long MacBook request still carries the fact to the screen', async () => {
+      const made = await requestErrand(deps, {
+        raw: {
+          source: 'ask-human',
+          need: 'hands',
+          text: `Deploy it\n${'x'.repeat(3800)}`,
+          command: `make deploy # ${'y'.repeat(1500)}`,
+          where: 'macbook',
+        },
+      }).then(value)
+      expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'reached_owner' }])
+      expect(screenDetails[0]).toContain('The mini has no shell on it')
     })
 
     test('the first look by rule turns away a plain command without calling the screen', async () => {

@@ -88,12 +88,21 @@ async function openUnder(
   return 'finished'
 }
 
+/**
+ * What the screen is told about where a MacBook command runs: the mini has no way onto the MacBook (its ssh takes a fixed verb
+ * list only), so "run it yourself over ssh" is no route. The screen turned a MacBook-only `make deploy` away with exactly that.
+ */
+const MACBOOK_FACT =
+  "This command runs on the owner's MacBook. The mini has no shell on it (ssh to the MacBook serves three fixed verbs only: a dotfiles sync, one read-only report and a git pull of one checkout, never an arbitrary command), so an agent cannot run it from the mini: turn it away only if the same command would run on the mini itself, with the repo, tool and credentials it needs there."
+
 /** A request carries the command to run too; the screen sees it, the first look by rule reads the words only. */
 const screenedDetail = (errand: ErrandRecord): string | null => {
   if (errand.command === null) return errand.detail
-  return `${errand.detail ?? ''}\nCommand to run${errand.host ? ` (${errand.host})` : ''}: ${errand.command}`
+  const asked = `${errand.detail ?? ''}\nCommand to run${errand.host ? ` (${errand.host})` : ''}: ${errand.command}`
     .trim()
     .slice(0, 4000)
+  // after the cut: a long detail and command must never push the fact out of what the screen reads
+  return errand.host === 'macbook' ? `${asked}\n${MACBOOK_FACT}` : asked
 }
 
 /** The Errand reaches the owner: recorded and paged (the page's key is the Errand's) in one transaction. */
