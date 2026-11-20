@@ -250,8 +250,6 @@ export interface LoopStore {
   pruneClassSamples(before: Date): Promise<number>
   /** drops the hourly rollups older than `before`; how many */
   pruneClassHours(before: Date): Promise<number>
-  /** the repos an Issue had an event in since `since`: the projects whose CI the ledger follows */
-  ciLedgerRepos(since: Date): Promise<string[]>
   /** when the newest run of the repo in the ledger finished, null for a repo with none */
   newestCiRun(repo: string): Promise<Date | null>
   /** stores the runs, a run already stored (same repo and run id) is overwritten; how many rows */

@@ -68,7 +68,7 @@ import { reaperPass, reaperSummary } from './app/loops/reaper.ts'
 import { processKiller, reaperProcesses } from './adapters/planning/reaper-processes.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
-import { ciLedgerPass } from './app/loops/ci-ledger.ts'
+import { ciLedgerPass, ciLedgerSummary } from './app/loops/ci-ledger.ts'
 import { githubCiLedger, githubCiLive, githubCiRuns, githubCiTimes } from './adapters/selfwatch/github.ts'
 import { gitMigrationFiles } from './adapters/selfwatch/git.ts'
 import { hostOverload } from './adapters/selfwatch/overload.ts'
@@ -427,6 +427,7 @@ async function main(): Promise<void> {
     findings: mainCheckoutLines,
     resume: resumeRules,
   }
+  const ciLedgerRefused = new Map<string, number>()
   const lines = new Map<string, string>()
   /** A problem that stands is said once, not on every pass. */
   const said = (loop: string, problems: readonly string[]) => {
@@ -654,28 +655,30 @@ async function main(): Promise<void> {
         })
         if (!pass.ok) return pass
         said('selfwatch', [...pass.value.notes, ...pass.value.failed.map((f) => `${f.key}: ${f.reason}`)])
-        // The CI ledger rides on this loop's interval: the runs of every followed project, kept per head for `read throughput`.
-        const ledger = await ciLedgerPass({
+        return ok(selfwatchSummary(pass.value))
+      },
+    },
+    {
+      // The finished CI runs of every stored project and of the factory's own repo, kept per head for `read throughput`. A repo GitHub or the checkout refuses is told once and left alone for a day.
+      name: 'ci-ledger',
+      intervalMs: loopSettings.intervalMs['ci-ledger'],
+      onChange: false,
+      run: async () => {
+        const pass = await ciLedgerPass({
           uow,
           clock: writes.clock,
+          projects: async () => (await projectBudgets()).map((b) => b.repo),
           always: [SELFWATCH_REPO],
+          refused: ciLedgerRefused,
           ledger: githubCiLedger({
             locate: (repo) => repos.locate(repo),
             token: intakeEnv.github.token,
             apiUrl: intakeEnv.github.apiUrl,
           }),
         })
-        const ledgerNotes = ledger.ok ? ledger.value.notes : [`ci ledger: ${ledger.error.kind}: ${ledger.error.detail}`]
-        said('selfwatch', ledgerNotes)
-        return ok(
-          [
-            selfwatchSummary(pass.value),
-            ledger.ok ? `ci ledger ${ledger.value.runs} run(s) of ${ledger.value.repos} repo(s)` : null,
-            ...ledgerNotes,
-          ]
-            .filter(Boolean)
-            .join('; '),
-        )
+        if (!pass.ok) return pass
+        said('ci-ledger', pass.value.notes)
+        return ok(ciLedgerSummary(pass.value))
       },
     },
     {

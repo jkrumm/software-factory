@@ -22,6 +22,7 @@ const Env = z.object({
   FACTORY_LOOP_SCREEN_MS: ms.optional(),
   FACTORY_LOOP_FIX_CLASSES_MS: ms.optional(),
   FACTORY_LOOP_SELFWATCH_MS: ms.optional(),
+  FACTORY_LOOP_CI_LEDGER_MS: ms.optional(),
   FACTORY_LOOP_HOST_MS: ms.optional(),
   FACTORY_LOOP_REAPER_MS: ms.optional(),
   FACTORY_LOOP_DIGEST_MS: ms.optional(),
@@ -123,6 +124,10 @@ const screenTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : Math.max(ti
 const FIX_CLASSES_TICK_MS = 6 * 3_600_000
 const fixClassesTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : FIX_CLASSES_TICK_MS)
 
+/** The CI ledger reads GitHub every 15 minutes, unless the tick is off (0). */
+const CI_LEDGER_TICK_MS = 15 * 60_000
+const ciLedgerTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : CI_LEDGER_TICK_MS)
+
 /** The host is sampled once a minute, unless the tick is off (0). */
 const HOST_TICK_MS = 60_000
 const hostTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : HOST_TICK_MS)
@@ -181,6 +186,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     screen: e.FACTORY_LOOP_SCREEN_MS,
     'fix-classes': e.FACTORY_LOOP_FIX_CLASSES_MS,
     selfwatch: e.FACTORY_LOOP_SELFWATCH_MS,
+    'ci-ledger': e.FACTORY_LOOP_CI_LEDGER_MS,
     host: e.FACTORY_LOOP_HOST_MS,
     reaper: e.FACTORY_LOOP_REAPER_MS,
     digest: e.FACTORY_LOOP_DIGEST_MS,
@@ -202,21 +208,23 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
                 ? fixClassesTickMs(tickMs)
                 : name === 'selfwatch'
                   ? selfwatchTickMs(tickMs)
-                  : name === 'host'
-                    ? hostTickMs(tickMs)
-                    : name === 'reaper'
-                      ? reaperTickMs(tickMs)
-                      : name === 'digest'
-                        ? digestTickMs(tickMs)
-                        : name === 'errands'
-                          ? errandsTickMs(tickMs)
-                          : name === 'reviews'
-                            ? reviewsTickMs(tickMs)
-                            : name === 'desk'
-                              ? deskTickMs(tickMs)
-                              : name === 'throughput'
-                                ? throughputTickMs(tickMs)
-                                : tickMs),
+                  : name === 'ci-ledger'
+                    ? ciLedgerTickMs(tickMs)
+                    : name === 'host'
+                      ? hostTickMs(tickMs)
+                      : name === 'reaper'
+                        ? reaperTickMs(tickMs)
+                        : name === 'digest'
+                          ? digestTickMs(tickMs)
+                          : name === 'errands'
+                            ? errandsTickMs(tickMs)
+                            : name === 'reviews'
+                              ? reviewsTickMs(tickMs)
+                              : name === 'desk'
+                                ? deskTickMs(tickMs)
+                                : name === 'throughput'
+                                  ? throughputTickMs(tickMs)
+                                  : tickMs),
       ]),
     ) as Record<LoopName, number>,
     tickMs,

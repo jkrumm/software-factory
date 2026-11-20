@@ -314,6 +314,7 @@ export const LOOP_NAMES = [
   'screen',
   'fix-classes',
   'selfwatch',
+  'ci-ledger',
   'host',
   'reaper',
   'digest',

@@ -36,6 +36,22 @@ export interface GithubCiOptions {
   fetch?: typeof fetch
 }
 
+/**
+ * A status other than 200 as the error it is. A 403 or 429 that GitHub says is its rate limit (no requests left, or a
+ * `retry-after`) passes by itself; any other 403 and a 404 is the token not seeing the repo: it stays so until the token or
+ * the repo changes, and says that in its detail.
+ */
+function statusError(response: Response): PortError {
+  const limited =
+    (response.status === 403 || response.status === 429) &&
+    (response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after'))
+  if (limited) return portError('timeout', `github ${response.status} (rate limited)`)
+  return portError(
+    response.status === 403 || response.status === 404 ? 'refused' : 'unreadable',
+    `github ${response.status}`,
+  )
+}
+
 /** The GitHub reads both adapters share: one GET with the token, and the `owner/name` of a repo's origin. */
 function githubReader(options: GithubCiOptions) {
   const api = options.apiUrl.replace(/\/+$/, '')
@@ -59,7 +75,7 @@ function githubReader(options: GithubCiOptions) {
         portError(timedOut ? 'timeout' : 'unreadable', `github did not answer: ${timedOut ? 'timeout' : 'error'}`),
       )
     }
-    if (response.status !== 200) return err(portError('unreadable', `github ${response.status}`))
+    if (response.status !== 200) return err(statusError(response))
     const parsed = schema.safeParse(await response.json().catch(() => undefined))
     return parsed.success ? ok(parsed.data) : err(portError('unreadable', 'github answered with an unexpected body'))
   }

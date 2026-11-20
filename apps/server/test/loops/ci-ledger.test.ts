@@ -11,21 +11,13 @@ import { err, ok, portError } from '../../src/kernel/result.ts'
 /** The CI ledger: GitHub's runs as the adapter maps them, and what a pass stores, repeats and prunes, on a real Postgres. */
 let db: TestCluster
 const NOW = new Date('2026-11-07T12:00:00Z')
+const projects = async () => ['app']
 const DAY = 24 * 3_600_000
 const clock = { now: () => NOW }
 
 beforeAll(async () => {
   db = await startTestCluster()
   await migrate(db.sql, await loadMigrations())
-  // `app` had an Issue event lately, `old` only long ago, `quiet` none
-  for (const [n, repo, at] of [
-    [1, 'app', new Date(NOW.getTime() - 2 * DAY)],
-    [2, 'old', new Date(NOW.getTime() - 40 * DAY)],
-  ] as const) {
-    await db.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES (${`issue_${n}`}, ${repo}, 'queued', 1)`
-    await db.sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
-      VALUES (${`ev_${n}`}, ${`issue_${n}`}, ${`k_${n}`}, 'filed', '{}'::jsonb, 'factory', ${at}, 'applied', 1, 'queued')`
-  }
 })
 afterAll(() => db.stop())
 
@@ -95,8 +87,31 @@ describe('githubCiLedger', () => {
   })
 })
 
+describe('githubCiLedger refusals', () => {
+  const answering = (status: number, headers: Record<string, string> = {}) =>
+    githubCiLedger({
+      token: 't',
+      apiUrl: 'https://api.example.test',
+      locate: async (repo) => ok(`/work/${repo}`),
+      run: async () => ({ exitCode: 0, stdout: 'git@github.com:o/app.git\n' }),
+      fetch: (async () => new Response('{}', { status, headers })) as unknown as typeof fetch,
+    })
+
+  test.each([
+    [404, {}, 'refused'],
+    [403, {}, 'refused'],
+    [403, { 'x-ratelimit-remaining': '0' }, 'timeout'],
+    [429, { 'retry-after': '60' }, 'timeout'],
+    [500, {}, 'unreadable'],
+  ] as const)('a %d answer (%j) is %s', async (status, headers, kind) => {
+    const read = await answering(status, headers)('app', NOW)
+    expect(read.ok).toBe(false)
+    expect(!read.ok && read.error.kind).toBe(kind)
+  })
+})
+
 describe('ciLedgerPass', () => {
-  test('stores the runs of the repos an Issue touched lately and the always-followed one, and reads the others never', async () => {
+  test('stores the runs of the stored projects and the always-followed repo', async () => {
     const asked: [string, string][] = []
     const ledger: CiLedgerRuns = async (repo, since) => {
       asked.push([repo, since.toISOString()])
@@ -106,7 +121,7 @@ describe('ciLedgerPass', () => {
       const read = await github([run(repo === 'app' ? 1 : 2)])(repo, NOW)
       return read.ok ? read.value : []
     }
-    const pass = await ciLedgerPass({ uow, clock, ledger, always: ['broken', 'factory'] })
+    const pass = await ciLedgerPass({ uow, clock, ledger, projects, always: ['broken', 'factory'], refused: new Map() })
     expect(pass).toEqual(ok({ repos: 2, runs: 2, pruned: 0, notes: ['ci ledger broken: github 500'] }))
     // a repo with no run is read 14 days back
     expect(asked.map(([repo]) => repo)).toEqual(['app', 'broken', 'factory'])
@@ -125,7 +140,7 @@ describe('ciLedgerPass', () => {
       const read = await github([run(1, { conclusion: 'failure' })])(repo, since)
       return read
     }
-    expect((await ciLedgerPass({ uow, clock, ledger, always: [] })).ok).toBe(true)
+    expect((await ciLedgerPass({ uow, clock, ledger, projects, always: [], refused: new Map() })).ok).toBe(true)
     // the newest run of `app` finished 2026-11-07T10:12
     expect(asked).toEqual(['2026-11-06T10:12:00.000Z'])
     const [row] = await db.sql`SELECT conclusion, count(*) OVER ()::int AS n FROM factory.ci_runs WHERE repo = 'app'`
@@ -137,8 +152,34 @@ describe('ciLedgerPass', () => {
       VALUES ('app', 99, 'CI', 'push', 'x', ${new Date(NOW.getTime() - 31 * DAY)}, ${new Date(NOW.getTime() - 31 * DAY)},
               ${new Date(NOW.getTime() - 31 * DAY)}, 'success')`
     const ledger: CiLedgerRuns = async () => ok([])
-    expect(await ciLedgerPass({ uow, clock, ledger, always: [] })).toEqual(
+    expect(await ciLedgerPass({ uow, clock, ledger, projects, always: [], refused: new Map() })).toEqual(
       ok({ repos: 1, runs: 0, pruned: 1, notes: [] }),
     )
+  })
+
+  test('a refused repo is a note once, left alone for a day, then asked again; a repo that cannot be read for now is asked every pass', async () => {
+    const asked: string[] = []
+    const ledger: CiLedgerRuns = async (repo) => {
+      asked.push(repo)
+      if (repo === 'gone') return err(portError('refused', 'github 404'))
+      if (repo === 'slow') return err(portError('timeout', 'github 403 (rate limited)'))
+      return ok([])
+    }
+    const refused = new Map<string, number>()
+    const deps = { uow, ledger, projects: async () => ['app', 'gone', 'slow'], always: [], refused }
+    const first = await ciLedgerPass({ ...deps, clock })
+    expect(first.ok && first.value.notes).toEqual([
+      'ci ledger gone: github 404',
+      'ci ledger slow: github 403 (rate limited)',
+    ])
+    const later = await ciLedgerPass({ ...deps, clock: { now: () => new Date(NOW.getTime() + 3_600_000) } })
+    expect(later.ok && later.value.notes).toEqual(['ci ledger slow: github 403 (rate limited)'])
+    const nextDay = await ciLedgerPass({ ...deps, clock: { now: () => new Date(NOW.getTime() + DAY + 60_000) } })
+    expect(nextDay.ok && nextDay.value.notes).toEqual([
+      'ci ledger gone: github 404',
+      'ci ledger slow: github 403 (rate limited)',
+    ])
+    expect(asked.filter((repo) => repo === 'gone')).toHaveLength(2)
+    expect(asked.filter((repo) => repo === 'slow')).toHaveLength(3)
   })
 })
