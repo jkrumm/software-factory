@@ -1,6 +1,6 @@
 import type { ResumeRules } from '../../domains/leads/apierror.ts'
 import type { SignalRequest } from '@software-factory/contract'
-import type { Triaged } from '../../domains/intake/model.ts'
+import type { LoopFinding, Triaged } from '../../domains/intake/model.ts'
 import type { CapacityStore } from '../../domains/capacity/ports.ts'
 import {
   type MemoryCeilings,
@@ -111,8 +111,8 @@ export interface SelfwatchDeps {
   overload?: OverloadHost
   /** `GET /health`'s heartbeat, as `healthOf` computes it */
   heartbeat(): Promise<HeartbeatFact>
-  /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
-  file(body: SignalRequest): Promise<Result<Triaged, IntakeError>>
+  /** intake's entry for a loop (`intake.api.file` with the finding): the finding's key decides a repeat, never its words */
+  file(body: SignalRequest, finding: LoopFinding): Promise<Result<Triaged, IntakeError>>
 }
 
 export interface SelfwatchPass {
@@ -324,9 +324,9 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
 /**
  * One tick of the self-watch loop: fourteen deterministic conditions (CI, migrations, waits, leads, regressions, the heartbeat, the host process growth, swap and process count, a project `budgets:` breached over the last day, and the factory own capacity: load over the ceiling, the slot line, gates passed, slow routes), filed through intake as signals on
  * the watched repo. A subject is filed once; while it stays open and its evidence is the same nothing is filed, a changed
- * evidence is filed again under the same title (intake amends the open Issue), and a subject that no longer holds is
+ * evidence is filed again under the same key (intake amends the open Issue), and a subject that no longer holds is
  * cleared. At most `MAX_SIGNALS_PER_PASS` a pass, the rest on the next. A row is written only after intake took the signal, so a
- * failed filing is tried again; a crash between the two replays safely, since intake's fingerprint turns a repeat into a note.
+ * failed filing is tried again; a crash between the two replays safely, since intake's finding key turns a repeat into a note.
  */
 export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<SelfwatchPass, PortError>> {
   const now = deps.clock.now()
@@ -355,14 +355,17 @@ export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<Selfwat
         ? { ...action.finding, evidence: await (evidence ??= overloadLines({ ...deps, overload }, now)) }
         : action.finding
     const id = key('selfwatch', finding.kind, finding.subject, action.hash)
-    const filed = await deps.file({
-      from: `agent:${finding.repo ?? deps.repo}`,
-      kind: 'request',
-      title: finding.title.slice(0, 512),
-      text: signalText(finding, finding.repo ?? deps.repo),
-      repo: finding.repo ?? deps.repo,
-      probe: false,
-    })
+    const filed = await deps.file(
+      {
+        from: `agent:${finding.repo ?? deps.repo}`,
+        kind: 'request',
+        title: finding.title.slice(0, 512),
+        text: signalText(finding, finding.repo ?? deps.repo),
+        repo: finding.repo ?? deps.repo,
+        probe: false,
+      },
+      { loop: 'selfwatch', class: finding.kind, subject: finding.subject },
+    )
     if (!filed.ok) {
       pass.failed.push({ key: id, reason: reasonOf(filed.error).slice(0, 300) })
       continue

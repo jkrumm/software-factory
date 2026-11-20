@@ -1340,3 +1340,135 @@ describe("a lead's follow-up never lands on its own Issue", () => {
     expect(out).toMatchObject({ outcome: 'filed', issue: 'issue_2' })
   })
 })
+
+describe("a loop's finding is matched by its key alone", () => {
+  const finding = (title: string, subject: string, text = 'seen in the newest pass'): SignalRequest => ({
+    from: 'agent:argo',
+    kind: 'request',
+    title,
+    text,
+    repo: 'argo',
+    probe: false,
+  })
+  const hygiene = (subject: string) => ({ loop: 'hygiene' as const, class: subject.split(':')[0] ?? subject, subject })
+  const notes = () =>
+    db.sql`SELECT issue_id, payload->>'text' AS text FROM factory.issue_events WHERE kind = 'noted' ORDER BY at, version`
+
+  test('two findings with the same key make one Issue and one note, and no workflow call', async () => {
+    done(await intake.file(finding('Hygiene: unused exports in src', 'exports:src'), 'owner'))
+    triageAnswer = () => ok({ amend: 'issue_1' as IssueId })
+    const first = done(
+      await intake.file(finding('Hygiene: unused files in src', 'files:src'), 'agent', hygiene('files:src')),
+    )
+    expect(first).toMatchObject({ outcome: 'filed', detail: 'new', issue: 'issue_2' })
+    const again = done(
+      await intake.file(
+        finding('Hygiene: two unused files in src', 'files:src', 'the pass found a second file'),
+        'agent',
+        hygiene('files:src'),
+      ),
+    )
+    expect(again).toMatchObject({ outcome: 'amended', detail: 'repeat', issue: 'issue_2' })
+    expect(await issues()).toHaveLength(2)
+    expect((await notes()).map((n: { issue_id: string }) => n.issue_id)).toEqual(['issue_2'])
+    expect(triageCalls).toBe(0)
+  })
+
+  test('two findings with similar titles and different keys make two Issues', async () => {
+    triageAnswer = () => ok({ amend: 'issue_1' as IssueId })
+    const title = 'Friction: leads stopped reporting before they ended'
+    const friction = (subject: string) => ({ loop: 'friction' as const, class: 'stall', subject })
+    expect(done(await intake.file(finding(title, 's'), 'agent', friction('stall:unreported')))).toMatchObject({
+      outcome: 'filed',
+      issue: 'issue_1',
+    })
+    expect(done(await intake.file(finding(`${title} again`, 's'), 'agent', friction('stall:regressed')))).toMatchObject(
+      { outcome: 'filed', issue: 'issue_2' },
+    )
+    expect(await issues()).toHaveLength(2)
+    expect(await notes()).toEqual([])
+    expect(triageCalls).toBe(0)
+  })
+
+  test('a replay after an amend files nothing twice: one note, one amended signal', async () => {
+    const key = hygiene('files:src')
+    done(await intake.file(finding('Hygiene: unused files in src', 'files:src'), 'agent', key))
+    const later = finding('Hygiene: unused files in src', 'files:src', 'still red at the next pass')
+    expect(done(await intake.file(later, 'agent', key))).toMatchObject({ outcome: 'amended', issue: 'issue_1' })
+    expect(done(await intake.file(later, 'agent', key))).toMatchObject({
+      outcome: 'amended',
+      detail: 'replayed',
+      issue: 'issue_1',
+    })
+    expect(await issues()).toHaveLength(1)
+    expect(await notes()).toHaveLength(1)
+    const amended = await db.sql`SELECT id FROM factory.intake_signals WHERE state = 'amended'`
+    expect(amended).toHaveLength(1)
+  })
+
+  test('a closed Issue of the key counts a repeat inside the window and files anew after it', async () => {
+    const key = hygiene('files:src')
+    done(await intake.file(finding('Hygiene: unused files in src', 'files:src'), 'agent', key))
+    await send('issue_1' as IssueId, 'cancel', { kind: 'cancelled', payload: { reason: 'x' }, actor: 'owner' })
+    expect(done(await intake.file(finding('Hygiene: unused files', 'files:src'), 'agent', key))).toMatchObject({
+      outcome: 'dropped',
+      detail: 'repeat',
+    })
+    clock.advance(DEFAULT_INTAKE_SETTINGS.fingerprintWindowMs + 1_000)
+    expect(done(await intake.file(finding('Hygiene: unused files', 'files:src'), 'agent', key))).toMatchObject({
+      outcome: 'filed',
+      issue: 'issue_2',
+    })
+  })
+
+  test('an open Issue a loop filed before its key existed is taken over once by its fingerprint, then by the key', async () => {
+    const title = 'Friction: leads stopped reporting before they ended'
+    done(await intake.file(finding(title, 's'), 'agent'))
+    const key = { loop: 'friction' as const, class: 'stall', subject: 'stall:unreported' }
+    expect(done(await intake.file(finding(title, 's', 'the next pass'), 'agent', key))).toMatchObject({
+      outcome: 'amended',
+      issue: 'issue_1',
+    })
+    const renamed = finding('Friction: leads end their turn silently', 's', 'a pass after that')
+    expect(done(await intake.file(renamed, 'agent', key))).toMatchObject({ outcome: 'amended', issue: 'issue_1' })
+    const other = { ...key, subject: 'stall:regressed' }
+    expect(done(await intake.file(finding(title, 's'), 'agent', other))).toMatchObject({
+      outcome: 'filed',
+      issue: 'issue_2',
+    })
+    expect(await issues()).toHaveLength(2)
+    expect(triageCalls).toBe(0)
+  })
+
+  test("an agent's words never land on a loop's Issue, by title match or by the workflow", async () => {
+    const title = 'Friction: leads stopped reporting before they ended'
+    done(
+      await intake.file(finding(title, 's'), 'agent', {
+        loop: 'friction',
+        class: 'stall',
+        subject: 'stall:unreported',
+      }),
+    )
+    expect(done(await intake.file(finding(title, 's', 'a lead saw it too'), 'agent'))).toMatchObject({
+      outcome: 'filed',
+      issue: 'issue_2',
+    })
+    expect(done(await intake.file(finding('Leads go quiet at the end', 's'), 'agent'))).toMatchObject({
+      outcome: 'filed',
+    })
+    expect(triageCalls).toBe(1)
+    expect(triageOffered).toEqual(['issue_2' as IssueId])
+    expect((await notes()).map((n: { issue_id: string }) => n.issue_id)).not.toContain('issue_1')
+  })
+
+  test('an amend by the workflow keeps the fingerprint: the same words again are a repeat, never asked again', async () => {
+    done(await intake.file(finding('Login page crashes on submit', 's'), 'owner'))
+    triageAnswer = () => ok({ amend: 'issue_1' as IssueId })
+    const words = finding('Sessions expire too early', 's', 'after ten minutes')
+    expect(done(await intake.file(words, 'agent'))).toMatchObject({ outcome: 'amended', detail: 'matched' })
+    expect(done(await intake.file(words, 'agent'))).toMatchObject({ outcome: 'amended', detail: 'repeat' })
+    expect(triageCalls).toBe(1)
+    expect(await issues()).toHaveLength(1)
+    expect(await notes()).toHaveLength(1)
+  })
+})

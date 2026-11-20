@@ -36,7 +36,7 @@ import type {
   LoopReads,
   LoopStore,
 } from '../../domains/loops/ports.ts'
-import type { Triaged } from '../../domains/intake/model.ts'
+import type { LoopFinding, Triaged } from '../../domains/intake/model.ts'
 import { type DoctorReader, doctorMessage } from '../../domains/capacity/doctor.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
@@ -48,6 +48,7 @@ import { err, ok, portError, type PortError, type Result } from '../../kernel/re
 import { recordIn } from '../issues.ts'
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { classOf } from '../../domains/loops/classes.ts'
 import { readGate, type ClassGate } from './gate.ts'
 
 export interface HygieneDeps {
@@ -58,8 +59,8 @@ export interface HygieneDeps {
   /** the projects' own doctors: a red one skips the project's `check` probe with its lines as the reason; absent: none is asked */
   doctor?: DoctorReader
   workflow: HygieneWorkflow
-  /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
-  file(body: SignalRequest): Promise<Result<Triaged, IntakeError>>
+  /** intake's entry for a loop (`intake.api.file` with the finding): the finding's key decides a repeat, never its words */
+  file(body: SignalRequest, finding: LoopFinding): Promise<Result<Triaged, IntakeError>>
   /** a project is swept in full (every probe, the document judgment) when its newest full pass is older than this */
   everyMs: number
   /** the cheap probes run again when the newest pass of any scope is older than this; 0 is off */
@@ -161,14 +162,17 @@ async function fileOne(
   input: { repoText: string; name: string; id: string; title: string; text: string },
   added: Added,
 ): Promise<void> {
-  const filed = await deps.file({
-    from: `agent:${input.name}`,
-    kind: 'request',
-    title: input.title,
-    text: input.text,
-    repo: input.repoText,
-    probe: false,
-  })
+  const filed = await deps.file(
+    {
+      from: `agent:${input.name}`,
+      kind: 'request',
+      title: input.title,
+      text: input.text,
+      repo: input.repoText,
+      probe: false,
+    },
+    { loop: 'hygiene', class: classOf('hygiene', input.id), subject: input.id },
+  )
   if (!filed.ok) {
     added.failed.push({ key: input.id, reason: reasonOf(filed.error).slice(0, 300) })
     return
@@ -504,7 +508,7 @@ async function redDoctor(deps: HygieneDeps, project: StoredProject): Promise<str
  * throwaway checkout, then `factory-hygiene` over the documents the sweep picked); otherwise a project whose judgment failed
  * is judged again at the stored commit. Both file through intake, at most `MAX_SIGNALS_PER_PASS` signals a project and pass,
  * the rest named in the record. A checkout that fails on a full pass is recorded as a sweep with no runs, retried after `retryMs`.
- * A crash between filing and recording replays safely: intake's fingerprint turns a repeat into a note or a drop.
+ * A crash between filing and recording replays safely: intake's finding key turns a repeat into a note or a drop.
  */
 export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass, PortError>> {
   const now = deps.clock.now()

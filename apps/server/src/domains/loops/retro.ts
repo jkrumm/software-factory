@@ -1,6 +1,6 @@
-/** The retro: a signal filed by every friction pass (a day or 200 closed Issues; intake's fingerprint folds a repeat into the open one), whose lead writes the review as a Report. */
+/** The retro: a signal filed by every friction pass (a day or 200 closed Issues; intake's finding key folds a repeat into the open one), whose lead writes the review as a Report. */
 
-/** Stable: the fingerprint drops digits and punctuation, so a repeat amends within the intake window. */
+/** Stable for the reader; intake matches a repeat by the finding key `retro`, never by this title. */
 export const RETRO_TITLE =
   'Weekly retro: the numbers, the transcripts, and whether last week’s changes moved their number'
 

@@ -569,7 +569,7 @@ async function main(): Promise<void> {
           evidence: (now, keys) => readFrictionEvidence(sql, { now, days: FRICTION_WINDOW_DAYS, epoch }, keys),
           closedSince: (since, now) => readClosedSince(sql, { since, now }),
           retroOutcomes: (now, days) => readRetroOutcomes(sql, { now, days }),
-          file: (body) => intake.api.file(body, 'agent'),
+          file: (body, finding) => intake.api.file(body, 'agent', finding),
         })
         if (!pass.ok) return pass
         if (pass.value.due)
@@ -593,7 +593,7 @@ async function main(): Promise<void> {
           checker: hygieneChecker,
           doctor,
           workflow: agwHygiene(agw),
-          file: (body) => intake.api.file(body, 'agent'),
+          file: (body, finding) => intake.api.file(body, 'agent', finding),
           everyMs: loopSettings.hygieneEveryMs,
           dailyMs: loopSettings.hygieneDailyMs,
           fixes: loopSettings.hygieneFix,
@@ -646,7 +646,7 @@ async function main(): Promise<void> {
               async () => (await readHealth()).heartbeat,
               (ms) => Bun.sleep(ms),
             ),
-          file: (body) => intake.api.file(body, 'agent'),
+          file: (body, finding) => intake.api.file(body, 'agent', finding),
         })
         if (!pass.ok) return pass
         said('selfwatch', [...pass.value.notes, ...pass.value.failed.map((f) => `${f.key}: ${f.reason}`)])
@@ -708,7 +708,7 @@ async function main(): Promise<void> {
             )
           },
           fates: (ids) => readIssueFates(sql, ids),
-          file: (body) => intake.api.file(body, 'agent'),
+          file: (body, finding) => intake.api.file(body, 'agent', finding),
         })
         if (!pass.ok) return pass
         said('throughput', [...pass.value.notes, ...pass.value.failed.map((f) => `${f.key}: ${f.reason}`)])

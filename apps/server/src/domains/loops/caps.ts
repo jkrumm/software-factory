@@ -57,7 +57,7 @@ const minutes = (value: number): string => `${Math.round(value * 10) / 10} min`
 export const capName = (fact: Pick<CapFact, 'lane' | 'cap'>): string =>
   fact.lane === null ? `leads: ${fact.cap}` : `lanes.${fact.lane}.leads: ${fact.cap}`
 
-/** The title is the signal's fingerprint with the repo: one cap, one open signal. */
+/** The title names the cap for the lead; the cap and the repo are the finding's key: one cap, one open signal. */
 export const capTitle = (fact: Pick<CapFact, 'lane' | 'cap' | 'project'>): string =>
   `The lead cap \`${capName(fact)}\` of ${fact.project} binds while seats idle`
 

@@ -17,7 +17,15 @@ import {
 import { doorSourceLines, unroutedLines } from '../domains/intake/health.ts'
 import { placeByName } from '../domains/intake/place.ts'
 import { NOT_SCREENED } from '../domains/intake/screen.ts'
-import type { Alert, ClosedIssue, OpenIssue, Received, RepoSignals, Triaged } from '../domains/intake/model.ts'
+import type {
+  Alert,
+  ClosedIssue,
+  LoopFinding,
+  OpenIssue,
+  Received,
+  RepoSignals,
+  Triaged,
+} from '../domains/intake/model.ts'
 import type {
   Dismissal,
   IntakeSink,
@@ -36,6 +44,8 @@ import type {
   Writeback,
 } from '../domains/intake/ports.ts'
 import {
+  FINDING_PREFIX,
+  findingKeyOf,
   fingerprintOf,
   gate,
   groupOf,
@@ -590,6 +600,8 @@ export function createIntake(deps: IntakeDeps) {
         )
         if (!noted.ok) return noted
         const stored = await store(s, r, null, 'amended', issue.id)
+        // The amended Issue carries the fingerprint from now on: the same words again are a repeat, never asked again.
+        await keepFingerprint(s, signal, issue.id)
         return ok(triaged('amended', 'matched', issue.id, stored))
       }
     }
@@ -597,23 +609,80 @@ export function createIntake(deps: IntakeDeps) {
     const filedOut = await fileNew(s, r, keyOf('filed', 'signal', id), { groupKey: null, stateKey: null })
     if (!filedOut.ok || filedOut.value.outcome !== 'filed') return filedOut
     // A person's request has no subject row to match its fingerprint by next time: one is kept for it.
-    const now = clock.now()
-    if (!r.alert && filedOut.value.issue) {
-      await s.intake.insertSubject({
-        source: signal.source,
-        subject: signal.fingerprint,
-        fingerprint: signal.fingerprint,
-        issueId: filedOut.value.issue,
-        groupKey: null,
-        filedAt: now,
-        lastSeen: now,
-        repeats: 0,
-        upAt: null,
-        writeback: false,
-        admitted: null,
-      })
-    }
+    if (!r.alert && filedOut.value.issue) await keepFingerprint(s, signal, filedOut.value.issue)
     return filedOut
+  }
+
+  /** The subject row a stateless signal is found by next time: its fingerprint, or a loop's finding key. */
+  async function keepFingerprint(s: Stores, signal: Signal, issueId: IssueId, findingKey?: Key): Promise<void> {
+    const now = clock.now()
+    await s.intake.insertSubject({
+      source: signal.source,
+      subject: findingKey ?? signal.fingerprint,
+      fingerprint: findingKey ? null : signal.fingerprint,
+      issueId,
+      groupKey: null,
+      filedAt: now,
+      lastSeen: now,
+      repeats: 0,
+      upAt: null,
+      writeback: false,
+      admitted: null,
+    })
+  }
+
+  // ---- a loop's finding ----
+
+  /**
+   * A loop's finding is one subject, its key: an open Issue of that key takes it as a note, one filed within the window
+   * and closed counts it as a repeat, else it is a new Issue. No text match and no workflow: the key alone decides, so a
+   * finding is never folded into an Issue of another subject. A replay finds the amend it made by its key.
+   */
+  async function findingIn(s: Stores, r: Received, findingKey: Key): Out<Triaged> {
+    const { signal } = r
+    const now = clock.now()
+    const keyed = await s.intake.latestSubject(signal.source, findingKey)
+    // An Issue a loop filed before its findings carried a key has only its title's fingerprint row: while it is open it
+    // is taken over once under the key (never one that already carries a key), so the first pass after the change notes it
+    // instead of filing it twice.
+    const adopted = keyed ? null : await s.intake.latestByFingerprint(signal.source, signal.fingerprint)
+    const taken =
+      adopted && (await s.intake.subjectsOfIssue(adopted.issueId)).some((row) => row.subject.startsWith(FINDING_PREFIX))
+    const adoptable = adopted && !taken ? await loadIssue(s.work, adopted.issueId) : null
+    if (adopted && isOpen(adoptable)) await keepFingerprint(s, signal, adoptable.id, findingKey)
+    const match = keyed ?? (isOpen(adoptable) ? adopted : null)
+    const issue = keyed ? await loadIssue(s.work, keyed.issueId) : adoptable
+    if (match && isOpen(issue)) {
+      const said = new Bun.CryptoHasher('sha256').update(signal.text).digest('hex').slice(0, 12)
+      const amendKey = keyOf('amended', 'finding', findingKey, issue.id, said)
+      const prior = await s.intake.signalByKey(amendKey)
+      if (prior) return ok(replayedOf(prior))
+      const noted = await note(s, issue.id, keyOf('noted', 'finding', findingKey, issue.id, said), r, 'repeated')
+      if (!noted.ok) return noted
+      await s.intake.touchSubject(match.id, { at: now, upAt: match.upAt, repeat: true })
+      const stored = await store(s, r, amendKey, 'amended', issue.id)
+      return ok(triaged('amended', 'repeat', issue.id, stored))
+    }
+    if (match && issue && now.getTime() - match.filedAt.getTime() < settings.fingerprintWindowMs) {
+      await s.intake.touchSubject(match.id, { at: now, upAt: match.upAt, repeat: true })
+      return ok(dropped('repeat', `it repeats ${match.issueId}, closed within the window`))
+    }
+    const filed = await fileNew(s, r, keyOf('filed', 'signal', ids.next('signal')), { groupKey: null, stateKey: null })
+    if (!filed.ok || filed.value.outcome !== 'filed' || !filed.value.issue) return filed
+    await keepFingerprint(s, signal, filed.value.issue, findingKey)
+    return filed
+  }
+
+  /** The open Issues a loop's finding filed are not an agent's to amend: each answers its own key alone. */
+  async function withoutFindings(open: readonly OpenIssue[]): Out<OpenIssue[]> {
+    return uow.run(async (s) => {
+      const kept: OpenIssue[] = []
+      for (const issue of open) {
+        const subjects = await s.intake.subjectsOfIssue(issue.id)
+        if (!subjects.some((row) => row.subject.startsWith(FINDING_PREFIX))) kept.push(issue)
+      }
+      return ok(kept)
+    })
   }
 
   // ---- quarantine ----
@@ -754,7 +823,7 @@ export function createIntake(deps: IntakeDeps) {
     return issue.value.origin === 'you' && signal.source === `agent:${issue.value.repo}`
   }
 
-  async function receive(r: Received, filer: IssueId | null = null): Out<Triaged> {
+  async function receive(r: Received, filer: IssueId | null = null, findingKey: Key | null = null): Out<Triaged> {
     const { signal, alert } = r
     // The loop guard: a change a loop made never fires an automatic sender again.
     if (signal.madeBy !== null && (signal.trust === 'machine' || signal.trust === 'agent')) {
@@ -782,6 +851,12 @@ export function createIntake(deps: IntakeDeps) {
       return ok(dropped(verdict.detail, verdict.reason))
     }
     if (signal.probe) return uow.run(async (s) => probeIn(s, r))
+    if (findingKey && !alert) {
+      return uow.run(async (s) => {
+        await s.intake.lock(findingKey)
+        return findingIn(s, r, findingKey)
+      })
+    }
     const info = found.value as RepoSignals
 
     if (alert?.status === 'down' || alert?.status === 'up') {
@@ -810,7 +885,11 @@ export function createIntake(deps: IntakeDeps) {
     // The Issue whose lead files this is never a candidate: its follow-up is work for others, not a note on itself.
     const inRepo = signal.repo ? await deps.openIssues.inRepo(signal.repo) : ok<OpenIssue[]>([])
     if (!inRepo.ok) return inRepo
-    const open = inRepo.value.filter((issue) => issue.id !== filer)
+    const others = inRepo.value.filter((issue) => issue.id !== filer)
+    // An agent's words never land on an Issue a loop's finding filed: that Issue answers its own key.
+    const kept = signal.trust === 'agent' ? await withoutFindings(others) : ok(others)
+    if (!kept.ok) return kept
+    const open = kept.value
     // A retro recommendation files its own Issue: only its own fingerprint (the same ask again) folds into an open one.
     const retro = isRetroSignal(signal.text)
     const match = retro ? ({ kind: 'none' } as const) : matchOpen(signal.title, open)
@@ -866,7 +945,8 @@ export function createIntake(deps: IntakeDeps) {
     return ok(named.value.startsWith('/') ? from : `agent:${named.value}`)
   }
 
-  async function file(body: SignalRequest, caller: RequestCaller): Out<Triaged> {
+  /** `finding`: a loop's signal, matched by its key alone (`findingIn`); no request over the API carries one. */
+  async function file(body: SignalRequest, caller: RequestCaller, finding?: LoopFinding): Out<Triaged> {
     const from = await sourceFor(body.from)
     if (!from.ok) return from
     const repo = body.repo ? await repoNameFor(body.repo) : null
@@ -876,6 +956,7 @@ export function createIntake(deps: IntakeDeps) {
     return receive(
       { signal: signal.value, alert: null },
       body.filer ? issueIdOf(body.filer.replace(/^(\d)/, 'issue_$1')) : null,
+      finding ? findingKeyOf(finding, signal.value.repo) : null,
     )
   }
 

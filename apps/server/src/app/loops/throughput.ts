@@ -1,5 +1,5 @@
 import type { SignalRequest } from '@software-factory/contract'
-import type { Triaged } from '../../domains/intake/model.ts'
+import type { LoopFinding, Triaged } from '../../domains/intake/model.ts'
 import { MAX_SIGNALS_PER_PASS } from '../../domains/loops/budget.ts'
 import type { LoopStore } from '../../domains/loops/ports.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
@@ -68,8 +68,8 @@ export interface ThroughputDeps {
   caps?(at: Date, shapes: ReadonlyMap<string, ProjectShape>): Promise<CapFact[]>
   /** how the Issues ended and when they shipped (`readIssueFates`) */
   fates(ids: readonly string[]): Promise<ReadonlyMap<string, IssueFate>>
-  /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
-  file(body: SignalRequest): Promise<Result<Triaged, IntakeError>>
+  /** intake's entry for a loop (`intake.api.file` with the finding): the finding's key decides a repeat, never its words */
+  file(body: SignalRequest, finding: LoopFinding): Promise<Result<Triaged, IntakeError>>
 }
 
 export interface ThroughputPass {
@@ -230,14 +230,17 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
     if (!target) continue
     const reopens = reopenedFrom(rows, candidate)
     const id = key('throughput', project, candidate.kpi, candidate.subject, date)
-    const filed = await deps.file({
-      from: `agent:${project}`,
-      kind: 'request',
-      title: improvementTitle(candidate).slice(0, 512),
-      text: improvementText(candidate, { date, reopens }),
-      repo: target.repo,
-      probe: false,
-    })
+    const filed = await deps.file(
+      {
+        from: `agent:${project}`,
+        kind: 'request',
+        title: improvementTitle(candidate).slice(0, 512),
+        text: improvementText(candidate, { date, reopens }),
+        repo: target.repo,
+        probe: false,
+      },
+      { loop: 'throughput', class: candidate.kpi, subject: candidate.subject },
+    )
     if (!filed.ok) {
       pass.failed.push({ key: id, reason: reasonOf(filed.error).slice(0, 300) })
       continue
@@ -286,8 +289,8 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
 }
 
 /**
- * One signal per cap that kept Issues queued for an hour or more while seats idled: its title is its fingerprint (the cap and
- * the repo), so intake drops a repeat while one is open and files again once it is closed and the cap still binds.
+ * One signal per cap that kept Issues queued for an hour or more while seats idled: its finding key is the cap and the repo,
+ * so intake notes a repeat on the open one and files again once it is closed and the cap still binds.
  */
 async function fileBindingCaps(
   deps: ThroughputDeps,
@@ -311,14 +314,17 @@ async function fileBindingCaps(
   )) {
     const target = byProject.get(fact.project)
     if (!target || pass.caps.length >= MAX_SIGNALS_PER_PASS) continue
-    const filed = await deps.file({
-      from: `agent:${fact.project}`,
-      kind: 'request',
-      title: capTitle(fact).slice(0, 512),
-      text: capText(fact),
-      repo: target.repo,
-      probe: false,
-    })
+    const filed = await deps.file(
+      {
+        from: `agent:${fact.project}`,
+        kind: 'request',
+        title: capTitle(fact).slice(0, 512),
+        text: capText(fact),
+        repo: target.repo,
+        probe: false,
+      },
+      { loop: 'throughput', class: 'cap', subject: capName(fact) },
+    )
     const id = key('cap', fact.project, capName(fact))
     if (!filed.ok) {
       pass.failed.push({ key: id, reason: reasonOf(filed.error).slice(0, 300) })
