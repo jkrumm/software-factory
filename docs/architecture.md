@@ -116,7 +116,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   down fires HyperDX (its infra and app alerts) and Kuma, and there is one Issue. The window is a setting (`FACTORY_INCIDENT_WINDOW_MIN`).
 - **Amend or new.** A loop's finding (friction, hygiene, selfwatch, throughput: `intake.api.file` with a `LoopFinding`) is
   matched by its key alone (loop, class, repo, subject; `findingKeyOf`, a subject row `finding:…`): an open Issue of
-  that key takes it as a note, one closed within the fingerprint window counts it as a repeat, else it files anew; no
+  that key takes it as a note, one closed within the fingerprint window counts it as a repeat (a finding that names `repeatWindowMs`, the friction patterns' 7 days, counts it from the Issue's close), else it files anew; no
   title match and no workflow call (an open Issue filed before the key existed is taken over once by its title's
   fingerprint), and an agent's own signal is never matched or offered for amending to an open Issue a finding filed. An
   amend by title match or workflow keeps a subject row for the signal's fingerprint, so the same words again are a repeat.

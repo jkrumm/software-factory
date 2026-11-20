@@ -635,7 +635,8 @@ export function createIntake(deps: IntakeDeps) {
 
   /**
    * A loop's finding is one subject, its key: an open Issue of that key takes it as a note, one filed within the window
-   * and closed counts it as a repeat, else it is a new Issue. No text match and no workflow: the key alone decides, so a
+   * and closed counts it as a repeat (a finding that names `repeatWindowMs` counts it from the Issue's close), else it is a
+   * new Issue. No text match and no workflow: the key alone decides, so a
    * finding is never folded into an Issue of another subject. A replay finds the amend it made by its key.
    */
   async function findingIn(s: Stores, r: Received, findingKey: Key, repeatWindowMs?: number): Out<Triaged> {
