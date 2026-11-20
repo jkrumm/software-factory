@@ -62,7 +62,7 @@ import { loadOpenProjects } from '../read/work.ts'
 import { readLoopYield } from '../read/loop-yield.ts'
 import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
-import type { LeadRow } from '../read/seats.ts'
+import type { SeatTable } from '../read/seats.ts'
 import { readSince, storedSince } from '../read/since.ts'
 import { callerOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
@@ -74,7 +74,7 @@ export interface ReadModelDeps {
   /** why each queued Issue stays queued; absent or failing, the Flow screen shows the Issues without a reason */
   queueReasons?: () => Promise<QueueReasons | null>
   /** the role table's lead row, for the seat badge of an Issue with no lead yet; absent or null, such an Issue shows none */
-  leadRow?: LeadRow
+  seatTable?: SeatTable
   /** the accounts' reset ledger for the KPI `quota_at_reset` (`packages/accounts`); absent, that KPI has no figure */
   quotaAtReset?: QuotaAtResetReader
   /** the role table's reviewer rows, for the Improve screen's reviewer table; absent or null, its numbers have no tier words */
@@ -159,7 +159,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/needs',
       async ({ request }) => {
         if (!deps) return unavailable
-        const needs = await readNeeds(deps.sql, now(), { longWaitMs: deps.longWaitMs, leadRow: deps.leadRow })
+        const needs = await readNeeds(deps.sql, now(), { longWaitMs: deps.longWaitMs, seatTable: deps.seatTable })
         return Response.json(NeedsModel.parse(needsModel(needs, { redact: caller(request) === 'read' })))
       },
       {
@@ -179,7 +179,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         const redact = caller(request) === 'read'
         return Response.json(
           FlowModel.parse(
-            await readFlow(deps.sql, { now: now(), queue: queue ?? undefined, redact, leadRow: deps.leadRow }),
+            await readFlow(deps.sql, { now: now(), queue: queue ?? undefined, redact, seatTable: deps.seatTable }),
           ),
         )
       },
@@ -400,7 +400,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
             await readChain(deps.sql, now(), {
               redact: caller(request) === 'read',
               queue: queue ?? undefined,
-              leadRow: deps.leadRow,
+              seatTable: deps.seatTable,
             }),
           ),
         )

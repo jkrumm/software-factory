@@ -122,6 +122,8 @@ async function fileFor(
         title: row.title ?? row.key,
         kind: row.kind ?? 'feature',
         origin: 'factory',
+        // the plan states the row's edges (`after` is what holds the row back); the triage loop settles it and takes its size
+        edges: 'stated' as const,
         ...(seat?.ok ? { seat: seat.value } : {}),
         ...(row.lane ? { lane: row.lane } : {}),
         ...(row.checkpoint ? { checkpoint: row.checkpoint } : {}),
@@ -137,12 +139,6 @@ async function fileFor(
     event: { kind: 'noted', payload: { text: factsNote(row) }, actor: 'factory' },
   })
   if (!noted.ok) return err(portError('refused', JSON.stringify(noted.error)))
-  const settled = await recordIn(stores.work, deps, {
-    issueId: issue,
-    key: key('plan', source, row.key, 'settled'),
-    event: { kind: 'settled', payload: {}, actor: 'factory' },
-  })
-  if (!settled.ok) return err(portError('refused', JSON.stringify(settled.error)))
   // The plan is the owner's file, so a row's `prio` is the owner's priority for its Issue; the key makes a replay record nothing twice.
   if (row.prio !== undefined && row.prio !== 0) {
     await stores.planning.recordPrio({

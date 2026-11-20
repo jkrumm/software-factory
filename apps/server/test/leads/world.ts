@@ -221,7 +221,13 @@ export interface World {
   seatAccount: string
   windowReset: Date | null
   /** files, settles and admits an Issue in the repo `example`; returns its id */
-  admitted(notes?: string[], seat?: ResolvedSeat, kind?: 'bug' | 'docs'): Promise<IssueId>
+  admitted(
+    notes?: string[],
+    seat?: ResolvedSeat,
+    kind?: 'bug' | 'docs',
+    /** triage's size, kept on the Issue by its `settled` event */
+    size?: 'small' | 'medium' | 'large',
+  ): Promise<IssueId>
   event(issue: IssueId, name: string, event: AnyIssueEvent): Promise<unknown>
   /** empties every table and every fake */
   reset(): Promise<void>
@@ -336,7 +342,7 @@ export async function startWorld(): Promise<World> {
     if (!result.ok) throw new Error(`event ${name}: ${JSON.stringify(result.error)}`)
     return result.value
   }
-  world.admitted = async (notes = [], seat, kind = 'bug') => {
+  world.admitted = async (notes = [], seat, kind = 'bug', size) => {
     const filed = await uow.run(({ work }) =>
       fileIn(work, world.deps, {
         key: key('filed', world.deps.ids.next('signal')),
@@ -349,7 +355,7 @@ export async function startWorld(): Promise<World> {
     )
     if (!filed.ok) throw new Error(JSON.stringify(filed.error))
     const issue = filed.value.issue.id
-    await world.event(issue, 'settled', { kind: 'settled', payload: {}, actor: 'factory' })
+    await world.event(issue, 'settled', { kind: 'settled', payload: size ? { size } : {}, actor: 'factory' })
     for (const [i, text] of notes.entries()) {
       await world.event(issue, `note:${i}`, { kind: 'noted', payload: { text }, actor: 'owner' })
     }

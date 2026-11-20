@@ -225,10 +225,33 @@ test('settle by rule when no edges are needed: an incident, an alert’s Issue, 
   expect(settleRule(settling({ origin: 'factory' }), [])).toBe('ask')
 })
 
-test('an Issue whose filer stated its edges settles by rule: the model is not asked for edges', () => {
-  expect(settleRule(settling({ statedEdges: true }), shown)).toBe('now')
-  expect(settleRule(settling({ statedEdges: true, origin: 'factory' }), shown)).toBe('now')
-  expect(settleRule(settling({ statedEdges: true, origin: 'github' }), shown)).toBe('now')
+test('an Issue whose filer stated its edges is asked for its size alone: edges are final, an incident or an alert needs no size', () => {
+  expect(settleRule(settling({ statedEdges: true }), shown)).toBe('size')
+  expect(settleRule(settling({ statedEdges: true, origin: 'factory' }), shown)).toBe('size')
+  expect(settleRule(settling({ statedEdges: true, origin: 'github' }), [])).toBe('size')
+  expect(settleRule(settling({ statedEdges: true, kind: 'incident' }), shown)).toBe('now')
+  expect(settleRule(settling({ statedEdges: true, fromAlert: true }), shown)).toBe('now')
+})
+
+test('a size answer for stated edges takes the size and kind, never an edge or the Spec flag', () => {
+  const answer: TriageAnswer = {
+    amend: null,
+    after: ['issue_12', 'issue_99', 'issue_12'],
+    kind: 'docs',
+    size: 'small',
+    checkpoint: 'spec',
+    reason: 'three file edits',
+  }
+  const checked = checkSettle([], settling({ statedEdges: true }), answer, () => false)
+  expect(checked).toEqual({
+    ok: true,
+    after: [],
+    dropped: [],
+    reason: 'three file edits',
+    refinement: { kind: 'docs', checkpoint: undefined, size: 'small' },
+  })
+  // the same answer for an Issue with open edges is refused: it was shown no Issue to name
+  expect(checkSettle([], settling(), answer, () => false)).toMatchObject({ ok: false })
 })
 
 const triaged = (over: Partial<TriageAnswer>): TriageAnswer => ({

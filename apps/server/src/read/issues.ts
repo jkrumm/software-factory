@@ -240,7 +240,7 @@ async function build(
     loadAttempts(deps.sql, ids, 0),
     loadBriefs(deps.sql, ids),
     loadExtras(deps.sql, ids),
-    readLeadSeats(deps.sql, ids, deps.leadRow),
+    readLeadSeats(deps.sql, ids, deps.seatTable),
   ])
   // the window share is a slower view: one Issue's page reads it, a list does not
   const derived = await deriveLeads(deps, { attempts, briefs, quota, points: rows.length === 1 })

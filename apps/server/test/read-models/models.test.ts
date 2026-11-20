@@ -389,12 +389,12 @@ describe('the fixture', () => {
   })
 
   test('seat: Flow, the Chain and Needs carry the lead seat, planned before a lead started and real after', async () => {
-    const leadRow = async () => ({ tier: 'sonnet' as const, effort: 'high' as const })
-    const planned = { tier: 'sonnet', effort: 'high', role: 'lead', planned: true }
+    const seatTable = { lead: async () => ({ tier: 'sonnet' as const, effort: 'high' as const }) }
+    const planned = { tier: 'sonnet', effort: 'high', role: 'lead', planned: true, rule: null, sizeKnown: true }
     const seatsOf = async () => {
-      const flow = FlowModel.parse(await readFlow(sql, { now: NOW, leadRow }))
-      const chain = ChainModel.parse(await readChain(sql, NOW, { leadRow }))
-      const needs = NeedsModel.parse(needsModel(await readNeeds(sql, NOW, { leadRow }), { redact: false }))
+      const flow = FlowModel.parse(await readFlow(sql, { now: NOW, seatTable }))
+      const chain = ChainModel.parse(await readChain(sql, NOW, { seatTable }))
+      const needs = NeedsModel.parse(needsModel(await readNeeds(sql, NOW, { seatTable }), { redact: false }))
       return {
         queued: flow.states.queued.issues.find((i) => i.id === 'issue_5')?.seat,
         working: flow.states.working.issues.find((i) => i.id === 'issue_6')?.seat,

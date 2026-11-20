@@ -110,7 +110,8 @@ import { shipIssue } from './app/quality-ship.ts'
 import { checkWatches, DEFAULT_TIMING, startWatchPort } from './app/quality-watch.ts'
 import { factoryDataDir, loadCheckpointSettings } from './checkpoint-settings.ts'
 import { storedChecks } from './app/leads-checks.ts'
-import { composeLeads } from './compose-leads.ts'
+import { composeLeads, lightReaders } from './compose-leads.ts'
+import { plannedSeatTable } from './app/leads-seat-table.ts'
 import { loginErrands } from './app/login-errands.ts'
 import { resumeRulesOf } from './app/leads-api-errors.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
@@ -255,11 +256,9 @@ async function main(env: Environment): Promise<void> {
   const reaperKiller = processKiller({ psBin })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const roles = fileRoles(leadSettings.rolesFile)
-  // The table's lead row: the seat an Issue with no lead yet will start on, for the Console's seat badge.
-  const leadRow = async () => {
-    const lead = await roles.lead()
-    return lead.ok ? lead.value : null
-  }
+  const light = lightReaders(sql, systemClock)
+  // The planned seat is what the lead's start would choose now: the `lead` row, or the `light` row when the light rule names the Issue.
+  const seatTable = plannedSeatTable({ roles, light })
   // The two reviewer rows as the table stands: the seat a review's record names, and the words beside the Improve numbers.
   const reviewerRows = async () => {
     const [cheap, reviewer] = await Promise.all([roles.role(REVIEWER_CHEAP_ROLE), roles.role(REVIEWER_ROLE)])
@@ -333,6 +332,7 @@ async function main(env: Environment): Promise<void> {
   const readProcesses = async () =>
     (await reaperProcessTable.read())?.map(({ pid, ppid, session }) => ({ pid, ppid, session })) ?? null
   const leads = composeLeads({
+    light,
     sql,
     uow,
     clock: systemClock,
@@ -1023,7 +1023,7 @@ async function main(env: Environment): Promise<void> {
       macbookProbe: loopSettings.askHumanHost !== null,
       maxRunTries: MAX_RUN_TRIES,
       queueReasons,
-      leadRow,
+      seatTable,
       uptime: () => uptime.snapshot(),
     }),
     readModels: {
@@ -1035,7 +1035,7 @@ async function main(env: Environment): Promise<void> {
       tenantBudget: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
       cores: planningEnv.cores,
       queueReasons,
-      leadRow,
+      seatTable,
       reviewerRows,
       quotaAtReset: ledgerQuotaReader(),
       machine,

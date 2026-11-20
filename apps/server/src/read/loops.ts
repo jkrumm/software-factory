@@ -222,13 +222,14 @@ export function loopReads(tx: SQL): LoopReads {
       return rows.map((row) => row.id as IssueId)
     },
 
+    // The words an Issue was filed with are the first signal's text, else its first note: `issue new` and a plan row file theirs as one.
     async settling(limit) {
       const rows: unknown[] = await tx`
         SELECT i.id, i.repo,
           f.payload->>'title' AS title, COALESCE((SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1), f.payload->>'kind') AS kind, f.payload->>'origin' AS origin, f.at AS filed_at,
           EXISTS (SELECT 1 FROM factory.intake_signals s WHERE s.issue_id = i.id AND s.alert IS NOT NULL) AS from_alert,
           COALESCE(f.payload->>'edges' = 'stated', false) AS stated_edges,
-          COALESCE((SELECT s.text FROM factory.intake_signals s WHERE s.issue_id = i.id ORDER BY s.received_at LIMIT 1), '') AS text,
+          COALESCE((SELECT s.text FROM factory.intake_signals s WHERE s.issue_id = i.id ORDER BY s.received_at LIMIT 1), (SELECT n.payload->>'text' FROM factory.issue_events n WHERE n.issue_id = i.id AND n.kind = 'noted' AND n.result = 'applied' ORDER BY n.version LIMIT 1), '') AS text,
           COALESCE((SELECT p.value FROM factory.planning_prios p WHERE p.issue_id = i.id ORDER BY p.at DESC, p.id DESC LIMIT 1), 0) AS prio
         FROM factory.issues i
         JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1

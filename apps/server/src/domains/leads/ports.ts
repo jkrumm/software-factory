@@ -358,7 +358,7 @@ export interface SeatOrigin {
   /** the class the loop filed that finding under (`factory.loop_findings.class`), null without one */
   hygieneClass: string | null
   unroutedMonitor: boolean
-  /** the titles and texts of the signals the Issue was filed from, joined; empty when it had none */
+  /** the titles and texts of the signals the Issue was filed from and its first note (what `issue new` and a plan row file their facts as), joined; empty when it had none */
   text: string
 }
 

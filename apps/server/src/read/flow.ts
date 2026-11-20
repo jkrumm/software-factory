@@ -12,7 +12,7 @@ import {
   type QueueReason as QueueReasonSchema,
   SIGNAL_ORIGINS,
 } from '@software-factory/contract'
-import { type LeadRow, readLeadSeats } from './seats.ts'
+import { type SeatTable, readLeadSeats } from './seats.ts'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
 
@@ -65,7 +65,7 @@ export async function readFlow(
     now: Date
     queue?: QueueReasons
     /** the read token: a work repo's words go */ redact?: boolean
-    /** the role table's lead row, for the seat of an Issue with no lead yet */ leadRow?: LeadRow
+    /** the role table's lead row, for the seat of an Issue with no lead yet */ seatTable?: SeatTable
   },
 ): Promise<FlowModel> {
   const { now } = options
@@ -152,7 +152,7 @@ export async function readFlow(
   const seats = await readLeadSeats(
     sql,
     [...open, ...closed].map((raw) => z.object({ id: z.string() }).parse(raw).id),
-    options.leadRow,
+    options.seatTable,
   )
   const columns: FlowModel['states'] = {
     settling: { count: 0, issues: [] },

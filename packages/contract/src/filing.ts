@@ -37,11 +37,12 @@ export const FILING = {
   },
   seat: {
     shape:
-      'optional; the tier and effort the Issue\'s lead starts on, one JSON object in one of two forms: {"tier", "effort"} or {"role"}; omitted, the lead starts on the role table\'s lead row',
+      'optional; the tier and effort the Issue\'s lead starts on, one JSON object in one of two forms: {"tier", "effort"} or {"role"}; omitted, the lead starts on the role table\'s light row when the light rule names the Issue (a hygiene finding, kind docs, an unrouted monitor alert, or triage\'s size small with no design checkpoint and none of the words that keep it off), else on the lead row; name a seat only to override that',
     tiers: TIERS,
     efforts: EFFORTS,
     notes: [
       'Never a model id: the tier is a word, the launcher maps it to a model.',
+      "A filed seat always wins and is never moved up; with none, the light rule decides at the lead's start and `factory issue show` reports it before then (leadSeat, planned, with the rule's name). Name a seat when the work needs a stronger lead (novel hard logic, a design that must hold) or when a mechanical sweep should run light whatever its size.",
       'A role is looked up in the role table when the Issue is filed and the result is kept; an unknown role is refused (422, seat.role).',
       'Not both forms at once; any other key is refused by name.',
     ],

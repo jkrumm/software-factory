@@ -26,11 +26,21 @@ export type RoleTable = ReadonlyMap<string, RoleEntry>
 
 /**
  * The seat an Issue's lead runs on, for the badge beside the Issue's number: the tier and effort the current attempt
- * started on, or (`planned`) the ones it will start on (its filed seat, else the `lead` row). `role` is the table row it
+ * started on, or (`planned`) the ones it will start on (its filed seat, else the `light` row when the light rule names the Issue
+ * as it is now, else the `lead` row). `role` is the table row it
  * came from (`lead`, `light`, the filed seat's role), null when unknown. Never a model id.
  */
 export const LeadSeat = z
-  .strictObject({ tier: Tier, effort: Effort, role: z.string().nullable(), planned: z.boolean() })
+  .strictObject({
+    tier: Tier,
+    effort: Effort,
+    role: z.string().nullable(),
+    planned: z.boolean(),
+    /** the light rule that chose the `light` row (`hygiene:links`, `kind:docs`, `alert:route`, `triage:small`), null on any other seat */
+    rule: z.string().nullable(),
+    /** false only on a planned seat that waits for the size: the Issue has none yet and no other rule names it, so it may still move to light */
+    sizeKnown: z.boolean(),
+  })
   .meta({ id: 'LeadSeat' })
 export type LeadSeat = z.infer<typeof LeadSeat>
 

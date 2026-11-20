@@ -6,7 +6,7 @@ import { JUDGE_MAX_TRIES } from '../kernel/judge-tries.ts'
 import { CHECK_BROKEN_NOTE, RUN_STATUSES, STILL_NEEDED_NOTE, triedLine } from '../kernel/run.ts'
 import { hostOf } from '../kernel/hands.ts'
 import { readLongWaits } from './long-waits.ts'
-import { type LeadRow, readLeadSeats } from './seats.ts'
+import { type SeatTable, readLeadSeats } from './seats.ts'
 import { screenPassed } from './spec-screen.ts'
 import { DEFAULT_LONG_WAIT_MS } from './needs-settings.ts'
 import { plain } from './words.ts'
@@ -175,7 +175,7 @@ const SignalRow = z.object({
 export async function readNeeds(
   sql: SQL,
   now: Date,
-  options: { longWaitMs?: number; leadRow?: LeadRow } = {},
+  options: { longWaitMs?: number; seatTable?: SeatTable } = {},
 ): Promise<ScopedNeeds> {
   const open = await loadOpenProjects(sql)
   // A timer that is still running is information, not a request: Flow shows the waiting Issue. It reaches the owner only once
@@ -406,7 +406,7 @@ export async function readNeeds(
   const seats = await readLeadSeats(
     sql,
     unseated.flatMap((item) => (item.issue ? [item.issue] : [])),
-    options.leadRow,
+    options.seatTable,
   )
   const items = unseated.map((item): ScopedNeed => ({ ...item, seat: (item.issue && seats.get(item.issue)) || null }))
   return { at: now, items: items.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)) }

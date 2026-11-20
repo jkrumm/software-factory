@@ -77,7 +77,7 @@ describe('syncing the projects', () => {
     world.source.add('app-tune', { project: PROJECT('app-tune'), plan: plan('p1', [row('a'), row('b')]) })
     value(await planningPass(world.deps))
     expect((await states()).map((s) => s.project.name)).toEqual(['app', 'app-tune'])
-    expect(await issues()).toEqual(['issue_1:queued', 'issue_2:queued', 'issue_3:queued'])
+    expect(await issues()).toEqual(['issue_1:settling', 'issue_2:settling', 'issue_3:settling'])
 
     world.source.repos.delete('/src/app-tune')
     await world.send(issueId(3), 'cancelled', 'cancelled', { reason: 'phantom' }, 'owner')
@@ -124,14 +124,18 @@ describe('syncing the projects', () => {
 })
 
 describe('the plan files its rows', () => {
-  test('a row is filed once when its after row has closed, as a settled Issue with its facts as a note', async () => {
+  test('a row is filed once when its after row has closed, as a stated-edge Issue left to triage, with its facts as a note', async () => {
     world.source.add('app', {
       project: PROJECT('app'),
       plan: plan('p1', [row('first'), row('second', { after: ['first'] })]),
     })
     const one = value(await planningPass(world.deps))
     expect(one.filed).toEqual([{ project: 'app', row: 'first', issue: issueId(1) }])
-    expect(await issues()).toEqual(['issue_1:queued'])
+    // the plan states the row's edges; the triage loop settles it and takes its size (NL51)
+    expect(await issues()).toEqual(['issue_1:settling'])
+    const [filed] = await world.db
+      .sql`SELECT payload FROM factory.issue_events WHERE issue_id = 'issue_1' AND kind = 'filed'`
+    expect(filed?.payload).toMatchObject({ origin: 'factory', edges: 'stated' })
     const [facts] = await world.db.sql`
       SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = 'issue_1' AND kind = 'noted'`
     expect(facts?.text).toBe('Plan row first.\nwhy: because first')
@@ -142,7 +146,7 @@ describe('the plan files its rows', () => {
     const two = value(await planningPass(world.deps))
     expect(two.filed).toEqual([{ project: 'app', row: 'second', issue: issueId(2) }])
     expect(value(await planningPass(world.deps)).filed).toEqual([])
-    expect(await issues()).toEqual(['issue_1:closed', 'issue_2:queued'])
+    expect(await issues()).toEqual(['issue_1:closed', 'issue_2:settling'])
     const rows = (await states())[0]?.plan?.rows
     expect(rows?.map((r) => [r.key, r.state, r.issue])).toEqual([
       ['first', 'done', 'issue_1'],
@@ -297,7 +301,7 @@ describe('the plan files its rows', () => {
     value(await syncProjects(world.deps, { fetch: false }))
     await Promise.all([planningPass(world.deps), planningPass(world.deps)])
     // one Issue; which of the two passes drew the id first is not the test's to say
-    expect(await issues()).toEqual([expect.stringMatching(/^issue_\d+:queued$/)])
+    expect(await issues()).toEqual([expect.stringMatching(/^issue_\d+:settling$/)])
   })
 
   test('a plan that does not parse files nothing, keeps the last valid plan and says so', async () => {

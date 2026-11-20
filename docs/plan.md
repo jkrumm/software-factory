@@ -70,7 +70,7 @@ a broken plan.
 | `title` | The filed Issue's title, up to 200 characters. Required unless the row adopts an Issue |
 | `facts` | What the filed Issue's lead reads, an object of the same shape as `factory issue schema` prints: `why`, `what`, `change`, `acceptance`, and any other key you add. Required unless the row adopts an Issue |
 | `kind` | `feature` (the default), `bug`, `chore`, `docs` or `incident` |
-| `seat` | The tier and effort the Issue's lead starts on: `{tier: opus, effort: high}` or `{role: lead}`. Default: the role table's `lead` row. See Choosing the seat |
+| `seat` | The tier and effort the Issue's lead starts on: `{tier: opus, effort: high}` or `{role: lead}`. Default: the light rule, else the role table's `lead` row. See Choosing the seat |
 | `lane` | A resource class inside the repo (`apple`): lowercase letters, digits, dashes. The target project's `project.yaml` `lanes:` caps how many leads of a lane run at once. See Lanes |
 | `prio` | The queue priority its Issue is filed with, an integer from -1000 to 1000 (default 0): higher runs first among the queued Issues, then the lower Issue number. It is `factory issue prio` applied at filing (recorded once, actor `plan`), so rows that become filable together run by `prio`, then file order; a later `factory issue prio` on the Issue overrides it. Not allowed on an adopted row (`issue`) |
 | `checkpoint` | `gate`: an owner gate: the same Spec is owed, but only the owner's own verdict ends the wait (no default after 24 hours, no Spec screen settle), so rows `after` it wait for him. `spec`: the row's lead owes a one-page Spec before it builds (a new public surface, a data model or a migration of meaning, a dependency of weight, an architecture or look-and-feel choice later Issues build on, a UI screen the owner has not seen). Its ship is refused until a Spec is submitted; with no verdict in 24 hours the lead goes on with the defaults the Spec names |
@@ -108,8 +108,16 @@ the row that waits for it is done too.
 
 ## Choosing the seat
 
-Every lead starts on the `lead` row of `config/roles.json` (sonnet, high). Name a `seat` when a row is worth a stronger
-lead (novel hard logic, a design that must hold) or a weaker one (a mechanical sweep). Two forms, never mixed:
+A row with no `seat` starts on the seat the light rule (`apps/server/src/domains/leads/light.ts`) names, else on the `lead` row
+of `config/roles.json` (sonnet, high). The rule names the `light` row (haiku, high) for a hygiene finding, kind `docs`, an
+unrouted monitor alert, or triage's size `small` with no `checkpoint` and none of the words that keep it off (migration,
+security, a public surface), while the light gate is met (NL38, NL45). A plan row is sized like any other Issue: its `after`
+edges are stated and final, and triage is asked for its size and kind only (NL51), so a mechanical row reaches the light seat
+by the same rule. A row whose Issue moved up from the light seat never starts light again. `factory issue show` reports the seat
+before a lead starts (`leadSeat`, `planned: true`, with the rule's name, or `sizeKnown: false` while triage has not sized it).
+
+Name a `seat` to override that: a row worth a stronger lead (novel hard logic, a design that must hold) or one that should run
+light whatever its size. A filed seat always wins and is never moved up. Two forms, never mixed:
 `{tier, effort}` (tier `haiku|sonnet|opus`, effort `low|medium|high|xhigh|max`; never a model id) or `{role}`, a row of
 the role table. A role is looked up when the Issue is filed and the result is kept, so a later table change does not move
 a filed Issue. A tier or effort outside the lists fails the plan's parse and the last valid plan stays; a role the table
