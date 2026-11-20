@@ -19,7 +19,9 @@ const DEFAULT_CI_MINUTES = 45
 /** A Makefile rule named `merge-guard`, alone or among others (`a merge-guard: b`). */
 const GUARD_RULE = /^(?:[\w.-]+\s+)*merge-guard(?:\s+[\w.-]+)*\s*:(?!=)/m
 /** An `include` can define the rule in a file this read does not see. */
-const INCLUDE = /^-?include\s/m
+const INCLUDE = /^-?s?include\s/m
+/** make's message when no rule makes `merge-guard` itself (GNU make 3.81 opens the quote with a backtick). */
+const ABSENT_GUARD = /No rule to make target [`']merge-guard'\.\s+Stop\./
 
 interface Options {
   pr?: string
@@ -450,12 +452,21 @@ class Lander {
    * that includes another file and shows no such rule itself asks `make -n merge-guard`.
    */
   private async hasGuard(): Promise<boolean> {
-    const path = join(this.repo.root, 'Makefile')
-    if (!existsSync(path)) return false
-    const text = readFileSync(path, 'utf8')
+    // make reads the first of these that exists
+    const name = ['GNUmakefile', 'makefile', 'Makefile'].find((file) => existsSync(join(this.repo.root, file)))
+    if (!name) return false
+    const text = readFileSync(join(this.repo.root, name), 'utf8')
     if (GUARD_RULE.test(text)) return true
     if (!INCLUDE.test(text)) return false
-    return (await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'])).code === 0
+    const probe = await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'])
+    if (probe.code === 0) return true
+    // only make's message for the absent target itself means none: a missing include or prerequisite is a broken guard
+    if (ABSENT_GUARD.test(probe.err + probe.out)) return false
+    throw new Refused(
+      'guard',
+      `make -n merge-guard failed, so whether the repo has a merge guard is unknown: ${lastLines(probe.err || probe.out)}`,
+      'fix the Makefile, commit, then factory land again',
+    )
   }
 
   /** Step 6: the repo's `make merge-guard`, or the same rule held here when it has none. */
@@ -548,7 +559,15 @@ class Lander {
 
   /** The landed commits, and a squash or merge commit whose review no longer matches (agw matches by patch). */
   private async report(before: string): Promise<void> {
-    const after = await this.fetch('report')
+    let after: string
+    try {
+      after = await this.fetch('report')
+    } catch (error) {
+      // the merge is done: a failed read afterwards is a warning, never a refusal
+      if (!(error instanceof Refused)) throw error
+      this.out(`report: landed, but the landed commits cannot be read: ${error.why}`)
+      return
+    }
     const log = (await this.sh.read(['git', 'log', '--oneline', `${before}..${after}`])) ?? ''
     this.out(`landed on ${this.repo.base}:`)
     for (const line of log.split('\n').filter(Boolean)) this.sh.io.out(`  ${line}\n`)

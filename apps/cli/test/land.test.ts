@@ -312,6 +312,27 @@ describe('factory land', () => {
     expect(await calls()).not.toContain('gh pr merge')
   })
 
+  test('an included merge-guard whose prerequisite is missing is refused, never skipped', async () => {
+    await writeFile(join(work, 'Makefile'), 'include ci.mk\n')
+    await writeFile(join(work, 'ci.mk'), 'merge-guard: merge-guard.stamp\n\t@echo guard-clear\n')
+    await git(work, 'add', 'Makefile', 'ci.mk')
+    await git(work, 'commit', '--quiet', '-m', 'chore: an included guard')
+    const result = await land().done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: guard: refused: make -n merge-guard failed')
+    expect(await calls()).not.toContain('gh pr merge')
+  })
+
+  test('an included Makefile that defines no merge-guard falls back to the rule held here', async () => {
+    await writeFile(join(work, 'Makefile'), 'include ci.mk\n')
+    await writeFile(join(work, 'ci.mk'), 'check:\n\t@true\n')
+    await git(work, 'add', 'Makefile', 'ci.mk')
+    await git(work, 'commit', '--quiet', '-m', 'chore: an include without a guard')
+    const result = await land().done
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('land: guard: contains the default branch')
+  })
+
   test('a red master is refused by the guard unless --allow-red', async () => {
     await writeFile(join(state, 'master-runs'), '[{"status":"completed","conclusion":"failure","url":"https://ci/m"}]')
     const refused = await land().done
