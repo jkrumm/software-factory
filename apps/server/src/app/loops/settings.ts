@@ -16,13 +16,21 @@ const Env = z.object({
   FACTORY_TICK_MS: ms.optional(),
   /** a loop's own interval, set where a scenario drives that loop; 0 is off */
   FACTORY_LOOP_LEADS_MS: ms.optional(),
+  /** how often the planning loop runs */
   FACTORY_LOOP_PLANNING_MS: ms.optional(),
+  /** how often the steward loop runs */
   FACTORY_LOOP_STEWARD_MS: ms.optional(),
+  /** how often the triage loop runs */
   FACTORY_LOOP_TRIAGE_MS: ms.optional(),
+  /** how often the hygiene loop runs */
   FACTORY_LOOP_HYGIENE_MS: ms.optional(),
+  /** how often the selfwatch loop runs */
   FACTORY_LOOP_SELFWATCH_MS: ms.optional(),
+  /** how often the ci-ledger loop runs */
   FACTORY_LOOP_CI_LEDGER_MS: ms.optional(),
+  /** how often the host loop runs */
   FACTORY_LOOP_HOST_MS: ms.optional(),
+  /** how often the throughput loop runs */
   FACTORY_LOOP_THROUGHPUT_MS: ms.optional(),
   /** the `gh` config directory the review poll uses in a work repo, whose account is not the owner's */
   FACTORY_GH_CONFIG_DIR_WORK: z.string().trim().min(1).optional(),

@@ -2,8 +2,11 @@ import * as z from 'zod'
 import { parseEnv, type Environment } from '../../kernel/env.ts'
 
 const Env = z.object({
+  /** the Uptime Kuma push URL; unset, the feature is off */
   FACTORY_UPTIME_URL: z.string().min(1).optional(),
+  /** the bearer token the Uptime Kuma push is sent with */
   FACTORY_UPTIME_TOKEN: z.string().min(1).optional(),
+  /** how often the Uptime poller runs, at least 1 s */
   FACTORY_UPTIME_EVERY_MS: z.coerce.number().int().min(1000).default(60_000),
 })
 

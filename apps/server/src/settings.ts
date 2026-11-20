@@ -11,15 +11,25 @@ const MIN_TOKEN_CHARS = 16
 const token = z.string().min(MIN_TOKEN_CHARS, `must be at least ${MIN_TOKEN_CHARS} characters`)
 
 const Env = z.object({
+  /** the owner's API token; the server refuses to start with fewer than 16 characters */
   FACTORY_TOKEN: token,
+  /** the token a lead's terminal calls the API with, never the owner's */
   FACTORY_AGENT_TOKEN: token.optional(),
+  /** the token a door (a machine) calls the API with */
   FACTORY_DOOR_TOKEN: token.optional(),
+  /** the token signals are filed with */
   FACTORY_SIGNAL_TOKEN: token.optional(),
+  /** the token the orchestrator calls the API with */
   FACTORY_ORCHESTRATOR_TOKEN: token.optional(),
+  /** a read-only token for the read API */
   FACTORY_READ_TOKEN: token.optional(),
+  /** the Postgres database the server stores into (secrets-run supplies it) */
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (from secrets-run)'),
+  /** the port the API listens on, on loopback */
   PORT: z.coerce.number().int().min(1).max(65_535),
+  /** the version the server reports; dev when unset */
   FACTORY_VERSION: z.string().min(1).optional(),
+  /** how long a write waits for the process lock before it gives up */
   FACTORY_LOCK_WAIT_MS: z.coerce.number().int().min(0).optional(),
   /** how long after a read of the database facts `/health` serves from, the next starts; for the scenarios */
   FACTORY_HEALTH_PROBE_MS: z.coerce.number().int().min(50).optional(),
@@ -27,12 +37,19 @@ const Env = z.object({
   FACTORY_THROUGHPUT_FILE: z.string().optional(),
   /** the owner's Herdr groups file; unset, the one the Herdr app reads */
   FACTORY_PROJECT_GROUPS_FILE: z.string().optional(),
+  /** 1 lets the test clock offset be set; only a scenario sets it */
   FACTORY_TEST_MODE: z.enum(['0', '1']).optional(),
+  /** the agw binary the server calls for agent work */
   FACTORY_AGW_BIN: z.string().min(1).optional(),
+  /** moves the server's clock by this many ms; honored only with FACTORY_TEST_MODE=1 */
   FACTORY_TEST_CLOCK_OFFSET_MS: z.coerce.number().int().optional(),
+  /** how long a shipped change is watched for a regression; 0 is off */
   FACTORY_WATCH_WINDOW_MS: z.coerce.number().int().min(0).optional(),
+  /** the wait before a failed verify is tried again */
   FACTORY_VERIFY_RETRY_MS: z.coerce.number().int().min(1).optional(),
+  /** the gap between two verify checks of a shipped change */
   FACTORY_VERIFY_RECHECK_MS: z.coerce.number().int().min(1).optional(),
+  /** how long a verify result must hold before it counts as settled */
   FACTORY_VERIFY_SETTLE_MS: z.coerce.number().int().min(0).optional(),
 })
 

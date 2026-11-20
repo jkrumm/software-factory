@@ -8,18 +8,31 @@ import { MAX_REVIVE_TRIES, QUIESCE_AFTER_MS } from '../../domains/leads/quiesce.
 import { TYPE_GAP_MS } from '../../domains/leads/type-gap.ts'
 
 const Env = z.object({
+  /** the home directory the defaults are built from */
   HOME: z.string().min(1),
+  /** the herdr-core client (hc) that a lead terminal runs through */
   HC_BIN: z.string().min(1).optional(),
+  /** another herdr-core session than the default one (tests) */
   HC_SESSION: z.string().min(1).optional(),
+  /** the claude binary a lead runs; unset, the one on PATH */
   FACTORY_CLAUDE_BIN: z.string().min(1).optional(),
+  /** colon-separated directories a lead repo must be inside */
   FACTORY_REPO_ROOTS: z.string().min(1).optional(),
+  /** colon-separated single repos a lead may work in, outside the roots */
   FACTORY_REPO_ALLOW: z.string().min(1).optional(),
+  /** the role table; config/roles.json of this checkout when unset */
   FACTORY_ROLES_FILE: z.string().min(1).optional(),
+  /** the script that marks a lead's folder trusted before it starts */
   FACTORY_PRETRUST_BIN: z.string().min(1).optional(),
+  /** where factory hook spools events until the server reads them */
   FACTORY_SPOOL_DIR: z.string().min(1).optional(),
+  /** the unix socket factory hook posts events to */
   FACTORY_SOCKET: z.string().min(1).optional(),
+  /** where a finished attempt's transcripts are archived */
   FACTORY_ARCHIVE_DIR: z.string().min(1).optional(),
+  /** after a restart, how long a live terminal may run no agent before its lead counts as lost */
   FACTORY_GRACE_MS: z.coerce.number().int().min(0).optional(),
+  /** how long a lead's turn may read as ended before a note is typed into it anyway */
   FACTORY_FORCE_NOTE_MS: z.coerce.number().int().min(0).optional(),
   /** the waits before each `continue` after an API error, comma-separated ms (the length is the number of resumes) */
   FACTORY_API_RESUME_MS: z
@@ -28,12 +41,15 @@ const Env = z.object({
     .optional(),
   /** the gap between two notes or nudges typed into leads in the first minutes after a server start; 0 is off */
   FACTORY_TYPE_GAP_MS: z.coerce.number().int().min(0).optional(),
+  /** a turn open and silent this long has its transcript read for an API error */
   FACTORY_API_DETECT_MS: z.coerce.number().int().min(0).optional(),
+  /** how often a session's transcript is read for an API error, at most */
   FACTORY_API_PROBE_MS: z.coerce.number().int().min(0).optional(),
   /** a waiting lead is dormant (its `claude` ended) after this long */
   FACTORY_QUIESCE_AFTER_MS: z.coerce.number().int().min(0).optional(),
   /** the agent token (`settings.ts`) and the API port: what a lead's `factory` calls the API with */
   FACTORY_AGENT_TOKEN: z.string().min(1).optional(),
+  /** the port the API listens on, on loopback */
   PORT: z.coerce.number().int().min(1).max(65_535).optional(),
 })
 

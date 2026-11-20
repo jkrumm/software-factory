@@ -151,352 +151,74 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 
 ## Capacity and leads
 
-- **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order: queue state
-  (`drain` starts nothing), the project's **doctor** (kind `doctor`, `domains/capacity/doctor.ts`, `adapters/doctor/`: `doctor: make doctor` in a `project.yaml` is a
-  read-only command of seconds that exits 0 when this host can run the project and otherwise exits non-zero with one line per missing prerequisite and its fix;
-  it runs in the project's own checkout under a 60 s timeout, a red reading stands 5 min and a green one 1 h, one run per project at a time, kept in memory so a restart asks again;
-  while it is red every Issue of the project stays queued, the reason `<project> cannot run on this host: <first four lines>`, and the hygiene `check` probe is skipped with the same words,
-  so a project needs no `hygiene.check: false` for a lab it lacks; a doctor that cannot run (no `make`, no `doctor` target in the checkout, a timeout) is no reading and the project is admitted), the **boot grace** (kind `boot`, `domains/capacity/boot.ts`: while the host's uptime, from `kern.boottime`, is under 30 min,
-  no new lead until the five newest minute samples, all taken since the boot, show a load under a quarter of the ceiling and the newest
-  sample's memory is under 80 % in use, then at most one lead per 2 min; resumed leads count against the seats as always; the reason reads
-  "host booted N min ago: …"; an unreadable uptime applies no grace and says so as a note), the host's 1-minute load (kind `load`; and the **throughput rule**, below), its memory (swapouts and swap against ceilings; the swapouts are the higher of the pass's own rate and the minute samples' last 300 s, `sustainedSwapoutMb`, so a lull between bursts does not open the gate; the memory that a
-  lane's `memory` reserves for its running leads and the candidate counts as swap in use, `docs/plan.md` "Lanes"; then the
-  learned fit (and, after the memory rules, the disk fit: kind `disk`, `domains/capacity/disk.ts`, "A binding cap and the disk fit" below): a repo with at least three sampled attempts is refused, kind `memory`, when its median lead (the median of its newest ten attempts' peaks) does not fit into
-  the free memory of the newest host sample (not older than 5 min) less headroom (the larger of 2 GiB and 8 % of RAM) and less what the running leads are still expected to take (`leadGrowth`, `domains/capacity/leadcost.ts`: each claim that started under `RAMP_MS` (2 min) before the host sample the free figure comes from, or after it, whose repo has a learned size takes that size less what its newest sample holds, 0 when it has none, never below 0: an older lead is in the reading, and a lead holds the same within its first minute as ten minutes on (475 against 520 MiB over 239 leads, 2026-11-15), its peak being a burst that no age settles, which the headroom and the swap and pressure ceilings hold; a lead resumed from a wait is a new process and starts again; a lead admitted in the same pass has no sample and takes the whole figure, so one pass cannot admit several against one reading; a repo with no learned size keeps the lane's constant; the refusal says "N young leads still take X GiB more"); the running leads' test peaks are not reserved here, the slot grant holds them back (`SlotFit`); it
-  replaces the lanes' `memory` for that repo's leads, never refuses with an unknown figure and never the only lead on the host).
-  **What a lead is learned to take** (`learnLeadCost`, `domains/capacity/leadcost.ts`): an attempt's peak is its worktree's largest
-  sample of the six hours before its last one, from the repo's relearn point on; the figure is the median (nearest rank) of the
-  newest ten attempts' peaks, except that a falling cost is believed sooner than a rising one: when the newest three **settled**
-  attempts (ended, no sample for 10 min, or run 30 min) all peak below that median, it is the largest of the three (the refusal
-  says so). Too early is still caught by the swap and pressure ceilings and the slot grant; too late is idle seats with work
-  queued. `factory capacity relearn --repo <name> [--at <time>]` (owner, orchestrator and a lead, whose `set_by` reads `agent`: an Issue's own ship step may set a point; `lead_relearn`, `migrations/1034_lead_relearn.sql`;
-  default now, never in the future) ignores the repo's samples before the time: with fewer than three attempts after it the repo is
-  on its lane's memory prior as a new repo is, and `factory queue order` carries a note per repo with a point (and the refusal
-  says "learned from the attempts since …"). `read/lead-costs.ts` keeps the same window and point, with its plain p80, beside it (the burst a lead reaches, not the size the fit reserves). The
-  candidate's lane (`lanes: {apple: 1}` in `project.yaml` caps the leads of a resource class inside the repo, a fix is
-  never held; `domains/capacity/lanes.ts`), the repo's claims (`leads: N`, 64 when the project states none, which is no cap beyond the host (memory fit and load above, the accounts below), and at most 64, a larger value is clamped with a warning in `factory project show`; a repo states a smaller `leads` only for a shared resource the factory does not model (not its merge window, deploy queue or disk, which `factory merge-lock`, `deploy-lock` and the disk fit hold), with the reason in a comment beside it, and a cap that binds while seats idle is a finding (NL32, NL48); plus one for a fix; `pace` allows one), then an
-  account with room. **Seats:** each account has its own cap (`FACTORY_ACCOUNT_LEADS`, `iu=20,me=10,me2=10`; an account not named takes `FACTORY_LEADS_PER_ACCOUNT`, at most 64; `factory capacity get` shows each account's `leads` beside its `cap`, and the `cap` refusal names every open account with its leads and cap). **Accounts are read in-process from `packages/accounts`, and the package alone decides (`adapters/planning/accounts-source.ts`):** the poll (once a minute) calls its `readStatus` (the registry, the cache files, the modes in force; no shell-out, no `FACTORY_CLAUDE_ACCOUNT_BIN`, no registry path of the factory's own: `CLAUDE_ACCOUNTS_REGISTRY` and the package's resolution) and stores, per account, the windows beside the package's verdict for the bulk lane: whether it takes work, its place in the order, why not and when it opens again (`capacity_readings`, `bulk_*`, `closed_why`, `opens_at`). The server keeps no window limit, weekly pace or room-left order of its own; `claude-account rank --lane bulk` and `factory capacity get` show the same order. The pick takes the open account with the lowest place, skipping accounts at their lead cap or loaded since their sample. An account the owner paused, drains or reserves is the package's business (`factory accounts mode <id> paused --until <iso>` writes the override through the package, so `claude-account mode` sees it; `factory accounts status` is `GET /v1/accounts`: the package's status with the seats taken and free and the leads running beside it). An account a lead's turn ended on a 401 for stays closed (`account_auth_marks`) until its login Errand closes. A reading the poll has not renewed for ten minutes admits nothing. An account is paced by sample (one new lead per quota sample) only when it has a 5-hour window above 70 %; an account with only a weekly limit, or a window below that, takes leads up to its cap in one pass. A lead that runs into the wall (`limit_stop`) stalls its Issue as `wall` and continues when the window resets: the wait is the reset of the window that closes the account, or, while the newest sample was taken before the wall and does not show it yet, the reset of the window nearest its ceiling when that window is within 10 points of it (the package's `wallResetAt`, stored on the reading, read by `windowOf`; a rate limit far from any window is a throttle and wakes the lead as before), so the steward neither wakes it early nor nudges it and `lead_idle` stays quiet (a stalled Issue is not a working lead). While the window is closed and another account is open with seat room (`pickAccount` over every account but the one it left), the steward moves the lead instead (`seats.move`, `moveWalled`): the attempt's assignment and its claim go to that account and the Issue is woken with the move in its detail. `noteLead` delivers that wake by ending the session and starting the same session again (`claude --resume`) under the new account's `CLAUDE_CONFIG_DIR`, the way a dormant lead is revived, and stores the account on the lead's row. Nothing is copied: the transcripts of every account lie in one `projects/` directory (the other accounts' `projects` is a symlink to the default one, `dotfiles/docs/claude-accounts.md`). The cost is one uncached read of the whole context, since the prompt cache is per account; it is only paid against a wait of hours. No other account with room: the lead waits for its window as before. **Seat raise:** when work is queued for the account cap and each of the newest five minute samples shows a load
-  of at most a quarter of the ceiling and swap below its ceiling, the pass raises every account's cap by the leads that fit into the
-  free memory (`domains/capacity/seats.ts`, at most `FACTORY_SEATS_MAX_BONUS`, default 2, 0 is off); never the repo's `leads: N`, never
-  past an account's window, and the `cap` reason says `(raised by N: the host is idle)`. **The throughput rule** (`DEFAULT_LOAD_PER_CORE`, `DEFAULT_PROCESS_CAP` in `domains/capacity/host.ts`; `hostRule` in `app/planning-settings.ts`): the load ceiling in multiples of the cores (`FACTORY_LOAD_PER_CORE`, default 3, so 36 on 12 cores) and a cap on the host's process count (`FACTORY_PROCESS_CAP`, default 1800, from the newest minute sample's `processes`, not older than 3 min; an unread count applies no cap), because the panic class is a process storm, not memory; an over-cap host is refused with kind `load` and "N processes (cap M)". Both limits are always on, with no setting that turns them off (the Console's load ceiling is the one in force). `factory.admission_shadow` (`migrations/1024_admission_shadow.sql`) is no longer written; dropping it is a later row. An env file that still sets `FACTORY_LOAD_RULE`, `FACTORY_SLOT_AIM` or `FACTORY_LOAD_CEILING` starts: `scripts/env-file.sh` drops the line with a warning for one release. The first that says no names itself and its numbers as the queue reason. It never spills to another
-  account past a window or a cap; with every account closed it waits for the first opening. Owed Issues are served
-  before new ones, in the repo and on the account: a woken lead is the same session on the account it was admitted on, so the
-  account cap never refuses its resume (only the repo's claims and its lane do), and from the moment its wait ends it counts in
-  its account's leads, so a new lead cannot take the seat it will run on. A lead in a wait that gave its claim up is idle and
-  counts nowhere. A herd woken at once (a red master closing and waking a dozen deferred leads) takes the repo's places in
-  order of its waits, oldest first, up to `leads: N`; the steward counts a refusal for a claim as a stall only when a claim
-  would be granted to that lead now, and names the account it resumes on. The gates (lead cap, loaded) stay the factory's; whether an account is open and the order of the open ones come from the package, read in the same poll as the windows.
-- **A turn that ends on an API error** (`domains/leads/apierror.ts`, `app/leads-api-errors.ts`, a step of the leads tick). Claude Code
-  fires `StopFailure`, never `Stop`, when a turn ends on an API error (hooks reference, "StopFailure": `error`, `error_details`,
-  `last_assistant_message`), so the session looks mid-turn to anything that waits for a `Stop`. The hook (every `error` type now,
-  no matcher) spools it as `api_error` (a `rate_limit` stays the `limit_stop` wall); a session whose hook did not run is found
-  by its transcript: a turn open and silent for `FACTORY_API_DETECT_MS` has the end of its transcript read (`TranscriptTails`,
-  the last `assistant`/`user` record with `isApiErrorMessage`, its `error` and `apiErrorStatus`) at most every
-  `FACTORY_API_PROBE_MS`, and the same fact is stored. `deriveSession` reads an `api_error` as the end of the turn
-  (`SessionView.apiIncident`: the errors since the last clean `turn_ended`), so a note waiting for the turn to end is delivered.
-  A prompt the account's closed window refuses (a resumed lead's first message) fires `UserPromptSubmit` and nothing after it: a
-  turn open and silent for two minutes, with no process in the lead's tree, on an account capacity reads as closed (the table is read fresh, and does not depend on quiescing) is stored as
-  the `limit_stop` the hook missed (`app/leads-held.ts`), so the Issue stalls as a `wall` and is woken or moved like any other.
-  `kindOfApiError` reads the fields before the words: a 401 or an expired or revoked token is **auth**; a 429, 5xx, a
-  timeout or reset, `server_error` (also mid-response, which adds "your last response may be cut off, re-check what you did" to
-  the note) and a 403 typed `authentication_failed` (a Cloudflare challenge: 10 of 10 on 2026-11-13, none needed a login, though
-  Claude Code prints "Please run /login") are **transient**; anything else is left to the steward. Transient: one `continue`
-  (a `resume` delivery, key `resume:<session>:<incident>:<n>`) after 1 minute, then 3, 10, 10, 10, five at most per incident; three
-  or more leads failing within five minutes are one **edge incident**: one clock, one `continue` per `STAGGER_MS`
-  (30 s) among them, and one `api_edge_incidents` row (leads, window, and the owner's `plan-*` sessions in the same state,
-  counted and never resumed) that the friction read shows as `api_transient` (informational, never a finding). Auth: the
-  account gets an `account_auth_marks` row that capacity reads as "not signed in" (no admissions on it, nothing moved), and
-  one Errand "log in account X" (request key `account-login:<account>`, no check: the picker still says the login is fine); its
-  closing clears the mark and the account's leads are resumed like a transient error. The screen is read before anything is typed
-  (`HcTerminals.resume`, and `type` for a note): herdr-core calls this state `blocked` or `error` and refuses a send, so the
-  API-error line above an empty prompt is what permits the core's `force`, a draft in the box is submitted and not appended to,
-  and any other screen (a dialog, a running turn) is left alone. The steward's idle nudge skips a session in an incident until
-  its five resumes are spent. `api_blocked_minutes_per_day` (from the error to the next turn that started) is in the retro's
-  capacity figures.
-- **The quiet lead** (`nudgeIdle` in `app/loops/steward.ts`, `decideIdle` in `domains/planning/stall.ts`). A `working` Issue is
-  no stall, so the steward reads each one's lead session (`deriveSession`: `idleSince` is the end of its last turn). A
-  turn that ended with nothing reported since it began, in a live terminal, for `FACTORY_STEWARD_IDLE_MS` (10 minutes),
-  gets a `noted` event by the steward that names the Issue's last event (a regression, a note) and tells the lead to
-  check its background tasks and report. A report (a Decision asked, a deferral) settles the quiet only while no news came after it: an answer, verdict or note
-  that arrived after the report with no turn begun since is unheard, and the quiet counts from it (issue 1190). A session mid-turn, whatever a tool in it is doing, is never read. A turn that
-  ended with background work in flight (a subagent, a check, a shell: the Stop hook lists it and `turn_ended` carries
-  `backgroundTasks`, `SessionView.backgroundTasks`) is waiting, not quiet: it is nudged only after
-  `FACTORY_STEWARD_IDLE_BACKGROUND_MS` (90 minutes, past the longest implementer wait measured), as a frozen task, and
-  self-watch's `lead_idle` uses the same two thresholds. Work the Stop hook did not list counts the same, read live (`countLiveWork`, once the lead has been quiet
-  past the plain threshold, for the steward and self-watch alike): a test slot held or queued by a command started in the lead's worktree (`capacity_slots.cwd`,
-  `slotLiveIn`), or a queued or in-progress CI run of its branch (`CiLive`, `githubCiLive`; an unreadable source is not
-  live). When that work ends the plain threshold applies again. The wakes are counted from the events alone (steward notes that
-  begin with `IDLE_NOTE`), `maxWakes` per attempt and each after another threshold of quiet; after that `factory-steward` is
-  asked, and its answer can only be one more such note: a quiet lead is never stalled or turned into a Decision (the options
-  of one, pause, drop, a fresh lead, are applied by nothing); self-watch files it for the owner's side.
-  The idle clock starts at the later of the turn's end and the last news the lead heard (`readIdleHistory`: a verdict, an owner's
-  or Judge's note, a Decision's answer, the end of a wait, an Errand done), and no idle nudge comes within
-  `verdictGraceMs` (30 minutes) of a verdict: the lead is reading and answering it. After a `changes` verdict the Issue waits on the lead's revision
-  (`PendingRevision`): the generic nudge is held back, and after `reviseAfterMs` (60 minutes) of quiet the lead gets one note that begins with
-  `REVISE_NOTE` and names `factory artifact revise <id>`, keyed by the artifact and the verdict, so it is sent once.
-- **Annotation dispositions.** A lead answers each of the owner's annotations with `factory artifact annotation-reply` (`POST
-  /v1/artifacts/:id/annotations/:annotationId/reply`, a lead verb gated on the Issue's current attempt): `applied`, `deferred` (the note
-  names the Issue or signal it filed) or `declined` (the note says why), stored on the annotation (`disposition`, `disposition_note`,
-  `disposed_at`). `factory issue ship` and `factory issue close --outcome done` (not `dropped`) are refused while an owner annotation on any of the Issue's Specs or Concepts has none, naming
-  each. The Console shows the disposition under the comment; the retro's taste part carries it, and an annotation declined twice for the same reason is a
-  candidate standing rule.
-- **A repeated stall is not asked twice** (`repeatedStall` in `app/loops/steward.ts`, `decideStall`). A stall of the same
-  cause as the one the steward's last Decision of this attempt answered, whose detail reads alike (`sameWords`: the share of
-  words, digits dropped, at least `SAME_STALL`) to that stall or to any block of the same cause the lead made since the
-  answer (a lead that wakes from a hold rewords its block, each wording close to the last), or a `blocked` stall that comes
-  within `QUICK_REBLOCK_MS` of the answer with no report of the lead between them (a lead that cites the answer it was just
-  given reads 0.1 to 0.4 alike, and one stand-down was asked 47 times), with no `noted` by the owner or the orchestrator and no `reopened` since
-  the answer, stays stalled and asks nothing: the lead blocking again on the same reason, or a re-ship of the same change
-  against the same failing check, is one question with one answer. A note delivered while it waited, or a changed detail, is
-  news and ends it as before.
-- **A hold is a timed wait** (`kernel/hold.ts`). When the Judge answers a Decision the steward raised with an option
-  that reads as a hold (its label begins with hold, wait, pause or defer), `answered` carries `hold`, a time, and the Issue
-  waits for it as a `timer` wait instead of going back to its lead; the lead hears the Judge's note when the time comes. A
-  repeated `blocked` stall whose Decision was answered so is held again (`decideStall` → `hold`: a `noted` and a steward
-  `deferred` until a time) and raises no Decision. The first hold is one hour, each later hold of the attempt twice the last,
-  at most twelve hours. An answer from the owner, the orchestrator, a policy or a default resumes the lead as before.
-- **The claim deadlock** (`breakClaimDeadlocks` in `app/loops/steward.ts`). A working or watching Issue keeps its repo's
-  claim; when it is after an Issue of the same repo that stays queued for lack of a claim, neither can move. The edge gets
-  there by the owner (or the orchestrator on his behalf) naming it with `after` (`POST /planning/after`, which takes a
-  working or watching Issue too; `POST /planning/unafter` removes stored edges again). Each steward pass takes the queue's `claim` refusals, reads the holders with an open
-  planning edge to one of them (`read/loops.ts`), and defers each: a `noted` and a `deferred` event by the steward, the
-  reason in the `deferred` payload (`why`). The dependency wait frees the claim and the blocker is admitted; when it
-  closes, the wake (`wakeDependents`) sends the holder back and it is counted as owed, served before new leads. One that
-  had shipped goes back to `watching` with a new watch (the old one ends). Only open planning edges are read, never free
-  text: a lead or an in-session subagent that merely mentions another Issue is not detected, and a blocker queued for any
-  other reason (load, memory, window, chain) or in another repo is left alone.
-- **The timer wake** (`wakeTimers` in `app/planning-pass.ts`). Every planning pass wakes each timer wait whose `until`
-  has passed, as `wakeDependents` does for dependency waits: a `woken` event by the factory, keyed by the wait's version,
-  so a replayed pass wakes once and a wait overdue by days ends on the first pass.
-- **A long wait is told** (`read/long-waits.ts`, read by `readNeeds`). A timed wait lasting `FACTORY_LONG_WAIT_MS` or more
-  (default one hour, from the event that began it to its `until`) of an Issue that open Issues wait behind, directly or through
-  others (unmet `planning_edges` and the `after` of dependency waits), is a Needs item of kind `long_wait`: the Issue, its
-  until-time and the count held. A leaf is not listed. It is Needs only once its `until` has passed and the Issue is still
-  asleep: a timer still running is information, and the Overview shows the waiting Issue. It is derived from the stored waits on every
-  read, so it ends with the wait (a wake, a close, a new deferral) and no state of its own exists.
-- **A Replan** (`app/planning-replan.ts`, `factory.replans`). An ordinary `chore` Issue, `Replan: <project>`, whose lead reads
-  the plan and the open and recently closed Issues and proposes changes as a Spec with Decisions raised first; its first
-  note is `domains/planning/replan.ts` (facts, then the playbook), no model is called. The owner files it
-  (`POST /planning/replan`, `factory planning replan <project> [--ask ...]`), and the planning pass files one for the
-  project of each long wait (above) whose repo is a known project. One is open per project: a second call files nothing
-  and returns the open one (an owner's ask is added to it as a note), and the stalled key (head Issue and wait start)
-  makes a replayed pass, or the same wait after its Replan closed, a no-op. A failure of the step is an entry in the
-  pass's `errors`. The lead applies an approved proposal with `factory issue replan` (`POST /v1/issues/:id/replan`, a lead
-  verb; `applyReplan`): gated on the Issue being a Replan, the current attempt working it, its latest Spec revision
-  approved (`looks_good`/`with_notes`) and every dependent or cancel target being an Issue of the Replan's project (a removed edge's dependent may be another project's open Issue when all its heads in that edge are this project's), then
-  edges added and removed and Issues cancelled through `addAfter`, `removeAfter` and `cancelIssue` as the orchestrator
-  (the avoidable-touch counts read the owner alone). `/planning/after|unafter` and `cancel` stay owner only: a lead never
-  edits the chain except through an approved Spec. The one cancel an agent has is `factory issue withdraw <id> --from
-  agent:<repo> --reason ...` (`POST /issues/:id/withdraw`, `withdrawIssue`): the filer takes back an Issue made from its
-  own signals, only while it is `settling` or `queued` and only when every signal on it came from that source; it records
-  `cancelled` by the factory with `by` set, so the owner-touch counts do not read it. `--from` is the source as
-  stored (`agent:<repo>`, what `signal list` shows), compared as written. Like `signal file`, it is self-asserted: the
-  agent token carries no identity, so the check guards against a mistake, not against another agent.
-- **Start** (`app/leads-start.ts`): claim and look, make the worktree (`factory/<issue>-<attempt>`), then the terminal,
-  then record the lead started. The terminal is found by its `factory.key` label before one is made, so a replay after a
-  crash attaches to the lead that runs. The prompt is the brief (`domains/leads/brief.ts`): standing orders that are
-  byte-identical in every brief so the prompt cache serves them (they carry the HerdrCore constraint: no lead restarts, stops,
-  updates or starts the core or reboots to prove a change), then the Issue as filed, its facts and its notes. Notes and
-  API-error nudges typed into leads are paced for 10 min after a server start, one per 10 s (`app/type-pace.ts`, `FACTORY_TYPE_GAP_MS`, 0 is off), so a restart's
-  backlog does not land at once.
-- **Hooks.** `factory hook` appends to the spool, then posts to the unix socket (mode 0600) within 300 ms. The server
-  replays the spool with idempotent keys. Session state is derived from the events when read, never stored.
-- **Notes** (`app/leads-note.ts`) are typed into the lead's terminal once: the delivery key is claimed before the typing, a
-  lead mid-turn is asked again until its turn ends, and a lead whose terminal is gone is the lead gone. A note is never typed
-  into a terminal that runs no agent (`HcTerminals.type` refuses it): a live terminal with a shell in it (herdr-core brings
-  every kept terminal back as a login shell after a host restart) has its session started again over it, as a dormant
-  lead's is, with the note after a line saying the host restarted. A lead whose hooks
-  say its turn ended for `forceNoteAfterMs` is typed to whatever herdr-core's status reads, when the screen shows an empty input
-  box (no dialog, no running turn): a resumed session read `working` for a day while it sat at its prompt (issue 1190). Before the typing
-  the lead takes its repo's claim back (`resumeClaim` through `claims.resume`): a wait that ended left it without one, and
-  a full repo refuses so the outbox tries again later. Trust follows the stored actor: a `noted` whose actor is `owner`
-  is typed as "a note from the owner" and binds the lead (the contract says so); the factory's, steward's and Judge's
-  (and any record without an actor) stay "a note, as data". The brief lists the owner's earlier notes in their own section.
-- **Quiescing** (`app/leads-quiesce.ts`, `domains/leads/quiesce.ts`, a step of the lead tick before the outbox). A lead whose Issue
-  waits for a person, a timer or another Issue holds no claim and needs no process, yet its `claude` is 200 to 290 MiB. After
-  `FACTORY_QUIESCE_AFTER_MS` (30 min) of a quiet wait the factory ends it (`hc kill`: a
-  `--keep` terminal whose program was killed on purpose is `finished`, not a shell, so the finished terminal stays only as
-  the record of the model and effort it ran on) and marks the attempt `dormant_at`; worktree, branch, tab id and the session
-  id from the hooks stay. Never quiesced: a stall (the lead is alive and the steward acts), a session mid-turn, with
-  background work or an API error, a lead with any process under it (a `factory merge-lock`, `deploy-lock`, `slot run`, a
-  test or a shell all run under the lead and carry its `FACTORY_SESSION`; its own root must be in the `ps` table too) or a
-  granted slot whose directory is its worktree. The wake is a `note_lead` like any other: after `claims.resume`, a dormant
-  lead's session is started again under the same key and tab (`HcTerminals.revive`: `claude --resume <session>` on the model and
-  effort of the finished terminal, the note as its first message, so nothing is typed), paced by `app/type-pace.ts`. A fresh
-  start and a resume share one argv (`HcTerminals.argv`) and both carry `--strict-mcp-config` with no `--mcp-config`: no
-  `.mcp.json` or agent-file MCP server of the repo the lead works in starts inside it (proved on Claude Code 2.1.325 in
-  dotfiles `docs/browser.md` §Strict MCP: the flag blocks a project server and is accepted with `--resume`, and leaves plugin
-  tools, tool search, hooks and skills working). A launcher that adds `--mcp-config` or a `--plugin-dir` server re-proves it. A
-  failed start is retried by the outbox; the third, or a refusal, is the lead gone. `followLeads` never calls a dormant
-  lead lost. It does call lost a lead of a `working` Issue whose terminal lives but runs no agent (`terminals.find`:
-  `agent` false for every live terminal; the hooks of such a lead read `gone` or `idle` from before the restart): past
-  the grace it opens a row of `lead_losses`, starts the session again with `--resume` and a first message that says the
-  host restarted and its background work is gone, and closes the row when the agent runs again; the third failed start is
-  the lead gone. The open row is a `lead-no-agent` health line, and every row is a lost lead in the friction read. A pass
-  starts at most `REVIVE_BUDGET_MS` of such starts; the rest wait for the next pass. The first turn of the resumed session is a prompt cache miss: the context is read uncached once, which a
-  wait over the cache's lifetime (1 h) costs nothing extra and one between 30 and 60 min does.
-- **The stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once with one line
-  (the hook exits 2); the stop after that is let through and stalls nothing, because a finished background task can restart the
-  lead milliseconds later (issues 1154, 1180). A lead that stays quiet is the steward's idle path: a note, then the `unreported`
-  stall. A stop with background work still running is no stop.
-- **Finalize** (`app/leads-finalize.ts`), once per attempt and in this order: the claim goes back, the terminals close,
-  the transcripts are archived, the worktree and branch are removed when clean and its work is on origin's default
-  (the worktree is found by the path it was made at, because a lead may detach HEAD or rename the branch; its HEAD and the
-  branch must be on the base, or a shipped commit must be, which a squash leaves as the only trace). When the Issue is closed, the same step
-  cleans every `factory/<issue>-*` branch, local and on origin (`adapters/git/branches.ts`): a dropped or cancelled
-  Issue's go, the others when their work is on origin's default (ancestry, an empty merge, a shipped commit, a merged
-  pull request); the rest are kept and the reason is recorded with the worktree's.
-- **Test slots** (`domains/capacity/slots.ts`): a host-wide semaphore around the whole `make check`, so parallel checks do not
-  pile their load; `factory slot run` takes a slot, says once on stderr that it is queued for one (and how long it waited when
-  it gets it), and a wait past 45 minutes exits 75 without running. A server that is down never opens the gate for everyone at
-  once (2026-11-14: a deploy's restart let nine waiting steps start together, load 15 to 206, and the boot took 72.8 s): the
-  caller first waits the restart out as every CLI call does (90 s, 10 minutes while a deploy holds its lock) and takes its slot
-  from the server the moment that answers; a server still gone after that gives it one of `FACTORY_SLOTS` (default 2)
-  host-local slots, lock files in `~/.local/state/factory/local-slots` taken like the deploy lock (a pid symlink, only a dead
-  holder reclaimed), so the work that repairs a dead factory still runs and the host is not flooded. A command
-  runs with `FACTORY_SLOT_ACTIVE=1`; a `slot run` inside one runs its command as it is, so the steps of `make check` do not queue
-  again. While swap in use grows (`swapGrowing`: the newest of five minute samples is 0.5 points of RAM above the lowest older one), only the first step runs, whatever memory is free: the memory rule reads free pages, and swap filling up beside 70 % free is the host paging out what a second run would touch. The host's load in a scenario is the fake `sysctl`'s (`vm.loadavg`), never the machine's.
-  Every step leaves a row in `factory.step_costs` (`POST /slots/:id/cost`: name, repo, the directory it ran in, peak resident size and CPU seconds of its
-  process tree, duration, wait, exit code; the CLI measures with `ps` every 3 s and the renewals carry the size). The same post carries the step's **test results**
-  (`migrations/1023_test_results.sql`): the CLI gives the command a fresh directory in `FACTORY_JUNIT_DIR`, reads every `*.xml`
-  JUnit file the command left there when it ends (`apps/cli/src/junit.ts`: a `<testcase>` is `fail` with a `<failure>` or `<error>`, `skip`
-  with a `<skipped>`, else `pass`; its suite is its `classname`, else the enclosing `<testsuite>`'s name; at most 50 000 results) and
-  posts them as `tests` with the commit (`git rev-parse HEAD`) and whether tracked files differ from it, both read before the command
-  starts. The server stores one `factory.test_results` row per result beside the `step_costs` row, with the OTel names where
-  they exist (`test.suite.name`, `test.case.name`, `test.case.result.status` with `skip` as a custom value, `vcs.ref.head.revision`); the host loop drops rows older than 14 days, the cost
-  ledger stays. Only a run inside a slot reports: the repos' check targets write JUnit when `FACTORY_JUNIT_DIR` is set (here
-  `make check`, `check-fast` and `e2e` through `JUNIT` in the Makefile and the Playwright config; a bare `make test-unit` outside a slot writes none; the convention is in `docs/plan.md` "Check tiers"). The grant is
-  `FACTORY_SLOTS` (default 2) as the base and `FACTORY_SLOTS_MAX` (default 6) as the cap: a lone step is always granted, a step
-  below the base when it fits (or free memory is unread), one beyond the base while the load tripwire is clear (the load ceiling; `FACTORY_SLOT_EXTRA_LOAD` is accepted but no longer read) and it fits. **A step is learned per project:** a caller in a linked worktree (`<repo>/.claude/worktrees/<dir>`) whose step name starts with that directory's name (`factory-1146-1 unit`) is stored and learned as the project's (`basalt-ui unit`, `stepNameOf` in `domains/capacity/costs.ts`, on the grant and on `POST /slots/:id/cost`; the row keeps the worktree's directory in `cwd`), and old rows `factory-<n>-<a> <words>` of that repo seed the project's figure. **A step with nothing learned is sized by a prior, never refused for it** (`stepPrior`): the largest learned peak of a step of the project's last 14 days with the same last word, else the project's largest, else `DEFAULT_PRIOR_MIB` (2 GiB, about the p85 of every step peak on 2026-11-14: p50 0.3 GiB, p80 1.7, p90 2.5); the wait line says it is a guess, and the same prior counts as the growth of a running step that has none. It fits when its learned peak (the p80, nearest rank, of its 8 newest measured peaks; a run that ended within 90 s of a host sample at pressure level above normal or a swapout above the swapout ceiling (`DEFAULT_SWAPOUT_CEILING_MB`) is not learned from, as it measured a thrashing host; `factory read capacity-loop` `topSteps` shows `p80PeakMib` beside `maxPeakMib`) plus what the running steps
-  still grow by (their learned peak less their size now) stays within the free memory of the newest host sample (not older than
-  5 minutes) less a headroom of 2 GiB or 8 % of RAM, **which only a slot beyond the base keeps** (a step below the base needs its peak and the growth within the free memory itself, NL36); a waiter's `why` is shown in the CLI and the capacity view. No model is called. **Small steps pass:** the slot goes to the first waiter in line that fits, not only to the first: a waiter ahead whose step does not fit (memory) is passed, and `capacity_slots.passed_at` / `passed_by` record the first pass (the waiter's `why` then ends in `passed by "<step>" since N min; after M min its memory is reserved and only a step that ends before its start passes it`). Once a waiter was passed for 10 minutes its memory is **reserved** (backfill, `reservedStartMs`): the running steps' learned remaining runtime (learned run less time run; a holder with no learned run reads as ending now, so the reservation is never later than the true start; a holder that has run past its learned run is taken to need as much longer as it has overrun, since "ending now" is known to be wrong for it and would reserve a start that never comes, every step behind the head waiting and a base slot idle while it runs) says in how many minutes enough of their resident size is freed for the waiter's size, the growth of the holders that stay and the headroom. A step behind it that fits now still passes when its own learned run ends before that start, so the big waiter's start is not delayed; a step that runs longer, or has no learned run, waits and the line says so (`"<step>" ahead was passed for 10 min and its memory is reserved (free in ~9 min; this step runs ~12 min)`). A head with no reservation (size unknown, it does not fit even with every holder gone) or one that waits for something other than memory keeps the whole line, which is the starvation guarantee. A step also passes a head it still fits beside: its size, the step's and the headroom (none when both take a base slot) fit in the free memory plus the resident size of the holders granted before the passing began, less what the holders granted since will still grow (`headFitsBeside`), so the frozen head does not leave a base slot idle for the minutes its holders run (the 2026-11-17 line: 24 waiting, one of two base slots held, load a quarter of the ceiling, no swap); a waiter ahead that fits takes the slot on its own next call. The swap, load and slot-count rules hold for every waiter alike. **What a wait waited for** (`migrations/1038_slot_waits.sql`): each call of a waiter counts the time since its previous call to the reason that call was given (`slots` every slot taken, `memory` the fit, `swap` swap growing, `load` the load gate, `unsized` no learned size or free-memory reading, `line` the waiters ahead, a passed waiter's hold included, `cores` the cores fit, `class` a host-wide class held; `capacity_slots.why_kind` / `wait_split`). When the step is granted or the waiter leaves without a slot, `factory.slot_waits` gets one row (`outcome` `granted` or `gave_up`, the wait and the split in ms); a step granted on its first call has none. `slotWait.byReason` and `slotWait.byRepo` of `factory read capacity-loop` read it (count, total, p50, p90 and max per reason, and per repo with its reasons; a reason's figures are over the waits that spent time under it). The load gate's number is named in the wait line: the tripwire's words (`load over 36 in each of the last 5 minutes (…)`).
-  **The slot aim** (`domains/capacity/slot-aim.ts`, `app/capacity-aim.ts`, always on):
-  once a minute, right after the host loop stored its sample, the count of slots moves between 1 and `FACTORY_SLOTS_MAX`,
-  starting at `FACTORY_SLOTS`, AIMD on the sample's pressure level (`kern.memorystatus_vm_pressure_level`) and swap in use: level 4
-  drops to one slot; level 2, or swap in use up by half a point of RAM over the newest five samples, halves it; one more after
-  five quiet minutes (level 1, swap steady) with a waiter in line and the load tripwire clear (below); an unread
-  pressure holds the count. `factory.slot_aim` keeps the count and the minute the quiet began. Every minute also
-  stores a row in `factory.slot_shadow` (the aim and the base slots and cap, holders and waiters, the reading, the reason;
-  kept 14 days; the self-watch's `slot_line` reads it); `factory read capacity-loop` shows the count now as `slotAim.target`.
-  The aimed
-  count is the cap of a grant (the base stays `FACTORY_SLOTS`, lowered to the aim when that is less), a step beyond the base
-  keeps the learned-peak fit and fits the cores (below), and its load gate is the tripwire;
-  running steps are never touched. **The lead aim** (Issue 2271, `leadAimStep` in `domains/capacity/slot-aim.ts`, the same pass): the
-  same minute and the same signals (pressure level 2 or 4, swap growing, swapouts over the swapout ceiling for five
-  minutes, the load tripwire) move a second count, the leads the host takes (`slot_aim.lead_target`, `lead_since`). It
-  is the gate of lead admission: no new lead while as many hold a claim as it allows (refusal `memory`
-  with `part: 'aim'`, the last admission rule, so it names only a lead every other rule lets in; counted as `memory` in the queue reasons, not as `memory_fit`), and none while the newest sample, not older
-  than five minutes, has no pressure level (fail closed). It is seeded at the leads running, adds one after two quiet minutes at
-  level 1 when as many leads run as it allows and a queued lead is held by the aim alone (`leadWaiters`, read from the queue
-  view), and a warning, swap growth or swapouts set it to half of what runs (never below one; leads running are not touched).
-  The learned-peak fit of a lead is then only the guard of what cannot fit at all: the learned figure against the free memory
-  less what young leads still take, with no headroom (the headroom is kept only while the aim is unread).
-  **The free memory is the kernel's own** (`host_samples.kernel_free_pct`, `kern.memorystatus_level`, `migrations/1054`;
-  `freeMibOf` in `domains/capacity/costs.ts`): the factory's sum (anonymous pageable less purgeable, plus wired and
-  compressed, the `memory_used_pct`) left 7.5 GiB at 2026-11-18 11:48 while the kernel said 57 % free at pressure normal, and
-  on this host reads about 83 % used against the kernel's 69 % free; the sum stays as the fallback when the level is not read. A
-  slot beyond the base keeps no headroom under the aim either (the pressure level is the margin); the step's peak plus the growth
-  of the running steps must still fit the free memory. `slot_shadow` stores `lead_aim` and `leads_running` per minute. **The bottleneck rules** (issue 1743): *the tripwire* (`loadTrip`, `SUSTAINED_LOAD_SAMPLES`
-  in `domains/capacity/host.ts`) is the load over the lead admission's ceiling in each of the newest five minute samples and
-  still by the reading now (2026-11-14 to 16 had no run over the ceiling of five minutes: 174 of one, 27 of two, 5 of three, 1
-  of four); one peak trips nothing, and with too few fresh samples the instant reading decides (`load 40 is over 36 (the load
-  ceiling, too few minute samples …)`). *Cores*: a step's cores are learned like its peak (the p80 of its 8 newest runs' CPU
-  seconds over their run, `learnedCores`; `DEFAULT_STEP_CORES` 1 with none), and a step beyond the base waits (`cores`) while
-  the running steps' learned cores plus its own exceed the host's cores, so light steps run beside a heavy one; `factory slot
-  run` reports the exit's resource usage, which counts every reaped descendant (the `ps` samples alone missed short-lived
-  workers: 0.4 cores for a step whose host minutes said more). *Host-wide classes* (`stepClassOf` in `domains/capacity/slots.ts`):
-  a step named `<repo>-apple` or `<project> apple` (the Apple slot's name in dotfiles `docs/apple-signing.md`) is of class
-  `apple`, and one step of a class holds a slot at a time whichever repo runs it (`class`); a waiter held by its class is
-  passed and never holds the line. Cargo builds are no class: the fit packs them. *The line's order* (`lineOrder`): a waiter's
-  place is when it asked plus its learned run (median of its 8 newest), so a short step passes a long one that asked a little
-  earlier; the place is fixed when it asks, which is the ageing. *The test line steers the lead admission* (`lineRefusal` in
-  `domains/capacity/admission.ts`, kind `tests`): no new lead while more steps wait for a slot than run and half of them have
-  waited longer than a step takes (the median run of the last day's `step_costs`); a fix is never held. Replayed over the 30
-  hours to 2026-11-16 21:50 UTC it would have held admission 404 of 1781 minutes. The lead admission's `load` gate is the
-  tripwire too, not the instant reading. `factory capacity` still shows the configured `FACTORY_SLOTS` and `FACTORY_SLOTS_MAX`; the aimed count is
-  `slotAim.target` of `factory read capacity-loop`. Steps run at normal priority: a test of
-  `taskpolicy -b` and its neighbours is in `docs/research/2026-11-14-taskpolicy-steps.md`.
+What runs on this host, and why an Issue waits. The reasons are in [the capacity guide](guide/capacity.md) and [the leads guide](guide/leads.md). Every setting a settings loader reads, with its default and what it tunes, is in [settings](settings.md), generated from the loaders; the few the CLI reads are named where they apply. Each rule names the symbol that holds it.
+
+**Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order:
+
+- **Queue**: `drain` starts nothing.
+- **Doctor** (`domains/capacity/doctor.ts`, `adapters/doctor/`): the project's `doctor` target says whether this host can run it. A red reading holds the project's Issues queued, with the reason in its first lines, and skips its hygiene `check` probe. A doctor that cannot run admits.
+- **Boot grace** (`domains/capacity/boot.ts`): for 30 minutes after boot, no lead until the newest samples show low load and memory; then one lead every 2 minutes.
+- **Load and processes** (`domains/capacity/host.ts`, `hostRule` in `app/planning-settings.ts`): a load ceiling in multiples of the cores and a process-count cap, always on. The panic class is a process storm, not memory.
+- **Memory**: the swap-out and swap ceilings, then the **learned fit** (`learnLeadCost`, `domains/capacity/leadcost.ts`): a repo's lead is the median of its newest ten attempts' peaks, set against the free memory of the newest host sample less headroom and less what young leads still take (`leadGrowth`). A falling cost is believed after three settled attempts. Refusal kind `memory`.
+- **Disk fit** (`domains/capacity/disk.ts`).
+- **Lanes and claims**: `lanes` in `project.yaml` caps a resource class inside a repo (`domains/capacity/lanes.ts`); `leads` in `project.yaml` caps the repo's claims. A fix is never held.
+- **Test line and lead aim**: `lineRefusal` (`admission.ts`, kind `tests`) and `leadAimStep` hold new leads; see Test slots.
+- **Seats** (`domains/capacity/seats.ts`): each account has its own lead cap, raised by a bounded bonus while the host is idle. The repo's own cap is never raised, and no account goes past its window.
+- **Account**: `packages/accounts` alone decides which accounts are open and in what order (`adapters/planning/accounts-source.ts`); the server keeps no window limit of its own. An account a turn ended on a 401 for stays closed until its login Errand closes (`account_auth_marks`). A reading not renewed for ten minutes admits nothing.
+
+Relearn: `factory capacity relearn --repo <name>` ignores a repo's samples before a point (`lead_relearn`, `migrations/1034_lead_relearn.sql`). Fewer than three attempts after it means the lane's prior applies.
+
+**Walls and moves.** A lead that runs into an account's limit (`limit_stop`) stalls as `wall` and waits for the window's reset (`wallResetAt`, `windowOf`). While its account is closed and another is open with room, the steward moves the lead (`seats.move`, `moveWalled`, `noteLead`): the same session resumes under the other account's `CLAUDE_CONFIG_DIR`. Nothing is copied; the accounts share one `projects/` directory (`dotfiles/docs/claude-accounts.md`).
+
+**Owed Issues first.** A woken lead is the same session on the account it was admitted on, so the account cap never refuses its resume; from its wait's end it counts as a lead there. A herd woken at once takes the repo's places in order of its waits, oldest first.
+
+**API errors** (`domains/leads/apierror.ts`, `kindOfApiError`, `app/leads-api-errors.ts`). Claude Code fires `StopFailure`, not `Stop`, when a turn ends on an API error: the hook spools `api_error`, and a turn silent too long has its transcript read (`TranscriptTails`). Transient errors (429, 5xx, a timeout, `server_error`, a 403 `authentication_failed`) get one `continue` after 1, 3, 10, 10 and 10 minutes at most per incident; three leads failing within five minutes are one edge incident, staggered (`STAGGER_MS`). An auth error (401, a revoked token) marks the account and raises one login Errand. The screen is read before anything is typed (`HcTerminals.resume`).
+
+**The lead's life**
+
+- **Start** (`app/leads-start.ts`): claim, worktree `factory/<issue>-<attempt>`, terminal, then the brief (`domains/leads/brief.ts`). The standing orders are byte-identical in every brief, so the prompt cache serves them. Notes and nudges typed after a server start are paced (`app/type-pace.ts`).
+- **Hooks**: `factory hook` appends to the spool and posts to the socket; the server replays the spool with idempotent keys. Session state is derived when read, never stored.
+- **Notes** (`app/leads-note.ts`): typed once; the delivery key is claimed before the typing. A note from the owner binds the lead. The factory's, the steward's and the Judge's notes are data.
+- **Quiescing** (`app/leads-quiesce.ts`, `domains/leads/quiesce.ts`): a lead quiet in a wait is ended and marked dormant; worktree, branch and session id stay. Never quiesced: a stall, a turn in progress or with background work, a lead with a process under it, a slot in its worktree. The wake is `claude --resume` (`HcTerminals.revive`) with `--strict-mcp-config` (`HcTerminals.argv`). A live terminal that runs no agent after a restart is a lost lead (`followLeads`, `lead_losses`).
+- **Stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once; the next stop is let through, since a finished background task can restart it.
+- **Finalize** (`app/leads-finalize.ts`): claim back, terminals closed, transcripts archived, worktree and branch removed when clean and on the base. On close, every `factory/<issue>-*` branch goes once its work is on origin's default (`adapters/git/branches.ts`).
+
+**Quiet leads and stalls.** A `working` Issue whose lead ends a turn with nothing reported gets a steward note after the idle threshold (`nudgeIdle` in `app/loops/steward.ts`, `decideIdle` in `domains/planning/stall.ts`); a lead with background work waits longer. A quiet lead is never stalled or turned into a Decision. A same-cause stall, reworded after the last answer, stays stalled and asks nothing (`repeatedStall`, `decideStall`, `sameWords`).
+
+**Holds** (`kernel/hold.ts`). An answer that reads as a hold makes the wait a timer: one hour, each later hold of the attempt doubling, at most twelve hours.
+
+**Claim deadlock** (`breakClaimDeadlocks`, `app/loops/steward.ts`). An Issue queued behind another of its repo that holds the claim is named with `after`; the blocker is admitted, and the holder is woken on close (`wakeDependents`). Only open planning edges count.
+
+**Timers and long waits.** `wakeTimers` (`app/planning-pass.ts`) wakes each timer whose `until` has passed. A timed wait that open Issues sit behind for long enough reaches Needs you as `long_wait` (`read/long-waits.ts`), derived on every read.
+
+**Annotations.** `factory artifact annotation-reply` gives each owner annotation `applied`, `deferred` or `declined`. A ship or a `done` close is refused while one has none.
+
+**Replans** (`app/planning-replan.ts`, `factory.replans`). One open Replan per project. The lead applies an approved Spec with `factory issue replan` (`applyReplan`). A lead's only cancel is `factory issue withdraw` (`withdrawIssue`), for its own signal Issues.
+
+**Test slots** (`domains/capacity/slots.ts`). `factory slot run` takes a host-wide slot around each heavy command; a wait past 45 minutes exits 75. A server that is down grants host-local slots (`~/.local/state/factory/local-slots`), so repair still runs.
+
+- **Grant**: a base count of slots and a cap above it. A step beyond the base waits while the load tripwire holds (`loadTrip`, `SUSTAINED_LOAD_SAMPLES` in `domains/capacity/host.ts`: over the lead ceiling in each of the newest five minute samples). While swap grows, only the first step runs.
+- **Fit**: a step's peak is learned per project (`stepNameOf`, `domains/capacity/costs.ts`) as the p80 of its eight newest runs. A step with nothing learned is sized by a prior and never refused (`stepPrior`, `DEFAULT_PRIOR_MIB`). The free memory is the kernel's own (`freeMibOf`, `kernel_free_pct`), not the factory's sum.
+- **Order**: `lineOrder` (asked plus learned run). A small step passes a head that does not fit; a passed head's memory is reserved after ten minutes (`reservedStartMs`).
+- **Cores and classes**: `learnedCores`. Host-wide classes (`stepClassOf`): `<repo>-apple` or `<project> apple` runs one at a time, whichever repo runs it.
+- **Aim** (`domains/capacity/slot-aim.ts`, `app/capacity-aim.ts`): once a minute the slot count moves AIMD on the kernel's pressure level and swap (`factory.slot_aim`, `factory.slot_shadow`). The lead aim (`leadAimStep`, `slot_aim.lead_target`) gates lead admission and fails closed without a pressure reading.
+- **Waits**: each wait counts its reason (`migrations/1038_slot_waits.sql`, `factory.slot_waits`); `factory read capacity-loop` shows the split.
+- **Results**: each step writes `factory.step_costs` and its JUnit results (`apps/cli/src/junit.ts`, `factory.test_results`). Only a run inside a slot reports.
 
 ### Steps off the mini
 
-Issue 1793, the Spec "Steps that run off the mini" (rev 3) and the planning session's measurements of 2026-11-17. A
-repo names its steps in `project.yaml` `steps:` (`docs/project.md`): the Makefile target, what each `needs`, and
-`remote: true` when it passes on Ubuntu 24.04 in the step image. No host is named in a repo's file: the step host is the
-owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step runs on the mini) and
-`FACTORY_STEP_REMOTE_PROJECTS` (the projects admitted to it). One line, two hosts:
+Issue 1793. A repo names its steps in `project.yaml` (`docs/project.md`); `remote: true` says a step passes in the step image on Ubuntu 24.04. The step host is the owner's setting ([settings](settings.md)). One call can be pinned to a host with `FACTORY_SLOT_HOST=mini|vps`, or kept on the mini with `FACTORY_SLOT_REMOTE=0`; the CLI reads both (`apps/cli/src/slot.ts`), so they are not in the table.
 
-- **Placement** (`app/capacity-slots.ts` `touchSlot`, `domains/capacity/remote.ts`). The mini's rule is as before over the
-  rows that are not the VPS's (`capacity_slots.host`). When it makes a caller wait, or has a slot free but the VPS is learned
-  to run the step in less time (issue 2668: basalt-ui's unit step, 187 s on the host against 401 s serial on the mini), the
-  caller can run off the mini (the CLI sends `remote`), its project is admitted, its step is declared `remote: true` and needs nothing only the mini has
-  (`mac`, `apple`, `secrets`, `services`; a step of the host-wide class `apple` never, whatever a file says), the VPS gets
-  it when `decideRemote` finds room and `finishesSooner` holds. Room: a probe at most 90 s old, production's own pressure
-  stall (`system.slice` memory and io `some avg10`) not over the pressure line (below), the disk under the 85 % its alert pages on with a new copy
-  counted, the step's peak beside the running steps' peaks and the mini's headroom rule in `MemAvailable`, its cores in the
-  idle ones. Sooner: its learned VPS run (unknown: 1.7 times the mini's, as measured) against the expected mini wait (the
-  holder that frees its slot; zero when a slot is free now) plus its mini run, so a step never run on the VPS goes there
-  only when the mini makes it wait, and one learned faster there goes with a mini slot free. A step the VPS would have
-  taken but has no room for is placed `no_room`, not `free`. There is no fixed share of the VPS.
-- **The pressure line** (`kernel/remote-pressure.ts`). Each probe reading is stored once (`remote_samples`: memory and io
-  pressure, and how many step containers ran). The samples taken with none running over the last 3 days are the baseline;
-  with a day of them (at least 24 h between the first and the newest, 200 samples) the line is just above each pressure's
-  p99 (the larger of half a point and a quarter of the p99 on top, at most 10 %), else 1 %. At rest the VPS reads 0.00, so
-  a flat 10 % meant production already stalled a tenth of the time. The line is derived from the samples at each read, so
-  the baseline sits beside it in Throughput's "Steps by host" (`tests.remote.pressure`).
-- **Why a step ran where it did** (`step_placements`, one row at each grant of a step its project declared remote): on the
-  VPS, or on the mini because a slot was free (`free`), the VPS had no room (`no_room`), would not finish it sooner
-  (`not_sooner`) or the step was held (`held`). The reason is the VPS's last refusal while the step waited, kept in the
-  process; a restart reads `free`. Throughput lists each such step with its runs per host and these counts.
-- **The probe** (`adapters/remote/probe.ts`): one `ssh` of at most every 30 s, started by a placement read and never awaited
-  by it. It reads cores, load, memory, disk, the PSI and the step containers, and removes a step container whose slot is
-  gone (older than 2 min, the CLI killed with its session up).
-- **The run** (`apps/cli/src/remote-step.ts`). The worktree travels as a git snapshot: a copy of the index, `git add -A`,
-  the `carry` paths forced in, `commit-tree` on HEAD (the worktree and its index untouched); pushed to the project's bare
-  repository on the host (`factory-steps/<project>.git`, with `origin/<default>` so a step that diffs can), checked out in the
-  slot's worktree (`factory-steps/<project>/<n>`), 0.4 to 1.4 s on a warm copy. The image is the repo's `dockerfile` or the
-  factory's (Ubuntu 24.04, git, jq, make, shellcheck, the bun of `packageManager` and the PostgreSQL 16 server binaries: `initdb`, `pg_ctl` and
-  `postgres` on `PATH`, `PG_BIN_DIR` set, issue 2114), built once per content and per image revision (`factory-step:bun-<bun>-r<n>`,
-  `IMAGE_REVISION` in `remote-step.ts`, bumped when the image changes without its bun). A step starts and stops a private cluster in
-  its own container (loopback and a unix socket need no network, a non-root uid needs a passwd entry: the image's `ubuntu` is uid
-  1000, the step host user's); there is no `needs` word for it, because every factory-image step has it and a repo's own
-  `dockerfile` carries what it needs itself. The install runs in a container
-  with the network, the step in one with none (`needs: [network]` keeps it), both under `--cgroup-parent
-  factory-steps.slice`, `--cpu-shares 2`, `--oom-score-adj 1000`, a memory ceiling of 1.5 times the learned peak (at least
-  1 GiB), `--cap-drop ALL`, `no-new-privileges`, the host user's uid, mounted at the caller's own path; the step gets
-  `FACTORY_STEP_CORES` (the idle cores at the grant) and `FACTORY_STEP_MEM_MIB`. Production wins by priority, not a
-  partition. A whole no-op step costs 1.9 s.
-- **Retention** (`adapters/remote/trim.ts`, issue 2035; measured 2026-11-17: `factory-steps` 7.2 GB, slot worktrees 1.6 GB
-  each with `node_modules`, the bun cache 1.9 GB with no bound). The probe starts one ssh of a shell script at most every
-  6 h (`TRIM_EVERY_MS`), apart from its own call, after a probe that saw no step container; the slot and cache parts of the
-  script do nothing while one runs or docker does not answer. It removes a slot copy (`<project>/<n>` and `<n>.run`) whose `.run`
-  directory, rewritten by every step of the slot, is older than 7 days (`COPY_IDLE_DAYS`), prunes the bare repository's
-  worktree record and keeps the bare repository; and a whole bun cache entry no install read for 14 days
-  (`CACHE_IDLE_DAYS`, by access time: the mount is `relatime`), tightening to 7, 3 and 1 day while the cache is over 3 GiB
-  (`CACHE_CAP_GIB`). The same script removes a scratch directory `~/exp<issue>` of the VPS home (a lead's experiment; 13 GB at
-  8 of them, 2026-11-20) in which no file or directory changed for 2 days (`EXP_IDLE_DAYS`); that part needs neither the step
-  directory nor docker (files a container left root-owned are removed by a container when docker answers). A removed copy costs the slot's next step one checkout and install, a removed entry one download.
-  A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini. The server logs a
-  line when something was removed (`steps: trim: removed ...`). The step images carry `factory.image=step` (set at build;
-  an image built before it has none), so the host's daily `docker image prune` can keep them with
-  `--filter label!=factory.image`; that prune is the vps repo's.
-- **Results.** The exit code is the step's own. ssh's 255 and docker's or the setup's 125 to 127 are the host's failure:
-  the caller goes back to the mini's line at its old place (`notOn`). A red on the VPS is not yet a red: the same call runs
-  the step again on the mini, and only that result reaches the caller; a green there is stored `disagreed` with what the red
-  run failed on (`step_costs.disagreement`: the failing test names from its JUnit with their remote duration and the
-  timeout its output names, else the last 40 lines of the output). `step_costs.host`, `tree` (the snapshot's tree) and
-  `disagreed` record it; the run time is learned per host, the peak and cores across hosts. The VPS's holders and pinned
-  waiters are not the mini's test line for the admission. Throughput's "Steps by host" reads them.
-- **The hold** (`kernel/remote-hold.ts`, derived from the ledger, never stored). A disagreement holds the step on the mini
-  for 1 hour; each further one within a week of the hold's end doubles it, up to 7 days; the first green run on the VPS
-  after a hold halves it (once; below an hour it is gone). The wait line says `it stays on the mini for 2 h, until <time>`,
-  and Throughput shows the hold with its end. A test name that disagrees a second time files one signal to its project
-  (`recordStepCost`: the test, its remote duration, the timeout), so the repo fixes the test instead of the factory losing
-  the host.
-- `FACTORY_SLOT_HOST=mini|vps` pins one call (a step that needs what only the mini has is never pinned off it);
-  `FACTORY_SLOT_REMOTE=0` keeps one call on the mini.
+- **Placement** (`app/capacity-slots.ts` `touchSlot`, `domains/capacity/remote.ts`): the VPS takes a step when `decideRemote` finds room and `finishesSooner` holds. A caller may run off the mini when the mini makes it wait, or when a slot is free but the VPS is learned to run the step in less time (issue 2668). A step that needs what only the mini has (`mac`, `apple`, `secrets`, `services`), or the host-wide class `apple`, never leaves the mini. Sooner: the learned VPS run against the expected mini wait (zero when a slot is free now) plus the mini run. A step the VPS would have taken but has no room for is placed `no_room`, not `free`.
+- **Pressure line** (`kernel/remote-pressure.ts`): the VPS's own memory and io stall, against a p99 baseline derived at each read.
+- **Why** (`step_placements`): `free`, `no_room`, `not_sooner` or `held`.
+- **Probe** (`adapters/remote/probe.ts`): one ssh at most every 30 s, never awaited by its caller.
+- **Run** (`apps/cli/src/remote-step.ts`): the worktree travels as a git snapshot (`commit-tree`) into a bare repository on the host. The image is built once per content and revision (`IMAGE_REVISION`). Install runs with network, the step without; both under `factory-steps.slice`, with a memory ceiling of 1.5 times the learned peak.
+- **Retention** (`adapters/remote/trim.ts`): a trim every six hours removes idle slot copies, cache entries and scratch directories.
+- **Results**: the exit code is the step's own. ssh's 255 and docker's 125 to 127 are the host's failure: the step goes back to the mini's line. A red on the VPS runs again on the mini, and only that result counts; a green there is `disagreed`.
+- **Hold** (`kernel/remote-hold.ts`, derived from the ledger): a disagreement holds the step on the mini for an hour, doubling up to seven days; the first green VPS run halves it.
 
-Not built: proving runs in the host's idle time (a step earns its place before it is used), pausing step containers when
-production stalls, a result cache keyed by the tree, a browser in the factory's image, a third host.
+Not built: proving runs in idle time, pausing step containers under a production stall, a result cache keyed by tree, a browser in the image, a third host.
 
 ## Quality
 

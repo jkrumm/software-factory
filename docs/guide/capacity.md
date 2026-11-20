@@ -264,7 +264,7 @@ export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
 
 **Read more:**
 
-- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L150-L418) in `docs/architecture.md`.
+- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#capacity-and-leads) in `docs/architecture.md`.
 - [Work](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L7-L46) and [The host](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L151-L162) in `docs/language.md`.
 - [Lanes](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L121-L164) in `docs/plan.md`.
 

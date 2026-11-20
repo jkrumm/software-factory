@@ -245,7 +245,7 @@ The same ship stated one acceptance line as not met: `stall:unreported` (37) and
 **Read more:**
 
 - [Who works](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L63-L77): Lead, Attempt, Delivery, Defer, Steward, Judge
-- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L150-L178): how a lead starts, its terminal and its account
-- [Hooks and notes](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L300-L304): the spool, the socket and the delivery key
+- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#capacity-and-leads): how a lead starts, its terminal and its account
+- [Hooks and notes](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#capacity-and-leads): the spool, the socket and the delivery key
 
 Next: [Gates](./gates.md)

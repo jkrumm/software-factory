@@ -4,6 +4,7 @@ import { parseEnv, type Environment } from '../kernel/env.ts'
 export const DEFAULT_LONG_WAIT_MS = 3_600_000
 
 const Env = z.object({
+  /** a timed wait behind open Issues this long reaches Needs you */
   FACTORY_LONG_WAIT_MS: z.coerce.number().int().min(60_000).default(DEFAULT_LONG_WAIT_MS),
 })
 

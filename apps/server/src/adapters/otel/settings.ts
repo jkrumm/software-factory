@@ -6,6 +6,7 @@ const Env = z.object({
   FACTORY_OTEL_ENDPOINT: z.string().url().optional(),
   /** the ingest key, sent as the `authorization` header; a ref of `.env.server.tpl` */
   FACTORY_OTEL_KEY: z.string().min(1).optional(),
+  /** how often the metrics export runs, at least 5 s */
   FACTORY_OTEL_EVERY_MS: z.coerce.number().int().min(5_000).default(60_000),
 })
 
