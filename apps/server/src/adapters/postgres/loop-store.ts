@@ -390,13 +390,6 @@ export function postgresLoopStore(tx: SQL): LoopStore {
       return rows.length
     },
 
-    async ciLedgerRepos(since) {
-      const rows: unknown[] = await tx`
-        SELECT DISTINCT i.repo FROM factory.issue_events e JOIN factory.issues i ON i.id = e.issue_id
-        WHERE e.at >= ${since} ORDER BY i.repo`
-      return rows.map((raw) => z.object({ repo: z.string() }).parse(raw).repo)
-    },
-
     async newestCiRun(repo) {
       const [row] = await tx`SELECT max(finished_at) AS at FROM factory.ci_runs WHERE repo = ${repo}`
       return z.object({ at: z.date().nullable() }).parse(row).at
