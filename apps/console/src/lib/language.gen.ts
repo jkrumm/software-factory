@@ -123,7 +123,7 @@ export const LANGUAGE = {
   pause:
     'The owner\'s verb for a started Issue that is to wait: the paused wait, which only his word (factory issue note <id> --wake) or the time he gave (factory issue pause <id> --reason "..." [--until <iso>]) ends. The steward, the Judge and the lead leave it alone; the lead hears it once. A stall or a timer is replaced by it; a dependency, a review of its pull request or a person\'s wait is not, and an Issue no lead has started cannot be paused. Shown as Paused, on you, and not as a need. The event is paused',
   paused:
-    "A lead began it and it waits on a named wait, no session running. Its split: on you (a Decision, a review, an Errand), on a timer, on another Issue (a dependency, or someone else's review of its pull request), stalled (the account's window, a lead that stopped without reporting, a block, a lost lead, a regression)",
+    "A lead began it and it waits on a named wait, no session running. Its split: on you (a Decision, a review, an Errand, or your own pause), on a timer, on another Issue (a dependency, or someone else's review of its pull request), stalled (the account's window, a lead that stopped without reporting, a block, a lost lead, a regression)",
   plan: "A project's docs/plan.yaml: rows not yet filed (the format: docs/plan.md). A row may target another repo",
   planned:
     'A plan row not yet filed as an Issue: due to be filed, after another Issue, or not before a date. Never an Issue, so never part of the five',

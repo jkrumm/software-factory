@@ -155,7 +155,7 @@ hand-filed Issue; `factory project show` lists the project's `lanes` (leads and 
 - **An undeclared lane is unlimited** within `leads`. A row naming a lane the project does not declare is a plan
   **warning**, not a broken plan; the lane then limits nothing (a typo is visible in `factory project show`).
 - **What counts as running:** a lead holding its claim, and a resumed lead working without one. A lead waiting on a
-  Decision, a review, an Errand, a timer or a dependency has given its claim back and its lane place with it, so another
+  Decision, a review, an Errand, a timer, a dependency or the owner's pause has given its claim back and its lane place with it, so another
   lead of the lane may start meanwhile; when the wait ends the lead takes its lane place back before it is told, and
   waits (like for a repo claim) while the lane is full.
 - **A fix is never held by a lane** (an `incident` Issue has its own place beyond `leads`; production is red).
