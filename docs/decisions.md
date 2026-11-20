@@ -391,7 +391,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   friction, selfwatch and owner-filed Issues keep NL38's rule; 20 and 3 are floors of this Issue, not measurements.
 - **NL41 A block and a full window are friction by rate, not by count (Issue 2187, 2026-11-18).** `stall:blocked` (48) and
   `stall:wall` (21) filed every day on a bare count of 2, one week after `issue_1818` traced the same pattern. Read from
-  `factory read waits --days 7`: 48 blocks had a median of 129 s (p90 144 s), 33 ended by the steward and 15 by the factory
+  the wait census of that week (a read since retired): 48 blocks had a median of 129 s (p90 144 s), 33 ended by the steward and 15 by the factory
   (a timer); 21 full windows had a median of 126 s, 20 ended by the steward moving the lead to an open account; no person ended
   either. 24 of the 48 blocks were re-blocks of 5 Issues that the steward holds on a timer or the owner paused (`issue_867` 8,
   `issue_1067` 6, `issue_1285` 4, `issue_1400` 3, `issue_1300` 3): the designed valve, each wake a new count. The other 24

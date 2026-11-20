@@ -7,7 +7,6 @@ import { percentile, per, windowOf } from './stats.ts'
 import { catalogFields, type CatalogField } from './kpi-fields.ts'
 import { flowKpis, regressionParts } from './kpis-flow.ts'
 import { costBySeat, USAGE_TIMEOUT_MS, type SeatCost } from './usage.ts'
-import { readAttemptSeats, readInferredEdges } from './kpis-attempts.ts'
 import { readReviewerKpis } from './kpis-reviewers.ts'
 import { readSeatKpis } from './kpis-seats.ts'
 
@@ -844,19 +843,15 @@ export async function readKpis(
     window: { from: last.from.toISOString(), to: last.to.toISOString() },
     windows: windows.map((w) => ({ from: w.from.toISOString(), to: w.to.toISOString() })),
     kpis,
-    seats: {
-      ...(await readSeatKpis(sql, last, {
-        now: options.now,
-        cost: (issues) => costOfIssues(sql, issues, options.usageTimeoutMs),
-        ...(options.usageTimeoutMs === undefined ? {} : { usageTimeoutMs: options.usageTimeoutMs }),
-      })),
-      attemptSeats: await readAttemptSeats(sql, last, { timeoutMs: options.usageTimeoutMs }),
-    },
+    seats: await readSeatKpis(sql, last, {
+      now: options.now,
+      cost: (issues) => costOfIssues(sql, issues, options.usageTimeoutMs),
+      ...(options.usageTimeoutMs === undefined ? {} : { usageTimeoutMs: options.usageTimeoutMs }),
+    }),
     reviewers: await readReviewerKpis(sql, last, {
       now: options.now,
       table: { cheap: options.reviewerRows?.cheap ?? null, reviewer: options.reviewerRows?.reviewer ?? null },
       cost: (issues) => reviewerCostOfIssues(sql, issues, options.usageTimeoutMs),
     }),
-    edges: await readInferredEdges(sql, last),
   }
 }

@@ -191,7 +191,7 @@ describe('as the owner', () => {
   })
 
   test('asks are Decisions, the human queue is the Errands', async () => {
-    const { body } = await json('/v1/asks')
+    const { body } = await json('/v1/overview')
     expect(body.asks).toHaveLength(1)
     expect(body.asks[0]).toMatchObject({
       id: 'decision_1',
@@ -270,7 +270,7 @@ describe('as the owner', () => {
 
 describe('as the read token', () => {
   test('a work repo loses its words everywhere, the other repo keeps them', async () => {
-    for (const path of ['/v1/issues', '/v1/issues/2', '/v1/sessions', '/v1/asks', '/v1/overview']) {
+    for (const path of ['/v1/issues', '/v1/issues/2', '/v1/sessions', '/v1/overview']) {
       const text = JSON.stringify((await json(path, READER)).body)
       expect(text).not.toContain('SECRET')
       expect(text).not.toContain('/src/chat')
@@ -283,7 +283,7 @@ describe('as the read token', () => {
       state: 'waiting',
     })
     expect(list.find((c: { id: number }) => c.id === 1).title).toBe('The login page crashes on submit')
-    const asks = (await json('/v1/asks', READER)).body.asks
+    const asks = (await json('/v1/overview', READER)).body.asks
     expect(asks[0].id).toMatch(/^redacted:/)
     expect(asks[0]).toMatchObject({ issue: 2, kind: 'decision' })
   })
@@ -328,24 +328,7 @@ describe('as the read token', () => {
   })
 })
 
-describe('changes', () => {
-  test('without since: no changes and the current cursor; with 0.0: every change; garbage: 410', async () => {
-    const none = await json('/v1/changes')
-    expect(none.body.changes).toEqual([])
-    const all = await json('/v1/changes?since=0.0')
-    expect(all.body.changes.length).toBeGreaterThan(5)
-    expect(all.body.cursor).toBe(all.body.changes.at(-1).cursor)
-    expect(none.body.cursor).toBe(all.body.cursor)
-    const again = await json(`/v1/changes?since=${all.body.cursor}`)
-    expect(again.body).toEqual({ changes: [], cursor: all.body.cursor })
-    const only = await json('/v1/changes?since=0.0&issue=2')
-    expect(only.body.changes.every((c: { issue: number }) => c.issue === 2)).toBe(true)
-    const garbage = await json('/v1/changes?since=garbage')
-    expect(garbage.status).toBe(410)
-    expect(ErrorBody.parse(garbage.body).code).toBe('cursor_gone')
-    expect((await json('/v1/changes?since=1.99999')).status).toBe(410)
-  })
-
+describe('the stream', () => {
   test('the stream is SSE: hello first, a change after it, 410 for a bad cursor, hidden from the document', async () => {
     const response = await call('/v1/stream')
     expect(response.status).toBe(200)
@@ -371,6 +354,7 @@ describe('changes', () => {
     await reader.cancel()
 
     expect((await call('/v1/stream?since=garbage')).status).toBe(410)
+    expect((await call('/v1/stream?since=1.99999')).status).toBe(410)
     expect((await call('/v1/stream?since=0.0', READER)).status).toBe(200)
   })
 })

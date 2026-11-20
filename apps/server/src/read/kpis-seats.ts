@@ -19,7 +19,7 @@ import {
   TRIPWIRE_TARGET_WATCHES,
   tripwireFrom,
 } from '@software-factory/contract'
-import { costOfAttempts, keyOf } from './kpis-attempts.ts'
+import { boundedRead } from './bounded.ts'
 import { percentile, per, windowOf } from './stats.ts'
 import { USAGE_TIMEOUT_MS } from './usage.ts'
 
@@ -332,7 +332,7 @@ export async function readSeatKpis(
   sql: SQL,
   w: Window,
   options: { now: Date; cost: CostOf; usageTimeoutMs?: number },
-): Promise<Omit<SeatKpis, 'attemptSeats'>> {
+): Promise<SeatKpis> {
   const usageTimeoutMs = options.usageTimeoutMs ?? USAGE_TIMEOUT_MS
   const facts = await factsOf(sql, w, options.now)
   const rows: SeatKpiRow[] = []
@@ -353,5 +353,69 @@ export async function readSeatKpis(
     movedUpShare: light ? per(light.movedUp, light.issues) : null,
     delivery: { ...delivery, definitions: { ...SEAT_DELIVERY_DEFINITIONS } },
     tripwire: await tripwireOf(sql, { now: options.now, cost: options.cost, usageTimeoutMs }),
+  }
+}
+
+const Claude = z.object({ issue_id: z.string(), attempt: z.coerce.number().int(), claude: z.string() })
+const Session = z.object({ id: z.union([z.string(), z.number(), z.bigint()]), claude: z.string() })
+const Spend = z.object({ id: z.coerce.string(), cost: z.coerce.number() })
+
+export const keyOf = (issue: string, attempt: number): string => `${issue}#${attempt}`
+
+/**
+ * Dollars per attempt, by the Claude sessions its hooks reported (with their subagents, `<session>:<agent>`), priced from
+ * the `usage` schema another component owns in this database. A session usage tagged with an Issue's number but no hook
+ * ever reported belongs to no attempt and is not counted here. Null (never zero) when the schema cannot be read, the role
+ * may not read it or a statement ran past the timeout.
+ */
+export async function costOfAttempts(
+  sql: SQL,
+  attempts: readonly { issue_id: string; attempt: number }[],
+  timeoutMs: number,
+): Promise<Map<string, number> | null> {
+  if (attempts.length === 0) return new Map()
+  const wanted = new Set(attempts.map((a) => keyOf(a.issue_id, a.attempt)))
+  try {
+    return await boundedRead(sql, timeoutMs, async (tx) => {
+      const [row] =
+        await tx`SELECT to_regclass('usage.sessions') IS NOT NULL AND to_regclass('usage.records_unique') IS NOT NULL AS present`
+      if (!z.object({ present: z.boolean() }).parse(row).present) return null
+      const issues = [...new Set(attempts.map((a) => a.issue_id))]
+      const reported = z.array(Claude).parse(
+        await tx`
+          SELECT DISTINCT issue_id, attempt, payload->>'claudeSessionId' AS claude FROM factory.lead_hook_events
+          WHERE issue_id = ANY(${tx.array(issues, 'TEXT')}) AND payload->>'claudeSessionId' IS NOT NULL`,
+      )
+      const attemptOf = new Map<string, string>()
+      for (const r of reported) {
+        const key = keyOf(r.issue_id, r.attempt)
+        if (wanted.has(key) && !attemptOf.has(r.claude)) attemptOf.set(r.claude, key)
+      }
+      const cost = new Map<string, number>([...wanted].map((key) => [key, 0]))
+      if (attemptOf.size === 0) return cost
+      const sessions = z.array(Session).parse(
+        await tx`
+          SELECT s.id, split_part(s.source_session_id, ':', 1) AS claude FROM usage.sessions s
+          WHERE split_part(s.source_session_id, ':', 1) = ANY(${tx.array([...attemptOf.keys()], 'TEXT')})`,
+      )
+      if (sessions.length === 0) return cost
+      const owner = new Map(sessions.map((s) => [String(s.id), attemptOf.get(s.claude)]))
+      const spend = z.array(Spend).parse(
+        await tx`
+          SELECT r.session_id AS id, sum(r.cost_usd)::float8 AS cost FROM usage.records_unique r
+          WHERE r.session_id = ANY(${tx.array(
+            sessions.map((s) => s.id),
+            'BIGINT',
+          )})
+          GROUP BY r.session_id`,
+      )
+      for (const s of spend) {
+        const key = owner.get(s.id)
+        if (key !== undefined) cost.set(key, (cost.get(key) ?? 0) + s.cost)
+      }
+      return cost
+    })
+  } catch {
+    return null
   }
 }

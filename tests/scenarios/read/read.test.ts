@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { ChangeList, ErrorBody, ReadIssueCards, ReadIssueDetail, ReadOverview } from '@software-factory/contract'
+import { ErrorBody, ReadIssueCards, ReadIssueDetail, ReadOverview } from '@software-factory/contract'
 import { bearer, type ServerProcess, startWorld, type World } from '../harness.ts'
 import { type Estate, makeEstate, startIntakeServer, until } from '../intake/support.ts'
 import { patient } from '../patience.ts'
@@ -103,6 +103,22 @@ test('an Issue filed through the real route shows on the cards, the detail and t
   expect(overview.issues.map((c) => c.ref)).toContain(ack.issue)
 }, 30_000)
 
+/** The cursor "now": the id of the hello frame of a stream with no `since`. */
+async function headCursor(): Promise<string> {
+  const head = frames(await get('/v1/stream'))
+  const hello = await head.until((frame) => frame.event === 'hello')
+  await head.close()
+  return hello.id ?? ''
+}
+
+/** The change frames after `since`, read through the stream up to the frame with id `until`; `issue` keeps one Issue. */
+async function changesSince(since: string, until: string, issue?: number): Promise<Frame[]> {
+  const stream = frames(await get(`/v1/stream?since=${since}${issue === undefined ? '' : `&issue=${issue}`}`))
+  await stream.until((frame) => frame.id === until)
+  await stream.close()
+  return stream.seen.filter((frame) => frame.event !== 'hello')
+}
+
 test('the stream resumes from a cursor with nothing lost and nothing doubled', async () => {
   // hello: the cursor "now"; then file work and follow it
   const first = frames(await get('/v1/stream'))
@@ -128,9 +144,9 @@ test('the stream resumes from a cursor with nothing lost and nothing doubled', a
     const list = ReadIssueCards.parse(await (await get('/v1/issues')).json())
     return list.issues.length >= 3
   })
-  const all = ChangeList.parse(await (await get(`/v1/changes?since=${start}&limit=500`)).json())
-  const lastCursor = all.cursor
-  expect(all.changes.length).toBeGreaterThan(3)
+  const lastCursor = await headCursor()
+  const all = await changesSince(start ?? '', lastCursor)
+  expect(all.length).toBeGreaterThan(3)
 
   const second = frames(await get('/v1/stream', 'owner', { 'last-event-id': lastSeen ?? '' }))
   await second.until((frame) => frame.id === lastCursor)
@@ -140,19 +156,21 @@ test('the stream resumes from a cursor with nothing lost and nothing doubled', a
     ...first.seen.filter((frame) => frame.event !== 'hello').map((frame) => frame.id),
     ...second.seen.filter((frame) => frame.event !== 'hello').map((frame) => frame.id),
   ]
-  expect(ids).toEqual(all.changes.map((change) => change.cursor))
+  expect(ids).toEqual(all.map((frame) => frame.id))
   expect(new Set(ids).size).toBe(ids.length)
   expect(second.seen[0]).toMatchObject({ event: 'hello', id: lastSeen })
 }, 60_000)
 
 test('the issue filter keeps one Issue and a bad or future cursor is 410', async () => {
-  const all = ChangeList.parse(await (await get('/v1/changes?since=0.0&limit=500')).json())
-  const issue = all.changes.find((change) => change.issue !== null)?.issue ?? 0
-  const only = ChangeList.parse(await (await get(`/v1/changes?since=0.0&issue=${issue}`)).json())
-  expect(only.changes.length).toBeGreaterThan(0)
-  expect(only.changes.every((change) => change.issue === issue)).toBe(true)
+  const all = await changesSince('0.0', await headCursor())
+  const issueOf = (frame: Frame) => (JSON.parse(frame.data) as { issue: number | null }).issue
+  const issue = all.map(issueOf).find((n) => n !== null) ?? 0
+  const last = all.findLast((frame) => issueOf(frame) === issue)
+  const only = await changesSince('0.0', last?.id ?? '', issue)
+  expect(only.length).toBeGreaterThan(0)
+  expect(only.every((frame) => issueOf(frame) === issue)).toBe(true)
 
-  for (const path of ['/v1/stream?since=garbage', '/v1/changes?since=garbage', '/v1/stream?since=1.99999999']) {
+  for (const path of ['/v1/stream?since=garbage', '/v1/stream?since=1.99999999']) {
     const response = await get(path)
     expect(response.status).toBe(410)
     expect(ErrorBody.parse(await response.json()).code).toBe('cursor_gone')

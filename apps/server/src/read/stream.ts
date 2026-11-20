@@ -20,7 +20,7 @@ import type { SQL } from 'bun'
  * transactions are short, and the advisory process lock is a session lock, not a transaction).
  *
  * A cursor that does not parse, or lies beyond every stored row (`seq` past the largest, `txid` past the next transaction
- * id: another database, a reset), is `CursorGone`: the client starts again from `GET /v1/changes` without `since`.
+ * id: another database, a reset), is `CursorGone`: the client starts again from `GET /v1/stream` without `since`.
  */
 
 export interface Cursor {

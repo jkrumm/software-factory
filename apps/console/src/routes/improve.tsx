@@ -71,8 +71,6 @@ import {
   perDayWords,
   SEAT_LABEL,
   seatCells,
-  attemptSeatCells,
-  edgeWords,
   shortDate,
   type FrictionRow,
   MEANING,
@@ -1048,23 +1046,6 @@ const SEAT_COLUMNS = [
   { key: 'movedUp', label: 'Moved up' },
 ] as const
 
-const ATTEMPT_SEAT_COLUMNS = [
-  { key: 'attempts', label: 'Attempts' },
-  { key: 'issues', label: 'Issues' },
-  { key: 'firstPass', label: 'First verification pass' },
-  { key: 'cost', label: 'Cost per Issue' },
-] as const
-
-function EdgeSection({ model }: { model: KpiModel }) {
-  return (
-    <div data-shot="improve-edges">
-      <Section title="Inferred chain edges" aside="Edges the factory added, created in the window">
-        <p className="text-sm text-muted-foreground">{edgeWords(model.edges)}</p>
-      </Section>
-    </div>
-  )
-}
-
 const REVIEWER_COLUMNS = [
   { key: 'seat', label: 'Seat' },
   { key: 'reviews', label: 'Reviews' },
@@ -1127,7 +1108,7 @@ function ReviewerSection({ model }: { model: KpiModel }) {
 }
 
 function SeatSection({ model }: { model: KpiModel }) {
-  const { rows, attemptSeats, tripwire, delivery } = model.seats
+  const { rows, tripwire, delivery } = model.seats
   return (
     <div data-shot="improve-seats">
       <Section title="By seat" aside="Issues by the seat their first lead ran on">
@@ -1206,54 +1187,6 @@ function SeatSection({ model }: { model: KpiModel }) {
           </div>
         </Section>
       </div>
-      <div data-shot="improve-attempt-seats" className="mt-6">
-        <Section title="By attempt seat" aside="Every attempt by the tier and effort it started on">
-          <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-            <table className="w-full text-sm">
-              <caption className="sr-only">
-                Attempts that started in the window, by the tier and effort they ran on
-              </caption>
-              <thead className="text-left text-xs text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-2 font-medium">
-                    Seat
-                  </th>
-                  {ATTEMPT_SEAT_COLUMNS.map((column) => (
-                    <th key={column.key} scope="col" className="px-4 py-2 text-right font-medium">
-                      {column.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {attemptSeats.length === 0 ? (
-                  <tr className="border-t">
-                    <td colSpan={ATTEMPT_SEAT_COLUMNS.length + 1} className="px-4 py-2 text-muted-foreground">
-                      No attempt started in this window
-                    </td>
-                  </tr>
-                ) : (
-                  attemptSeats.map((row) => {
-                    const cells = attemptSeatCells(row)
-                    return (
-                      <tr key={cells.seat} className="border-t">
-                        <th scope="row" className="px-4 py-2 text-left font-medium">
-                          {cells.seat}
-                        </th>
-                        {ATTEMPT_SEAT_COLUMNS.map((column) => (
-                          <td key={column.key} className="px-4 py-2 text-right tabular-nums">
-                            {cells[column.key]}
-                          </td>
-                        ))}
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-      </div>
     </div>
   )
 }
@@ -1292,7 +1225,6 @@ function Improve() {
           <KpiSections model={model} />
           <SeatSection model={model} />
           <ReviewerSection model={model} />
-          <EdgeSection model={model} />
           <FixBand model={fixes.data} pending={fixes.isPending} />
           <FrictionSection model={friction.data} pending={friction.isPending} />
           <LoopYieldSection model={yields.data} />

@@ -51,14 +51,14 @@ test('routeTimer: a request still unanswered counts at its age, a stream never c
       await held
       return 'stream'
     })
-    .get('/v1/changes', async () => {
+    .get('/v1/feed', async () => {
       await held
       return 'sse'
     })
   const calls = [
     app.handle(new Request('http://localhost/v1/slow')),
     app.handle(new Request('http://localhost/v1/stream')),
-    app.handle(new Request('http://localhost/v1/changes', { headers: { accept: 'text/event-stream' } })),
+    app.handle(new Request('http://localhost/v1/feed', { headers: { accept: 'text/event-stream' } })),
   ]
   await Bun.sleep(20)
   clock = 4_000
