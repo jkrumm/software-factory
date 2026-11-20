@@ -24,6 +24,7 @@ import {
   waitSubjectOf,
 } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
+import { queuedHours } from './queue-time.ts'
 import { REPO_OF_STEP } from './retro-build.ts'
 
 const DAY_MS = 86_400_000
@@ -285,14 +286,32 @@ export async function readWindowFacts(
       FROM factory.host_process_samples WHERE at >= ${from} AND at < ${to}
       GROUP BY pid, name, class, repo HAVING max(footprint_mib) - min(footprint_mib) >= ${PROCESS_GROWTH_MIB}`
     // the waits a lead can cut, by interval kind, project and the lane the Issue was filed in, clipped to the window
-    const waited: unknown[] = await tx`
-      SELECT q.kind, q.project, coalesce(f.payload->>'lane', '') AS lane,
-        string_agg(DISTINCT q.issue_id, ',') AS issue_ids,
-        sum(extract(epoch FROM least(coalesce(q.to_at, ${to}), ${to}) - greatest(q.from_at, ${from})) / 60.0)::float8 AS minutes
-      FROM factory.queue_intervals q
-      LEFT JOIN factory.issue_events f ON f.issue_id = q.issue_id AND f.kind = 'filed' AND f.version = 1
-      WHERE q.kind IN ${tx(Object.values(WAIT_SUBJECTS).flat())} AND q.from_at < ${to} AND coalesce(q.to_at, ${to}) > ${from}
-      GROUP BY q.kind, q.project, coalesce(f.payload->>'lane', '')`
+    const waitKinds = new Set<string>(Object.values(WAIT_SUBJECTS).flat())
+    const spans = (await queuedHours(tx, { from, to })).filter((s) => waitKinds.has(s.kind))
+    const queuedIssues = [...new Set(spans.map((s) => s.issue))]
+    const laneRows: unknown[] =
+      queuedIssues.length === 0
+        ? []
+        : await tx`
+      SELECT issue_id, coalesce(payload->>'lane', '') AS lane FROM factory.issue_events
+      WHERE kind = 'filed' AND version = 1 AND issue_id IN ${tx(queuedIssues)}`
+    const laneOf = new Map(
+      laneRows
+        .map((raw) => z.object({ issue_id: z.string(), lane: z.string() }).parse(raw))
+        .map((r) => [r.issue_id, r.lane]),
+    )
+    const waited = [...Map.groupBy(spans, (s) => JSON.stringify([s.kind, s.project, laneOf.get(s.issue) ?? '']))].map(
+      ([key, rows]) => {
+        const [kind, project, lane] = z.tuple([z.string(), z.string(), z.string()]).parse(JSON.parse(key))
+        return {
+          kind,
+          project,
+          lane,
+          issue_ids: [...new Set(rows.map((s) => s.issue))].join(','),
+          minutes: rows.reduce((sum, s) => sum + s.hours * 60, 0),
+        }
+      },
+    )
 
     const tenants = await readTenantFacts(tx, from, to, options.baseline, epoch)
     const projects = new Set([...runs.keys(), ...closed.keys()])
@@ -333,14 +352,7 @@ export async function readWindowFacts(
           minutes: r.minutes,
         }
       }),
-      waits: waitFacts(
-        waited.map((raw) =>
-          z
-            .object({ kind: z.string(), project: z.string(), lane: z.string(), issue_ids: z.string(), minutes: num })
-            .parse(raw),
-        ),
-        options.shapes ?? new Map(),
-      ),
+      waits: waitFacts(waited, options.shapes ?? new Map()),
       tenants,
     }
   })

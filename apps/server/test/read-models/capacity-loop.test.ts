@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { CapacityLoopModel } from '@software-factory/contract'
+import { CapacityLoopModel, KpiModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { readCapacityLoop } from '../../src/read/capacity-loop.ts'
+import { readKpis } from '../../src/read/kpis.ts'
+import { CAPACITY_KINDS } from '../../src/read/queue-time.ts'
 import { redactCapacityLoop } from '../../src/read/throughput-redact.ts'
 
 /**
@@ -193,6 +195,17 @@ function expectDays(got: Days, want: Days, digits: number) {
 }
 
 describe('GET /v1/capacity-loop figures', () => {
+  test('the queue time held by capacity is one number in the KPI part and in the capacity loop', async () => {
+    const loop = CapacityLoopModel.parse(await readCapacityLoop(sql, { now: NOW, days: DAYS, constants }))
+    const kpis = KpiModel.parse(await readKpis(sql, { now: NOW, days: DAYS }))
+    const part = kpis.kpis.find((k) => k.key === 'queue_wait_p90')?.parts.find((p) => p.key === 'capacity')
+    const heldByCapacity = loop.queueByReason
+      .filter((r) => CAPACITY_KINDS.includes(r.kind))
+      .reduce((sum, r) => sum + r.queuedHours, 0)
+    expect(heldByCapacity).toBeGreaterThan(0)
+    expect(part?.value).toBeCloseTo(heldByCapacity * 3_600_000, 3)
+  })
+
   test('every figure equals plain SQL over the same rows', async () => {
     const model = CapacityLoopModel.parse(await readCapacityLoop(sql, { now: NOW, days: DAYS, constants }))
 

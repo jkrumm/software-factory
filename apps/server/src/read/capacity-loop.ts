@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { CapacityLoopModel } from '@software-factory/contract'
 import { OWNED_ELSEWHERE_KINDS } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
+import { queuedHours } from './queue-time.ts'
 import { countedFrom, epochNote } from '../kernel/epoch.ts'
 import { EDGE_NEED_DAYS, notNeededShare, stopsEdges } from '../kernel/edge-need.ts'
 import { readEdgeNeed } from './edge-need.ts'
@@ -114,30 +115,23 @@ export async function readCapacityLoop(
     }
 
     // what the queue waited for: intervals clipped to the window, and the idle minutes split among the kinds queued in them
-    const queuedRows: unknown[] = await tx`
-      SELECT kind, count(DISTINCT issue_id) AS issues,
-        sum(extract(epoch FROM least(coalesce(to_at, ${w.to}), ${w.to}) - greatest(from_at, ${w.from})))::float8 / 3600 AS hours
-      FROM factory.queue_intervals
-      WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from} GROUP BY kind`
-    const repoQueuedRows: unknown[] = await tx`
-      SELECT kind, project AS repo, count(DISTINCT issue_id) AS issues,
-        sum(extract(epoch FROM least(coalesce(to_at, ${w.to}), ${w.to}) - greatest(from_at, ${w.from})))::float8 / 3600 AS hours
-      FROM factory.queue_intervals
-      WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from} GROUP BY kind, project`
-    const RepoQueued = z.object({
-      kind: z.string(),
-      repo: z.string(),
-      issues: z.coerce.number().int(),
-      hours: z.coerce.number().nullable(),
-    })
+    const queued = await queuedHours(tx, w)
+    const queuedByKind = new Map(
+      [...Map.groupBy(queued, (s) => s.kind)].map(([kind, spans]) => [
+        kind,
+        { issues: new Set(spans.map((s) => s.issue)).size, hours: spans.reduce((sum, s) => sum + s.hours, 0) },
+      ]),
+    )
     const reposByKind = new Map<string, Array<{ repo: string; queuedHours: number; issues: number }>>()
-    for (const raw of repoQueuedRows) {
-      const r = RepoQueued.parse(raw)
-      reposByKind.set(r.kind, [
-        ...(reposByKind.get(r.kind) ?? []),
-        { repo: r.repo, queuedHours: r.hours ?? 0, issues: r.issues },
-      ])
-    }
+    for (const [kind, spans] of Map.groupBy(queued, (s) => s.kind))
+      reposByKind.set(
+        kind,
+        [...Map.groupBy(spans, (s) => s.project)].map(([repo, rows]) => ({
+          repo,
+          queuedHours: rows.reduce((sum, s) => sum + s.hours, 0),
+          issues: new Set(rows.map((s) => s.issue)).size,
+        })),
+      )
     // The idle samples are read twice from the table (not from one CTE): a CTE used twice is materialized, and the join from
     // each interval to the samples it covers (the primary key's range scan) is then a nested loop over every pair, 7,500 samples
     // by 19,000 intervals took 6 s (the route's p95 of 2026-11-18). The samples with no interval left-join back as 'unrecorded'.
@@ -161,14 +155,12 @@ export async function readCapacityLoop(
           AND h.at >= ${w.from} AND h.at < ${w.to})
       SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, kind, sum(seats::float8 / 60 / cardinality(kinds)) AS hours
       FROM kinds, unnest(kinds) AS kind GROUP BY 1, 2`
-    const Queued = z.object({ kind: z.string(), issues: z.coerce.number().int(), hours: z.coerce.number().nullable() })
     const Idle = z.object({ day: z.string(), kind: z.string(), hours: z.coerce.number().nullable() })
     const idleParsed = idleRows.map((raw) => Idle.parse(raw))
     const idleByKind = new Map<string, number>()
     for (const r of idleParsed) idleByKind.set(r.kind, (idleByKind.get(r.kind) ?? 0) + (r.hours ?? 0))
     // the share behind a drained queue (an owner or orchestrator state, not capacity going unused), by the same split
     const drainRows = idleParsed.filter((r) => r.kind === DRAIN_KIND).map((r) => ({ day: r.day, v: r.hours ?? 0 }))
-    const queuedByKind = new Map(queuedRows.map((raw) => Queued.parse(raw)).map((r) => [r.kind, r]))
     const queueByReason = [...new Set([...queuedByKind.keys(), ...idleByKind.keys()])]
       .map((kind) => ({
         kind,

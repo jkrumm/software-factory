@@ -5,6 +5,7 @@ import { AUTO_RUN_NOTE_PATTERN } from '../kernel/auto-run.ts'
 import { boundedRead } from './bounded.ts'
 import { MIN_SAMPLES, percentile, per, shareOf, windowOf } from './stats.ts'
 import { catalogFields, type CatalogField } from './kpi-fields.ts'
+import { QUEUE_GROUPS, hoursByKind, queuedHours } from './queue-time.ts'
 import { flowFigures, regressionParts } from './kpis-flow.ts'
 import { costBySeat, USAGE_TIMEOUT_MS, type SeatCost } from './usage.ts'
 
@@ -437,27 +438,13 @@ function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
   return k
 }
 
-/** Queue reasons (`queue_intervals.kind`) in the four groups the owner reads, and the rest. */
-const QUEUE_GROUPS: ReadonlyArray<readonly [key: string, label: string, kinds: readonly string[]]> = [
-  ['capacity', 'Capacity', ['memory', 'memory_fit', 'disk', 'claim', 'lane', 'window', 'cap', 'load', 'boot']],
-  ['chain', 'An after edge', ['chain']],
-  ['drain', 'Queue draining', ['drain']],
-  ['production_red', 'Production red', ['line']],
-]
-
-const QueueHours = z.object({ kind: z.string(), hours: z.coerce.number().nullable() })
-
 /**
  * Queued time that fell in the window, in ms, by the group of its reason. The groups are the owner's four (capacity, an
  * after edge, a draining queue, production red); everything else (a Spec at the owner, another Issue finalizing, no reason
  * recorded) is `other`. Empty when nothing was queued.
  */
 async function queueWaitParts(sql: SQL, w: Window): Promise<Kpi['parts']> {
-  const rows: unknown[] = await sql`
-    SELECT kind, sum(extract(epoch FROM least(coalesce(to_at, ${w.to}), ${w.to}) - greatest(from_at, ${w.from})))::float8 / 3600 AS hours
-    FROM factory.queue_intervals
-    WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from} GROUP BY kind`
-  const byKind = new Map(rows.map((raw) => QueueHours.parse(raw)).map((r) => [r.kind, r.hours ?? 0]))
+  const byKind = hoursByKind(await queuedHours(sql, w))
   const grouped = new Set(QUEUE_GROUPS.flatMap(([, , kinds]) => kinds))
   const other = [...byKind].filter(([kind]) => !grouped.has(kind)).reduce((sum, [, hours]) => sum + hours, 0)
   return [
