@@ -297,34 +297,17 @@ export type ChainModel = z.infer<typeof ChainModel>
 
 // -- kpis ----------------------------------------------------------------------------------------------------------------
 
+/**
+ * The seven KPIs: each has a target that the friction loop acts on (`THRESHOLDS.kpis` in `thresholds.ts`), or the reason it has
+ * none yet. Every other figure is a part of one of them, or a figure beside one (`Kpi.beside`), or lives on the page that shows it.
+ */
 export const KPI_KEYS = [
   'avoidable_touches',
-  'asks',
-  'recommendation_taken',
-  'specs_not_needed',
-  'verdict_changes_share',
-  'specs_per_100',
-  'owner_decisions_per_100',
-  'errands_reached_per_100',
-  'errands_no_secret_no_hands',
-  'errands_auto_run_share',
   'first_verification_passes',
-  'refusals',
+  'specs_not_needed',
+  'errands_reached_per_100',
   'cycle_p50',
   'queue_wait_p90',
-  'issues_closed_per_day',
-  'test_slot_wait_p50',
-  'minutes_over_ceiling',
-  'fix_commits',
-  'window_points',
-  'cost',
-  'queue_capacity_share',
-  'idle_capacity',
-  'working_share',
-  'dropped_after_lead',
-  'nudges_acted',
-  'errands_turned_away',
-  'first_watch_dwell_p50',
   'quota_at_reset',
 ] as const
 export type KpiKey = (typeof KPI_KEYS)[number]
@@ -342,7 +325,10 @@ export type KpiTargetValue = z.infer<typeof KpiTarget>
 export const KPI_DIRECTIONS = ['lower', 'higher', 'watch'] as const
 export type KpiDirection = (typeof KPI_DIRECTIONS)[number]
 
-/** How many consecutive windows of `days` days a Kpi's `history` holds, the current one last. */
+/**
+ * How many consecutive windows of `days` days a Kpi's `history` holds at most, the current one last. A window that ends before the
+ * counting epoch is not read, and one the epoch cuts starts at it, so the history holds fewer while the epoch is young.
+ */
 export const HISTORY_WINDOWS = 6
 
 export const KpiPoint = z
@@ -355,7 +341,7 @@ export const KpiPoint = z
 
 const KPI_UNITS = ['per_issue', 'per_100_issues', 'per_day', 'share', 'ms', 'usd', 'points', 'count'] as const
 
-/** One slice of a KPI that is a breakdown (queued time by reason, time by state): same unit as the KPI, never a target. */
+/** One slice of a KPI's breakdown (queued time by reason, touches by kind), or one figure read beside it; never a target. */
 export const KpiPart = z
   .strictObject({
     key: z.string(),
@@ -380,24 +366,20 @@ export const Kpi = z
     target: KpiTarget,
     /** the side that is good; the target's kind follows it (`at_most` for lower, `at_least` for higher, a trend for watch) */
     direction: z.enum(KPI_DIRECTIONS),
-    /** where the target came from, or why the KPI is watch only */
+    /** where the target came from, or why the KPI has none yet */
     targetSource: z.string(),
-    /** what is counted, in a short phrase */
-    numerator: z.string(),
-    /** what it is divided by */
-    denominator: z.string(),
-    /** what a person or a loop does differently when the figure moves */
-    decision: z.string(),
     /** false: there is no figure (it is not a zero): the factory has no data for it, or too few samples stand under it; `reason` says which */
     measured: z.boolean(),
     /** why `measured` is false, in words; null when it is true */
     reason: z.string().nullable(),
     /** exactly what was counted */
     definition: z.string(),
-    /** the breakdown of the current window, when the figure is one (empty otherwise); history keeps the headline only */
+    /** the breakdown of the current window, largest first where it is one (empty otherwise); history keeps the headline only */
     parts: z.array(KpiPart),
-    /** `HISTORY_WINDOWS` points, oldest first, one per window of `KpiModel.windows`; the last is `value` and `n` */
-    history: z.array(KpiPoint).length(HISTORY_WINDOWS),
+    /** figures of the current window read beside this one (once KPIs of their own); each keeps its own unit and key */
+    beside: z.array(KpiPart),
+    /** up to `HISTORY_WINDOWS` points, oldest first, one per window of `KpiModel.windows`; the last is `value` and `n` */
+    history: z.array(KpiPoint).min(1).max(HISTORY_WINDOWS),
   })
   .meta({ id: 'Kpi' })
 export type Kpi = z.infer<typeof Kpi>
@@ -631,16 +613,31 @@ export const KpiModel = z
     at,
     days: z.number().int(),
     window: z.strictObject({ from: at, to: at }),
-    /** the consecutive windows behind every `history`, oldest first; the last is `window` */
-    windows: z.array(z.strictObject({ from: at, to: at })).length(HISTORY_WINDOWS),
+    /** the consecutive windows behind every `history`, oldest first, none ending before the counting epoch; the last is `window` */
+    windows: z
+      .array(z.strictObject({ from: at, to: at }))
+      .min(1)
+      .max(HISTORY_WINDOWS),
+    /** the counting epoch when it cut the windows (the first starts at it); null when it cut none */
+    since: at.nullable(),
     kpis: z.array(Kpi),
+  })
+  .meta({ id: 'KpiModel' })
+export type KpiModel = z.infer<typeof KpiModel>
+
+/** The light-seat and cheap-reviewer gates' figures over the window: what their tripwires decide on. */
+export const SeatsModel = z
+  .strictObject({
+    at,
+    days: z.number().int(),
+    window: z.strictObject({ from: at, to: at }),
     /** the current window's Issues by the seat their first lead ran on */
     seats: SeatKpis,
     /** the reviewer seats side by side, and the tripwire that hands the cheap one every review */
     reviewers: ReviewerKpis,
   })
-  .meta({ id: 'KpiModel' })
-export type KpiModel = z.infer<typeof KpiModel>
+  .meta({ id: 'SeatsModel' })
+export type SeatsModel = z.infer<typeof SeatsModel>
 
 /** `?days=7`: a whole number of days, 1 to 90 (a query is text, so the number is read by the route). */
 export const DaysQuery = z.object({

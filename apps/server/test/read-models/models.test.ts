@@ -5,6 +5,7 @@ import {
   FlowTrendSeries,
   FrictionModel,
   HISTORY_WINDOWS,
+  KPI_KEYS,
   KpiModel,
   NeedsModel,
   openOfWork,
@@ -69,6 +70,9 @@ async function event(issueId: string, version: number | null, kind: string, at: 
 const filed = (id: string, repo: string, title: string, at: Date, origin = 'you') =>
   event(id, 1, 'filed', at, { payload: { repo, title, kind: 'feature', origin }, to: 'settling' })
 
+const usageBeside = (model: KpiModel, key: string) =>
+  model.kpis.find((k) => k.key === 'quota_at_reset')?.beside.find((p) => p.key === key)
+
 describe('the empty database', () => {
   test('every model answers with zero counts, never an error', async () => {
     const needs = NeedsModel.parse(needsModel(await readNeeds(sql, NOW), { redact: false }))
@@ -91,10 +95,10 @@ describe('the empty database', () => {
     expect(chain).toMatchObject({ nodes: [], edges: [], blocking: {} })
 
     const kpis = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-    expect(kpis.kpis.map((k) => k.key)).toHaveLength(28)
-    // a count per day is a real zero when nothing closed; every other figure has nothing to divide and is null
-    for (const kpi of kpis.kpis) expect(kpi.value).toBe(kpi.key === 'issues_closed_per_day' ? 0 : null)
-    expect(kpis.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, n: 0 })
+    expect(kpis.kpis.map((k) => k.key)).toEqual([...KPI_KEYS])
+    // every figure has nothing to divide and is null, and nothing stands beside it
+    for (const kpi of kpis.kpis) expect(kpi.value).toBeNull()
+    expect(kpis.kpis.find((k) => k.key === 'quota_at_reset')?.beside).toEqual([])
 
     const friction = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7 }))
     expect(friction.issues).toBe(0)
@@ -455,20 +459,18 @@ describe('the fixture', () => {
     const by = Object.fromEntries(model.kpis.map((k) => [k.key, k]))
     // nine Issues were filed in the window
     expect(by.avoidable_touches).toMatchObject({ n: 9, count: 3, value: 3 / 9, measured: true })
-    expect(by.asks).toMatchObject({ n: 9, count: 3 })
-    // two samples are under the floor of three: a share of two is a coin, so there is no figure, and it says why
+    const beside = (kpi: string, key: string) => by[kpi]?.beside.find((p) => p.key === key)
+    expect(beside('avoidable_touches', 'asks')).toMatchObject({ value: 3 / 9, unit: 'per_issue' })
+    // no loop filed any of the nine: nothing is left out of the rate
+    expect(beside('avoidable_touches', 'loop_filed')).toMatchObject({ value: 0, unit: 'count' })
+    // two samples are under the floor of three: a share of two is a coin, so it is not shown beside the touches
     // (the owner's two answers were 'pino' to the recommendation 'Use pino': neither names it as an option label)
-    expect(by.recommendation_taken).toMatchObject({ n: 2, count: 0, value: null, measured: false })
-    expect(by.recommendation_taken?.reason).toBe('Only 2 counted in the window; at least 3 are needed for a figure')
+    expect(beside('avoidable_touches', 'recommendation_taken')).toBeUndefined()
     expect(by.first_verification_passes).toMatchObject({ n: 2, count: 1, value: null, measured: false })
-    expect(by.refusals).toMatchObject({ n: 9, count: 2 })
     expect(by.cycle_p50).toMatchObject({ n: 2, value: null, measured: false })
     expect(by.queue_wait_p90).toMatchObject({ n: 7, value: 7_200_000 })
-    expect(by.fix_commits).toMatchObject({ measured: false, value: null, n: 0 })
-    expect(by.fix_commits?.reason).toContain('No fix commit is stored yet')
-    expect(by.cost).toMatchObject({ measured: false, value: null })
-    expect(by.cost?.reason).toBe('The usage schema is not in this database')
-    expect(by.window_points).toMatchObject({ measured: false, value: null })
+    // the usage schema is absent: no dollars and no window points beside the quota
+    expect(by.quota_at_reset?.beside).toEqual([])
     // no KPI that has no figure is a zero, and every one without a figure says why
     for (const kpi of model.kpis) {
       if (kpi.measured) expect(kpi.reason).toBeNull()
@@ -480,7 +482,7 @@ describe('the fixture', () => {
     // a window that starts after the fixture sees none of it
     const later = new Date(NOW.getTime() + 10 * 24 * 3_600_000)
     const narrow = KpiModel.parse(await readKpis(sql, { now: later, days: 1 }))
-    expect(narrow.kpis.find((k) => k.key === 'recommendation_taken')).toMatchObject({ n: 0, value: null })
+    expect(narrow.kpis.find((k) => k.key === 'avoidable_touches')).toMatchObject({ n: 0, value: null })
   })
 
   test('kpis: quota used at reset is the accounts’ ledger over each window, a share, and has no figure without three resets or a reader', async () => {
@@ -531,7 +533,7 @@ describe('the fixture', () => {
       expect(kpi).toMatchObject({ n: 9, count: 4, measured: true, unit: 'per_100_issues' })
       expect(kpi?.value).toBeCloseTo((4 / 9) * 100, 6)
       const parts = Object.fromEntries((kpi?.parts ?? []).map((part) => [part.key, part.value]))
-      expect(parts).toEqual({ secret_or_hands: 2 / 4, secret: 1 / 4, hands: 1 / 4, place: 1 / 4, approval: 0 })
+      expect(parts).toEqual({ secret: 1 / 4, hands: 1 / 4, place: 1 / 4, approval: 0 })
     } finally {
       await sql`DELETE FROM factory.errands WHERE id LIKE 'errand_k%'`
     }
@@ -547,10 +549,11 @@ describe('the fixture', () => {
       ('errand_a4', 'key_a4', 'ask-human', 'd', ${ago(3)}, ${ago(2)}, ${`${AUTO_RUN_NOTE}secrets-seed (granted)`}, 'done', 'orchestrator')`
     try {
       const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-      const kpi = model.kpis.find((k) => k.key === 'errands_auto_run_share')
+      const kpi = model.kpis.find((k) => k.key === 'errands_reached_per_100')
       // the fixture's own Errand and three above reached him in the window, a fourth (a request) ran by itself before the screen reached it: two of five were auto-runs
-      expect(kpi).toMatchObject({ n: 5, count: 2, measured: true, unit: 'share' })
-      expect(kpi?.value).toBeCloseTo(2 / 5, 6)
+      const auto = kpi?.beside.find((p) => p.key === 'errands_auto_run_share')
+      expect(auto?.unit).toBe('share')
+      expect(auto?.value).toBeCloseTo(2 / 5, 6)
     } finally {
       await sql`DELETE FROM factory.errands WHERE id LIKE 'errand_a%'`
     }
@@ -597,18 +600,13 @@ describe('the fixture', () => {
         expect(kpi.history).toHaveLength(HISTORY_WINDOWS)
         expect(kpi.history.at(-1)).toEqual({ value: kpi.value, n: kpi.n })
       }
-      for (const key of ['cost', 'window_points', 'fix_commits']) {
-        expect(by[key]?.history.slice(0, 4)).toEqual(Array(4).fill({ value: null, n: 0 }))
-      }
-      // the Issue 30 days back counts in asks (its real n) but not in cost or points, which that window does not read
-      expect(by.asks?.history.slice(0, 4).map((p) => p.n)).toEqual([0, 1, 0, 0])
+      // the Issue 30 days back counts in its window's touch rate (its real n)
+      expect(by.avoidable_touches?.history.slice(0, 4).map((p) => p.n)).toEqual([0, 1, 0, 0])
 
-      // the window before: two Issues filed, one owner note, one refusal, one Decision raised and answered by the owner,
+      // the window before: two Issues filed, one owner note, one Decision raised and answered by the owner (worth asking),
       // three first watches with two passes, admissions after waits of 2 h and 3 h
       const before = (key: string) => by[key]?.history.at(-2)
       expect(before('avoidable_touches')).toEqual({ value: 1 / 2, n: 2 })
-      expect(before('asks')).toEqual({ value: 1 / 2, n: 2 })
-      expect(before('refusals')).toEqual({ value: 1 / 2, n: 2 })
       expect(before('first_verification_passes')).toEqual({ value: 2 / 3, n: 3 })
       expect(before('queue_wait_p90')).toEqual({ value: null, n: 2 })
       expect(before('cycle_p50')).toEqual({ value: null, n: 0 })
@@ -617,7 +615,7 @@ describe('the fixture', () => {
 
       // the same window read directly gives the same figures as the history entry
       const shifted = KpiModel.parse(await readKpis(sql, { now: new Date(NOW.getTime() - week), days: 7 }))
-      for (const key of ['avoidable_touches', 'asks', 'refusals', 'first_verification_passes', 'queue_wait_p90']) {
+      for (const key of ['avoidable_touches', 'first_verification_passes', 'queue_wait_p90']) {
         const direct = shifted.kpis.find((k) => k.key === key)
         expect(before(key)).toEqual({ value: direct?.value ?? null, n: direct?.n ?? -1 })
       }
@@ -639,49 +637,18 @@ describe('the fixture', () => {
       VALUES ('hook_1', 'lead-3', 'issue_3', 1, 'session_started', ${ago(19)}, ${ago(19)}, '{"claudeSessionId":"abc"}'::jsonb)`
 
     const noShares = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-    expect(noShares.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: true, value: 6 / 9, n: 9 })
-    expect(noShares.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: false, value: null })
+    expect(usageBeside(noShares, 'cost')).toMatchObject({ value: 6 / 9, unit: 'usd' })
+    expect(usageBeside(noShares, 'window_points')).toBeUndefined()
 
     await sql`CREATE TABLE usage.session_window_share (account text, session_id bigint, five_hour_pct float8, seven_day_pct float8)`
     await sql`INSERT INTO usage.session_window_share VALUES ('a', 1, 1.5, 4), ('a', 2, 0.5, 1), ('a', 3, 50, 50)`
     const full = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-    expect(full.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: true, value: 2 / 9 })
+    expect(usageBeside(full, 'window_points')).toMatchObject({ value: 2 / 9, unit: 'points' })
 
     await sql`ALTER TABLE usage.records_unique RENAME COLUMN cost_usd TO price`
     const broken = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-    expect(broken.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, value: null })
+    expect(usageBeside(broken, 'cost')).toBeUndefined()
     await sql`DROP SCHEMA usage CASCADE`
-  })
-
-  test('kpis: the cost KPI groups by seat; a usage side with no seat columns keeps the cost and drops the parts', async () => {
-    await sql`CREATE SCHEMA usage`
-    await sql`CREATE TABLE usage.sessions (id bigint PRIMARY KEY, source_session_id text, issue_id text)`
-    await sql`CREATE TABLE usage.records_unique (session_id bigint, cost_usd numeric, tool text, model text, effort text)`
-    await sql`INSERT INTO usage.sessions VALUES (1, 'claude-a', '2'), (2, 'abc:agent-x', NULL), (3, 'other', '999')`
-    await sql`INSERT INTO usage.records_unique VALUES
-      (1, 3.0, 'lead', 'claude-sonnet-5-5', 'high'), (1, 1.0, 'lead', 'claude-sonnet-5-5', 'high'),
-      (2, 2.0, 'worker', 'claude-haiku-5-5', NULL), (3, 100.0, 'lead', 'claude-opus-5-5', 'max')`
-    await sql`INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)
-      VALUES ('hook_seat', 'lead-3', 'issue_3', 1, 'session_started', ${ago(19)}, ${ago(19)}, '{"claudeSessionId":"abc"}'::jsonb)`
-    try {
-      const cost = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 })).kpis.find((k) => k.key === 'cost')
-      expect(cost).toMatchObject({ measured: true, value: 6 / 9 })
-      expect(cost?.parts).toEqual([
-        { key: 'lead · claude-sonnet-5-5 · high', label: 'lead · claude-sonnet-5-5 · high', value: 4 / 9, unit: 'usd' },
-        {
-          key: 'worker · claude-haiku-5-5 · none',
-          label: 'worker · claude-haiku-5-5 · none',
-          value: 2 / 9,
-          unit: 'usd',
-        },
-      ])
-      await sql`ALTER TABLE usage.records_unique DROP COLUMN effort`
-      const bare = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 })).kpis.find((k) => k.key === 'cost')
-      expect(bare).toMatchObject({ measured: true, value: 6 / 9, parts: [] })
-    } finally {
-      await sql`DROP SCHEMA usage CASCADE`
-      await sql`DELETE FROM factory.lead_hook_events WHERE key = 'hook_seat'`
-    }
   })
 
   test('kpis: a usage statement past the timeout leaves its figure unmeasured and frees the connection; points are reused', async () => {
@@ -699,25 +666,25 @@ describe('the fixture', () => {
       const slow = KpiModel.parse(
         await readKpis(sql, { now: NOW, days: 7, usageTimeoutMs: 200, pointsCache: pointsCache() }),
       )
-      expect(slow.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: true, value: 3 / 9 })
-      expect(slow.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: false, value: null })
+      expect(usageBeside(slow, 'cost')).toMatchObject({ value: 3 / 9 })
+      expect(usageBeside(slow, 'window_points')).toBeUndefined()
 
       const cache = pointsCache()
       const first = KpiModel.parse(
         await readKpis(sql, { now: NOW, days: 7, usageTimeoutMs: 5_000, pointsCache: cache }),
       )
-      expect(first.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: true, value: 1.5 / 9 })
+      expect(usageBeside(first, 'window_points')).toMatchObject({ value: 1.5 / 9 })
       await sql`UPDATE usage.share_rows SET five_hour_pct = 9`
       const again = KpiModel.parse(
         await readKpis(sql, { now: NOW, days: 7, usageTimeoutMs: 5_000, pointsCache: cache }),
       )
-      expect(again.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: true, value: 1.5 / 9 })
+      expect(usageBeside(again, 'window_points')).toMatchObject({ value: 1.5 / 9 })
       const later = new Date(NOW.getTime() + 16 * 60_000)
       const expired = KpiModel.parse(
         await readKpis(sql, { now: later, days: 7, usageTimeoutMs: 5_000, pointsCache: cache }),
       )
-      expect(expired.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: true })
-      expect(expired.kpis.find((k) => k.key === 'window_points')?.value).not.toBeCloseTo(1.5 / 9)
+      expect(usageBeside(expired, 'window_points')).toBeDefined()
+      expect(usageBeside(expired, 'window_points')?.value).not.toBeCloseTo(1.5 / 9)
     } finally {
       await sql`DROP SCHEMA usage CASCADE`
     }
@@ -743,8 +710,8 @@ describe('the fixture', () => {
           if (error !== rollback) throw error
         })
       if (!model) throw new Error('readKpis did not answer')
-      expect(model.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, value: null })
-      expect(model.kpis.find((k) => k.key === 'window_points')).toMatchObject({ measured: false, value: null })
+      expect(usageBeside(model, 'cost')).toBeUndefined()
+      expect(usageBeside(model, 'window_points')).toBeUndefined()
       expect(model.kpis.find((k) => k.key === 'avoidable_touches')?.measured).toBe(true)
     } finally {
       await sql`DROP OWNED BY kpi_no_usage`

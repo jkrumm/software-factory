@@ -1,14 +1,15 @@
 import { expect, test } from 'bun:test'
 import { MAX_SIGNALS_PER_PASS } from '../../src/domains/loops/budget.ts'
-import type { FrictionCount, SignalRequest } from '@software-factory/contract'
+import { type FrictionCount, type SignalRequest, THRESHOLDS } from '@software-factory/contract'
 import {
   isRetired,
+  type KpiReading,
+  kpisOffTarget,
   MIN_CLOSED,
   named,
   patternsOver,
   signalText,
   signalTitle,
-  THRESHOLDS,
   withinBudget,
 } from '../../src/domains/loops/friction.ts'
 import type { LoopFinding } from '../../src/domains/intake/model.ts'
@@ -54,7 +55,7 @@ test('a serious pattern is a finding by its count alone, at any sample', () => {
     ['undelivered_note', 'undelivered_note'],
   ]
   for (const [key, group] of cases) {
-    const rule = THRESHOLDS[group as keyof typeof THRESHOLDS]
+    const rule = THRESHOLDS.friction.groups[group as keyof typeof THRESHOLDS.friction.groups]
     expect(rule.rate).toBeNull()
     for (const closed of [0, 1, CLOSED]) {
       expect(over([count(key, group, rule.min, key, closed)], closed).map((p) => p.key)).toEqual([key])
@@ -75,7 +76,7 @@ test('a rate-judged pattern needs its count, its rate and the minimum sample', (
     ['signal_held:feedback', 'signal'],
   ]
   for (const [key, group] of cases) {
-    const rule = THRESHOLDS[group as keyof typeof THRESHOLDS]
+    const rule = THRESHOLDS.friction.groups[group as keyof typeof THRESHOLDS.friction.groups]
     if (rule.rate === null) throw new Error(`${group} has no rate`)
     const atRate = Math.ceil(rule.rate * CLOSED)
     const n = Math.max(rule.min, atRate)
@@ -212,6 +213,8 @@ function frictionWorld(
     retroFiled?: Date | null
     closedFindings?: ClosedFinding[]
     counts?: FrictionCount[]
+    kpis?: () => Promise<KpiReading[]>
+    since?: string | null
   } = {},
 ) {
   const recorded: { issue: string; class: string; key: string; figure: number | null }[] = []
@@ -240,11 +243,12 @@ function frictionWorld(
       at: passNow.toISOString(),
       days: 7,
       window: { from: new Date(passNow.getTime() - 7 * DAY).toISOString(), to: passNow.toISOString() },
-      since: null,
+      since: extra.since ?? null,
       issues: 40,
       closed: 40,
       counts: extra.counts ?? [count('lead_gone', 'lead_gone', 9), count('regression', 'regression', 9)],
     }),
+    kpis: extra.kpis ?? (async () => []),
     evidence: async () => ({}),
     closedSince: async () => extra.closed ?? 0,
     retroFiledAt: async () => extra.retroFiled ?? null,
@@ -290,7 +294,7 @@ test('every pass files the weekly retro signal once, and a failure to file it ne
   expect(retro).toHaveLength(1)
   expect(retro[0]).toMatchObject({ from: 'agent:software-factory', repo: 'software-factory', kind: 'request' })
   expect(retro[0]?.text).toContain('factory retro --days 7')
-  expect(retro[0]?.text).toContain('Retro: 2026-11-20 kpi=<KPI or capacity figure key>')
+  expect(retro[0]?.text).toContain('Retro: 2026-11-20 kpi=<KPI, part or beside-figure, or capacity figure key>')
   // part 2c, after 2b and before the ledger: the build speed, its two figures and the guard that keeps the coverage
   const text = retro[0]?.text ?? ''
   expect(text.indexOf('2b. Capacity')).toBeLessThan(text.indexOf('2c. Build speed'))
@@ -446,4 +450,155 @@ test('a pattern no longer counted is at 0, a count that did not fall is flat or 
   expect(w.bodies.find((b) => b.text.includes('(regression)'))?.text).toContain(
     'Last time: Issue issue_2 at figure 9, now 9 (flat).',
   )
+})
+
+/** Avoidable touches above the target: notes are the largest kind, then cancels. */
+const touchesOver = (value = 0.12): KpiReading => ({
+  key: 'avoidable_touches',
+  label: 'Avoidable touches per Issue',
+  value,
+  unit: 'per_issue',
+  n: 200,
+  count: Math.round(value * 200),
+  measured: true,
+  target: THRESHOLDS.kpis.avoidable_touches,
+  parts: [
+    { key: 'touch:cancelled', label: 'Issues the owner cancelled', value: 0.03, unit: 'per_issue' },
+    { key: 'touch:noted', label: 'Notes the owner sent to a lead', value: 0.08, unit: 'per_issue' },
+    {
+      key: 'touch:decision_answered',
+      label: 'Decisions the owner answered that were not worth asking',
+      value: 0.01,
+      unit: 'per_issue',
+    },
+  ],
+})
+
+test('a KPI off its target over a whole window is a finding that names its largest part', () => {
+  const [pattern, ...rest] = kpisOffTarget([touchesOver()], { whole: true })
+  expect(rest).toEqual([])
+  expect(pattern?.key).toBe('kpi:avoidable_touches')
+  expect(pattern?.group).toBe('kpi')
+  expect(pattern?.label).toContain('Notes the owner sent to a lead')
+  expect(pattern?.kpi?.largest?.key).toBe('touch:noted')
+  // the figure is read so that lower is better: an at_most KPI's own value
+  expect(pattern?.count).toBeCloseTo(0.12)
+})
+
+test('a KPI on its target, unmeasured, with no number yet, or over a window the epoch cut is no finding', () => {
+  const target = THRESHOLDS.kpis.avoidable_touches.max ?? 0
+  expect(kpisOffTarget([touchesOver(target)], { whole: true })).toEqual([])
+  expect(kpisOffTarget([{ ...touchesOver(), measured: false, value: null }], { whole: true })).toEqual([])
+  expect(kpisOffTarget([touchesOver()], { whole: false })).toEqual([])
+  // three Issues are no sample for a rate: no friction rate is judged under ten either
+  expect(kpisOffTarget([{ ...touchesOver(), n: 3 }], { whole: true })).toEqual([])
+  const errands: KpiReading = {
+    key: 'errands_reached_per_100',
+    label: 'Errands that reached the owner per 100 Issues',
+    value: 40,
+    unit: 'per_100_issues',
+    n: 100,
+    count: 40,
+    measured: true,
+    target: THRESHOLDS.kpis.errands_reached_per_100,
+    parts: [],
+  }
+  expect(kpisOffTarget([errands], { whole: true })).toEqual([])
+})
+
+test('a higher-is-better KPI under its target is a finding judged by its shortfall', () => {
+  const passes: KpiReading = {
+    key: 'first_verification_passes',
+    label: 'First verification passes',
+    value: 0.8,
+    unit: 'share',
+    n: 50,
+    count: 40,
+    measured: true,
+    target: THRESHOLDS.kpis.first_verification_passes,
+    parts: [{ key: 'ci', label: 'Regressed: CI', value: 0.15, unit: 'share' }],
+  }
+  const [pattern] = kpisOffTarget([passes], { whole: true })
+  expect(pattern?.key).toBe('kpi:first_verification_passes')
+  expect(pattern?.count).toBeCloseTo(0.2)
+})
+
+test('with avoidable touches above their target for a whole window the pass files a finding naming the largest touch kind', async () => {
+  const w = frictionWorld({}, false, { counts: [], kpis: async () => [touchesOver()] })
+  expect((await frictionPass(w.deps)).ok).toBe(true)
+  expect(w.records[0]?.filed.map((f) => f.key)).toEqual(['kpi:avoidable_touches'])
+  const body = w.bodies.find((b) => b.title !== RETRO_TITLE)
+  expect(body?.title).toContain('Notes the owner sent to a lead')
+  expect(body?.text).toContain('Largest part: Notes the owner sent to a lead (touch:noted, 0.08)')
+  expect(body?.text).toContain('target at most 0.07')
+  expect(w.finds.find((f) => f.subject === 'kpi:avoidable_touches')?.class).toBe('kpi')
+})
+
+test('a window the epoch cut judges no KPI, and a failed KPI read is named while the counts still file', async () => {
+  const cut = frictionWorld({}, false, {
+    counts: [],
+    kpis: async () => [touchesOver()],
+    since: '2026-11-15T00:00:00.000Z',
+  })
+  await frictionPass(cut.deps)
+  expect(cut.records[0]?.filed).toEqual([])
+
+  const failing = frictionWorld({}, false, {
+    kpis: async () => {
+      throw new Error('statement timeout')
+    },
+  })
+  expect((await frictionPass(failing.deps)).ok).toBe(true)
+  expect(failing.records[0]?.filed.map((f) => f.key)).toEqual(['lead_gone', 'regression'])
+  expect(failing.records[0]?.failed).toEqual([
+    { key: 'kpi', reason: 'the KPIs could not be read: Error: statement timeout' },
+  ])
+})
+
+test('a closed KPI finding waits for the next pass when the KPIs could not be read', async () => {
+  const w = frictionWorld({}, false, {
+    counts: [],
+    kpis: async () => {
+      throw new Error('statement timeout')
+    },
+    closedFindings: [
+      {
+        issue: 'issue_7',
+        loop: 'friction',
+        repo: 'software-factory',
+        key: 'kpi:avoidable_touches',
+        figure: 0.12,
+        verdict: null,
+        outcome: 'done',
+        filedAt: new Date(passNow.getTime() - 9 * DAY),
+        closedAt: new Date(passNow.getTime() - 2 * DAY),
+      },
+    ],
+  })
+  await frictionPass(w.deps)
+  expect(w.verdicts).toEqual([])
+})
+
+test('a closed KPI finding is judged against the KPI now, and one with no figure now is unmeasured', async () => {
+  const closed = (issue: string, key: string): ClosedFinding => ({
+    issue,
+    loop: 'friction',
+    repo: 'software-factory',
+    key,
+    figure: 0.12,
+    verdict: null,
+    outcome: 'done',
+    filedAt: new Date(passNow.getTime() - 9 * DAY),
+    closedAt: new Date(passNow.getTime() - 2 * DAY),
+  })
+  const w = frictionWorld({}, false, {
+    counts: [],
+    kpis: async () => [touchesOver(0.05)],
+    closedFindings: [closed('issue_7', 'kpi:avoidable_touches'), closed('issue_8', 'kpi:cycle_p50')],
+  })
+  await frictionPass(w.deps)
+  expect(w.verdicts).toEqual([
+    { issue: 'issue_7', verdict: 'moved', measured: 0.05 },
+    { issue: 'issue_8', verdict: 'unmeasured', measured: null },
+  ])
 })

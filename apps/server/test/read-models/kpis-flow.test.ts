@@ -15,7 +15,7 @@ import { regressionCause } from '../../src/read/kpis-flow.ts'
 import { figureOf, FRICTION_MARKER_KEYS, movedOf, readRetro } from '../../src/read/retro.ts'
 
 /**
- * The flow KPIs and the retro model over a real Postgres. One fixture, every expectation worked out by hand from it, and
+ * The flow figures (the parts of the KPIs and the figures beside them) and the retro model over a real Postgres. One fixture, every expectation worked out by hand from it, and
  * each figure also read back with SQL written separately here (the figures "match SQL over the window").
  */
 let db: TestCluster
@@ -175,41 +175,22 @@ const flow = async (days = 7) => {
 const from = ago(7 * 24)
 const num = async (rows: Promise<unknown[]>) => Number(((await rows)[0] as { v: unknown }).v)
 
-describe('queue time, idle capacity and the lead’s time', () => {
-  test('queued time is split into what an after edge held and the rest, and matches SQL', async () => {
-    const k = (await flow())('queue_capacity_share')
-    // issue_1 9 h (5 h chain), issue_2 4.9 h, issue_3 4.9 h
-    // of 18.8 h queued, 13.8 h no after edge held
-    expect(k.value).toBeCloseTo(13.8 / 18.8, 6)
-    expect(k.unit).toBe('share')
-    expect(k.n).toBe(3)
-    expect(k.parts.map((p) => p.key)).toEqual(['chain', 'capacity'])
-    expect(k.parts[0]?.value).toBeCloseTo(5 * H, -3)
-    expect(k.parts[1]?.value).toBeCloseTo(13.8 * H, -3)
-    const sqlTotal = await num(sql`
-      SELECT sum(extract(epoch FROM (n.at - q.at)) * 1000) AS v FROM factory.issue_events q
-      JOIN factory.issue_events n ON n.issue_id = q.issue_id AND n.kind = 'admitted'
-      WHERE q.kind = 'settled' AND n.at >= ${from} AND n.at < ${NOW}`)
-    expect((k.parts[0]?.value ?? 0) + (k.parts[1]?.value ?? 0)).toBeCloseTo(sqlTotal, -3)
-  })
-
-  test('idle capacity counts the hours an unblocked Issue was queued and an account had room', async () => {
-    const k = (await flow())('idle_capacity')
+describe('idle capacity and the lead’s time', () => {
+  test('idle capacity counts the hours an unblocked Issue was queued and an account had room, beside the queue wait', async () => {
+    const k = (await flow())('queue_wait_p90')
     // free hours: issue_1 94..91 h ago, issue_2 69..66, issue_3 49..46; only 93 h ago and 91 h ago have a reading, and only
-    // the first shows room. An hour with no reading is not counted: the readings are kept a week.
-    expect(k.n).toBe(2)
-    expect(k.count).toBe(1)
-    // two hours are under the floor: the share is not a reading
-    expect(k).toMatchObject({ value: null, measured: false })
+    // the first shows room. An hour with no reading is not counted: the readings are kept a week. Two hours are under the
+    // floor: the share is not a reading, so it is not beside the queue wait
+    expect(k.beside.find((p) => p.key === 'idle_capacity')).toBeUndefined()
   })
 
-  test('working share divides a lead’s time into working and each wait reason', async () => {
-    const k = (await flow())('working_share')
+  test('the cycle’s parts divide an Issue’s time into working and each wait reason, with the working share beside it', async () => {
+    const k = (await flow())('cycle_p50')
     // working: issue_1 18 h, issue_2 25 h, issue_3 1 h; waiting for a decision 2 h; issue_9 watched 0 h ended before the window
     const working = k.parts.find((p) => p.key === 'working')?.value ?? 0
     expect(working).toBeCloseTo((44 + 1 / 6) * H, -3)
     expect(k.parts.find((p) => p.key === 'waiting:decision')?.value).toBeCloseTo(2 * H, -3)
-    expect(k.value).toBeCloseTo((44 + 1 / 6) / (46 + 1 / 6), 6)
+    expect(k.beside.find((p) => p.key === 'working_share')?.value).toBeCloseTo((44 + 1 / 6) / (46 + 1 / 6), 6)
     const sqlWorking = await num(sql`
       WITH ev AS (SELECT to_state, at, lead(at) OVER (PARTITION BY issue_id ORDER BY version) AS nxt
         FROM factory.issue_events WHERE result = 'applied')
@@ -221,29 +202,28 @@ describe('queue time, idle capacity and the lead’s time', () => {
 
 describe('what leads and the loops cost', () => {
   test('dropped and cancelled after a lead started: only an Issue a lead was admitted to', async () => {
-    const k = (await flow())('dropped_after_lead')
+    const k = (await flow())('cycle_p50')
     // closed in the window after a lead was admitted: issue_1 done, issue_2 dropped, issue_3 cancelled (issue_10 had no lead)
-    expect(k.n).toBe(3)
-    expect(k.count).toBe(2)
-    expect(k.parts.map((p) => [p.key, Math.round(p.value * 100)])).toEqual([
-      ['dropped', 33],
-      ['cancelled', 33],
-    ])
+    expect(k.beside.find((p) => p.key === 'dropped_after_lead')).toMatchObject({ value: 2 / 3, unit: 'share' })
   })
 
-  test('nudges and Errands', async () => {
+  test('Errands the screen turned away are beside the ones that reached the owner', async () => {
     const k = await flow()
-    // three steward notes: on issue_1 a lead's ask followed within 30 minutes, on issue_40 its block (a stalled event), on issue_2
-    // the next action only an hour later
-    expect(k('nudges_acted')).toMatchObject({ n: 3, count: 2 })
-    expect(k('errands_turned_away')).toMatchObject({ n: 3, count: 2 })
+    // three raised: one turned away by a rule, one by the Judge, one reached him
+    expect(k('errands_reached_per_100')).toMatchObject({ count: 1 })
+    expect(k('errands_reached_per_100').beside.find((p) => p.key === 'errands_turned_away')?.value).toBeCloseTo(
+      2 / 3,
+      6,
+    )
   })
 
   test('first watches: the dwell, and each regression by the checks of its last run', async () => {
     const k = await flow()
-    expect(k('first_watch_dwell_p50')).toMatchObject({ n: 3, value: 600_000 })
-    // the first-pass KPI is 1 of 3, and its parts name why the other two regressed
+    // the first-pass KPI is 1 of 3, its dwell is beside it, and its parts name why the other two regressed
     const passes = k('first_verification_passes')
+    expect(passes.beside).toEqual([
+      { key: 'first_watch_dwell_p50', label: 'First watch dwell, median', value: 600_000, unit: 'ms' },
+    ])
     expect(passes).toMatchObject({ n: 3, count: 1 })
     expect(passes.parts.map((p) => [p.key, Math.round(p.value * 100)])).toEqual([
       ['verify', 33],
@@ -319,7 +299,7 @@ describe('the retro model', () => {
     expect(model.sessions).toEqual([
       { issue: 'issue_1', attempt: 1, model: 'claude-sonnet-5-5', account: 'me', transcriptPath: '/x/t.jsonl' },
     ])
-    expect(model.kpis.kpis.map((k) => k.key)).toContain('queue_capacity_share')
+    expect(model.kpis.kpis.map((k) => k.key)).toEqual([...KPI_KEYS])
     expect(model.samples.regressed.map((s) => s.issue).toSorted()).toEqual(['issue_2', 'issue_3'])
     expect(model.samples.slowest[0]).toMatchObject({ issue: 'issue_1', why: 'cycle' })
     expect(model.samples.dropped.map((s) => s.issue).toSorted()).toEqual(['issue_2', 'issue_3'])
@@ -358,7 +338,7 @@ describe('the retro model', () => {
   })
 
   test('every key a retro signal can carry resolves to a figure, or is listed as unreadable', () => {
-    const kpi = (key: string) => ({ key, value: 1 })
+    const kpi = (key: string) => ({ key, value: 1, parts: [], beside: [] })
     const kpis = { kpis: KPI_KEYS.map(kpi) } as unknown as KpiModel
     const capacity = CAPACITY_FIGURE_KEYS.map((key) => ({ key, value: 2 })) as unknown as RetroCapacityFigure[]
     const friction = {
@@ -369,6 +349,13 @@ describe('the retro model', () => {
     for (const key of keys) if (figureOf(key, { kpis, capacity, friction }) === null) unreadable.push(key)
     expect(unreadable).toEqual([])
     expect(figureOf('no_such_key', { kpis, capacity, friction })).toBeNull()
+  })
+
+  test('a key that was a KPI of its own reads the figure that now stands beside a KPI', () => {
+    const kpis = {
+      kpis: [{ key: 'cycle_p50', value: 1, parts: [], beside: [{ key: 'dropped_after_lead', value: 0.25 }] }],
+    } as unknown as KpiModel
+    expect(figureOf('dropped_after_lead', { kpis })).toBe(0.25)
   })
 
   test('the read token gets no transcript path and no words of the Issues', async () => {

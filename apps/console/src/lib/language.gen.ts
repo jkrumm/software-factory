@@ -12,7 +12,7 @@ export const LANGUAGE = {
   ask: "The lead's verb that raises a Decision (factory issue ask)",
   attempt: 'Lead number n of an Issue',
   'auto-run':
-    "The MacBook gate's verb that runs a command with no dialog when it is exactly a catalogue class the owner granted once (dotfiles config/macbook-auto-classes.tsv, his local consent file; first class secrets-seed). ask-human.sh push tries it before the dialog, so an Issue's Errand and an ask-human request take the same path; a command no granted class covers keeps its dialog. It closes the Errand through the orchestrator's done with the evidence ask-human: auto-run class <class>, which the factory reads as \"ran by itself\" (KPI errands_auto_run_share)",
+    "The MacBook gate's verb that runs a command with no dialog when it is exactly a catalogue class the owner granted once (dotfiles config/macbook-auto-classes.tsv, his local consent file; first class secrets-seed). ask-human.sh push tries it before the dialog, so an Issue's Errand and an ask-human request take the same path; a command no granted class covers keeps its dialog. It closes the Errand through the orchestrator's done with the evidence ask-human: auto-run class <class>, which the factory reads as \"ran by itself\" (errands_auto_run_share, beside the KPI errands_reached_per_100)",
   'avoidable cost':
     "The open improvement that costs the factory most, in minutes of queue wait or MiB over the memory budget; without one, the standing tenants' memory against its budget. What to do: it is the next thing worth fixing; open the improvement's Issue",
   'avoidable touch':

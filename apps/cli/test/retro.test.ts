@@ -6,20 +6,6 @@ import type { RetroModel } from '@software-factory/contract'
 import { bundleOf, sampledIssues } from '../src/retro.ts'
 import { run } from '../src/run.ts'
 
-const noDelivery = {
-  issues: 0,
-  finishedWatches: 0,
-  finishedPassRate: null,
-  movedUp: 0,
-  movedUpShare: null,
-  movedUpCost: null,
-  movedUpMs: null,
-  regressions: 0,
-  regressionsPerIssue: null,
-  cost: null,
-  costPerIssue: null,
-}
-
 let dir: string
 let model: RetroModel
 
@@ -51,50 +37,9 @@ beforeAll(() => {
       at: '',
       days: 7,
       window: { from: '', to: '' },
-      windows: [],
+      windows: [{ from: '', to: '' }],
+      since: null,
       kpis: [],
-      seats: {
-        rows: [],
-        movedUpShare: null,
-        delivery: {
-          light: noDelivery,
-          lead: noDelivery,
-          definitions: { finishedPass: '', movedUp: '', regressions: '', cost: '' },
-        },
-        tripwire: {
-          points: 3,
-          days: 3,
-          from: '2026-11-15T00:00:00.000Z',
-          confidence: 0.95,
-          targetWatches: 100,
-          minWatches: 10,
-          passGap: null,
-          regressionGap: null,
-          light: noDelivery,
-          lead: noDelivery,
-          bound: null,
-          met: null,
-          failing: [],
-        },
-      },
-      reviewers: {
-        rows: [],
-        startShare: 0.5,
-        tripwire: {
-          minReviews: 100,
-          points: 2,
-          windowDays: 3,
-          windowMinIssues: 10,
-          cheap: { reviews: 0, issues: 0, firstPassRate: null, regressionRate: null },
-          plain: { reviews: 0, issues: 0, firstPassRate: null, regressionRate: null },
-          window: { reviews: 0, issues: 0, firstPassRate: null, regressionRate: null },
-          enough: false,
-          passOk: null,
-          regressOk: null,
-          windowBreaks: null,
-          takesAll: false,
-        },
-      },
     },
     friction: { at: '', days: 7, window: { from: '', to: '' }, since: null, issues: 0, closed: 0, counts: [] },
     sessions: [

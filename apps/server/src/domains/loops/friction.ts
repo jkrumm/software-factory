@@ -1,4 +1,14 @@
-import type { FrictionCount } from '@software-factory/contract'
+import {
+  type FrictionCount,
+  type FrictionRule,
+  type JudgedFrictionGroup,
+  type Kpi,
+  type KpiPart,
+  type KpiTargetValue,
+  meetsTarget,
+  targetPhrase,
+  THRESHOLDS,
+} from '@software-factory/contract'
 import { MAX_SIGNALS_PER_PASS } from './budget.ts'
 
 /** A pass reads this many days of counts: the thresholds below are a week's. */
@@ -28,116 +38,35 @@ export const volumeDue = (closedSince: number): boolean => closedSince >= FRICTI
 /** Evidence Issue refs shown in one signal. */
 const MAX_EVIDENCE = 5
 
-/** The groups whose counts are findings; `decision_settled` and `api_transient` (an edge incident the factory answered itself) are informational and have no row. */
-type Judged = Exclude<FrictionCount['group'], 'decision_settled' | 'api_transient'>
+/** The groups whose counts are findings: `decision_settled` and `api_transient` are informational and have no rule. */
+type Judged = JudgedFrictionGroup
 
-/**
- * What makes a count a finding, with the reason in one line. `min` is the least count; `rate` is the share of Issues
- * closed in the window that must show it (`perIssue`), judged only once `MIN_CLOSED` Issues closed. A `null` rate marks a
- * pattern that is serious at any rate, so its count alone decides.
- */
-export interface Rule {
-  min: number
-  rate: number | null
-  why: string
-}
+/** What makes a count a finding (`THRESHOLDS.friction` in the contract holds every one). */
+type Rule = FrictionRule
 
 /** A rate stands on at least this many Issues closed in the window; under it, no rate-judged pattern is a finding. */
-export const MIN_CLOSED = 10
+export const MIN_CLOSED = THRESHOLDS.friction.minClosed
 
-export const THRESHOLDS: Record<Judged, Rule> = {
-  refusal: {
-    min: 3,
-    rate: 0.05,
-    why: 'the same class of refusal on one in twenty closed Issues is a rule or a prompt that is wrong (a class sums every sha and branch it named: 60 of 1,000 is a finding)',
-  },
-  stall: { min: 2, rate: null, why: 'a stall twice in a week is a cause, not weather' },
-  lead_gone: { min: 2, rate: null, why: 'a lead lost twice in a week points at the host or the harness' },
-  undelivered_note: { min: 1, rate: null, why: 'a note that never reached its lead is a broken promise' },
-  unreviewed_ship: {
-    min: 3,
-    rate: 0.25,
-    why: 'ships with no review on one in four closed Issues is a habit or a broken review path',
-  },
-  unstated_acceptance: {
-    min: 3,
-    rate: 0.25,
-    why: 'ships that state nothing against the acceptance on one in four closed Issues is a habit or a brief that never asks',
-  },
-  unproven_ci: {
-    min: 3,
-    rate: 0.25,
-    why: 'ships whose pull request CI was red or missing on one in four closed Issues is a lead that lands before CI says so, or a repo with no CI',
-  },
-  regression: {
-    min: 3,
-    rate: 0.05,
-    why: 'a watch catching a bad change is the factory working; one closed Issue in twenty ending in a regression means the changes or the watch are wrong',
-  },
-  avoidable_touch: {
-    min: 3,
-    rate: 0.15,
-    why: 'the owner stepping in on one in seven closed Issues for the same thing means the factory should have',
-  },
-  orchestrator_steer: {
-    min: 5,
-    rate: 0.5,
-    why: "the orchestrator steering leads on one in two closed Issues is the factory's real avoidable-touch rate: its leads are not briefed or unblocked well enough to work alone",
-  },
-  signal: {
-    min: 3,
-    rate: 0.2,
-    why: 'held signals from one source on one in five closed Issues is a route or a trust rule to settle',
-  },
-  spec_unneeded: {
-    min: 2,
-    rate: null,
-    why: 'two Specs in a week from one source that the owner marked not needed is a rule that sends him what its lead could decide',
-  },
-}
-
-/**
- * A full window and a lead's own report that it is blocked are the factory working: the steward moves the lead to an open
- * account or holds it on a timer, 20 of 21 and 33 of 48 ended that way in the week to 2026-11-18 with no person, median 2 min.
- * A week at 0.03 and 0.015 per Issue closed is weather; the week one Issue's block loop made 47 of 77 stalls was 0.07, so one
- * in twenty (the level NL37 chose for a regression) tells the two apart. `unreported` and `regressed` stay at the bare count.
- * A block that moved a light lead up is not counted at all (`readFriction`): 47 of the 85 blocks of the week to 2026-11-19.
- */
-const STALL_BY_RATE: Rule = {
-  min: 3,
-  rate: 0.05,
-  why: 'a block or a full window on one in twenty closed Issues is a loop or a cap that is wrong; fewer are the steward moving or holding a lead',
-}
-
-/** Rules of one key, over the rule of its group: the touches the owner uses to steer and to triage file only at a higher rate than a touch that is a failure; the stalls the factory ends itself file by rate. */
-const BY_KEY: Record<string, Rule> = {
-  'stall:wall': STALL_BY_RATE,
-  'stall:blocked': STALL_BY_RATE,
-  'touch:noted': {
-    min: 5,
-    rate: 0.5,
-    why: 'owner notes on one in two closed Issues (free-form `issue note` calls, not the orchestrator steering) means the leads are not briefed well enough to work alone',
-  },
-  'touch:cancelled': {
-    min: 3,
-    rate: 0.4,
-    why: 'owner cancels on two in five closed Issues means the intake files work nobody wanted',
-  },
-}
+/** The rule of each group, and the rules of single keys over their group's (`packages/contract/src/thresholds.ts`). */
+const GROUP_RULES: Readonly<Record<Judged, Rule>> = THRESHOLDS.friction.groups
+const BY_KEY: Readonly<Record<string, Rule>> = THRESHOLDS.friction.keys
 
 /** Patterns whose mechanism is gone: the review gate that refused a ship (NL23). Never a finding. */
 const RETIRED: readonly RegExp[] = [/^ship_refused:review_gate_retired$/]
 
 export const isRetired = (key: string): boolean => RETIRED.some((pattern) => pattern.test(key))
 
-const ruleOf = (key: string, group: Judged): Rule => BY_KEY[key] ?? THRESHOLDS[group]
+const ruleOf = (key: string, group: Judged): Rule => BY_KEY[key] ?? GROUP_RULES[group]
 
 /** Groups whose events map to Issues; the others (an undelivered note, a held signal) carry no Issue refs. */
-const WITHOUT_ISSUES = new Set<FrictionCount['group']>(['undelivered_note', 'signal'])
+const WITHOUT_ISSUES = new Set<PatternGroup>(['undelivered_note', 'signal', 'kpi'])
+
+/** A friction count's group, or `kpi`: one of the seven KPIs off its target. */
+export type PatternGroup = FrictionCount['group'] | 'kpi'
 
 export interface Pattern {
   key: string
-  group: FrictionCount['group']
+  group: PatternGroup
   label: string
   count: number
   perIssue: number | null
@@ -145,6 +74,8 @@ export interface Pattern {
   /** the least `perIssue` (per Issue closed), or null when the count alone decides */
   rate: number | null
   why: string
+  /** a KPI finding's figure: the KPI as read, its target and its largest part; absent on a count */
+  kpi?: { value: number; unit: Kpi['unit']; n: number; target: KpiTargetValue; largest: KpiPart | null }
 }
 
 /** `refusal:total` and the like add up the detail keys beside them; filing them too would double every finding. */
@@ -174,6 +105,56 @@ export function patternsOver(counts: readonly FrictionCount[], closed: number): 
     })
   }
   return over.sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+}
+
+/** One of the seven KPIs as the friction pass reads it: the figure of the pass's window with its parts, no history. */
+export type KpiReading = Pick<Kpi, 'key' | 'label' | 'value' | 'unit' | 'n' | 'count' | 'measured' | 'target' | 'parts'>
+
+/**
+ * The number a KPI finding is filed against and judged by once its Issue closes, read so that lower is better (the loop
+ * ledger's rule for every figure): an `at_most` KPI's own value, an `at_least` share's shortfall from 1.
+ */
+export const kpiFigure = (target: KpiTargetValue, value: number): number =>
+  target.kind === 'at_least' ? 1 - value : value
+
+/** The units of a KPI that is a rate over Issues: judged only from `MIN_CLOSED` Issues, like a friction rate. */
+const OVER_ISSUES: ReadonlySet<Kpi['unit']> = new Set(['per_issue', 'per_100_issues'])
+
+/**
+ * The KPIs off their target (`THRESHOLDS.kpis`) over a whole window, as patterns keyed `kpi:<key>`, each naming its largest
+ * part: for avoidable touches, the touch kind to remove first. A window the counting epoch cut is not whole and judges none; a
+ * KPI with no figure, a rate over fewer than `MIN_CLOSED` Issues, or no number for a target yet, is never a finding.
+ */
+export function kpisOffTarget(readings: readonly KpiReading[], window: { whole: boolean }): Pattern[] {
+  if (!window.whole) return []
+  const over: Pattern[] = []
+  for (const reading of readings) {
+    if (!reading.measured || reading.value === null) continue
+    // a rate over Issues stands on as many as a friction rate does; a share or a median has its own floor in the read
+    if (OVER_ISSUES.has(reading.unit) && reading.n < MIN_CLOSED) continue
+    if (meetsTarget(reading.target, reading.value) !== false) continue
+    const largest = reading.parts.toSorted((a, b) => b.value - a.value)[0] ?? null
+    over.push({
+      key: `kpi:${reading.key}`,
+      group: 'kpi',
+      label: `${reading.label} off its target${largest ? `, largest part: ${largest.label}` : ''}`,
+      count: kpiFigure(reading.target, reading.value),
+      perIssue: null,
+      threshold: 1,
+      rate: null,
+      why: 'a KPI off its target for a whole window is the one figure the owner set a line for; its largest part is where to start',
+      kpi: { value: reading.value, unit: reading.unit, n: reading.n, target: reading.target, largest },
+    })
+  }
+  return over
+}
+
+/** A KPI value in words, in its unit. */
+function valueWords(unit: Kpi['unit'], value: number): string {
+  if (unit === 'share') return `${(value * 100).toFixed(1)}%`
+  if (unit === 'ms') return `${(value / 3_600_000).toFixed(1)} h`
+  if (unit === 'usd') return `$${value.toFixed(2)}`
+  return Number(value.toFixed(3)).toString()
 }
 
 /** The first `MAX_SIGNALS_PER_PASS` patterns are filed; the rest are named, never dropped. */
@@ -211,6 +192,7 @@ export function signalText(
   refs: readonly string[],
   last: string | null = null,
 ): string {
+  if (pattern.kpi) return kpiSignalText(pattern, pattern.kpi, facts, last)
   const evidence = !hasIssueRefs(pattern)
     ? 'Evidence: this count has no Issue behind it (it counts notes or held signals, not Issue events), so there are no refs.'
     : refs.length === 0
@@ -224,6 +206,27 @@ export function signalText(
     `Threshold: ${thresholdOf(pattern)}. ${pattern.why}.`,
     evidence,
     `Reproduce: factory read friction --days ${facts.days}`,
+  ].join('\n')
+}
+
+/** A KPI finding's text: the figure, its target, its largest part, and how to look again. */
+function kpiSignalText(
+  pattern: Pattern,
+  kpi: NonNullable<Pattern['kpi']>,
+  facts: PassFacts,
+  last: string | null,
+): string {
+  const target = targetPhrase(kpi.target, kpi.unit === 'share' ? 'share' : kpi.unit === 'ms' ? 'ms' : 'raw')
+  return [
+    `Pattern: ${pattern.label} (${pattern.key})`,
+    `Window: ${facts.from} to ${facts.to} (${facts.days} days, whole)`,
+    `Figure: ${valueWords(kpi.unit, kpi.value)} over ${kpi.n}, target ${target}; Issues filed in the window: ${facts.issues}, closed: ${facts.closed}`,
+    kpi.largest
+      ? `Largest part: ${kpi.largest.label} (${kpi.largest.key}, ${valueWords(kpi.largest.unit, kpi.largest.value)})`
+      : 'Largest part: this KPI has no parts in the window.',
+    ...(last === null ? [] : [last]),
+    `Threshold: the KPI's target in THRESHOLDS.kpis (packages/contract/src/thresholds.ts), judged over a whole window. ${pattern.why}.`,
+    `Reproduce: factory read kpis --days ${facts.days}`,
   ].join('\n')
 }
 

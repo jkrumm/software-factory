@@ -1,17 +1,24 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { type Effort, HISTORY_WINDOWS, type Kpi, type KpiModel, type Tier } from '@software-factory/contract'
+import { HISTORY_WINDOWS, type Kpi, type KpiModel, type KpiPart } from '@software-factory/contract'
 import { AUTO_RUN_NOTE_PATTERN } from '../kernel/auto-run.ts'
 import { boundedRead } from './bounded.ts'
-import { percentile, per, windowOf } from './stats.ts'
+import { MIN_SAMPLES, percentile, per, shareOf, windowOf } from './stats.ts'
 import { catalogFields, type CatalogField } from './kpi-fields.ts'
-import { flowKpis, regressionParts } from './kpis-flow.ts'
+import { flowFigures, regressionParts } from './kpis-flow.ts'
 import { costBySeat, USAGE_TIMEOUT_MS, type SeatCost } from './usage.ts'
-import { readReviewerKpis } from './kpis-reviewers.ts'
-import { readSeatKpis } from './kpis-seats.ts'
 
 /** The owner's actions on an Issue that the factory should have settled; the events that count are these kinds. */
 export const TOUCH_EVENTS = ['noted', 'woken', 'cancelled', 'reopened'] as const
+
+/** The kinds of avoidable touch in words: the parts of `avoidable_touches` and the friction loop's `touch:<kind>` counts. */
+export const TOUCH_LABELS: Readonly<Record<string, string>> = {
+  decision_answered: 'Decisions the owner answered that were not worth asking',
+  noted: 'Notes the owner sent to a lead',
+  woken: 'Waits the owner woke by hand',
+  cancelled: 'Issues the owner cancelled',
+  reopened: 'Issues the owner reopened',
+}
 
 /**
  * The owner events that count as touches, of the given kinds. The orchestrator has its own actor, so it is excluded by
@@ -101,6 +108,20 @@ export const issuesFiled = (sql: SQL, w: Window): Promise<number> =>
     sql`SELECT count(*) AS n FROM factory.issue_events WHERE kind = 'filed' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}`,
   )
 
+/**
+ * Issues filed in the window that no loop of the factory filed: what a person, an agent or an alert asked for. A loop files
+ * through intake with a finding, so its Issue's intake subject is a finding key (`finding:`, the `FINDING_PREFIX` of intake's rules, which a test holds equal): the
+ * friction patterns and the weekly retro, hygiene, selfwatch and throughput alike; `loop_findings` holds the rows the ledger
+ * imported from before. The owner-touch rate divides by these, so a week the loops file hundreds of hygiene Issues does not
+ * make the owner's touches look rarer.
+ */
+const issuesFiledOutsideLoops = (sql: SQL, w: Window): Promise<number> =>
+  one(sql`
+    SELECT count(*) AS n FROM factory.issue_events e
+    WHERE e.kind = 'filed' AND e.result = 'applied' AND e.at >= ${w.from} AND e.at < ${w.to}
+      AND NOT EXISTS (SELECT 1 FROM factory.loop_findings lf WHERE lf.issue_id = e.issue_id)
+      AND NOT EXISTS (SELECT 1 FROM factory.intake_subjects s WHERE s.issue_id = e.issue_id AND s.subject LIKE 'finding:%')`)
+
 /** Owner touches of one kind this close together are one action: a person sending the same steer to a dozen Issues, or an owner script cancelling a re-planned batch. */
 const TOUCH_BURST_MS = 60_000
 
@@ -150,15 +171,6 @@ export async function orchestratorSteering(sql: SQL, w: Window): Promise<Record<
     counts[row.kind] = row.n
   }
   return counts
-}
-
-/** Refusals in the window: Issue events the machine refused, and ships the gate refused. */
-async function refusalCount(sql: SQL, w: Window): Promise<number> {
-  const events = await one(sql`
-    SELECT count(*) AS n FROM factory.issue_events WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to}`)
-  const ships = await one(sql`
-    SELECT count(*) AS n FROM factory.quality_ships WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to}`)
-  return events + ships
 }
 
 const durations = async (rows: Promise<unknown[]>): Promise<number[]> =>
@@ -261,8 +273,6 @@ async function sessionsOfIssues(tx: SQL, filed: readonly string[]): Promise<Arra
 interface Usage {
   cost: number | null
   points: number | null
-  /** the cost by tool, model and effort, biggest first; empty when unmeasured or the seat columns are not there */
-  seats: SeatCost[]
   /** why a figure is null; null when both were read */
   reason: string | null
 }
@@ -274,7 +284,6 @@ async function usageOf(
 ): Promise<Usage> {
   let sessions: Array<string | number | bigint>
   let cost: number
-  let seats: SeatCost[]
   let shares: boolean
   try {
     const found = await boundedRead(sql, options.timeoutMs, async (tx) => {
@@ -291,27 +300,25 @@ async function usageOf(
         WHERE r.session_id = ANY(${tx.array(ids, 'BIGINT')})`
       return { ids, cost: z.object({ cost: z.coerce.number() }).parse(sum).cost, shares: present.shares }
     })
-    if (!found) return { cost: null, points: null, seats: [], reason: 'The usage schema is not in this database' }
+    if (!found) return { cost: null, points: null, reason: 'The usage schema is not in this database' }
     ;({ ids: sessions, cost, shares } = found)
-    seats = await costBySeat(sql, { sessions, timeoutMs: options.timeoutMs })
   } catch {
     return {
       cost: null,
       points: null,
-      seats: [],
       reason: 'The usage schema could not be read: no access, or the read timed out',
     }
   }
   if (!shares) {
-    return { cost, points: null, seats, reason: 'The usage view session_window_share is not in this database' }
+    return { cost, points: null, reason: 'The usage view session_window_share is not in this database' }
   }
   if (sessions.length === 0) {
-    return { cost: null, points: null, seats: [], reason: 'No usage session is linked to an Issue filed in the window' }
+    return { cost: null, points: null, reason: 'No usage session is linked to an Issue filed in the window' }
   }
 
   const key = String(Bun.hash(sessions.map(String).sort().join(',')))
   const cached = options.cache.get(key, options.now)
-  if (cached !== undefined) return { cost, points: cached, seats, reason: null }
+  if (cached !== undefined) return { cost, points: cached, reason: null }
   try {
     const points = await boundedRead(sql, options.timeoutMs, async (tx) => {
       const [sum] = await tx`
@@ -320,30 +327,10 @@ async function usageOf(
       return z.object({ points: z.coerce.number() }).parse(sum).points
     })
     options.cache.set(key, points, options.now)
-    return { cost, points, seats, reason: null }
+    return { cost, points, reason: null }
   } catch {
-    return { cost, points: null, seats, reason: 'The window points read timed out' }
+    return { cost, points: null, reason: 'The window points read timed out' }
   }
-}
-
-/** The seats the cost KPI names; the rest are summed as one part. */
-const SEAT_PARTS = 12
-
-/** Cost per Issue by seat: the biggest spenders, then the rest as one part. */
-function seatParts(seats: readonly SeatCost[], issues: number): Kpi['parts'] {
-  if (issues === 0) return []
-  const part = (key: string, label: string, cost: number): Kpi['parts'][number] => ({
-    key,
-    label,
-    value: cost / issues,
-    unit: 'usd',
-  })
-  const named = seats.slice(0, SEAT_PARTS).map((seat) => {
-    const label = `${seat.tool} · ${seat.model} · ${seat.effort}`
-    return part(label, label, seat.cost)
-  })
-  const rest = seats.slice(SEAT_PARTS).reduce((sum, seat) => sum + seat.cost, 0)
-  return rest > 0 ? [...named, part('other', 'Other seats', rest)] : named
 }
 
 /**
@@ -373,7 +360,7 @@ export async function costOfIssues(sql: SQL, issues: readonly string[], timeoutM
  * The reviewer-agent dollars (the usage side's tool `reviewer`) of these Issues' sessions, split by the seat that ran
  * them: the haiku tier is the cheap seat, any other the rest. Null when the usage schema cannot be read.
  */
-async function reviewerCostOfIssues(
+export async function reviewerCostOfIssues(
   sql: SQL,
   issues: readonly string[],
   timeoutMs = USAGE_TIMEOUT_MS,
@@ -398,21 +385,25 @@ async function reviewerCostOfIssues(
   }
 }
 
-const kpi = (
-  k: Omit<Kpi, CatalogField | 'history' | 'parts' | 'reason'> & { parts?: Kpi['parts']; reason?: string },
-): Omit<Kpi, 'history'> => ({
+type Figure = Omit<Kpi, CatalogField | 'history' | 'parts' | 'beside' | 'reason'> & {
+  parts?: KpiPart[]
+  beside?: KpiPart[]
+  reason?: string
+}
+
+const kpi = (k: Figure): Omit<Kpi, 'history'> => ({
   ...k,
   ...catalogFields(k.key),
   parts: k.parts ?? [],
+  beside: k.beside ?? [],
   reason: k.reason ?? null,
 })
 
-/**
- * Fewer samples than this under a share or a duration is noise, not a reading: one verdict is 0 % or 100 %, two watches
- * are a coin. Such a KPI has no figure (`measured` false, the reason says how many it had); a rate per Issue stands on its
- * Issues and has no floor beyond one.
- */
-const MIN_SAMPLES = 3
+/** A figure as a part, or nothing when it has no number: a part is never a null. */
+const partOf = (key: string, label: string, value: number | null, unit: KpiPart['unit']): KpiPart[] =>
+  value === null || !Number.isFinite(value) ? [] : [{ key, label, value, unit }]
+
+/** The units a KPI under `MIN_SAMPLES` has no figure in (`measured` false, the reason says how many it had); a rate per Issue stands on its Issues and has no floor beyond one. */
 const FLOORED_UNITS: ReadonlySet<Kpi['unit']> = new Set(['share', 'ms'])
 
 /**
@@ -421,7 +412,7 @@ const FLOORED_UNITS: ReadonlySet<Kpi['unit']> = new Set(['share', 'ms'])
  */
 function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
   if (!k.measured) return { ...k, value: null, reason: k.reason ?? 'The factory has no data for this figure yet' }
-  // a count that is zero is a result (a week with no fix commit); every other figure over nothing has no value
+  // a count that is zero is a result; every other figure over nothing has no value
   if (k.value === null || (k.n === 0 && k.unit !== 'count'))
     return { ...k, value: null, measured: false, reason: 'Nothing was counted in the window' }
   if (FLOORED_UNITS.has(k.unit) && k.n < MIN_SAMPLES)
@@ -432,34 +423,6 @@ function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
       reason: `Only ${k.n} counted in the window; at least ${MIN_SAMPLES} are needed for a figure`,
     }
   return k
-}
-
-/**
- * Quota used at reset: the share of its weekly quota each account had used when its window reset, weighted by capacity, from the
- * reset ledger the accounts package keeps. A share of the quota (0 to 1), counted over the resets in the window; a window with
- * none, or a ledger this process cannot read, has no figure.
- */
-function quotaAtResetKpi(read: QuotaAtResetReader | undefined, w: Window): Omit<Kpi, 'history'> {
-  let found: ReturnType<QuotaAtResetReader> = null
-  let reason: string | undefined
-  try {
-    found = read ? read({ from: w.from, to: w.to }) : null
-    if (!read) reason = 'The accounts’ reset ledger is not read in this process'
-  } catch (error) {
-    reason = `The accounts’ reset ledger could not be read: ${error instanceof Error ? error.message : String(error)}`
-  }
-  const measured = found !== null && found.percent !== null
-  return kpi({
-    key: 'quota_at_reset',
-    value: found?.percent == null ? null : found.percent / 100,
-    unit: 'share',
-    n: found?.resets ?? 0,
-    count: found?.resets ?? 0,
-    measured,
-    ...(!measured && reason ? { reason } : {}),
-    definition:
-      'The weekly percent each account stood at when its weekly window reset, weighted by the account’s weekly capacity, over the resets in the window (the reset ledger of packages/accounts, read in the server’s process). Higher means less quota went unused; the target is none, demand sets the ceiling.',
-  })
 }
 
 /** Queue reasons (`queue_intervals.kind`) in the four groups the owner reads, and the rest. */
@@ -498,15 +461,26 @@ async function queueWaitParts(sql: SQL, w: Window): Promise<Kpi['parts']> {
     .toSorted((a, b) => b.value - a.value)
 }
 
-const FixTotals = z.object({ n: z.coerce.number().int() })
-
-/** Fix commits committed in the window, and whether the fix-classes loop has stored any at all. */
-async function fixCommitCounts(sql: SQL, w: Window): Promise<{ inWindow: number; ever: boolean }> {
-  const [row] = await sql`
-    SELECT count(*) FILTER (WHERE committed_at >= ${w.from} AND committed_at < ${w.to}) AS n,
-      count(*) AS total FROM factory.fix_commits`
-  const parsed = FixTotals.extend({ total: z.coerce.number().int() }).parse(row)
-  return { inWindow: parsed.n, ever: parsed.total > 0 }
+/**
+ * Quota used at reset: the share of its weekly quota each account had used when its window reset, weighted by capacity, from the
+ * reset ledger the accounts package keeps. A share of the quota (0 to 1), counted over the resets in the window; a window with
+ * none, or a ledger this process cannot read, has no figure.
+ */
+function quotaAtReset(
+  read: QuotaAtResetReader | undefined,
+  w: Window,
+): { value: number | null; resets: number; reason?: string } {
+  try {
+    if (!read) return { value: null, resets: 0, reason: 'The accounts’ reset ledger is not read in this process' }
+    const found = read({ from: w.from, to: w.to })
+    return { value: found?.percent == null ? null : found.percent / 100, resets: found?.resets ?? 0 }
+  } catch (error) {
+    return {
+      value: null,
+      resets: 0,
+      reason: `The accounts’ reset ledger could not be read: ${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
 }
 
 /** What the reset ledger of the accounts says of a span: the capacity-weighted mean weekly percent at reset, and how many resets stand under it. */
@@ -514,36 +488,20 @@ export type QuotaAtResetReader = (span: { from: Date; to: Date }) => { percent: 
 
 type KpiOptions = { now: Date; usageTimeoutMs?: number; pointsCache?: PointsCache; quotaAtReset?: QuotaAtResetReader }
 
-/** The KPIs of one window. Without `usage`, cost and window points are left unmeasured and the usage schema is not read. */
+/**
+ * The seven KPIs of one window. `detail` reads their parts and the figures beside them, and the usage schema behind the cost
+ * figures: only the current window shows those, so the history windows read the headlines alone.
+ */
 async function kpisOf(
   sql: SQL,
   w: Window,
   options: KpiOptions,
-  { usage: withUsage, parts: withParts }: { usage: boolean; parts: boolean },
+  { detail, usage }: { detail: boolean; usage: boolean },
 ): Promise<Array<Omit<Kpi, 'history'>>> {
-  const issues = await issuesFiled(sql, w)
-
+  const filed = await issuesFiledOutsideLoops(sql, w)
   const touches = await avoidableTouches(sql, w)
   const touchCount = Object.values(touches).reduce((a, b) => a + b, 0)
-
-  const asked = await one(sql`
-    SELECT count(*) AS n FROM factory.decisions
-    WHERE asked_at >= ${w.from} AND asked_at < ${w.to}
-      AND (settled_by IN ('owner', 'orchestrator') OR (answered_at IS NULL AND withdrawn_at IS NULL))`)
-  const byOwner = await one(sql`
-    SELECT count(*) AS n FROM factory.decisions WHERE settled_by = 'owner' AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
-  const recommended = await one(sql`
-    SELECT count(*) AS n FROM factory.decisions
-    WHERE settled_by = 'owner' AND lower(trim(answer)) = lower(trim(recommendation))
-      AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const reached = await errandsReached(sql, w)
-  const autoRun = await errandsAutoRun(sql, w)
-  const verdicts = await one(sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)}`)
-  const verdictsChanged = await one(
-    sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)} AND v.verdict IN ('with_notes', 'changes')`,
-  )
-  const specs = await one(sql`
-    SELECT count(*) AS n FROM factory.artifacts WHERE kind = 'spec' AND created_at >= ${w.from} AND created_at < ${w.to}`)
   const specsAtOwner = await one(sql`
     SELECT count(*) AS n FROM factory.verdicts v JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
     WHERE ${ownerVerdict(sql, w)}`)
@@ -554,126 +512,38 @@ async function kpisOf(
     SELECT count(*) AS n FROM factory.quality_watches WHERE watch = 1 AND answer IN ('passed', 'regressed') AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const firstPassed = await one(sql`
     SELECT count(*) AS n FROM factory.quality_watches WHERE watch = 1 AND answer = 'passed' AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
-  const refusals = await refusalCount(sql, w)
-  const regressions = withParts ? await regressionParts(sql, w) : []
   const cycles = await cycleTimes(sql, w)
   const waits = await queueWaits(sql, w)
-  const usage = withUsage
-    ? await usageOf(sql, w, {
-        now: options.now,
-        timeoutMs: options.usageTimeoutMs ?? USAGE_TIMEOUT_MS,
-        cache: options.pointsCache ?? sharedPoints,
-      })
-    : { cost: null, points: null, seats: [], reason: 'Usage is read for the current and the previous window only' }
-  const fixes = await fixCommitCounts(sql, w)
-  const weeks = (w.to.getTime() - w.from.getTime()) / (7 * 24 * 3_600_000)
-  const queueParts = withParts ? await queueWaitParts(sql, w) : []
+  const quota = quotaAtReset(options.quotaAtReset, w)
+  // every Issue filed, loops' included: the Errand and Spec rates and the cost figures divide by these
+  const issues = await issuesFiled(sql, w)
+
+  const side = detail ? await detailOf(sql, w, { ...options, usage }, { issues, filed, touches, reached }) : null
 
   const figures = [
     kpi({
       key: 'avoidable_touches',
-      value: per(touchCount, issues),
+      value: per(touchCount, filed),
       unit: 'per_issue',
-      n: issues,
+      n: filed,
       count: touchCount,
       measured: true,
       definition:
-        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window: a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, anything the orchestrator did (it is reported separately, as its own friction line), a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them. Touches of one kind within a minute of the one before count once: one steer sent to a dozen Issues, or one re-planned batch cancelled, is one action. The orchestrator is excluded only while it writes with its own token (`FACTORY_ORCHESTRATOR_TOKEN`); a session still on the owner token is counted as the owner.',
+        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window that no loop of the factory filed (a person, an agent or an alert asked for them; the friction, hygiene, selfwatch and throughput loops’ Issues are left out): a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, anything the orchestrator did (its own friction line), a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them. Touches of one kind within a minute of the one before count once: one steer sent to a dozen Issues, or one re-planned batch cancelled, is one action. A touch on an Issue a loop filed counts too: the factory filed work the owner had to step into. The parts are the touches by kind, per Issue; the count is beside the rate.',
+      parts: side?.touchParts ?? [],
+      beside: side?.touchBeside ?? [],
     }),
     kpi({
-      key: 'asks',
-      value: per(asked, issues),
-      unit: 'per_issue',
-      n: issues,
-      count: asked,
-      measured: true,
-      definition:
-        'Decisions raised in the window that the factory did not settle itself (the owner answered them, or they still wait), divided by the Issues filed in the window.',
-    }),
-    kpi({
-      key: 'specs_per_100',
-      value: issues === 0 ? null : (specs / issues) * 100,
-      unit: 'per_100_issues',
-      n: issues,
-      count: specs,
-      measured: true,
-      definition:
-        'Specs the leads submitted in the window (a lead hands one over when the Issue carries the checkpoint spec, or the change is a new public surface, a data model, a dependency of weight or a screen the owner has not seen), per 100 Issues filed in the window. Near zero for weeks means the Spec path is silent.',
-    }),
-    kpi({
-      key: 'owner_decisions_per_100',
-      value: issues === 0 ? null : (byOwner / issues) * 100,
-      unit: 'per_100_issues',
-      n: issues,
-      count: byOwner,
-      measured: true,
-      definition:
-        'Decisions the owner answered himself in the window (not the Judge, a policy or a default), per 100 Issues filed in the window. Read beside Specs per 100 Issues: both near zero means nothing reaches him.',
-    }),
-    kpi({
-      key: 'errands_reached_per_100',
-      value: issues === 0 ? null : (reached.n / issues) * 100,
-      unit: 'per_100_issues',
-      n: issues,
-      count: reached.n,
-      measured: true,
-      definition:
-        "Errands, an Issue's and a request's, that the screen let through to the owner in the window (the rules of their shape, the fixed MacBook verbs and the screen model keep the rest away from him), per 100 Issues filed in the window. The parts are the share of those that needs a secret (1Password, a biometric, a password), hands (a device, a portal, a physical step), a place on his MacBook or only his yes on the mini, and the share of secret and hands together: what is left of them after that is the figure to lower.",
-      parts:
-        reached.n === 0
-          ? []
-          : [
-              {
-                key: 'secret_or_hands',
-                label: 'Needing a secret, a password or hands',
-                value: (reached.secret + reached.hands) / reached.n,
-                unit: 'share',
-              },
-              {
-                key: 'secret',
-                label: 'Needing a secret or a password',
-                value: reached.secret / reached.n,
-                unit: 'share',
-              },
-              { key: 'hands', label: 'Needing hands', value: reached.hands / reached.n, unit: 'share' },
-              {
-                key: 'place',
-                label: 'Needing a place on his MacBook',
-                value: reached.place / reached.n,
-                unit: 'share',
-              },
-              { key: 'approval', label: 'Needing only his yes', value: reached.approval / reached.n, unit: 'share' },
-            ],
-    }),
-    kpi({
-      key: 'errands_no_secret_no_hands',
-      value: per(reached.place + reached.approval, reached.n),
+      key: 'first_verification_passes',
+      value: per(firstPassed, firstWatches),
       unit: 'share',
-      n: reached.n,
-      count: reached.place + reached.approval,
+      n: firstWatches,
+      count: firstPassed,
       measured: true,
       definition:
-        'Of the Errands that reached the owner in the window, the share that needed neither a secret nor hands: a command on his MacBook (`place`) or only his yes (`approval`). An Errand that reached him before `need` was stored counts under neither. Each one is a step the lead or a rule could have taken.',
-    }),
-    kpi({
-      key: 'errands_auto_run_share',
-      value: per(autoRun.auto, autoRun.n),
-      unit: 'share',
-      n: autoRun.n,
-      count: autoRun.auto,
-      measured: true,
-      definition:
-        "Of the Errands that reached the owner in the window, or that his MacBook ran by itself in it (a request can close before the screen reaches it), the share the MacBook's gate ran by itself (a granted auto-run class: no dialog, no click), closed with the evidence `ask-human: auto-run class <class>`. A command that no granted class covers keeps its dialog and does not count. Higher is less of his time.",
-    }),
-    kpi({
-      key: 'recommendation_taken',
-      value: per(recommended, byOwner),
-      unit: 'share',
-      n: byOwner,
-      count: recommended,
-      measured: true,
-      definition:
-        'Of the Decisions the owner answered in the window, the share where the option he chose is the one the lead recommended (the answer is the recommendation, ignoring case and spaces; a recommendation written as prose that names no option never matches, so the share can only be too low). It needs no click from him: the answer is the signal. Each one was an ask the lead could have decided itself.',
+        "Of the first watches (the window after an Issue's first ship) that ended in the window as passed or regressed, the share that passed. A watch that ended because its Issue moved on is not counted. A pass is as strong as its watch: the first watch's median dwell is beside it. The parts are the shares of first watches that regressed, by what failed in the last run: the CI, the project's verify, a deployed version that lacks the landed commit, a missing version probe, the checkout, another check (the first of these in that order names a regression that failed several).",
+      parts: side?.regressions ?? [],
+      beside: side?.flow.passBeside ?? [],
     }),
     kpi({
       key: 'specs_not_needed',
@@ -683,38 +553,20 @@ async function kpisOf(
       count: specsNotNeeded,
       measured: true,
       definition:
-        "Of the owner's own verdicts on a Spec in the window (the Spec screen passed it to him; the factory's looks_good on a Spec it settled, and a default after the wait, are not his), the share he marked not needed (`needed me: no`). An unmarked verdict does not count against it. Each mark is a precedent for the Spec screen and triage at once; the friction lines name who made each such Spec owed: triage, the filer, a Replan or the lead.",
+        "Of the owner's own verdicts on a Spec in the window (the Spec screen passed it to him; the factory's looks_good on a Spec it settled, and a default after the wait, are not his), the share he marked not needed (`needed me: no`). An unmarked verdict does not count against it. Beside it: the Specs per 100 Issues (near zero for weeks means the Spec path is silent) and the share of his verdicts that asked for notes or changes.",
+      beside: side?.specBeside ?? [],
     }),
     kpi({
-      key: 'verdict_changes_share',
-      value: per(verdictsChanged, verdicts),
-      unit: 'share',
-      n: verdicts,
-      count: verdictsChanged,
-      measured: true,
-      definition:
-        "Of the owner's own verdicts on a Concept, Spec or Report in the window (the defaults the factory gave when a wait ran out, and withdrawals, are not his), the share that was good with notes or changes. Lower is better: a lead that already knows his taste gets looks_good. The retro writes recurring notes down where the next lead reads them.",
-    }),
-    kpi({
-      key: 'first_verification_passes',
-      value: per(firstPassed, firstWatches),
-      unit: 'share',
-      n: firstWatches,
-      count: firstPassed,
-      parts: regressions,
-      measured: true,
-      definition:
-        "Of the first watches (the window after an Issue's first ship) that ended in the window as passed or regressed, the share that passed. A watch that ended because its Issue moved on is not counted. A pass is as strong as its watch: read it beside the first watch's dwell. The parts are the shares of first watches that regressed, by what failed in the last run: the CI, the project's verify, a deployed version that lacks the landed commit, a missing version probe, the checkout, another check (the first of these in that order names a regression that failed several).",
-    }),
-    kpi({
-      key: 'refusals',
-      value: per(refusals, issues),
-      unit: 'per_issue',
+      key: 'errands_reached_per_100',
+      value: issues === 0 ? null : (reached.n / issues) * 100,
+      unit: 'per_100_issues',
       n: issues,
-      count: refusals,
+      count: reached.n,
       measured: true,
       definition:
-        'Issue events the state machine refused (result refused) plus ships the gate refused, in the window, divided by the Issues filed in the window.',
+        "Errands, an Issue's and a request's, that the screen let through to the owner in the window (the rules of their shape, the fixed MacBook verbs and the screen model keep the rest away from him), per 100 Issues filed in the window. The parts are the share of those that needs a secret (1Password, a biometric, a password), hands (a device, a portal, a physical step), a place on his MacBook or only his yes on the mini. Beside it: the share that needed neither a secret nor hands, the share his MacBook ran by itself, and the share of raised Errands the screen turned away.",
+      parts: side?.errandParts ?? [],
+      beside: side?.errandBeside ?? [],
     }),
     kpi({
       key: 'cycle_p50',
@@ -723,7 +575,10 @@ async function kpisOf(
       n: cycles.length,
       count: null,
       measured: true,
-      definition: 'The median time from filed to closed of the Issues that closed in the window.',
+      definition:
+        'The median time from filed to closed of the Issues that closed in the window. The parts are the time Issues spent in each state and wait reason, for the intervals that ended in the window; beside it, the share of working and waiting spent working and the share of Issues closed dropped or cancelled after a lead started.',
+      parts: side?.flow.cycleParts ?? [],
+      beside: side?.flow.cycleBeside ?? [],
     }),
     kpi({
       key: 'queue_wait_p90',
@@ -733,47 +588,156 @@ async function kpisOf(
       count: null,
       measured: true,
       definition:
-        'The 90th percentile of the time from filed or reopened to admitted (a lead started), over the admissions in the window; settling and the chain are part of the wait. The parts are the queued time of the window by what held it: capacity (a seat, a cap, an account window, memory, load), an after edge, a draining queue, production red (a fix is queued and only fixes are admitted), and the rest.',
-      parts: queueParts,
+        'The 90th percentile of the time from filed or reopened to admitted (a lead started), over the admissions in the window; settling and the chain are part of the wait. The parts are the queued time of the window by what held it: capacity (a seat, a cap, an account window, memory, load), an after edge, a draining queue, production red (a fix is queued and only fixes are admitted), and the rest. Beside it: the share of queued hours in which an account had room.',
+      parts: side?.queueParts ?? [],
+      beside: side?.flow.queueBeside ?? [],
     }),
     kpi({
-      key: 'fix_commits',
-      value: fixes.inWindow / weeks,
-      unit: 'count',
-      n: fixes.inWindow,
-      count: fixes.inWindow,
-      measured: fixes.ever,
-      ...(fixes.ever ? {} : { reason: 'No fix commit is stored yet: the fix-classes loop has not sorted any' }),
+      key: 'quota_at_reset',
+      value: quota.value,
+      unit: 'share',
+      n: quota.resets,
+      count: quota.resets,
+      measured: quota.value !== null,
+      ...(quota.value === null && quota.reason ? { reason: quota.reason } : {}),
       definition:
-        'Commits on a project’s default branch whose subject is a conventional fix, committed in the window, per week of it. For a seven-day window this is the newest week of GET /v1/fix-commits; the class split is on the Improve screen.',
+        'The weekly percent each account stood at when its weekly window reset, weighted by the account’s weekly capacity, over the resets in the window (the reset ledger of packages/accounts, read in the server’s process). Higher means less quota went unused. Beside it: the points of the five-hour window and the dollars the sessions of the Issues filed in the window used, per Issue (from the usage schema; absent while it cannot be read).',
+      beside: side?.quotaBeside ?? [],
     }),
-    kpi({
-      key: 'window_points',
-      value: usage.points === null ? null : per(usage.points, issues),
-      unit: 'points',
-      n: withUsage ? issues : 0,
-      count: null,
-      measured: usage.points !== null,
-      ...(usage.points === null && usage.reason ? { reason: usage.reason } : {}),
-      definition:
-        "Points of the five-hour Max window that the sessions of the Issues filed in the window used, from the usage schema's session_window_share, divided by those Issues. Null while the usage schema or that view is not there.",
-    }),
-    kpi({
-      key: 'cost',
-      value: usage.cost === null ? null : per(usage.cost, issues),
-      unit: 'usd',
-      n: withUsage ? issues : 0,
-      count: null,
-      measured: usage.cost !== null,
-      ...(usage.cost === null && usage.reason ? { reason: usage.reason } : {}),
-      parts: usage.cost === null ? [] : seatParts(usage.seats, issues),
-      definition:
-        "Dollars the usage schema priced for the sessions of the Issues filed in the window (a session tagged with the Issue's number, or a Claude session its lead reported, with its subagents), divided by those Issues. Joined at read, never copied. The parts are the same dollars by seat (the tool: lead, worker, reviewer or a subagent type; the model; the effort), the twelve biggest and the rest as one. Null while the usage schema is not there.",
-    }),
-    quotaAtResetKpi(options.quotaAtReset, w),
-    ...(await flowKpis(sql, w)),
   ]
   return figures.map(withReason)
+}
+
+/** The parts and the beside-figures of the current window. */
+async function detailOf(
+  sql: SQL,
+  w: Window,
+  options: KpiOptions & { usage: boolean },
+  head: {
+    issues: number
+    filed: number
+    touches: Record<string, number>
+    reached: Awaited<ReturnType<typeof errandsReached>>
+  },
+) {
+  const { issues, filed, touches, reached } = head
+  const asked = await one(sql`
+    SELECT count(*) AS n FROM factory.decisions
+    WHERE asked_at >= ${w.from} AND asked_at < ${w.to}
+      AND (settled_by IN ('owner', 'orchestrator') OR (answered_at IS NULL AND withdrawn_at IS NULL))`)
+  const byOwner = await one(sql`
+    SELECT count(*) AS n FROM factory.decisions WHERE settled_by = 'owner' AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
+  const recommended = await one(sql`
+    SELECT count(*) AS n FROM factory.decisions
+    WHERE settled_by = 'owner' AND lower(trim(answer)) = lower(trim(recommendation))
+      AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
+  const verdicts = await one(sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)}`)
+  const verdictsChanged = await one(
+    sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)} AND v.verdict IN ('with_notes', 'changes')`,
+  )
+  const specs = await one(sql`
+    SELECT count(*) AS n FROM factory.artifacts WHERE kind = 'spec' AND created_at >= ${w.from} AND created_at < ${w.to}`)
+  const autoRun = await errandsAutoRun(sql, w)
+  const usage = options.usage
+    ? await usageOf(sql, w, {
+        now: options.now,
+        timeoutMs: options.usageTimeoutMs ?? USAGE_TIMEOUT_MS,
+        cache: options.pointsCache ?? sharedPoints,
+      })
+    : { cost: null, points: null }
+  const flow = await flowFigures(sql, w)
+
+  return {
+    flow,
+    regressions: await regressionParts(sql, w),
+    queueParts: await queueWaitParts(sql, w),
+    touchParts:
+      filed === 0
+        ? []
+        : Object.entries(touches)
+            .filter(([, count]) => count > 0)
+            .toSorted((a, b) => b[1] - a[1])
+            .map(([kind, count]): KpiPart => ({
+              key: `touch:${kind}`,
+              label: TOUCH_LABELS[kind] ?? kind,
+              value: count / filed,
+              unit: 'per_issue',
+            })),
+    // the keys of the figures beside a KPI are the keys they had as KPIs of their own: a retro marker naming one still reads it
+    touchBeside: [
+      ...partOf('loop_filed', 'Issues the factory’s own loops filed (not in the rate)', issues - filed, 'count'),
+      ...partOf('asks', 'Decisions the factory did not settle, per Issue filed', per(asked, issues), 'per_issue'),
+      ...partOf(
+        'owner_decisions_per_100',
+        'Decisions the owner answered, per 100 Issues filed',
+        issues === 0 ? null : (byOwner / issues) * 100,
+        'per_100_issues',
+      ),
+      ...partOf(
+        'recommendation_taken',
+        'Owner answers that took the recommendation',
+        shareOf(recommended, byOwner),
+        'share',
+      ),
+    ],
+    specBeside: [
+      ...partOf(
+        'specs_per_100',
+        'Specs per 100 Issues filed',
+        issues === 0 ? null : (specs / issues) * 100,
+        'per_100_issues',
+      ),
+      ...partOf(
+        'verdict_changes_share',
+        'Owner verdicts with notes or changes',
+        shareOf(verdictsChanged, verdicts),
+        'share',
+      ),
+    ],
+    errandParts:
+      reached.n === 0
+        ? []
+        : [
+            {
+              key: 'secret',
+              label: 'Needing a secret or a password',
+              value: reached.secret / reached.n,
+              unit: 'share' as const,
+            },
+            { key: 'hands', label: 'Needing hands', value: reached.hands / reached.n, unit: 'share' as const },
+            {
+              key: 'place',
+              label: 'Needing a place on his MacBook',
+              value: reached.place / reached.n,
+              unit: 'share' as const,
+            },
+            {
+              key: 'approval',
+              label: 'Needing only his yes',
+              value: reached.approval / reached.n,
+              unit: 'share' as const,
+            },
+          ].toSorted((a, b) => b.value - a.value),
+    errandBeside: [
+      ...partOf(
+        'errands_no_secret_no_hands',
+        'Reached him needing neither a secret nor hands',
+        shareOf(reached.place + reached.approval, reached.n),
+        'share',
+      ),
+      ...partOf('errands_auto_run_share', 'Run by his MacBook by itself', shareOf(autoRun.auto, autoRun.n), 'share'),
+      ...flow.errandsBeside,
+    ],
+    quotaBeside: [
+      ...partOf(
+        'window_points',
+        'Five-hour window points per Issue filed',
+        usage.points === null ? null : per(usage.points, issues),
+        'points',
+      ),
+      ...partOf('cost', 'Dollars per Issue filed', usage.cost === null ? null : per(usage.cost, issues), 'usd'),
+    ],
+  }
 }
 
 /**
@@ -800,35 +764,47 @@ async function mapBounded<T, R>(
   return results
 }
 
-/** Windows older than this many back (0 is the current one) skip the usage schema: its figures are expensive. */
-const USAGE_WINDOWS = 2
+/**
+ * The windows behind a KPI read: `HISTORY_WINDOWS` of `days` days, oldest first, the last ending now. None ends before the
+ * counting epoch, and the one it falls into starts at it: a figure from before the factory counted is not history.
+ */
+function kpiWindows(now: Date, days: number, epoch: Date | null): Window[] {
+  const step = days * 24 * 3_600_000
+  const all = Array.from({ length: HISTORY_WINDOWS }, (_, i) =>
+    windowOf(new Date(now.getTime() - (HISTORY_WINDOWS - 1 - i) * step), days),
+  )
+  if (epoch === null) return all
+  const kept = all
+    .filter((w) => w.to.getTime() > epoch.getTime())
+    .map((w) => (w.from.getTime() < epoch.getTime() ? { from: epoch, to: w.to } : w))
+  // an epoch in the future (a clock that is off) cuts nothing it cannot: the current window stays
+  return kept.length > 0 ? kept : all.slice(-1)
+}
 
 /**
- * The table in `docs/product.md`, computed over the last `days` days from the event log and the checkpoint tables, with the
- * same figures over the `HISTORY_WINDOWS - 1` windows of `days` days before it (usage only for the one before).
+ * The seven KPIs over the last `days` days from the event log and the checkpoint tables, with each one's history over the windows
+ * of `days` days before it since the counting epoch (`kpiWindows`). Only the current window reads the parts and the figures
+ * beside a KPI.
  */
 export async function readKpis(
   sql: SQL,
   options: {
     now: Date
     days: number
+    /** the counting epoch: no window reaches back before it; absent or null, six windows */
+    epoch?: Date | null
     usageTimeoutMs?: number
     pointsCache?: PointsCache
     /** the accounts' reset ledger (`packages/accounts`); absent or null, `quota_at_reset` has no figure */
     quotaAtReset?: QuotaAtResetReader
-    /** the role table's reviewer rows, for the words beside the reviewer numbers; absent: the numbers stand alone */
-    reviewerRows?: { cheap: { tier: Tier; effort: Effort }; reviewer: { tier: Tier; effort: Effort } } | null
   },
 ): Promise<KpiModel> {
-  const step = options.days * 24 * 3_600_000
-  // oldest first; window k ends where window k + 1 starts, the last is exactly `windowOf(now, days)`
-  const windows = Array.from({ length: HISTORY_WINDOWS }, (_, i) =>
-    windowOf(new Date(options.now.getTime() - (HISTORY_WINDOWS - 1 - i) * step), options.days),
-  )
+  const epoch = options.epoch ?? null
+  const windows = kpiWindows(options.now, options.days, epoch)
   const lists = await mapBounded(windows, WINDOW_CONCURRENCY, (w, i) =>
-    kpisOf(sql, w, options, { usage: i >= HISTORY_WINDOWS - USAGE_WINDOWS, parts: i === HISTORY_WINDOWS - 1 }),
+    kpisOf(sql, w, options, { detail: i === windows.length - 1, usage: i === windows.length - 1 }),
   )
-  const current = lists[HISTORY_WINDOWS - 1] ?? []
+  const current = lists.at(-1) ?? []
   const kpis: Kpi[] = current.map((k) => ({
     ...k,
     history: lists.map((list) => {
@@ -836,22 +812,21 @@ export async function readKpis(
       return { value: point?.value ?? null, n: point?.n ?? 0 }
     }),
   }))
-  const last = windows[HISTORY_WINDOWS - 1] ?? windowOf(options.now, options.days)
+  const last = windows.at(-1) ?? windowOf(options.now, options.days)
+  const first = windows[0] ?? last
   return {
     at: options.now.toISOString(),
     days: options.days,
     window: { from: last.from.toISOString(), to: last.to.toISOString() },
     windows: windows.map((w) => ({ from: w.from.toISOString(), to: w.to.toISOString() })),
+    since: epoch !== null && first.from.getTime() === epoch.getTime() ? epoch.toISOString() : null,
     kpis,
-    seats: await readSeatKpis(sql, last, {
-      now: options.now,
-      cost: (issues) => costOfIssues(sql, issues, options.usageTimeoutMs),
-      ...(options.usageTimeoutMs === undefined ? {} : { usageTimeoutMs: options.usageTimeoutMs }),
-    }),
-    reviewers: await readReviewerKpis(sql, last, {
-      now: options.now,
-      table: { cheap: options.reviewerRows?.cheap ?? null, reviewer: options.reviewerRows?.reviewer ?? null },
-      cost: (issues) => reviewerCostOfIssues(sql, issues, options.usageTimeoutMs),
-    }),
   }
 }
+
+/**
+ * The seven KPIs of one window with their parts and no history, the usage schema not read: what the friction pass judges
+ * against the targets.
+ */
+export const kpisOfWindow = (sql: SQL, w: Window, options: KpiOptions): Promise<Array<Omit<Kpi, 'history'>>> =>
+  kpisOf(sql, w, options, { detail: true, usage: false })

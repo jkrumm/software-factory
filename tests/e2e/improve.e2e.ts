@@ -2,8 +2,8 @@ import {
   CAPACITY_HINT,
   comparisonWords,
   constantRows,
-  distanceWords,
   drawsHistory,
+  FIX_HINT,
   fixCard,
   fixClassRows,
   fixWeeksOldestFirst,
@@ -23,6 +23,7 @@ import {
   perDayWords,
   SEAT_LABEL,
   shortDate,
+  subWords,
   targetTally,
   tripwireWords,
   REVIEWER_LABEL,
@@ -30,7 +31,7 @@ import {
   deliveryRows,
   windowWords,
 } from '../../apps/console/src/lib/improve.ts'
-import type { CapacityLoopModel, Kpi, KpiModel } from '@software-factory/contract'
+import type { CapacityLoopModel, Kpi, KpiModel, SeatsModel } from '@software-factory/contract'
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { expectHint } from './hints.ts'
@@ -42,34 +43,14 @@ interface FrictionModel {
 }
 type FixModel = Parameters<typeof fixClassRows>[0] & { measured: boolean }
 
-/** The cards in the Console's own order, band by band; the fix-commit card follows. */
+/** The seven KPIs; the fix-commit card follows them. */
 const CARD_ORDER = [
-  'first_verification_passes',
   'avoidable_touches',
-  'asks',
-  'recommendation_taken',
+  'first_verification_passes',
   'specs_not_needed',
-  'specs_per_100',
-  'owner_decisions_per_100',
   'errands_reached_per_100',
-  'errands_no_secret_no_hands',
-  'errands_auto_run_share',
-  'verdict_changes_share',
-  'first_watch_dwell_p50',
-  'issues_closed_per_day',
   'cycle_p50',
   'queue_wait_p90',
-  'refusals',
-  'queue_capacity_share',
-  'idle_capacity',
-  'working_share',
-  'dropped_after_lead',
-  'test_slot_wait_p50',
-  'minutes_over_ceiling',
-  'nudges_acted',
-  'errands_turned_away',
-  'window_points',
-  'cost',
   'quota_at_reset',
 ]
 const FIX_TITLE = 'Fix commits per week'
@@ -85,9 +66,9 @@ const cardKpis = (model: KpiModel): Kpi[] => {
   return found
 }
 
-/** The folds hide their cards until opened: open every one. */
+/** The folds below the KPIs hide their rows until opened: open every one. */
 const openFolds = async (page: Page) => {
-  await expect(page.getByRole('heading', { name: 'Off target', level: 2 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'KPIs', level: 2 })).toBeVisible()
   const closed = page
     .getByRole('group', { name: 'Key figures' })
     .locator('button[aria-controls][aria-expanded="false"]')
@@ -96,8 +77,9 @@ const openFolds = async (page: Page) => {
 
 /** Each KPI card shows what the lib makes of the API's figure, history and target: figure, change, distance, footer. */
 async function expectCards(page: Page, model: KpiModel) {
-  expect(model.kpis).toHaveLength(28)
-  expect(model.windows).toHaveLength(6)
+  expect(model.kpis).toHaveLength(7)
+  // the history starts at the counting epoch: the seed's epoch is ten days back
+  expect(model.windows.length).toBeGreaterThanOrEqual(1)
   for (const kpi of cardKpis(model)) {
     const card = cardOf(page, kpi.label)
     await expect(card, kpi.key).toHaveCount(1)
@@ -119,46 +101,38 @@ async function expectCards(page: Page, model: KpiModel) {
       await expect(chart).toHaveCount(0)
       continue
     }
-    const distance = distanceWords(kpi)
-    // no target to judge: the footer's Target pair says so, and the card says it nowhere else
-    if (distance === null) await expect(card.getByText(target.value, { exact: true })).toHaveCount(1)
-    else await expect(card.getByText(distance, { exact: true }).first()).toBeVisible()
+    const sub = subWords(kpi)
+    // a target it is judged by says how far; none yet says why (the catalog's target source)
+    if (sub === null) await expect(card.getByText(target.value, { exact: true })).toHaveCount(1)
+    else await expect(card.getByText(sub, { exact: true }).first()).toBeVisible()
     const change = kpiChange(kpi)
     await expect(card.locator('[data-tone]')).toHaveText(change.text)
     await expect(card.locator('[data-tone]')).toHaveAttribute('data-tone', change.tone)
-    if (drawsHistory(kpi)) await expect(chart.locator('tbody tr')).toHaveCount(6)
+    if (drawsHistory(kpi)) await expect(chart.locator('tbody tr')).toHaveCount(model.windows.length)
     else await expect(chart).toHaveCount(0)
   }
 }
 
-test('the page opens on what is off target; what is met and what has no figure sit in folds', async ({
+test('the seven KPIs are one band, what is off target first, with the tally of the targets met', async ({
   page,
   apiUrl,
 }) => {
   const [kpis] = await read(apiUrl, 7)
-  const groups = groupKpis(kpis.kpis)
   const { met, judged } = targetTally(kpis.kpis)
   await page.goto('/improve')
-  const region = page.getByRole('group', { name: 'Key figures' })
-  const off = page.locator('[data-shot="improve-target"]')
-  await expect(off.getByRole('heading', { name: 'Off target', level: 2 })).toBeVisible()
-  if (judged > 0) await expect(off.getByText(`${met} of ${judged} targets met, ${groups.off.length} not`)).toBeVisible()
-  await expect(off.getByRole('article')).toHaveCount(groups.off.length)
-  const unmeasured = region.getByRole('button', { name: /^Not measured/ })
-  const onTarget = region.getByRole('button', { name: /^On target/ })
-  await expect(unmeasured).toHaveCount(groups.unmeasured.length > 0 ? 1 : 0)
-  await expect(onTarget).toHaveCount(groups.met.length > 0 ? 1 : 0)
-  // on target is folded: its cards are not shown until opened
-  if (groups.met.length > 0) {
-    await expect(onTarget).toHaveAttribute('aria-expanded', 'false')
-    await expect(page.locator('[data-shot="improve-met"]').getByRole('article').first()).toBeHidden()
-    await onTarget.click()
-    await expect(page.locator('[data-shot="improve-met"]').getByRole('article').first()).toBeVisible()
-  }
+  const band = page.locator('[data-shot="improve-target"]')
+  await expect(band.getByRole('heading', { name: 'KPIs', level: 2 })).toBeVisible()
+  await expect(
+    band.getByText(judged > 0 ? `${met} of ${judged} targets met` : 'No target could be judged'),
+  ).toBeVisible()
+  await expect(band.getByRole('article')).toHaveCount(7)
+  await expect(band.locator('article h3')).toHaveText(cardKpis(kpis).map((k) => k.label))
 })
 
 const read = (apiUrl: string, days: number) =>
   Promise.all([api<KpiModel>(apiUrl, `/v1/kpis?days=${days}`), api<FrictionModel>(apiUrl, `/v1/friction?days=${days}`)])
+
+const readSeats = (apiUrl: string) => api<SeatsModel>(apiUrl, '/v1/seats?days=7')
 
 test('one card per KPI in the order the Console shows, each the figures the API says, then the fix-commit card', async ({
   page,
@@ -172,9 +146,8 @@ test('one card per KPI in the order the Console shows, each the figures the API 
   const grid = page.getByRole('group', { name: 'Key figures' })
   await openFolds(page)
   await expect(grid.locator('article h3')).toHaveText([...cardKpis(kpis).map((k) => k.label), FIX_TITLE])
-  const headings = ['Off target', ...(groupKpis(kpis.kpis).trend.length > 0 ? ['No target, trends only'] : [])]
   await expect(grid.getByRole('heading', { level: 2 })).toHaveText([
-    ...headings,
+    'KPIs',
     'By seat',
     'What the light seat delivers',
     'Reviewers',
@@ -212,7 +185,7 @@ test('the KPIs with a history draw it: a tooltip per point names its window and 
   const withHistory = cardKpis(kpis).filter(
     (k) => drawsHistory(k) && k.history.filter((p) => p.value !== null).length > 1,
   )
-  expect(withHistory.length, 'the seed gives some KPI a real history').toBeGreaterThanOrEqual(3)
+  expect(withHistory.length, 'the seed gives some KPI a reading in the window the epoch cut').toBeGreaterThanOrEqual(1)
   await page.goto('/improve')
   await openFolds(page)
   for (const kpi of withHistory.slice(0, 3)) {
@@ -227,7 +200,7 @@ test('the definition of what is counted is one keyboard press away on every card
   const [kpis] = await read(apiUrl, 7)
   await page.goto('/improve')
   await openFolds(page)
-  for (const kpi of [kpis.kpis[0], kpis.kpis.find((k) => k.key === 'cost')]) {
+  for (const kpi of [kpis.kpis[0], kpis.kpis.find((k) => k.key === 'quota_at_reset')]) {
     if (!kpi) throw new Error('a KPI is missing')
     const button = cardOf(page, kpi.label).getByRole('button', { name: `${kpi.label}: what is counted` })
     await button.focus()
@@ -243,7 +216,7 @@ test('every KPI card title and the watches carry an InfoHint with the generated 
   await page.goto('/improve')
   await openFolds(page)
   for (const kpi of cardKpis(kpis)) await expectHint(cardOf(page, kpi.label), KPI_HINT[kpi.key])
-  await expectHint(cardOf(page, FIX_TITLE), KPI_HINT.fix_commits)
+  await expectHint(cardOf(page, FIX_TITLE), FIX_HINT)
   const first = kpis.kpis.find((k) => k.key === 'first_verification_passes')
   if (!first) throw new Error('the first verification passes are not in the API answer')
   await expectHint(cardOf(page, first.label), 'watch')
@@ -270,9 +243,7 @@ test('a KPI the API does not measure says Not measured and why, and no id leaks 
   const [kpis] = await read(apiUrl, 7)
   await page.goto('/improve')
   await openFolds(page)
-  for (const key of ['cost', 'window_points']) {
-    const kpi = kpis.kpis.find((k) => k.key === key)
-    if (!kpi) throw new Error(`${key} is not in the API answer`)
+  for (const kpi of kpis.kpis.filter((k) => !k.measured)) {
     const card = cardOf(page, kpi.label)
     await expect(card.getByText(formatKpi(kpi), { exact: true }).first()).toBeVisible()
     if (kpi.measured) continue
@@ -341,9 +312,6 @@ test('the fix-commit card reads the API: the newest week, the change, the legend
   const model = await api<FixModel>(apiUrl, '/v1/fix-commits')
   expect(model.measured).toBe(true)
   const card = fixCard(model)
-  // the KPI is wired to the same data: the newest week is the number the fix-commits read returns
-  const [kpis] = await read(apiUrl, 7)
-  expect(kpis.kpis.find((k) => k.key === 'fix_commits')).toMatchObject({ measured: true, value: card.latest })
   await page.goto('/improve')
   const article = cardOf(page, FIX_TITLE)
   await expect(article.getByText(String(card.latest), { exact: true }).first()).toBeVisible()
@@ -472,15 +440,15 @@ test('the queue wait card names what the wait is made of, largest first, from th
   const largest = rows[0]
   // an open interval grows between the API read and the page's, so the share is matched as a number
   await expect(
-    card.getByText(new RegExp(`^Mostly ${largest?.label.toLowerCase()}, \\d+ % of the time Issues waited$`)),
+    card.getByText(new RegExp(`^Mostly ${largest?.label.toLowerCase()}, \\d+ % of the parts$`)),
   ).toBeVisible()
-  const list = card.getByRole('list', { name: /by reason/ })
+  const list = card.getByRole('list', { name: /by part/ })
   await expect(list.getByRole('listitem')).toHaveCount(rows.length)
   await expect(list.getByRole('listitem').first()).toContainText(largest?.label ?? '')
 })
 
 test('the By seat section tables the three seats and says where the tripwire stands', async ({ page, apiUrl }) => {
-  const [kpis] = await read(apiUrl, 7)
+  const kpis = await readSeats(apiUrl)
   await page.goto('/improve')
   const section = page.locator('[data-shot="improve-seats"]')
   await expect(section.getByRole('heading', { name: 'By seat' })).toBeVisible()
@@ -492,7 +460,7 @@ test('the By seat section tables the three seats and says where the tripwire sta
 })
 
 test('the light seat delivery table shows the four figures, each with its definition', async ({ page, apiUrl }) => {
-  const [kpis] = await read(apiUrl, 7)
+  const kpis = await readSeats(apiUrl)
   await page.goto('/improve')
   const section = page.locator('[data-shot="improve-light-delivery"]')
   await expect(section.getByRole('heading', { name: 'What the light seat delivers' })).toBeVisible()
@@ -506,7 +474,7 @@ test('the reviewers table shows both seats with the five measures, and the tripw
   page,
   apiUrl,
 }) => {
-  const [kpis] = await read(apiUrl, 7)
+  const kpis = await readSeats(apiUrl)
   await page.goto('/improve')
   const section = page.locator('[data-shot="improve-reviewers"]')
   await expect(section.getByRole('heading', { name: 'Reviewers' })).toBeVisible()

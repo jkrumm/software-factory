@@ -1,15 +1,14 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { FrictionModel, KpiModel } from '@software-factory/contract'
+import { FrictionModel, KPI_KEYS, KpiModel, THRESHOLDS } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
-import { readFixCommits } from '../../src/read/fix-commits.ts'
 import { readFriction } from '../../src/read/friction.ts'
 import { readKpis } from '../../src/read/kpis.ts'
 
 /**
- * What the Improve page rests on: a KPI with no figure says why instead of reading zero, fix commits are the number
- * `/v1/fix-commits` returns, the queue wait is split by what held it, and a friction count carries the window before.
+ * What the Improve page rests on: a KPI with no figure says why instead of reading zero, the history starts at the counting
+ * epoch, the queue wait is split by what held it, and a friction count carries the window before.
  */
 let db: TestCluster
 let sql: SQL
@@ -56,28 +55,25 @@ afterAll(async () => {
   await db.stop()
 })
 
-test('fix commits are the number the fix-commits read returns, and not measured until one is stored', async () => {
-  const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-  const fixes = model.kpis.find((k) => k.key === 'fix_commits')
-  const read = await readFixCommits(sql, { now: NOW })
-  expect(read.weeks[0]?.total).toBe(3)
-  expect(fixes).toMatchObject({ measured: true, value: 3, n: 3, count: 3, unit: 'count', reason: null })
-  // the week before is the history's second to last reading, and the week the read calls second
-  expect(fixes?.history.at(-2)).toEqual({ value: read.weeks[1]?.total ?? null, n: read.weeks[1]?.total ?? 0 })
-  const thirty = KpiModel.parse(await readKpis(sql, { now: NOW, days: 28 }))
-  expect(thirty.kpis.find((k) => k.key === 'fix_commits')?.value).toBe(5 / 4)
+test('the history starts at the counting epoch: no window ends before it, and the one it falls into starts at it', async () => {
+  const all = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
+  expect(all.windows).toHaveLength(6)
+  expect(all.since).toBeNull()
+  const epoch = ago(10 * DAY)
+  const cut = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7, epoch }))
+  expect(cut.windows).toHaveLength(2)
+  expect(cut.windows[0]?.from).toBe(epoch.toISOString())
+  expect(cut.windows.at(-1)).toEqual(all.windows.at(-1))
+  expect(cut.since).toBe(epoch.toISOString())
+  for (const kpi of cut.kpis) expect(kpi.history, kpi.key).toHaveLength(2)
 })
 
-test('a week with no fix commit is a measured zero, as the fix-commits read says', async () => {
-  const later = new Date(NOW.getTime() + 30 * DAY * 3_600_000)
-  const model = KpiModel.parse(await readKpis(sql, { now: later, days: 7 }))
-  expect((await readFixCommits(sql, { now: later })).weeks[0]?.total).toBe(0)
-  expect(model.kpis.find((k) => k.key === 'fix_commits')).toMatchObject({
-    measured: true,
-    value: 0,
-    n: 0,
-    reason: null,
-  })
+test('the read serves the seven KPIs, each with a target or the reason it has none yet', async () => {
+  const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
+  expect(model.kpis.map((k) => k.key)).toEqual([...KPI_KEYS])
+  for (const kpi of model.kpis)
+    if (kpi.target.kind === 'trend') expect(kpi.targetSource, kpi.key).toMatch(/^No target yet/)
+    else expect(kpi.target).toEqual(THRESHOLDS.kpis[kpi.key])
 })
 
 test('the queue wait is split by what held it, the largest first, and nothing is made up', async () => {
@@ -96,7 +92,7 @@ test('the queue wait is split by what held it, the largest first, and nothing is
 
 test('a ratio over nothing and a share under the floor read as not measured, never zero', async () => {
   const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-  for (const key of ['recommendation_taken', 'specs_not_needed', 'first_verification_passes', 'cycle_p50']) {
+  for (const key of ['specs_not_needed', 'first_verification_passes', 'cycle_p50']) {
     const kpi = model.kpis.find((k) => k.key === key)
     expect(kpi, key).toMatchObject({ value: null, measured: false })
     expect(kpi?.reason, key).toContain('counted')

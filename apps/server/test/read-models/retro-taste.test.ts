@@ -70,8 +70,10 @@ describe('the retro bundle carries the owner’s taste', () => {
 
   test('verdict_changes_share is the owner’s with_notes and changes over all his verdicts, the factory’s default not counted', async () => {
     const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: 7 }))
-    const share = model.kpis.kpis.find((k) => k.key === 'verdict_changes_share')
-    expect(share).toMatchObject({ n: 3, count: 2 })
+    // beside the Specs not needed, under the key it had as a KPI of its own
+    const specs = model.kpis.kpis.find((k) => k.key === 'specs_not_needed')
+    const share = specs?.beside.find((p) => p.key === 'verdict_changes_share')
+    expect(share?.unit).toBe('share')
     expect(share?.value).toBeCloseTo(2 / 3, 9)
   })
 

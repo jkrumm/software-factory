@@ -7,19 +7,16 @@ import type {
   KpiKey,
   KpiModel,
   LoopYieldModel,
+  SeatsModel,
 } from '@software-factory/contract'
 import {
-  ChatCircleDotsIcon,
   CheckCircleIcon,
-  CurrencyDollarIcon,
   FileTextIcon,
   GaugeIcon,
   HandPointingIcon,
   HourglassIcon,
   ArmchairIcon,
   type Icon,
-  ProhibitIcon,
-  ScalesIcon,
   SealCheckIcon,
   TimerIcon,
   WrenchIcon,
@@ -44,8 +41,10 @@ import {
   yieldWords,
   comparisonWords,
   DEFAULT_WINDOW,
-  distanceWords,
+  besideWords,
   drawsHistory,
+  FIX_HINT,
+  FIX_MEANING,
   fixCard,
   fixClassRows,
   fixWeekLabel,
@@ -65,6 +64,7 @@ import {
   KPI_HINT,
   kpiFooter,
   partWords,
+  subWords,
   lineTone,
   mibWords,
   msWords,
@@ -91,7 +91,15 @@ import {
 import { percentWords } from '@/lib/throughput'
 import { ImproveSkeleton } from '@/components/skeletons'
 import { useScreen, useScreenNote } from '@/lib/screen'
-import { useCapacityLoop, useFindingClasses, useFixCommits, useFriction, useKpis, useLoopYield } from '@/lib/queries'
+import {
+  useCapacityLoop,
+  useFindingClasses,
+  useFixCommits,
+  useFriction,
+  useKpis,
+  useLoopYield,
+  useSeats,
+} from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/improve')({
@@ -108,33 +116,12 @@ const LATTICE = 'grid-cols-1 @3xl:grid-cols-2 @7xl:grid-cols-4'
 const BAND_CARD = 'row-span-3 grid grid-rows-subgrid gap-y-1 self-stretch'
 
 const KPI_ICON: Record<KpiKey, Icon> = {
-  first_verification_passes: SealCheckIcon,
   avoidable_touches: HandPointingIcon,
-  asks: ChatCircleDotsIcon,
-  recommendation_taken: ScalesIcon,
-  errands_no_secret_no_hands: HandPointingIcon,
-  errands_auto_run_share: HandPointingIcon,
-  issues_closed_per_day: SealCheckIcon,
-  test_slot_wait_p50: HourglassIcon,
-  minutes_over_ceiling: GaugeIcon,
+  first_verification_passes: SealCheckIcon,
   specs_not_needed: FileTextIcon,
-  specs_per_100: FileTextIcon,
-  owner_decisions_per_100: ChatCircleDotsIcon,
   errands_reached_per_100: HandPointingIcon,
-  verdict_changes_share: FileTextIcon,
-  refusals: ProhibitIcon,
-  queue_wait_p90: HourglassIcon,
   cycle_p50: TimerIcon,
-  window_points: GaugeIcon,
-  cost: CurrencyDollarIcon,
-  fix_commits: WrenchIcon,
-  queue_capacity_share: HourglassIcon,
-  idle_capacity: GaugeIcon,
-  working_share: TimerIcon,
-  dropped_after_lead: ProhibitIcon,
-  nudges_acted: ChatCircleDotsIcon,
-  errands_turned_away: HandPointingIcon,
-  first_watch_dwell_p50: TimerIcon,
+  queue_wait_p90: HourglassIcon,
   quota_at_reset: GaugeIcon,
 }
 
@@ -193,7 +180,7 @@ function KpiCard({ kpi, model, className }: { kpi: Kpi; model: KpiModel; classNa
           ? { value: change.text, direction: change.direction, tone: change.tone }
           : undefined
       }
-      sub={distanceWords(kpi) ?? undefined}
+      sub={subWords(kpi) ?? undefined}
       meaning={MEANING[kpi.key]}
       extra={PARTS_ON_CARD.has(kpi.key) ? <PartsList kpi={kpi} /> : undefined}
       chart={
@@ -214,7 +201,7 @@ function KpiCard({ kpi, model, className }: { kpi: Kpi; model: KpiModel; classNa
       footer={kpiFooter(kpi)}
       menu={
         <MenuPopover label={`${kpi.label}: what is counted`} title="What is counted">
-          {kpi.definition}
+          <span className="block">{kpi.definition}</span>
           {kpi.parts.length > 0 ? (
             <ul className="mt-2 list-disc pl-4">
               {partWords(kpi).map((line) => (
@@ -222,13 +209,23 @@ function KpiCard({ kpi, model, className }: { kpi: Kpi; model: KpiModel; classNa
               ))}
             </ul>
           ) : null}
+          {kpi.beside.length > 0 ? (
+            <>
+              <span className="mt-2 block font-medium">Read beside it</span>
+              <ul className="mt-1 list-disc pl-4">
+                {besideWords(kpi).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </MenuPopover>
       }
     />
   )
 }
 
-/** What a figure is made of: the largest part named, then every part with its share, largest first. */
+/** What a figure is made of: the largest part named, then every part with its share of the parts, largest first. */
 function PartsList({ kpi }: { kpi: Kpi }) {
   const rows = partRows(kpi)
   const [largest] = rows
@@ -236,9 +233,9 @@ function PartsList({ kpi }: { kpi: Kpi }) {
   return (
     <div className="flex flex-col gap-1.5 text-[length:var(--vx-text-sm)]">
       <p className="font-medium">
-        Mostly {largest.label.toLowerCase()}, {Math.round(largest.share * 100)} % of the time Issues waited
+        Mostly {largest.label.toLowerCase()}, {Math.round(largest.share * 100)} % of the parts
       </p>
-      <ul aria-label={`${kpi.label}: by reason`} className="flex flex-col gap-1">
+      <ul aria-label={`${kpi.label}: by part`} className="flex flex-col gap-1">
         {rows.map((row) => (
           <li key={row.key} className="flex flex-col gap-0.5">
             <span className="flex items-baseline justify-between gap-3">
@@ -284,13 +281,13 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
     icon: WrenchIcon,
     title: 'Fix commits per week',
     subtitle: 'This week against the one before',
-    meaning: MEANING.fix_commits,
+    meaning: FIX_MEANING,
   }
   if (!model || !model.measured) {
     return (
       <StatCard
         {...common}
-        hint={KPI_HINT.fix_commits}
+        hint={FIX_HINT}
         value={model || !pending ? 'Not measured' : 'Loading'}
         sub={model ? 'No fix commit is stored yet: the fix-classes loop has not sorted any' : undefined}
         chart={model ? null : <Skeleton height={CHART_HEIGHT} />}
@@ -307,7 +304,7 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
   return (
     <StatCard
       {...common}
-      hint={KPI_HINT.fix_commits}
+      hint={FIX_HINT}
       value={card.latest}
       delta={{ value: card.change.text, direction: card.change.direction, tone: card.tone }}
       sub="Falling is the target"
@@ -345,48 +342,16 @@ function CardGrid({ kpis, model }: { kpis: Kpi[]; model: KpiModel }) {
   )
 }
 
-/** The page by what needs attention: off target first, then the trends, with what is on target and what has no figure (and why) folded below. */
+/** The seven KPIs in one band, ordered by what needs attention: off target first, then those with no target yet, those on target and those with no figure (each says why). */
 function KpiSections({ model }: { model: KpiModel }) {
   const groups = groupKpis(model.kpis)
   const { met, judged } = targetTally(model.kpis)
   return (
-    <>
-      <div data-shot="improve-target">
-        <Section
-          title="Off target"
-          aside={judged > 0 ? `${met} of ${judged} targets met, ${groups.off.length} not` : undefined}
-        >
-          {groups.off.length > 0 ? (
-            <CardGrid kpis={groups.off} model={model} />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {judged > 0 ? 'Every target that can be judged is met.' : 'No target could be judged.'}
-            </p>
-          )}
-        </Section>
-      </div>
-      {groups.trend.length > 0 ? (
-        <div data-shot="improve-trend">
-          <Section title="No target, trends only">
-            <CardGrid kpis={groups.trend} model={model} />
-          </Section>
-        </div>
-      ) : null}
-      {groups.met.length > 0 ? (
-        <div data-shot="improve-met">
-          <Fold title="On target" count={groups.met.length}>
-            <CardGrid kpis={groups.met} model={model} />
-          </Fold>
-        </div>
-      ) : null}
-      {groups.unmeasured.length > 0 ? (
-        <div data-shot="improve-unmeasured">
-          <Fold title="Not measured" count={groups.unmeasured.length}>
-            <CardGrid kpis={groups.unmeasured} model={model} />
-          </Fold>
-        </div>
-      ) : null}
-    </>
+    <div data-shot="improve-target">
+      <Section title="KPIs" aside={judged > 0 ? `${met} of ${judged} targets met` : 'No target could be judged'}>
+        <CardGrid kpis={[...groups.off, ...groups.trend, ...groups.met, ...groups.unmeasured]} model={model} />
+      </Section>
+    </div>
   )
 }
 
@@ -1058,7 +1023,7 @@ const REVIEWER_COLUMNS = [
   { key: 'wall', label: 'Wall time p50' },
 ] as const
 
-function ReviewerSection({ model }: { model: KpiModel }) {
+function ReviewerSection({ model }: { model: SeatsModel }) {
   const { rows } = model.reviewers
   return (
     <div data-shot="improve-reviewers" className="mt-6">
@@ -1107,7 +1072,7 @@ function ReviewerSection({ model }: { model: KpiModel }) {
   )
 }
 
-function SeatSection({ model }: { model: KpiModel }) {
+function SeatSection({ model }: { model: SeatsModel }) {
   const { rows, tripwire, delivery } = model.seats
   return (
     <div data-shot="improve-seats">
@@ -1203,6 +1168,7 @@ function Improve() {
   const yields = useLoopYield()
   const fixes = useFixCommits()
   const capacity = useCapacityLoop(days)
+  const seats = useSeats(days)
 
   if (!kpis.data) {
     return (
@@ -1223,8 +1189,12 @@ function Improve() {
       <div role="group" aria-label="Key figures" className="@container">
         <div className="grid gap-10">
           <KpiSections model={model} />
-          <SeatSection model={model} />
-          <ReviewerSection model={model} />
+          {seats.data ? (
+            <>
+              <SeatSection model={seats.data} />
+              <ReviewerSection model={seats.data} />
+            </>
+          ) : null}
           <FixBand model={fixes.data} pending={fixes.isPending} />
           <FrictionSection model={friction.data} pending={friction.isPending} />
           <LoopYieldSection model={yields.data} />

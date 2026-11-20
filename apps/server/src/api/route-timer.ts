@@ -41,10 +41,11 @@ const PORT_WAITING = [/^\/signals(?:\/(?:alerts|feedback))?$/, /^\/issues\/[^/]+
 /**
  * The report reads: each scans a window of days of events and Issues, so seconds are their cost and not a sign of a server
  * that is up but useless (2026-11-19, a quiet host: `GET /v1/retro` 9.7 s for one day and over 87 s for the default seven,
- * `/v1/throughput` 1.8 s, `/v1/kpis` 1.4 s; one call of the weekly retro lead or a Console page filed a slow-routes alert).
+ * `/v1/throughput` 1.8 s, `/v1/kpis` 1.4 s with the seat figures `/v1/seats` now reads; one call of the weekly retro lead or a
+ * Console page filed a slow-routes alert).
  * Every route the loops and the Console depend on stays timed, so a hung database still shows on those.
  */
-const REPORT_READS = [/^\/v1\/(?:retro|throughput|kpis)$/]
+const REPORT_READS = [/^\/v1\/(?:retro|throughput|kpis|seats)$/]
 
 /** The routes whose time says nothing about the database: the health route (it never queries), a stream that stays open by design, the routes that wait on a port and the report reads. */
 const untimed = (request: Request): boolean => {

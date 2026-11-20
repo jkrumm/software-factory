@@ -50,19 +50,35 @@ Friction is any counted waste: an avoidable touch, a refusal, an undelivered not
 - **A refusal is counted by its class, not its text.** The stored text names a commit, a branch or an Issue, so each row was its own key and never added up. `read/refusal-class.ts` gives every refusal a class (`commit_not_on_base`, `waits_for_errand`, `closed`, and so on; an unknown text is its own class by its wording with shas, paths and numbers replaced) and friction sums the rows of one class.
 - **One signal per pattern,** with the evidence Issues (five at most) and the command that shows the count again. An open Issue of the same pattern is amended, not doubled.
 - **Retired mechanisms are never judged.** The review gate is gone, so its refusals do not count.
+- **A KPI off its target is a finding.** Each pass also reads the seven KPIs over its window. One off its target over a whole window (seven days the counting epoch did not cut) files `kpi:<key>`, and the signal names the KPI's largest part: for avoidable touches, the touch kind to remove first. The KPI targets and the friction rules are one table in the contract, so the loop and the Improve screen judge by the same numbers.
 
-<!-- snippet: apps/server/src/domains/loops/friction.ts THRESHOLDS -->
+<!-- snippet: packages/contract/src/thresholds.ts THRESHOLDS -->
 ```ts
-export const THRESHOLDS: Record<Judged, Rule> = {
-  refusal: {
-    min: 3,
-    rate: 0.05,
-    why: 'the same class of refusal on one in twenty closed Issues is a rule or a prompt that is wrong (a class sums every sha and branch it named: 60 of 1,000 is a finding)',
-  },
-  stall: { min: 2, rate: null, why: 'a stall twice in a week is a cause, not weather' },
+export const THRESHOLDS = {
+  /** The seven KPI targets. A `trend` target is a KPI with no number yet; its catalog row says why. */
+  kpis: {
+    avoidable_touches: atMost(0.07),
+    first_verification_passes: atLeast(0.9),
+    specs_not_needed: atMost(0.2),
+    errands_reached_per_100: NONE_YET,
+    cycle_p50: atMost(3 * HOUR_MS),
+    queue_wait_p90: atMost(8 * HOUR_MS),
+    quota_at_reset: atLeast(0.9),
+  } satisfies Record<KpiKey, KpiTargetValue>,
+  friction: {
+    /** A rate stands on at least this many Issues closed in the window; under it, no rate-judged pattern is a finding. */
+    minClosed: 10,
+    /** The rule of each group. */
+    groups: {
+      refusal: {
+        min: 3,
+        rate: 0.05,
+        why: 'the same class of refusal on one in twenty closed Issues is a rule or a prompt that is wrong (a class sums every sha and branch it named: 60 of 1,000 is a finding)',
+      },
+      stall: { min: 2, rate: null, why: 'a stall twice in a week is a cause, not weather' },
 ```
 
-The excerpt is the start of `THRESHOLDS`, not the whole table. `issue_1818` came from the `stall` rule. On 2026-11-17 at 02:06 the loop filed "Stalled because something blocked the lead" (`factory issue show issue_1818 --format json`, 2026-11-17):
+The excerpt is the start of `THRESHOLDS`: the seven KPI targets, then the friction rules, not the whole table. `issue_1818` came from the `stall` rule. On 2026-11-17 at 02:06 the loop filed "Stalled because something blocked the lead" (`factory issue show issue_1818 --format json`, 2026-11-17):
 
 ```text
 Pattern: Stalled because something blocked the lead (stall:blocked)
@@ -76,9 +92,10 @@ The lead traced the 77. 47 were one Issue looping: it asked, the Judge answered,
 
 **Example files:**
 
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L45-L94): every rule with its minimum, its rate and the reason in one line.
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L150-L174): `patternsOver`, the counts over their rule, most frequent first.
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L205-L219): the signal text, which names the window, the count, the threshold and how to look again.
+- [`thresholds.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/thresholds.ts#L40-L121): the KPI targets and every friction rule with its minimum, its rate and the reason in one line.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L88-L108): `patternsOver`, the counts over their rule, most frequent first.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L125-L145): `kpisOffTarget`, the KPIs off their target over a whole window, each with its largest part.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L184-L205): the signal text, which names the window, the count, the threshold and how to look again.
 
 ## Selfwatch
 

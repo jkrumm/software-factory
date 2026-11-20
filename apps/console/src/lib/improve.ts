@@ -1,16 +1,17 @@
-import type {
-  CapacityLoopModel,
-  FindingClass,
-  FixCommitsModel,
-  FrictionCount,
-  Kpi,
-  KpiKey,
-  LoopYieldWindow,
-  SeatDelivery,
-  SeatKpiRow,
-  ReviewerKpiRow,
-  ReviewerKpis,
-  SeatKpis,
+import {
+  type CapacityLoopModel,
+  type FindingClass,
+  type FixCommitsModel,
+  type FrictionCount,
+  type Kpi,
+  type KpiKey,
+  type LoopYieldWindow,
+  type SeatDelivery,
+  type SeatKpiRow,
+  type ReviewerKpiRow,
+  type ReviewerKpis,
+  type SeatKpis,
+  meetsTarget,
 } from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone'
 import type { LANGUAGE } from './language.gen'
@@ -72,7 +73,7 @@ export function formatKpi(kpi: Pick<Kpi, 'value' | 'unit' | 'measured'>): string
 export function targetWords(kpi: Pick<Kpi, 'target' | 'unit'>): string {
   const { kind, min, max } = kpi.target
   const show = (n: number) => formatValue(kpi.unit, n)
-  if (kind === 'trend') return 'Trend only'
+  if (kind === 'trend') return 'None yet'
   if (kind === 'between' && min !== null && max !== null) return `${show(min)} to ${show(max)}`
   if (kind === 'at_most' && max !== null) return `at most ${show(max)}`
   if (kind === 'at_least' && min !== null) return `at least ${show(min)}`
@@ -81,13 +82,8 @@ export function targetWords(kpi: Pick<Kpi, 'target' | 'unit'>): string {
 
 export type TargetStatus = 'met' | 'missed' | 'trend' | 'no_target' | 'no_data' | 'not_measured'
 
-/** Whether `v` meets the target; null when the target judges nothing (trend, unset, or a bound missing). */
-function meets({ kind, min, max }: Kpi['target'], v: number): boolean | null {
-  if (kind === 'between') return min === null || max === null ? null : v >= min && v <= max
-  if (kind === 'at_most') return max === null ? null : v <= max
-  if (kind === 'at_least') return min === null ? null : v >= min
-  return null
-}
+/** Whether `v` meets the target; null when the target judges nothing (trend, unset, or a bound missing): the contract's rule, the one the friction loop judges by. */
+const meets = meetsTarget
 
 export function targetStatus(kpi: Pick<Kpi, 'value' | 'measured' | 'target'>): TargetStatus {
   if (!kpi.measured) return 'not_measured'
@@ -112,32 +108,11 @@ export function targetTally(kpis: readonly Pick<Kpi, 'value' | 'measured' | 'tar
 
 const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   avoidable_touches: ['Issue', 'Issues'],
-  asks: ['Issue', 'Issues'],
-  recommendation_taken: ['Decision', 'Decisions'],
-  errands_no_secret_no_hands: ['Errand', 'Errands'],
-  errands_auto_run_share: ['Errand', 'Errands'],
-  issues_closed_per_day: ['day', 'days'],
-  test_slot_wait_p50: ['step', 'steps'],
-  minutes_over_ceiling: ['minute', 'minutes'],
-  specs_not_needed: ['Spec verdict', 'Spec verdicts'],
-  specs_per_100: ['Issue', 'Issues'],
-  owner_decisions_per_100: ['Issue', 'Issues'],
-  errands_reached_per_100: ['Issue', 'Issues'],
-  verdict_changes_share: ['verdict', 'verdicts'],
   first_verification_passes: ['watch', 'watches'],
-  refusals: ['Issue', 'Issues'],
+  specs_not_needed: ['Spec verdict', 'Spec verdicts'],
+  errands_reached_per_100: ['Issue', 'Issues'],
   cycle_p50: ['sample', 'samples'],
   queue_wait_p90: ['sample', 'samples'],
-  fix_commits: ['fix commit', 'fix commits'],
-  window_points: ['Issue', 'Issues'],
-  cost: ['Issue', 'Issues'],
-  queue_capacity_share: ['queue interval', 'queue intervals'],
-  idle_capacity: ['hour', 'hours'],
-  working_share: ['interval', 'intervals'],
-  dropped_after_lead: ['Issue', 'Issues'],
-  nudges_acted: ['nudge', 'nudges'],
-  errands_turned_away: ['Errand', 'Errands'],
-  first_watch_dwell_p50: ['watch', 'watches'],
   quota_at_reset: ['reset', 'resets'],
 }
 
@@ -150,38 +125,24 @@ export function sampleWords(kpi: Pick<Kpi, 'key' | 'n'>): string {
 /** The domain word each KPI's title carries an InfoHint for. */
 export const KPI_HINT = {
   avoidable_touches: 'avoidable touch',
-  asks: 'ask',
-  recommendation_taken: 'decision',
-  errands_no_secret_no_hands: 'errand',
-  errands_auto_run_share: 'errand',
-  issues_closed_per_day: 'cycle',
-  test_slot_wait_p50: 'test slot',
-  minutes_over_ceiling: 'load ceiling',
-  specs_not_needed: 'needed me',
-  specs_per_100: 'spec',
-  owner_decisions_per_100: 'decision',
-  errands_reached_per_100: 'errand',
-  verdict_changes_share: 'verdict',
   first_verification_passes: 'first verification pass',
-  refusals: 'refusal',
+  specs_not_needed: 'needed me',
+  errands_reached_per_100: 'errand',
   cycle_p50: 'cycle',
   queue_wait_p90: 'queue wait',
-  fix_commits: 'fix commit',
-  window_points: 'window point',
-  cost: 'cost',
-  queue_capacity_share: 'queue wait',
-  idle_capacity: 'idle',
-  working_share: 'running',
-  dropped_after_lead: 'dropped',
-  nudges_acted: 'steward',
-  errands_turned_away: 'turn away',
-  first_watch_dwell_p50: 'watch',
   quota_at_reset: 'quota used at reset',
 } as const satisfies Record<KpiKey, InfoWord>
+
+/** The fix-commit card's word: fix commits have a band of their own, not a KPI card. */
+export const FIX_HINT: InfoWord = 'fix commit'
 
 /** The breakdown of a KPI as the "what is counted" popover lists it: one line per part, in the KPI's unit. */
 export const partWords = (kpi: Pick<Kpi, 'parts'>): string[] =>
   kpi.parts.map((part) => `${part.label}: ${formatValue(part.unit, part.value)}`)
+
+/** The figures read beside a KPI, as the popover lists them: one line each, in its own unit. */
+export const besideWords = (kpi: Pick<Kpi, 'beside'>): string[] =>
+  kpi.beside.map((figure) => `${figure.label}: ${formatValue(figure.unit, figure.value)}`)
 
 /** The word the sample noun of a KPI is hinted by, where the noun is a domain word of its own ("13 watches"). */
 const SAMPLE_HINT = { first_verification_passes: 'watch' } as const satisfies Partial<Record<KpiKey, InfoWord>>
@@ -444,92 +405,54 @@ export function historyXLabels(
 export const comparisonWords = (days: number): string => `Last ${days} days against the ${days} before`
 
 /** The footer pairs of a KPI card. */
-export function kpiFooter(kpi: Pick<Kpi, 'key' | 'n' | 'measured' | 'target' | 'unit'>): [FooterPair, FooterPair] {
+export function kpiFooter(
+  kpi: Pick<Kpi, 'key' | 'n' | 'count' | 'measured' | 'target' | 'unit'>,
+): [FooterPair, FooterPair] {
   const hint = SAMPLE_HINT[kpi.key as keyof typeof SAMPLE_HINT]
   return [
     { label: 'Target', value: targetWords(kpi) },
-    { label: 'Counted', value: sampleWords(kpi), ...(hint ? { hint } : {}) },
+    { label: 'Counted', value: countedWords(kpi), ...(hint ? { hint } : {}) },
   ]
 }
+
+/** What a rate stands on, the absolute count first: "58 over 1,263 Issues"; a share or a duration says its sample alone. */
+function countedWords(kpi: Pick<Kpi, 'key' | 'n' | 'count' | 'unit'>): string {
+  const rate = kpi.unit === 'per_issue' || kpi.unit === 'per_100_issues'
+  return rate && kpi.count !== null ? `${kpi.count} over ${sampleWords(kpi)}` : sampleWords(kpi)
+}
+
+/** The card's sub line: how far the KPI is from its target, or, with no number for one yet, why. */
+export const subWords = (
+  kpi: Pick<Kpi, 'value' | 'unit' | 'measured' | 'target' | 'reason' | 'targetSource'>,
+): string | null => distanceWords(kpi) ?? (kpi.target.kind === 'trend' ? kpi.targetSource : null)
 
 // ---- what a card says in plain words, and the order of the page --------------------------------------------------------
 
 /** One sentence per KPI, for a reader who knows none of the words: what it is, then which way is good. */
 export const MEANING: Record<KpiKey, string> = {
   avoidable_touches:
-    'How often you had to step in on something the factory should have settled, per Issue filed. Lower is better.',
-  asks: 'How many Decisions the factory put to you or left open, per Issue filed. Lower is better.',
-  recommendation_taken:
-    'Of the Decisions you answered, how many you answered with the option the lead recommended: a question the lead could have decided. Lower is better.',
-  errands_no_secret_no_hands:
-    'Of the Errands that reached you, how many needed neither a secret nor your hands: a step a command could take. Lower is better.',
-  errands_auto_run_share:
-    'Of the Errands that reached you, or that your MacBook ran by itself before they reached you, how many ran with no click from a command class you granted once. Higher is better.',
-  issues_closed_per_day: 'How many Issues closed per day, whatever the outcome. Higher is faster.',
-  test_slot_wait_p50: 'How long a typical check step waited for a test slot before it ran. Shorter is better.',
-  minutes_over_ceiling:
-    'The share of minutes the host ran above its load ceiling. Lower is better: the host is not overcommitted.',
+    'How often you had to step in on something the factory should have settled, per Issue a person, an agent or an alert filed. Lower is better.',
+  first_verification_passes: 'Of the first checks after a ship, how many passed. Higher is better.',
   specs_not_needed: 'Of the Specs sent to you, how many you said did not need you. Lower is better.',
-  specs_per_100:
-    'How many Specs the leads wrote per 100 Issues. Neither direction is good by itself; zero for weeks means the Spec path is silent.',
-  owner_decisions_per_100:
-    'How many Decisions you answered yourself per 100 Issues. Neither direction is good by itself; zero for weeks means nothing reaches you.',
   errands_reached_per_100:
     'How many Errands got through to you per 100 Issues: a device, a portal or a secret only you can supply. Lower is better.',
-  verdict_changes_share:
-    'Of your verdicts on a Concept, Spec or Report, how many asked for notes or changes. Lower is better.',
-  first_verification_passes: 'Of the first checks after a ship, how many passed. Higher is better.',
-  refusals: 'How often the state machine or the ship gate refused something, per Issue filed. Lower is better.',
   cycle_p50: 'How long a typical Issue takes from filed to closed. Shorter is better.',
   queue_wait_p90: 'How long the slowest tenth of Issues wait before a lead starts on them. Shorter is better.',
-  fix_commits: 'How many fix commits landed per week, each one a mistake that shipped. Fewer is better.',
-  window_points: 'How much of the five-hour Max window the sessions of an Issue used, per Issue. Lower is cheaper.',
-  cost: 'What the sessions of an Issue cost in dollars, per Issue. Lower is cheaper.',
-  queue_capacity_share:
-    'Of the time Issues waited for a lead to start, the share an after edge did not hold: capacity, a cap or a slot. Lower is better.',
-  idle_capacity:
-    'How often an account had room while an Issue waited for a lead with nothing holding it. Lower is better: capacity went unused.',
-  working_share:
-    'How much of a lead’s time goes into the work itself rather than into holding for something. Higher is better.',
-  dropped_after_lead:
-    'Of the Issues closed after a lead started, how many were dropped or cancelled: lead time that shipped nothing. Lower is better.',
-  nudges_acted: 'Of the steward’s reminders to a lead, how many the lead acted on within 30 minutes. Higher is better.',
-  errands_turned_away:
-    'Of the Errands leads raised, how many the screen turned away before they reached you. Higher means less of your time went to needless Errands.',
   quota_at_reset:
     'How much of its weekly quota each account had used when its week reset, weighted by plan size. Higher means less went unused.',
-  first_watch_dwell_p50:
-    'How long a first check takes to answer. Neither direction is good by itself: a pass over checks that answer in seconds proves little, and one that takes an hour slows the queue.',
 }
+
+/** The fix-commit card's sentence: fix commits have a band of their own, not a KPI card. */
+export const FIX_MEANING = 'How many fix commits landed per week, each one a mistake that shipped. Fewer is better.'
 
 /** The KPIs the page lists as cards, in the order each group keeps (fix commits have their own band). */
 export const KPI_ORDER: readonly KpiKey[] = [
-  'first_verification_passes',
   'avoidable_touches',
-  'asks',
-  'recommendation_taken',
+  'first_verification_passes',
   'specs_not_needed',
-  'specs_per_100',
-  'owner_decisions_per_100',
   'errands_reached_per_100',
-  'errands_no_secret_no_hands',
-  'errands_auto_run_share',
-  'verdict_changes_share',
-  'first_watch_dwell_p50',
-  'issues_closed_per_day',
   'cycle_p50',
   'queue_wait_p90',
-  'refusals',
-  'queue_capacity_share',
-  'idle_capacity',
-  'working_share',
-  'dropped_after_lead',
-  'test_slot_wait_p50',
-  'minutes_over_ceiling',
-  'nudges_acted',
-  'errands_turned_away',
-  'window_points',
-  'cost',
   'quota_at_reset',
 ]
 
@@ -585,7 +508,11 @@ export function partRows(kpi: Pick<Kpi, 'parts'>): PartRow[] {
 }
 
 /** The KPIs whose card shows what the figure is made of (the others keep that in the popover). */
-export const PARTS_ON_CARD: ReadonlySet<KpiKey> = new Set(['queue_wait_p90'])
+export const PARTS_ON_CARD: ReadonlySet<KpiKey> = new Set([
+  'avoidable_touches',
+  'errands_reached_per_100',
+  'queue_wait_p90',
+])
 
 // ---- the fix-commit card -----------------------------------------------------------------------------------------------
 

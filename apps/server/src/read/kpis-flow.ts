@@ -1,20 +1,15 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { Kpi, KpiPart } from '@software-factory/contract'
-import { catalogFields, type CatalogField } from './kpi-fields.ts'
-import { percentile, per } from './stats.ts'
+import type { KpiPart } from '@software-factory/contract'
+import { MIN_SAMPLES, percentile, shareOf } from './stats.ts'
 import type { Window } from './kpis.ts'
 
 /**
- * The KPIs the event log, the checkpoint tables and the delivery log answer by themselves: where Issues waited and why, how
- * much capacity sat idle behind a non-empty queue, how a lead's time divides, what was spent on Issues that were dropped,
- * what the loops' own paths cost (amends, nudges, notes, Errands) and why a first watch regressed. Each is read-only SQL over
- * one window, so each can be checked by SQL over the same window (`apps/server/test/read-models/kpis-flow.test.ts`).
+ * The figures the event log, the checkpoint tables and the delivery log answer by themselves, read as parts of a KPI or beside
+ * one: how much capacity sat idle behind a non-empty queue, how an Issue's time divides by state, what was spent on Issues that
+ * were dropped, what the screen did with the Errands, how long a first watch took and why one regressed. Each is read-only SQL
+ * over one window, so each can be checked by SQL over the same window (`apps/server/test/read-models/kpis-flow.test.ts`).
  */
-
-type Figure = Omit<Kpi, 'history' | 'reason' | CatalogField>
-
-const Duration = z.object({ ms: z.coerce.number() })
 
 /** An open-ended edge or interval: later than any window. */
 const NEVER = new Date('9999-01-01T00:00:00Z')
@@ -29,11 +24,6 @@ export const REGRESSION_CAUSES = [
   ['other', 'A probe or another check failed'],
 ] as const
 
-/** The Issue events that count as a lead visibly acting after a nudge (a lead's own verb, not a note). */
-const ACTION_KINDS = ['shipped', 'asked', 'deferred', 'closed', 'submitted', 'errand_raised', 'stalled'] as const
-/** How long after a steward's note a lead's action still counts as its answer. */
-const NUDGE_ANSWER_MS = 30 * 60_000
-
 /** An account has room while its five-hour window is below this share and the week is not nearly used. */
 const ROOM_FIVE_HOUR_BELOW = 50
 const ROOM_WEEKLY_BELOW = 90
@@ -44,25 +34,6 @@ const part = (key: string, label: string, value: number, unit: KpiPart['unit']):
   value,
   unit,
 })
-
-/** Queued time that ended in the window, in ms, and how much of it an unmet `after` edge held. */
-async function queuedTime(sql: SQL, w: Window) {
-  const [row] = await sql`
-    WITH ev AS (
-      SELECT issue_id, to_state, at, lead(at) OVER (PARTITION BY issue_id ORDER BY version) AS nxt
-      FROM factory.issue_events WHERE result = 'applied'),
-    q AS (SELECT issue_id, at AS s, nxt AS e FROM ev WHERE to_state = 'queued' AND nxt >= ${w.from} AND nxt < ${w.to}),
-    b AS (
-      SELECT issue_id, min(created_at) AS b0, max(coalesce(satisfied_at, ${NEVER})) AS b1
-      FROM factory.planning_edges GROUP BY issue_id)
-    SELECT count(*) AS n,
-      coalesce(sum(extract(epoch FROM q.e - q.s)), 0) * 1000 AS total_ms,
-      coalesce(sum(CASE WHEN b.issue_id IS NULL THEN 0
-        ELSE extract(epoch FROM greatest(least(q.e, b.b1) - greatest(q.s, b.b0), interval '0')) END), 0) * 1000 AS chain_ms
-    FROM q LEFT JOIN b ON b.issue_id = q.issue_id`
-  const parsed = z.object({ n: z.coerce.number(), total_ms: z.coerce.number(), chain_ms: z.coerce.number() }).parse(row)
-  return { n: parsed.n, total: parsed.total_ms, chain: parsed.chain_ms }
-}
 
 /**
  * Hours of the window when an Issue no `after` edge held sat queued while an account had room, and the hours an Issue like
@@ -136,19 +107,6 @@ async function closedWithLead(sql: SQL, w: Window) {
   return z.object({ n: z.coerce.number(), dropped: z.coerce.number(), cancelled: z.coerce.number() }).parse(row)
 }
 
-/** Steward notes sent in the window, and those a lead's own verb followed within `NUDGE_ANSWER_MS`. */
-async function nudges(sql: SQL, w: Window) {
-  const [row] = await sql`
-    SELECT count(*) AS n, count(*) FILTER (WHERE EXISTS (
-      SELECT 1 FROM factory.issue_events x
-      WHERE x.issue_id = n.issue_id AND x.result = 'applied' AND x.actor = 'lead'
-        AND x.kind IN ${sql([...ACTION_KINDS])}
-        AND x.at > n.at AND x.at <= n.at + ${NUDGE_ANSWER_MS / 1000}::int * interval '1 second')) AS acted
-    FROM factory.issue_events n
-    WHERE n.kind = 'noted' AND n.actor = 'steward' AND n.result = 'applied' AND n.at >= ${w.from} AND n.at < ${w.to}`
-  return z.object({ n: z.coerce.number(), acted: z.coerce.number() }).parse(row)
-}
-
 /** Errands raised in the window, by what the screen did before the owner saw them. */
 async function errandCounts(sql: SQL, w: Window) {
   const [row] = await sql`
@@ -196,8 +154,6 @@ export function regressionCause(failed: readonly string[]): (typeof REGRESSION_C
   return 'other'
 }
 
-const kpi = (k: Figure): Omit<Kpi, 'history'> => ({ ...k, ...catalogFields(k.key), reason: null })
-
 /**
  * Why the first watches that ended in the window regressed, as shares of all first watches that ended: the parts of
  * `first_verification_passes`. A regression that failed several checks counts under the first cause in `REGRESSION_CAUSES`.
@@ -215,194 +171,69 @@ export async function regressionParts(sql: SQL, w: Window): Promise<KpiPart[]> {
   )
 }
 
-const DAY_MS = 24 * 3_600_000
-
-/** Issues that closed in the window, any outcome: the count the capacity loop's `closed_per_day` reads (without its epoch cut). */
-async function closedCount(sql: SQL, w: Window): Promise<number> {
-  const [row] = await sql`
-    SELECT count(*) AS n FROM factory.issue_events
-    WHERE result = 'applied' AND to_state = 'closed' AND at >= ${w.from} AND at < ${w.to}`
-  return z.object({ n: z.coerce.number() }).parse(row).n
+/** The flow figures of one window, as parts and beside-figures of the KPIs they explain. */
+export interface FlowFigures {
+  /** cycle_p50's parts: the ms Issues spent in each state and wait reason, largest first */
+  cycleParts: KpiPart[]
+  /** beside cycle_p50: the working share and the dropped-after-lead share */
+  cycleBeside: KpiPart[]
+  /** beside queue_wait_p90: the share of queued hours in which an account had room */
+  queueBeside: KpiPart[]
+  /** beside errands_reached_per_100: the share of raised Errands the screen turned away */
+  errandsBeside: KpiPart[]
+  /** beside first_verification_passes: the first watches' median dwell */
+  passBeside: KpiPart[]
 }
 
-/** Waits for a test slot of the steps that ran in the window, in ms (`step_costs.wait_ms`, the capacity loop's source). */
-async function slotWaits(sql: SQL, w: Window): Promise<number[]> {
-  const rows: unknown[] = await sql`
-    SELECT wait_ms::float8 AS ms FROM factory.step_costs WHERE at >= ${w.from} AND at < ${w.to} AND wait_ms IS NOT NULL`
-  return rows.map((raw) => Duration.parse(raw).ms)
+/** A share as a part, or nothing under `MIN_SAMPLES`: a part with no reading is not shown. */
+const sharePart = (key: string, label: string, count: number, n: number): KpiPart[] => {
+  const value = shareOf(count, n)
+  return value === null ? [] : [part(key, label, value, 'share')]
 }
 
-/** Host samples (one a minute) in the window, and those with the load above the ceiling the sample carried. */
-async function ceilingMinutes(sql: SQL, w: Window) {
-  const [row] = await sql`
-    SELECT count(*) AS n, count(*) FILTER (WHERE load > load_ceiling) AS over
-    FROM factory.host_samples WHERE load_ceiling IS NOT NULL AND at >= ${w.from} AND at < ${w.to}`
-  return z.object({ n: z.coerce.number(), over: z.coerce.number() }).parse(row)
-}
-
-/** The flow KPIs of one window. */
-export async function flowKpis(sql: SQL, w: Window): Promise<Array<Omit<Kpi, 'history'>>> {
-  const queued = await queuedTime(sql, w)
+/** The flow figures of one window. The keys of the beside-figures are the KPI keys they had, so a retro marker naming one still reads it. */
+export async function flowFigures(sql: SQL, w: Window): Promise<FlowFigures> {
   const idle = await idleHours(sql, w)
   const time = await stateTime(sql, w)
   const states = time.ms
   const closed = await closedWithLead(sql, w)
-  const steward = await nudges(sql, w)
   const errands = await errandCounts(sql, w)
   const watches = await firstWatches(sql, w)
-  const done = await closedCount(sql, w)
-  const slot = await slotWaits(sql, w)
-  const minutes = await ceilingMinutes(sql, w)
-  const windowDays = Math.max(1, (w.to.getTime() - w.from.getTime()) / DAY_MS)
 
   const working = states.get('working') ?? 0
   const waiting = [...states].filter(([key]) => key.startsWith('waiting:')).reduce((sum, [, ms]) => sum + ms, 0)
-  const stateParts = [...states]
-    .toSorted((a, b) => b[1] - a[1])
-    .map(([key, ms]) =>
-      part(key, key.startsWith('waiting:') ? `Waiting: ${key.slice('waiting:'.length)}` : key, ms, 'ms'),
-    )
+  const dwell = percentile(
+    watches.map((x) => x.ms),
+    0.5,
+  )
 
-  const dwell = (answer: 'passed' | 'regressed') =>
-    percentile(
-      watches.filter((x) => x.answer === answer).map((x) => x.ms),
-      0.5,
-    )
-
-  return [
-    kpi({
-      key: 'queue_capacity_share',
-      value: per(Math.max(0, queued.total - queued.chain), queued.total),
-      unit: 'share',
-      n: queued.n,
-      count: null,
-      measured: true,
-      definition:
-        'Of the time Issues spent queued, for the queue intervals that ended in the window (admitted, cancelled or closed), the share no `after` edge held. An edge holds an Issue from the first edge’s creation to the last one’s satisfaction, cut to the interval. The rest is capacity (the repo’s lead cap, a seat, a slot, the account windows, the queue state): the factory does not record which, per interval. The parts are the two times in ms.',
-      parts:
-        queued.n === 0
-          ? []
-          : [
-              part('chain', 'Held by an after edge', queued.chain, 'ms'),
-              part('capacity', 'Capacity, cap or the queue state', Math.max(0, queued.total - queued.chain), 'ms'),
-            ],
-    }),
-    kpi({
-      key: 'idle_capacity',
-      value: per(idle.idle, idle.hours),
-      unit: 'share',
-      n: idle.hours,
-      count: idle.idle,
-      measured: true,
-      definition: `Of the hours of the window (read at the top of the hour) in which an Issue no after edge held sat queued, the share in which an enabled, signed-in account that was not exhausted had room: its five-hour window under ${ROOM_FIVE_HOUR_BELOW} % and its week under ${ROOM_WEEKLY_BELOW} %. Hours with no capacity reading (the readings are kept a week) are left out, so an older window has no data. A queue that waits behind a timer, a repo’s lead cap or a slot shows here.`,
-      parts: [],
-    }),
-    kpi({
-      key: 'working_share',
-      value: per(working, working + waiting),
-      unit: 'share',
-      n: time.n,
-      count: null,
-      measured: true,
-      definition:
-        'Of the time Issues spent working or waiting (a wait on a Decision, a review, an Errand, a timer, a dependency, a block), for the intervals that ended in the window, the share spent working. The parts are the ms in each state and wait reason, watching included; that a lead working is itself waiting on a background run is in the transcripts (`factory retro`), not here.',
-      parts: stateParts,
-    }),
-    kpi({
-      key: 'dropped_after_lead',
-      value: per(closed.dropped + closed.cancelled, closed.n),
-      unit: 'share',
-      n: closed.n,
-      count: closed.dropped + closed.cancelled,
-      measured: true,
-      definition:
-        'Of the Issues that closed in the window after a lead had been admitted to them, the share that closed dropped (the lead gave it up) or cancelled (the owner stopped it): a lead’s time that shipped nothing, whether the Issue was a duplicate, misrouted or noise. Not split by reason: that is words.',
-      parts:
-        closed.n === 0
-          ? []
-          : [
-              part('dropped', 'Dropped by the lead', closed.dropped / closed.n, 'share'),
-              part('cancelled', 'Cancelled by the owner', closed.cancelled / closed.n, 'share'),
-            ],
-    }),
-    kpi({
-      key: 'nudges_acted',
-      value: per(steward.acted, steward.n),
-      unit: 'share',
-      n: steward.n,
-      count: steward.acted,
-      measured: true,
-      definition: `Of the notes the steward sent in the window, the share followed within ${NUDGE_ANSWER_MS / 60_000} minutes by the lead's own verb on that Issue (${ACTION_KINDS.join(', ')}). A lead that only keeps working is not counted: the event log shows no action.`,
-      parts: [],
-    }),
-    kpi({
-      key: 'errands_turned_away',
-      value: per(errands.rule + errands.judge, errands.n),
-      unit: 'share',
-      n: errands.n,
-      count: errands.rule + errands.judge,
-      measured: true,
-      definition:
-        'Of the Errands raised in the window, the share the screen (its rules, then the Judge) turned away before they reached the owner: a CLI call a token can make, a step the lead had a way round. What reached him and he found needless is his word, not counted.',
-      parts:
-        errands.n === 0
-          ? []
-          : [
-              part('rule', 'Turned away by a rule', errands.rule / errands.n, 'share'),
-              part('judge', 'Turned away by the Judge', errands.judge / errands.n, 'share'),
-            ],
-    }),
-    kpi({
-      key: 'first_watch_dwell_p50',
-      value: percentile(
-        watches.map((x) => x.ms),
-        0.5,
+  return {
+    cycleParts: [...states]
+      .toSorted((a, b) => b[1] - a[1])
+      .map(([key, ms]) =>
+        part(key, key.startsWith('waiting:') ? `Waiting: ${key.slice('waiting:'.length)}` : key, ms, 'ms'),
       ),
-      unit: 'ms',
-      n: watches.length,
-      count: null,
-      measured: true,
-      definition:
-        'The median time from a first watch’s start to its answer, for those answered in the window. A pass rate over watches that answer in seconds checks little: this is the number to read beside first verification passes. The parts are the medians for the passed and the regressed.',
-      parts: [
-        ...(dwell('passed') === null ? [] : [part('passed', 'Passed', dwell('passed') ?? 0, 'ms' as const)]),
-        ...(dwell('regressed') === null
-          ? []
-          : [part('regressed', 'Regressed', dwell('regressed') ?? 0, 'ms' as const)]),
-      ],
-    }),
-    kpi({
-      key: 'issues_closed_per_day',
-      value: per(done, windowDays),
-      unit: 'per_day',
-      n: Math.round(windowDays),
-      count: done,
-      measured: true,
-      definition:
-        "Issues that closed in the window, whatever the outcome, divided by the days of the window: the figure the capacity loop and the retro call `closed_per_day`, without the throughput epoch's cut. Dropped and cancelled Issues are in it; their share is the dropped KPI.",
-      parts: [],
-    }),
-    kpi({
-      key: 'test_slot_wait_p50',
-      value: percentile(slot, 0.5),
-      unit: 'ms',
-      n: slot.length,
-      count: null,
-      measured: true,
-      definition:
-        'The median time a step waited for a test slot before it ran (`step_costs.wait_ms`: the slot count, memory, swap, load and the line all count), over the steps that ran in the window. The parts are the 90th percentile.',
-      parts: slot.length === 0 ? [] : [part('p90', '90th percentile', percentile(slot, 0.9) ?? 0, 'ms')],
-    }),
-    kpi({
-      key: 'minutes_over_ceiling',
-      value: per(minutes.over, minutes.n),
-      unit: 'share',
-      n: minutes.n,
-      count: minutes.over,
-      measured: true,
-      definition:
-        'Of the minutes of the window the host was sampled (one sample a minute), the share in which its load was above the load ceiling at that time. The ceiling stops new leads from being admitted; work already running is not stopped.',
-      parts: [],
-    }),
-  ]
+    cycleBeside: [
+      ...(time.n < MIN_SAMPLES || working + waiting === 0
+        ? []
+        : [part('working_share', 'Working, of working and waiting', working / (working + waiting), 'share')]),
+      ...sharePart(
+        'dropped_after_lead',
+        'Closed dropped or cancelled after a lead started',
+        closed.dropped + closed.cancelled,
+        closed.n,
+      ),
+    ],
+    queueBeside: sharePart('idle_capacity', 'Queued hours with an account that had room', idle.idle, idle.hours),
+    errandsBeside: sharePart(
+      'errands_turned_away',
+      'Raised Errands the screen turned away',
+      errands.rule + errands.judge,
+      errands.n,
+    ),
+    passBeside:
+      dwell === null || watches.length < MIN_SAMPLES
+        ? []
+        : [part('first_watch_dwell_p50', 'First watch dwell, median', dwell, 'ms')],
+  }
 }

@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { KpiModel } from '@software-factory/contract'
+import { KPI_CATALOG, KpiModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { readKpis } from '../../src/read/kpis.ts'
+import { FINDING_PREFIX } from '../../src/domains/intake/rules.ts'
 
-/** The figures that count what the factory moved and what it waited for: closed per day, slot wait, minutes over the ceiling, the recommendation taken. */
+/** The recommendation taken beside the owner's touches, and the catalog fields every KPI carries. */
 let db: TestCluster
 let sql: SQL
 const NOW = new Date('2026-11-17T12:00:00Z')
@@ -15,28 +16,6 @@ beforeAll(async () => {
   db = await startTestCluster()
   sql = db.sql
   await migrate(sql, await loadMigrations())
-
-  // three Issues closed in the window (one done, one dropped, one cancelled), one before it
-  for (const [n, outcome, hours] of [
-    [1, 'done', 30],
-    [2, 'dropped', 20],
-    [3, 'cancelled', 10],
-    [4, 'done', 24 * 9],
-  ] as const) {
-    await sql`INSERT INTO factory.issues (id, repo, state, outcome, version) VALUES (${`issue_${n}`}, 'app', 'closed', ${outcome}, 2)`
-    await sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, from_state, to_state, outcome)
-      VALUES (${`event_${n}`}, ${`issue_${n}`}, ${`key_${n}`}, 'closed', '{}'::jsonb, 'factory', ${ago(hours)}, 'applied', 2, 'working', 'closed', ${outcome})`
-  }
-
-  // ten host minutes, four of them over the ceiling of 8; a minute with no ceiling stored is not sampled against one
-  for (let m = 0; m < 10; m++)
-    await sql`INSERT INTO factory.host_samples (at, load, load_ceiling)
-      VALUES (${new Date(ago(5).getTime() + m * 60_000)}, ${m < 4 ? 9 : 3}, 8)`
-  await sql`INSERT INTO factory.host_samples (at, load, load_ceiling) VALUES (${ago(4)}, 50, NULL)`
-
-  // three steps that waited 1, 2 and 3 s for a slot, one a week before
-  await sql`INSERT INTO factory.step_costs (at, name, duration_ms, wait_ms) VALUES
-    (${ago(3)}, 'check', 10, 1000), (${ago(3)}, 'check', 10, 2000), (${ago(3)}, 'check', 10, 3000), (${ago(24 * 9)}, 'check', 10, 90000)`
 
   // three Decisions the owner answered (the floor of a share is three): two with the recommended option (in other case and with spaces), one with the other
   await sql`INSERT INTO factory.issues (id, repo, state, version) VALUES ('issue_5', 'app', 'working', 1)`
@@ -52,41 +31,43 @@ beforeAll(async () => {
 })
 afterAll(() => db.stop())
 
-const kpi = async (key: string) => {
-  const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-  const found = model.kpis.find((k) => k.key === key)
-  if (!found) throw new Error(`no KPI ${key}`)
-  return found
-}
+const read = async () => KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
 
-test('closed per day counts every outcome in the window over its days', async () => {
-  expect(await kpi('issues_closed_per_day')).toMatchObject({ count: 3, n: 7, unit: 'per_day', direction: 'higher' })
-  expect((await kpi('issues_closed_per_day')).value).toBeCloseTo(3 / 7, 6)
+test('the recommendation taken is the answers that name the recommended option, ignoring case and spaces, beside avoidable touches', async () => {
+  const touches = (await read()).kpis.find((k) => k.key === 'avoidable_touches')
+  const taken = touches?.beside.find((p) => p.key === 'recommendation_taken')
+  expect(taken).toMatchObject({ unit: 'share' })
+  expect(taken?.value).toBeCloseTo(2 / 3, 6)
+  // the three answers are touches of the owner too; with no Issue filed in the window there is no rate, so no parts
+  expect(touches).toMatchObject({ count: 3, n: 0, value: null, measured: false, parts: [] })
 })
 
-test('the slot wait is the median over the steps of the window, with its 90th percentile as the part', async () => {
-  const k = await kpi('test_slot_wait_p50')
-  expect(k).toMatchObject({ n: 3, value: 2000 })
-  expect(k.parts).toEqual([{ key: 'p90', label: '90th percentile', value: 2800, unit: 'ms' }])
+test('an Issue a loop filed (its intake subject a finding key) is left out of the touch rate and counted beside it', async () => {
+  for (const id of ['issue_20', 'issue_21']) {
+    await sql`INSERT INTO factory.issues (id, repo, state, version) VALUES (${id}, 'app', 'queued', 1)`
+    await sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+      VALUES (${`event_filed_${id}`}, ${id}, ${`filed:${id}`}, 'filed', '{}'::jsonb, 'factory', ${ago(3)}, 'applied', 1, 'settling')`
+  }
+  // issue_21 is the weekly retro: the friction loop filed it through intake with its finding
+  await sql`INSERT INTO factory.intake_subjects (source, subject, issue_id, filed_at, last_seen)
+    VALUES ('agent:software-factory', 'finding:friction:retro:software-factory:retro', 'issue_21', ${ago(3)}, ${ago(3)})`
+  // the read matches the prefix as a literal (read/ imports no domain code): it must be the one intake writes
+  expect(FINDING_PREFIX).toBe('finding:')
+  const touches = (await read()).kpis.find((k) => k.key === 'avoidable_touches')
+  expect(touches).toMatchObject({ n: 1, count: 3 })
+  expect(touches?.beside.find((p) => p.key === 'loop_filed')?.value).toBe(1)
 })
 
-test('minutes over the ceiling are a share of the minutes sampled against one', async () => {
-  expect(await kpi('minutes_over_ceiling')).toMatchObject({ n: 10, count: 4, value: 0.4, unit: 'share' })
-})
-
-test('the recommendation taken is the answers that name the recommended option, ignoring case and spaces', async () => {
-  const k = await kpi('recommendation_taken')
-  expect(k.value).toBeCloseTo(2 / 3, 6)
-  expect(k).toMatchObject({ n: 3, count: 2, direction: 'lower' })
-})
-
-test('every KPI carries its direction, target source and decision from the catalog', async () => {
-  const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-  for (const k of model.kpis) {
-    expect(k.targetSource.length, k.key).toBeGreaterThan(8)
-    expect(k.decision.length, k.key).toBeGreaterThan(8)
-    expect(k.numerator.length, k.key).toBeGreaterThan(8)
-    expect(k.denominator.length, k.key).toBeGreaterThan(8)
+test('every KPI carries its label, direction, target and target source from the catalog, and nothing the screen does not show', async () => {
+  for (const k of (await read()).kpis) {
+    expect(k).toMatchObject({
+      label: KPI_CATALOG[k.key].label,
+      direction: KPI_CATALOG[k.key].direction,
+      target: KPI_CATALOG[k.key].target,
+      targetSource: KPI_CATALOG[k.key].targetSource,
+    })
+    expect(Object.keys(k)).not.toContain('decision')
+    expect(Object.keys(k)).not.toContain('numerator')
     // a target is never a band, so a value better than it is never off it
     expect(['at_most', 'at_least', 'trend'], k.key).toContain(k.target.kind)
   }

@@ -10,6 +10,9 @@ import {
   clockTrigger,
   FRICTION_WINDOW_DAYS,
   hasIssueRefs,
+  kpiFigure,
+  type KpiReading,
+  kpisOffTarget,
   named,
   PATTERN_REPEAT_MS,
   type Pattern,
@@ -47,6 +50,8 @@ export interface FrictionDeps {
   ids: IdSource
   /** the counts of the last `FRICTION_WINDOW_DAYS` days ending at `now` (`read/friction.ts`, bound in `main.ts`) */
   friction(now: Date): Promise<FrictionModel>
+  /** the seven KPIs over the pass's window (the one `friction` read), with their parts */
+  kpis(window: { from: Date; to: Date }): Promise<KpiReading[]>
   /** the most recent Issue refs behind the counts of these keys, for the same window */
   evidence(now: Date, keys: string[]): Promise<Record<string, string[]>>
   /** Issues closed from `since` to `now`: what the volume trigger counts */
@@ -95,11 +100,21 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
   let model: FrictionModel
   let evidence: Record<string, string[]>
   let over: ReturnType<typeof withinBudget>
+  let kpis: KpiReading[] = []
+  let kpiFailure: string | null = null
   const held: Pattern[] = []
   try {
     model = await deps.friction(now)
-    // A held class is named before the budget counts: it does not use up a slot.
-    const allowed = patternsOver(model.counts, model.closed).filter((pattern) => {
+    try {
+      kpis = await deps.kpis({ from: new Date(model.window.from), to: new Date(model.window.to) })
+    } catch (error) {
+      // the KPIs are one input of the pass: a failed read is named in the record, the counts are still judged
+      kpiFailure = `the KPIs could not be read: ${String(error).slice(0, 250)}`
+    }
+    // A KPI off its target leads: it is the figure the owner set a line for. A held class is named before the budget
+    // counts: it does not use up a slot.
+    const found = [...kpisOffTarget(kpis, { whole: model.since === null }), ...patternsOver(model.counts, model.closed)]
+    const allowed = found.filter((pattern) => {
       if (gate.allows(pattern.key)) return true
       held.push(pattern)
       return false
@@ -119,9 +134,18 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     issues: model.issues,
     closed: model.closed,
   }
-  // what the Issues of earlier findings did: a pattern no longer counted is at 0
+  // what the Issues of earlier findings did: a pattern no longer counted is at 0, a KPI with no figure now is unmeasured,
+  // and a KPI finding waits for the next pass when the KPIs could not be read (undefined)
   const counted = new Map(model.counts.map((count) => [count.key, count.count]))
-  const settled = await settleClosed(deps, { loop: 'friction', now, read: (row) => counted.get(row.key) ?? 0 })
+  for (const kpi of kpis)
+    if (kpi.measured && kpi.value !== null) counted.set(`kpi:${kpi.key}`, kpiFigure(kpi.target, kpi.value))
+  const readNow = (key: string): number | null | undefined => {
+    const figure = counted.get(key)
+    if (figure !== undefined) return figure
+    if (!key.startsWith('kpi:')) return 0
+    return kpiFailure === null ? null : undefined
+  }
+  const settled = await settleClosed(deps, { loop: 'friction', now, read: (row) => readNow(row.key) })
   if (!settled.ok) return settled
   const ledger = settled.value
   const record: FrictionPassRecord = {
@@ -132,7 +156,7 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     issues: model.issues,
     filed: [],
     overBudget: [...over.overBudget, ...held].map(({ key, count }) => ({ key, count })),
-    failed: [],
+    failed: kpiFailure === null ? [] : [{ key: 'kpi', reason: kpiFailure }],
   }
   for (const pattern of over.file)
     await fileOne(deps, { gate, ledger, now }, pattern, facts, evidence[pattern.key] ?? [], record)

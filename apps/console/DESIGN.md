@@ -205,9 +205,9 @@ Each screen of the navigation answers one question, shown under its title (`purp
   nodes are folded. Smaller chains are drawn whole. Under it a schedule puts every
   row that waits on a date on a time axis from now, with a gridline per day or week (a row past 120 days sits in "Later",
   after a break mark on the axis).
-- **Improve**: ordered by what needs attention, not by topic. Off target (the StatCards whose target judged them and missed,
-  with "N of M targets met" beside the heading), No target, trends only, then two closed Folds, On target and Not measured, all
-  on one 4-column lattice of equal StatCards (a shared subgrid keeps header, figure and chart level); Fix commits (the
+- **Improve**: ordered by what needs attention, not by topic. The seven KPIs in one band, "N of M targets met" beside the
+  heading, off target first, then those with no target yet (the sub line says why), on target and not measured, all on one
+  4-column lattice of equal StatCards (a shared subgrid keeps header, figure and chart level); Fix commits (the
   stacked-bar card beside its class table); Friction, a ranked list (the top five with a bar, the count and the change
   against the window before, the rest folded); then the held finding classes. Every KPI card carries one plain sentence of
   what it means and which way is good, with no click; a KPI with no figure says "Not measured" and why, never a zero. Each
