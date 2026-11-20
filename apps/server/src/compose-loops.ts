@@ -315,6 +315,7 @@ export function composeLoops(ctx: LoopContext) {
       processCap: DEFAULT_PROCESS_CAP,
       memoryCeilings: planningEnv.memoryCeilings,
       serverPid: process.pid,
+      cores: planningEnv.cores,
       routes: () => ctx.routes.snapshot(),
       overload: hostOverload({ dataDir: ctx.dataDir }),
       budgets: async (now) => readBudgetFacts(sql, { now, budgets: await projectBudgets(), epoch: ctx.epoch }),

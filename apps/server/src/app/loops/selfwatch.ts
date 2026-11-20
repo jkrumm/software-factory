@@ -107,6 +107,8 @@ export interface SelfwatchDeps {
   serverPid: number
   /** the server's own routes over the last five minutes, timed in the process; absent, `routes_slow` is not judged */
   routes?: () => RouteLatency
+  /** the host's cores: the CPU accounting of the evidence names what the sampled processes leave unattributed against them */
+  cores?: number
   /** the process list and `deploys.log` for the evidence block; absent, a capacity signal carries none */
   overload?: OverloadHost
   /** `GET /health`'s heartbeat, as `healthOf` computes it */
@@ -161,6 +163,7 @@ async function overloadLines(deps: SelfwatchDeps & { overload: OverloadHost }, n
     queue: stored.ok ? stored.value.queue : [],
     cpu: stored.ok ? stored.value.cpu : null,
     host: stored.ok ? stored.value.host : null,
+    ...(deps.cores === undefined ? {} : { cores: deps.cores }),
     ps: ps.ok ? { output: ps.value } : { failure: ps.error.detail },
     serverPid: deps.serverPid,
     deployLines,

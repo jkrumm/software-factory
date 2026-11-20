@@ -193,10 +193,22 @@ export interface ClassCpu {
   cpuMs: number
 }
 
-/** What `classCpu` read: the groups and the number of host minutes sampled in the window (the divisor of a core count). */
+/** The host's own CPU split over the window (the `top` header of each host minute, averaged): what every process, short-lived or not, and the kernel took. */
+export interface HostCpuSplit {
+  samples: number
+  idlePct: number
+  userPct: number
+  sysPct: number
+}
+
+/**
+ * What `classCpu` read: the groups, the number of host minutes sampled in the window (the divisor of a core count) and the
+ * host's CPU split over the same window, null when no host minute carried one.
+ */
 export interface ClassCpuWindow {
   minutes: number
   rows: ClassCpu[]
+  host: HostCpuSplit | null
 }
 
 /** One line of `ps`: the process, its scheduling priority (`ps -o pri`), CPU share, resident size and command. */

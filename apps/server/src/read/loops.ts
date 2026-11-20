@@ -123,6 +123,13 @@ const ClassCpuRow = z.object({
   minutes: z.coerce.number().int(),
 })
 
+const HostCpuSplitRow = z.object({
+  samples: z.coerce.number().int(),
+  idle: z.coerce.number().nullable(),
+  usr: z.coerce.number().nullable(),
+  sys: z.coerce.number().nullable(),
+})
+
 const QueueReasonRow = z.object({ kind: z.string(), count: z.coerce.number().int(), since: z.date() })
 
 const WaitRowSchema = z.object({
@@ -512,9 +519,17 @@ export function loopReads(tx: SQL): LoopReads {
         FROM factory.host_class_samples WHERE at >= ${since} AND cpu_ms IS NOT NULL
         GROUP BY class, repo ORDER BY sum(cpu_ms) DESC`
       const parsed = rows.map((raw) => ClassCpuRow.parse(raw))
+      const split: unknown[] = await tx`
+        SELECT count(*) AS samples, avg(cpu_idle_pct) AS idle, avg(cpu_user_pct) AS usr, avg(cpu_sys_pct) AS sys
+        FROM factory.host_samples WHERE at >= ${since} AND cpu_idle_pct IS NOT NULL AND cpu_user_pct IS NOT NULL AND cpu_sys_pct IS NOT NULL`
+      const header = HostCpuSplitRow.parse(split[0])
       return {
         minutes: parsed[0]?.minutes ?? 0,
         rows: parsed.map((row) => ({ class: row.class, repo: row.repo, cpuMs: row.cpu_ms })),
+        host:
+          header.samples === 0 || header.idle === null || header.usr === null || header.sys === null
+            ? null
+            : { samples: header.samples, idlePct: header.idle, userPct: header.usr, sysPct: header.sys },
       }
     },
 

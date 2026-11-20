@@ -596,15 +596,25 @@ test('classCpu: the CPU of each class and repo over the window, ranked, with the
   await row(6, 'lead', 'app', 45_000)
   await row(6, 'system', null, 10_000)
   await row(6, 'owner', null, null) // CPU not read: not a group
+  const hostRow = (min: number, idle: number | null, user: number, sys: number) =>
+    db.sql`INSERT INTO factory.host_samples (at, cpu_idle_pct, cpu_user_pct, cpu_sys_pct) VALUES (${at(min)}, ${idle}, ${user}, ${sys})`
+  const clearHostRows = () => db.sql`DELETE FROM factory.host_samples WHERE at >= ${at(0)} AND at <= ${at(59)}`
+  await clearHostRows()
+  await hostRow(0, 0, 50, 50) // before the window
+  await hostRow(5, 10, 60, 30)
+  await hostRow(6, 0, 70, 30)
+  await hostRow(7, null, 1, 1) // no split read: not averaged
   const window = await loopReads(db.sql).classCpu(at(1))
   expect(window.minutes).toBe(2)
+  expect(window.host).toEqual({ samples: 2, idlePct: 5, userPct: 65, sysPct: 30 })
   expect(window.rows).toEqual([
     { class: 'lead', repo: 'app', cpuMs: 75_000 },
     { class: 'system', repo: null, cpuMs: 10_000 },
     { class: 'step', repo: 'app', cpuMs: 5_000 },
   ])
-  expect(await loopReads(db.sql).classCpu(at(30))).toEqual({ minutes: 0, rows: [] })
+  expect(await loopReads(db.sql).classCpu(at(30))).toEqual({ minutes: 0, rows: [], host: null })
   await db.sql`DELETE FROM factory.host_class_samples`
+  await clearHostRows()
 })
 
 test('readLeadCosts: per repo, the attempts and the p80 of the newest ten attempt peaks', async () => {
