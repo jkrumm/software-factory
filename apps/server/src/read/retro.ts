@@ -310,7 +310,7 @@ export async function readRetro(
   const { now, days } = options
   const w = windowOf(now, days)
   const kpis = await readKpis(sql, { now, days })
-  const friction: FrictionModel = await readFriction(sql, { now, days })
+  const friction: FrictionModel = await readFriction(sql, { now, days, epoch: options.epoch ?? null })
   const sessions = await sessionsOf(sql, w)
   const build = await readRetroBuild(sql, {
     now,

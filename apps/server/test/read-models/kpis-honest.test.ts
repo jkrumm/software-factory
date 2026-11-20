@@ -110,10 +110,8 @@ test('a friction count carries the same count over the window before, and none w
   expect(row).toMatchObject({ count: 2, previous: 5 })
   expect(friction.counts.every((c) => c.previous !== null)).toBe(true)
 
-  // an import ends the old core's history: a window that reaches back before it is shorter than the one it would be read against
-  await sql`INSERT INTO factory.import_issues (issue_id, legacy_id, imported_at, last_event, carried_version)
-    VALUES ('issue_2', 2, ${ago(3 * DAY)}, 0, 1)`
-  const cut = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7, compare: true }))
+  // the epoch ends the counted history: a window that reaches back before it is shorter than the one it would be read against
+  const cut = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7, compare: true, epoch: ago(3 * DAY) }))
   expect(cut.since).not.toBeNull()
   expect(cut.counts.every((c) => c.previous === null)).toBe(true)
 })

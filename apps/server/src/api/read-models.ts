@@ -475,7 +475,9 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       async ({ query }) => {
         if (!deps) return unavailable
         return Response.json(
-          FrictionModel.parse(await readFriction(deps.sql, { now: now(), days: days(query), compare: true })),
+          FrictionModel.parse(
+            await readFriction(deps.sql, { now: now(), days: days(query), compare: true, epoch: deps.epoch ?? null }),
+          ),
         )
       },
       {

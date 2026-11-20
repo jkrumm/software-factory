@@ -788,22 +788,21 @@ describe('the fixture', () => {
     expect(day.counts.find((c) => c.key === 'decision_settled:owner')?.count).toBe(0)
   })
 
-  test('friction counts nothing older than the newest import, and the evidence agrees', async () => {
-    await sql`INSERT INTO factory.import_issues (issue_id, legacy_id, imported_at, last_event, carried_version)
-      VALUES ('issue_6', 6, ${ago(2)}, 1, 1)`
-    try {
-      const model = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7 }))
-      expect(model.since).toBe(ago(2).toISOString())
-      expect(model.window.from).toBe(ago(2).toISOString())
-      const count = (key: string) => model.counts.find((c) => c.key === key)?.count
-      expect(count('lead_gone')).toBe(1) // 1.2 hours ago: the new core's own
-      expect(count('regression')).toBe(0) // answered 10 hours ago: history
-      expect(model.issues).toBeLessThan(9)
-      const evidence = await readFrictionEvidence(sql, { now: NOW, days: 7 }, ['lead_gone', 'regression'])
-      expect(evidence).toEqual({ lead_gone: ['issue_6'], regression: [] })
-    } finally {
-      await sql`DELETE FROM factory.import_issues WHERE issue_id = 'issue_6'`
-    }
+  test('friction counts nothing older than the counting epoch, and the evidence agrees', async () => {
+    const epoch = ago(2)
+    const model = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7, epoch }))
+    expect(model.since).toBe(epoch.toISOString())
+    expect(model.window.from).toBe(epoch.toISOString())
+    const count = (key: string) => model.counts.find((c) => c.key === key)?.count
+    expect(count('lead_gone')).toBe(1) // 1.2 hours ago: after the epoch
+    expect(count('regression')).toBe(0) // answered 10 hours ago: before it
+    expect(model.issues).toBeLessThan(9)
+    const evidence = await readFrictionEvidence(sql, { now: NOW, days: 7, epoch }, ['lead_gone', 'regression'])
+    expect(evidence).toEqual({ lead_gone: ['issue_6'], regression: [] })
+    // an epoch before the window cuts nothing, and neither does none
+    const whole = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7, epoch: ago(30 * 24) }))
+    expect(whole.since).toBeNull()
+    expect(whole.window.from).toBe(ago(7 * 24).toISOString())
   })
 
   test('friction evidence: Issue refs exist exactly when the count is above zero, newest first, at most five', async () => {

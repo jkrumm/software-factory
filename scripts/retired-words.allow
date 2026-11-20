@@ -10,11 +10,6 @@ apps/server/test/read/api.test.ts human queue  # the legacy read API's wire name
 packages/contract/src/read.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 tests/scenarios/clients/requests.ts human queue  # the recorded requests read the legacy wire name `humanQueue`
 tests/scenarios/clients/dotfiles.test.ts human queue  # ask-human.sh's own note text and its queue directory are the dotfiles' words
-apps/server/scripts/import/plan.ts classify  # the old core's event kinds (classified, classify_failed) the importer maps or drops
-apps/server/scripts/import/plan.ts park  # the old core's park event and reason, mapped to a stall
-apps/server/scripts/import/run.ts park  # the old core's wait reason `parked`, compared with the new stall
-apps/server/test/import/plan.test.ts classify  # old event kinds the planner is tested on
-apps/server/test/import/plan.test.ts park  # the old core wait reason `parked`, tested against the new stall
 apps/server/src/api/console.ts manifest  # manifest.webmanifest is a browser file name, not a project manifest
 apps/server/test/console.test.ts manifest  # manifest.webmanifest is a browser file name, not a project manifest
 apps/console/README.md manifest  # the PWA web app manifest, a browser file

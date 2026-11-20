@@ -6,6 +6,7 @@ import { avoidableTouches, issuesFiled, orchestratorSteering, ownerVerdict, type
 import { specSourceSql } from './spec-screen.ts'
 import { per, windowOf } from './stats.ts'
 import { refusalClass } from './refusal-class.ts'
+import { isCut } from '../kernel/epoch.ts'
 
 /** A note of a lead that is still there and not typed this long after it was claimed is undelivered. */
 const NOTE_GRACE_MS = 10 * 60_000
@@ -69,20 +70,17 @@ function byClass(rows: readonly { detail: string | null; n: number }[]): { id: s
 const one = async (rows: Promise<unknown[]>): Promise<number> => Count.parse((await rows)[0]).n
 const grouped = async (rows: Promise<unknown[]>) => (await rows).map((raw) => Grouped.parse(raw))
 
-const Marker = z.object({ at: z.coerce.date().nullable() })
-
 /**
- * The window friction counts in: the last `days` days, cut at the import marker. The cutover imported the old core's
- * history with its original timestamps, so before the newest import ran, nothing was recorded by this core. A database
- * with no import has no marker and no cut.
+ * The window friction counts in: the last `days` days, cut at the counting epoch (`config/throughput.json`): nothing
+ * earlier is counted. `since` is the epoch when it cuts this window, else null.
  */
-export async function frictionWindow(
-  sql: SQL,
-  options: { now: Date; days: number },
-): Promise<{ w: Window; since: Date | null }> {
-  const { at: since } = Marker.parse((await sql`SELECT max(imported_at) AS at FROM factory.import_issues`)[0])
+export function frictionWindow(options: { now: Date; days: number; epoch?: Date | null }): {
+  w: Window
+  since: Date | null
+} {
   const w = windowOf(options.now, options.days)
-  return { w: since && since > w.from ? { from: since, to: w.to } : w, since }
+  const since = isCut(w.from, options.epoch ?? null) ? (options.epoch ?? null) : null
+  return { w: since ? { from: since, to: w.to } : w, since }
 }
 
 /** Issues closed in the window: what the per-Issue rates divide by. */
@@ -269,21 +267,21 @@ async function countsOf(
 }
 
 /**
- * The counts of waste in the last `days` days since the import: counts only, no model. Read-only SQL. Each count also
+ * The counts of waste in the last `days` days since the counting epoch: counts only, no model. Read-only SQL. Each count also
  * carries the same count over the window of the same length just before it, so a reader sees which way it moved; that
- * window is not read (`previous` null) when it reaches back before the import marker, because it would be shorter than
+ * window is not read (`previous` null) when it reaches back before the epoch, because it would be shorter than
  * the one it is compared with. The comparison is read only when asked for (`compare`): the Console wants it, the loops do not.
  */
 export async function readFriction(
   sql: SQL,
-  options: { now: Date; days: number; compare?: boolean },
+  options: { now: Date; days: number; compare?: boolean; epoch?: Date | null },
 ): Promise<FrictionModel> {
   const { now } = options
-  const { w, since } = await frictionWindow(sql, options)
+  const { w, since } = frictionWindow(options)
   const current = await countsOf(sql, w, now)
   const span = w.to.getTime() - w.from.getTime()
   const before = { from: new Date(w.from.getTime() - span), to: w.from }
-  const comparable = options.compare === true && (since === null || since <= before.from)
+  const comparable = options.compare === true && !isCut(before.from, options.epoch ?? null)
   const earlier = comparable ? await countsOf(sql, before, before.to) : null
   const previous = new Map((earlier?.counts ?? []).map((c) => [c.key, c.count]))
   return {

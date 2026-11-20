@@ -171,7 +171,7 @@ test('the text names window, import cut, count, rate, threshold, refs and the co
   for (const part of [
     '2026-11-07T16:35',
     '2026-11-08',
-    'cut at the import',
+    'cut at the counting epoch',
     'Count: 3',
     'per Issue closed',
     'closed: 8',
@@ -192,7 +192,7 @@ test('a pattern without Issues says so', () => {
     .map((p) => signalText(p, { ...facts, since: null }, []))
     .join('')
   expect(note).toContain('no Issue behind it')
-  expect(note).not.toContain('cut at the import')
+  expect(note).not.toContain('cut at the counting epoch')
 })
 
 // ---- finding classes ------------------------------------------------------------------------------------------------------
