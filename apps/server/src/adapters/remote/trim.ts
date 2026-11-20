@@ -49,8 +49,8 @@ export function trimScript(input: {
     '[ "$exps" -eq 0 ] || echo "trim: removed $exps idle exp dirs"',
     `[ -d ${root} ] || exit 0`,
     // docker not answering reads as "a step may be running": fail closed
-    `running=$(docker ps -q --filter label=${input.stepLabel}) || { echo "trim: docker did not answer, nothing removed"; exit 0; }`,
-    '[ -z "$running" ] || { echo "trim: a step is running, nothing removed"; exit 0; }',
+    `running=$(docker ps -q --filter label=${input.stepLabel}) || { echo "trim: docker did not answer, no slot copy or cache entry removed"; exit 0; }`,
+    '[ -z "$running" ] || { echo "trim: a step is running, no slot copy or cache entry removed"; exit 0; }',
     'copies=0; entries=0',
     `for run in ${root}/*/[0-9]*.run; do`,
     '  [ -d "$run" ] || continue',
