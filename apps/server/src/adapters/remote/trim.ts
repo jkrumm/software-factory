@@ -4,7 +4,8 @@
  * the host's disk alert pages at 85 %. One ssh of this script, at most every `TRIM_EVERY_MS`, keeps both bounded:
  *
  * - a scratch directory `~/exp<issue>` (a lead's experiment on the VPS, which nothing else ever removes) in which no
- *   file or directory changed for `EXP_IDLE_DAYS` is removed. This part needs neither the step directory nor docker.
+ *   file or directory changed for `EXP_IDLE_DAYS` is removed. This part needs neither the step directory nor docker; files a
+ *   container left root-owned are removed by a container (the step image, else any local image) when docker answers.
  * - a slot copy (`<project>/<n>` and `<project>/<n>.run`) whose `.run` directory, rewritten by every step of the slot, has
  *   not changed for `COPY_IDLE_DAYS` is removed, then the project's bare repository prunes the worktree record. The bare
  *   repository (50 to 140 MB) stays, so the next snapshot pushes only what is new.
@@ -13,7 +14,8 @@
  *   tightens to 7, 3 and then 1 day. The mount is `relatime`, so a read marks a file's access time within a day.
  *
  * The slot and cache parts do nothing while a step container runs or when docker does not answer, so they never remove what
- * an install is reading; the exp part touches neither and runs regardless. A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini.
+ * an install is reading; the exp part runs regardless of a running step or an unanswering docker, and uses docker only for the
+ * root-owned fallback. A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini.
  */
 import { CACHE_CAP_GIB, CACHE_IDLE_DAYS, COPY_IDLE_DAYS, EXP_IDLE_DAYS } from '../../domains/capacity/remote.ts'
 
@@ -44,7 +46,15 @@ export function trimScript(input: {
     '  [ -d "$dir" ] && [ ! -L "$dir" ] || continue',
     `  case "\${dir#exp}" in *[!0-9]*) continue ;; esac`,
     `  [ -z "$(find "$dir" -mtime -${expDays} -print -quit)" ] || continue`,
-    '  rm -rf "$dir" && exps=$((exps + 1))',
+    '  rm -rf "$dir" 2>/dev/null',
+    // a container leaves root-owned files (cargo's target, bun's cache): rm cannot remove them, a container can
+    '  if [ -d "$dir" ]; then',
+    '    img=$(docker images -q --filter label=factory.image=step 2>/dev/null | head -n 1)',
+    '    [ -n "$img" ] || img=$(docker images -q 2>/dev/null | head -n 1)',
+    `    [ -z "$img" ] || docker run --rm --entrypoint sh -v "$PWD/$dir:/x" "$img" -c 'rm -rf /x/* /x/.[!.]* /x/..?*' >/dev/null 2>&1`,
+    '    rm -rf "$dir" 2>/dev/null',
+    '  fi',
+    '  [ -d "$dir" ] || exps=$((exps + 1))',
     'done',
     '[ "$exps" -eq 0 ] || echo "trim: removed $exps idle exp dirs"',
     `[ -d ${root} ] || exit 0`,

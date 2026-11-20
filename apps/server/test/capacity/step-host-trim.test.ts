@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { trimScript } from '../../src/adapters/remote/trim.ts'
@@ -143,6 +143,25 @@ describe('the step host trim', () => {
     const silent = exp('exp3', 9)
     expect(run('exit 1').out).toContain('docker did not answer')
     expect(existsSync(silent)).toBe(false)
+  })
+
+  test('what rm cannot remove (root-owned files from a container) is removed by a container', () => {
+    const dir = exp('exp7', 9)
+    const locked = join(dir, 'repo', 'target')
+    mkdirSync(locked, { recursive: true })
+    writeFileSync(join(locked, 'lib.rlib'), 'x')
+    for (const path of [join(locked, 'lib.rlib'), locked, join(dir, 'repo'), dir]) touch(path, 9)
+    chmodSync(locked, 0o555)
+    // the stub is the container: it unlocks the directory and removes what is in the mounted one
+    const docker = [
+      'case "$1" in',
+      '  images) echo img1 ;;',
+      `  run) chmod -R u+w "${home}/exp7" && rm -rf "${home}/exp7"/* ;;`,
+      'esac',
+    ].join('\n')
+    const result = run(docker)
+    expect(existsSync(dir)).toBe(false)
+    expect(result.out).toContain('trim: removed 1 idle exp dirs')
   })
 
   test('a host with no step directory is left alone', () => {
