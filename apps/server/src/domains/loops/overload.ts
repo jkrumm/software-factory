@@ -343,9 +343,10 @@ const CPU_GROUPS = 6
 /**
  * Whose work the load is: the CPU of each class and repo over the host minutes of the window, as cores (CPU time over the
  * window). One parallel build is a dozen rows in the busiest-processes list but one group here, and a `lead` group is work
- * no test slot saw, a `step` group is one a slot admitted. The host loop samples once a minute and counts the CPU time of the
- * processes it sees at two samples, so a process that starts and exits within a minute and the kernel's own time never show:
- * read the groups as a ranking, not a total, and the second line (`cpuAccountingLine`) for how much of the load they leave out.
+ * no test slot saw, a `step` group is one a slot admitted. The host loop samples once a minute and counts each process's CPU since
+ * the previous sample (its whole time when first seen), so a process that starts and exits between two samples never shows, and
+ * the kernel's time shows only as far as `top` prints a TIME for `kernel_task` (the system group): read the groups as a ranking,
+ * not a total, and the second line (`cpuAccountingLine`) for how much of the load they leave out.
  */
 function cpuLine(window: ClassCpuWindow | null): string {
   if (!window || window.minutes === 0 || window.rows.length === 0)
