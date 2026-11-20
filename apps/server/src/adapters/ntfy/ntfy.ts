@@ -29,6 +29,9 @@ export interface OwnersLine {
   consoleUrl: string
 }
 
+/** The Console listener on loopback: where a checkpoint links when FACTORY_CONSOLE_URL is unset. */
+const loopbackUrl = (port: number): string => `http://127.0.0.1:${port}`
+
 /** The owner's line from the environment; throws one message when a setting is malformed. */
 export function loadOwnersLine(env: Record<string, string | undefined>): OwnersLine {
   const e = parseEnv(Env, env)
@@ -37,7 +40,7 @@ export function loadOwnersLine(env: Record<string, string | undefined>): OwnersL
     url,
     topic: e.FACTORY_NTFY_TOPIC,
     token: e.NTFY_TOKEN?.trim() || null,
-    consoleUrl: e.FACTORY_CONSOLE_URL ?? `http://127.0.0.1:${loadConsoleSettings(env).port}`,
+    consoleUrl: e.FACTORY_CONSOLE_URL ?? loopbackUrl(loadConsoleSettings(env).port),
   }
 }
 
