@@ -14,7 +14,7 @@ import { callsOf, loops, runLoop, script } from './support.ts'
 let lab: Lab
 let dir: string
 let queueScript: string
-const REPOS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12', 'q13', 'q14', 'q15']
+const REPOS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12', 'q13', 'q14', 'q15', 'q16']
 
 beforeAll(async () => {
   dir = await mkdtemp('/tmp/factory-queue-')
@@ -217,6 +217,38 @@ test('an agw answer that does not parse is recorded as failed and retried only a
   expect(await asksFor('q7')).toHaveLength(2)
   expect((await asksRecorded('q7')).map((r) => r.outcome)).toEqual(['failed', 'answered'])
   expect(await edgesOf('q7')).toEqual([`${b}>${a}`])
+})
+
+test('a queue ask that fails or answers unavailable is not an asked shape: the shape is asked again once the retry window has passed', async () => {
+  const a = await queued('q16', 'Unavailable first')
+  const b = await queued('q16', 'Unavailable second')
+  const aged = () => sql()`UPDATE factory.queue_asks
+    SET claimed_at = claimed_at - interval '20 minutes', lease_until = lease_until - interval '20 minutes',
+        finished_at = finished_at - interval '20 minutes'
+    WHERE repo = 'q16'`
+
+  await script(queueScript, [{ match: '"repo":"q16"', fail: true }])
+  expect((await runLoop(lab, 'queue')).summary).toContain('asked 1')
+  expect((await asksRecorded('q16')).map((r) => r.outcome)).toEqual(['failed'])
+
+  // agw answers the empty answer, with its reason: queue unavailable
+  await aged()
+  await script(queueScript, [
+    { match: '"repo":"q16"', answer: { edges: [], order: [], reason: 'queue unavailable: timeout' } },
+  ])
+  const unavailable = await runLoop(lab, 'queue')
+  expect(unavailable.summary).toContain('asked 1')
+  expect(unavailable.summary).toContain('1 problem(s)')
+  expect((await asksRecorded('q16')).map((r) => r.outcome)).toEqual(['failed', 'failed'])
+  expect(await edgesOf('q16')).toEqual([])
+
+  // the same shape is asked once more on the next pass after the window, and the answer then counts
+  await aged()
+  await answers('q16', [[b, a]], [a, b])
+  expect((await runLoop(lab, 'queue')).summary).toContain('applied 1 edge(s)')
+  expect((await asksRecorded('q16')).map((r) => r.outcome)).toEqual(['failed', 'failed', 'answered'])
+  expect(await asksFor('q16')).toHaveLength(3)
+  expect(await edgesOf('q16')).toEqual([`${b}>${a}`])
 })
 
 test('an answer stored but not applied (a crash in between) is applied on the next pass without a second call', async () => {

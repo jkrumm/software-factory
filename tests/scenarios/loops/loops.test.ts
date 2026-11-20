@@ -534,6 +534,60 @@ test('triage names edges: the Issue waits for the Issue it was shown, and a refu
   expect(await settledPayload(stuck)).toEqual({})
 }, 40_000)
 
+/** Past the retry window of the failed calls of an Issue, as if the wait had run. */
+const ageCalls = (issue: string) =>
+  lab.world.db.sql`UPDATE factory.loop_calls
+    SET claimed_at = claimed_at - interval '20 minutes', lease_until = lease_until - interval '20 minutes',
+        finished_at = finished_at - interval '20 minutes'
+    WHERE issue_id = ${issue}`
+
+test('a triage call that fails, or answers unavailable, settles nothing: the Issue stays settling and is asked again', async () => {
+  const blocker = (await signal('app', 'Replace the audit trail store entirely')).issue as string
+  await runLoop(lab, 'triage')
+  const waits = (await signal('app', `Add audit trail export to the new store, after ${blocker}`)).issue as string
+  const calls = async () => await lab.world.db.sql`SELECT 1 FROM factory.loop_calls WHERE issue_id = ${waits}`
+  const outcomes = async () =>
+    (await lab.world.db.sql`SELECT outcome FROM factory.loop_calls WHERE issue_id = ${waits} ORDER BY round`).map(
+      (row: { outcome: string }) => row.outcome,
+    )
+
+  // the run fails
+  await script(triageScript, [{ match: 'audit trail export', fail: true }])
+  const failed = await runLoop(lab, 'triage')
+  expect(failed.summary).toContain('asked 1')
+  expect(await state(lab, waits)).toMatchObject({ state: 'settling' })
+  expect(await outcomes()).toEqual(['failed'])
+  await runLoop(lab, 'triage')
+  expect(await calls()).toHaveLength(1)
+
+  // agw answers the empty answer with its reason: unavailable
+  await ageCalls(waits)
+  await script(triageScript, [
+    {
+      match: 'audit trail export',
+      answer: { amend: null, after: [], kind: null, size: null, reason: 'triage unavailable: timeout' },
+    },
+  ])
+  await runLoop(lab, 'triage')
+  expect(await calls()).toHaveLength(2)
+  expect(await state(lab, waits)).toMatchObject({ state: 'settling' })
+  expect(await outcomes()).toEqual(['failed', 'failed'])
+
+  // the next round has the model back: its edges are applied
+  await ageCalls(waits)
+  await script(triageScript, [
+    {
+      match: 'audit trail export',
+      answer: { amend: null, after: [blocker], kind: null, size: null, reason: 'builds on the store' },
+    },
+  ])
+  const answered = await runLoop(lab, 'triage')
+  expect(answered.summary).toContain('chained 1')
+  expect(await outcomes()).toEqual(['failed', 'failed', 'answered'])
+  const edges = await lab.world.db.sql`SELECT after_issue FROM factory.planning_edges WHERE issue_id = ${waits}`
+  expect(edges.map((e: { after_issue: string }) => e.after_issue)).toEqual([blocker])
+}, 40_000)
+
 test('triage stops naming edges once its own were mostly not needed: the Issue settles with none and the drop is counted', async () => {
   // twelve pairs that shipped disjoint files behind an edge triage had inferred: the kind is mostly not needed
   const sql = lab.world.db.sql
