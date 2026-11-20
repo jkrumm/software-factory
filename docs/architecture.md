@@ -151,7 +151,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 
 ## Capacity and leads
 
-What runs on this host, and why an Issue waits. The reasons are in [the capacity guide](guide/capacity.md) and [the leads guide](guide/leads.md). Every setting, its default and what it tunes is in [settings](settings.md), generated from the settings loaders. Each rule names the symbol that holds it.
+What runs on this host, and why an Issue waits. The reasons are in [the capacity guide](guide/capacity.md) and [the leads guide](guide/leads.md). Every setting a settings loader reads, with its default and what it tunes, is in [settings](settings.md), generated from the loaders; the few the CLI reads are named where they apply. Each rule names the symbol that holds it.
 
 **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order:
 
@@ -207,7 +207,7 @@ Relearn: `factory capacity relearn --repo <name>` ignores a repo's samples befor
 
 ### Steps off the mini
 
-Issue 1793. A repo names its steps in `project.yaml` (`docs/project.md`); `remote: true` says a step passes in the step image on Ubuntu 24.04. The step host is the owner's setting, and one call can be pinned to a host or kept on the mini ([settings](settings.md)).
+Issue 1793. A repo names its steps in `project.yaml` (`docs/project.md`); `remote: true` says a step passes in the step image on Ubuntu 24.04. The step host is the owner's setting ([settings](settings.md)). One call can be pinned to a host with `FACTORY_SLOT_HOST=mini|vps`, or kept on the mini with `FACTORY_SLOT_REMOTE=0`; the CLI reads both (`apps/cli/src/slot.ts`), so they are not in the table.
 
 - **Placement** (`app/capacity-slots.ts` `touchSlot`, `domains/capacity/remote.ts`): the VPS takes a step when `decideRemote` finds room and `finishesSooner` holds. A caller may run off the mini when the mini makes it wait, or when a slot is free but the VPS is learned to run the step in less time (issue 2668). A step that needs what only the mini has (`mac`, `apple`, `secrets`, `services`), or the host-wide class `apple`, never leaves the mini. Sooner: the learned VPS run against the expected mini wait (zero when a slot is free now) plus the mini run. A step the VPS would have taken but has no room for is placed `no_room`, not `free`.
 - **Pressure line** (`kernel/remote-pressure.ts`): the VPS's own memory and io stall, against a p99 baseline derived at each read.
