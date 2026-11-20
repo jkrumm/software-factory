@@ -28,7 +28,7 @@ import {
   refuseUndialogable,
   screenByRule,
   screenByNeed,
-} from '../../src/domains/checkpoints/errand.ts'
+} from '../../src/domains/errands/errand.ts'
 import {
   decisionPageKey,
   deepLink,

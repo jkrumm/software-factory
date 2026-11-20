@@ -6,19 +6,19 @@ import {
   isReturn,
   PUSH_UNREACHABLE,
   pushQueue,
-} from '../../domains/checkpoints/desk.ts'
-import type { ErrandId } from '../../domains/checkpoints/errand.ts'
-import type { CheckRun } from '../../domains/checkpoints/request.ts'
+} from '../../domains/errands/desk.ts'
+import type { ErrandId } from '../../domains/errands/errand.ts'
+import type { CheckRun } from '../../domains/errands/request.ts'
 import { exitedNote } from '../../kernel/run.ts'
-import { MAX_RUN_TRIES } from '../../domains/checkpoints/need.ts'
-import type { DeskStore, ErrandRecord, PushPort } from '../../domains/checkpoints/ports.ts'
+import { MAX_RUN_TRIES } from '../../domains/errands/need.ts'
+import type { DeskStore, ErrandRecord, PushPort } from '../../domains/errands/ports.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { rescreenErrand, resolveErrand, retireErrand, tellCheckBroken, turnBackRan } from '../checkpoints-errands.ts'
 import { runCheck } from './errands.ts'
 import type { SettleDeps } from '../checkpoints-settle.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 import { syncPlaceErrands, syncSummary } from '../checkpoints-sync.ts'
-import type { SyncPort } from '../../domains/checkpoints/ports.ts'
+import type { SyncPort } from '../../domains/errands/ports.ts'
 import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 /** the composition asks it before it starts a pass, and imports no domain code */
@@ -97,7 +97,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   )
   if (!state.ok) return state
   const force = deps.force === true
-  const read = await settle.uow.run(async ({ checkpoints }) => ok(await checkpoints.openErrands(500)))
+  const read = await settle.uow.run(async ({ errands }) => ok(await errands.openErrands(500)))
   if (!read.ok) return read
   // a command Errand never pushed goes at once; not to a MacBook known to be down, which the probe above asks again each tick
   const fresh = !macbookDown && hasUnpushed(read.value)
@@ -182,7 +182,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   }
 
   for (const next of pushQueue(stillOpen, settle.clock.now(), pass.returned, { includePlace: force })) {
-    await settle.uow.run(async ({ checkpoints }) => ok(await checkpoints.recordPush(next.id, settle.clock.now())))
+    await settle.uow.run(async ({ errands }) => ok(await errands.recordPush(next.id, settle.clock.now())))
     const pushed = await deps.push.push(next.id)
     if (!pushed.ok) {
       pass.problems.push(`${next.id}: push: ${pushed.error.detail}`.slice(0, 300))

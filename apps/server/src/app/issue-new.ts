@@ -1,5 +1,5 @@
 import { cleanText, parseSeat, type ResolvedSeat } from '@software-factory/contract'
-import type { CheckpointStore } from '../domains/checkpoints/ports.ts'
+import type { CheckpointStore, CollectionStore } from '../domains/checkpoints/ports.ts'
 import { projectOf, repoNameOf, repoTextOf } from '../domains/planning/sync.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import type { OwnerActor } from '../kernel/events.ts'
@@ -51,7 +51,7 @@ export interface NewIssued {
 
 export interface NewIssueDeps extends Omit<PlanningDeps, 'uow'>, Pick<FiledSpecDeps, 'blobs' | 'consoleUrl'> {
   /** planning's stores, and the checkpoints' for the Spec a filer attaches */
-  uow: UnitOfWork<PlanningStores & { checkpoints: CheckpointStore }>
+  uow: UnitOfWork<PlanningStores & { checkpoints: CheckpointStore; collections: CollectionStore }>
   /** the trust boundary: the repo's real path, or a refusal when it is outside the roots (`adapters/git/repos.ts`) */
   locate(repo: string): Promise<Result<string, PortError>>
   /** the role table, for a seat that names a role */

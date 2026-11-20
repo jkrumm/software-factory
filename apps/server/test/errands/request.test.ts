@@ -6,7 +6,7 @@ import {
   hostOf,
   readExpiry,
   readRequest,
-} from '../../src/domains/checkpoints/request.ts'
+} from '../../src/domains/errands/request.ts'
 
 const NOW = new Date('2026-11-13T08:00:00Z')
 

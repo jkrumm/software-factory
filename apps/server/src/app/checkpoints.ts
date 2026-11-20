@@ -17,7 +17,6 @@ import {
 import {
   type DecisionForm,
   type DecisionId,
-  type MissingFields,
   readDecisionForm,
   refuseNoOpDefault,
   type Settler,
@@ -30,10 +29,10 @@ import {
   refuseHostClass,
   refuseUndialogable,
   refuseQueuedAsk,
-} from '../domains/checkpoints/errand.ts'
+} from '../domains/errands/errand.ts'
 import { autoRunClassOf } from '../kernel/auto-run.ts'
-import { matchKeyOf } from '../domains/checkpoints/match.ts'
-import { failedTwiceNote, MAX_RUN_TRIES, needOf } from '../domains/checkpoints/need.ts'
+import { matchKeyOf } from '../domains/errands/match.ts'
+import { failedTwiceNote, MAX_RUN_TRIES, needOf } from '../domains/errands/need.ts'
 import {
   DECLINE_HOLD_MS,
   refuseBotCheck,
@@ -42,7 +41,7 @@ import {
   refuseKeyless,
   refuseOffMacbook,
   refuseUnroutable,
-} from '../domains/checkpoints/triage.ts'
+} from '../domains/errands/triage.ts'
 import {
   brokenLine,
   CHECK_BROKEN_NOTE,
@@ -50,7 +49,7 @@ import {
   checkVerdict,
   readRequest,
   SCREENED_SOURCES,
-} from '../domains/checkpoints/request.ts'
+} from '../domains/errands/request.ts'
 import {
   exitedNote,
   firstErrorLine,
@@ -66,16 +65,14 @@ import type {
   ArtifactRecord,
   BlobStore,
   CheckpointStore,
-  CheckRunner,
   DecisionFilter,
   DecisionRecord,
-  ErrandJoin,
-  ErrandRecord,
   PageRecord,
   RevisionRecord,
   SpecScreenRecord,
   VerdictRecord,
 } from '../domains/checkpoints/ports.ts'
+import type { CheckRunner, ErrandJoin, ErrandRecord, ErrandStore } from '../domains/errands/ports.ts'
 import type { IssueEvent } from '../domains/work/events.ts'
 import { holdsIn, holdUntil, isHold } from '../kernel/hold.ts'
 import type { Issue } from '../domains/work/issue.ts'
@@ -83,11 +80,12 @@ import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
 import { type IssueId, issueNumber } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
+import type { MissingFields } from '../kernel/missing-fields.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { type IssueWriteError, recordIn, type Recorded, type WriteDeps } from './issues.ts'
 import type { UnitOfWork } from './unit-of-work.ts'
 
-export type CheckpointStores = { work: WorkStore; checkpoints: CheckpointStore }
+export type CheckpointStores = { work: WorkStore; checkpoints: CheckpointStore; errands: ErrandStore }
 export type CheckpointUow = UnitOfWork<CheckpointStores>
 
 export interface CheckpointDeps extends WriteDeps {
@@ -159,7 +157,7 @@ export async function eachJoined(
   errand: Pick<ErrandRecord, 'id'>,
   each: (issueId: IssueId, join: ErrandJoin) => Promise<Result<unknown, CheckpointError>>,
 ): Promise<Result<null, CheckpointError>> {
-  for (const join of await stores.checkpoints.joinsOf(errand.id)) {
+  for (const join of await stores.errands.joinsOf(errand.id)) {
     const issue = await issueOf(stores.work, join.issueId)
     if (!issue || !waitingOn(issue, 'errand', errand.id)) continue
     const done = await each(join.issueId, join)
@@ -1180,8 +1178,8 @@ async function countRefusal<T>(
   if (rule === undefined) return result
   // the count is a figure, not the answer: a database error here must not hide the refusal from the one asked
   await deps.uow
-    .run(async ({ checkpoints }) => {
-      await checkpoints.insertErrandRefusal({ at: deps.clock.now(), rule, source })
+    .run(async ({ errands }) => {
+      await errands.insertErrandRefusal({ at: deps.clock.now(), rule, source })
       return ok(null)
     })
     .catch(() => null)
@@ -1190,12 +1188,12 @@ async function countRefusal<T>(
 
 /** The refusal of a need the owner turned back within the hold, or null. */
 async function declinedRefusal(
-  checkpoints: Pick<CheckpointStores['checkpoints'], 'declinedMatch'>,
+  errands: Pick<ErrandStore, 'declinedMatch'>,
   matchKey: string | null,
   now: Date,
 ): Promise<string | null> {
   if (matchKey === null) return null
-  const declined = await checkpoints.declinedMatch(matchKey, new Date(now.getTime() - DECLINE_HOLD_MS))
+  const declined = await errands.declinedMatch(matchKey, new Date(now.getTime() - DECLINE_HOLD_MS))
   return refuseDeclined(declined, now)
 }
 
@@ -1221,7 +1219,7 @@ function raisedErrand(
   const read = readErrand(input.raw)
   if (!read.ok) return Promise.resolve(read)
   // `tried` is the gate's, never stored: the rule screen reads the stored detail as the ask, and what was run first is not.
-  // the host's own work and an empty place are refused before an Issue waits (`domains/checkpoints/triage.ts`)
+  // the host's own work and an empty place are refused before an Issue waits (`domains/errands/triage.ts`)
   const refused =
     ruled('host_class', refuseHostClass(read.value)) ??
     ruled('undialogable', refuseUndialogable(read.value)) ??
@@ -1242,20 +1240,20 @@ async function raiseChecked(
     const queued = await deps.queuedAsks(issueNumber(input.issueId))
     if (queued.length > 0) return refusal('queued_ask', refuseQueuedAsk(queued))
   }
-  return deps.uow.run(async ({ work, checkpoints }) => {
+  return deps.uow.run(async ({ work, errands }) => {
     const issue = await issueOf(work, input.issueId)
     if (!issue) return err({ kind: 'unknown_issue', issueId: input.issueId })
     const errandKey = key('errand', input.issueId, input.attempt, digest(input.call ? `call:${input.call}` : summary))
-    const existing = await checkpoints.errandByKey(errandKey)
+    const existing = await errands.errandByKey(errandKey)
     if (existing) return ok<ErrandWritten>({ result: 'replayed', errand: existing, issue: moveOf(issue) })
 
     // a repeat of a raise that joined: the same Errand again
-    const earlier = await checkpoints.joinedErrand(errandKey)
+    const earlier = await errands.joinedErrand(errandKey)
     if (earlier) return ok<ErrandWritten>({ result: 'replayed', errand: earlier, issue: moveOf(issue) })
 
     // the same command, check, need key or ask as an open Errand: the Issue waits on that one, and the owner is paged once
     const matchKey = matchKeyOf({ repo: issue.repo, needKey: read.needKey, command: read.command, summary })
-    const same = await checkpoints.openMatching({ command: read.command, check: read.check, matchKey })
+    const same = await errands.openMatching({ command: read.command, check: read.check, matchKey })
     if (same) {
       if (same.issueId === input.issueId)
         return ok<ErrandWritten>({ result: 'replayed', errand: same, issue: moveOf(issue) })
@@ -1273,7 +1271,7 @@ async function raiseChecked(
         'errand_raised',
       )
       if (!joined.ok) return joined
-      await checkpoints.joinErrand({
+      await errands.joinErrand({
         errandId: same.id,
         issueId: input.issueId,
         attempt: input.attempt,
@@ -1288,7 +1286,7 @@ async function raiseChecked(
     }
 
     // the owner turned this need back not long ago: his note is the answer, nothing is raised
-    const held = await declinedRefusal(checkpoints, matchKey, deps.clock.now())
+    const held = await declinedRefusal(errands, matchKey, deps.clock.now())
     if (held) return refusal('declined', held)
 
     const id = deps.ids.next('errand')
@@ -1306,7 +1304,7 @@ async function raiseChecked(
     )
     if (!recorded.ok) return recorded
     const at = deps.clock.now()
-    const stored = await checkpoints.insertErrand({
+    const stored = await errands.insertErrand({
       id,
       key: errandKey,
       issueId: input.issueId,
@@ -1347,7 +1345,7 @@ async function raiseChecked(
       matchKey,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
-    const errand = await checkpoints.errand(id)
+    const errand = await errands.errand(id)
     if (!errand) throw new Error(`errand ${id} vanished inside its own transaction`)
     return ok<ErrandWritten>({
       result: 'applied',
@@ -1404,7 +1402,7 @@ export async function finishErrand(
   }
   if (input.by === 'orchestrator') {
     // an `approval` Errand is the owner's yes (Approve): his delegate does not give it
-    const held = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.errand(input.errandId)))
+    const held = await deps.uow.run(async ({ errands }) => ok(await errands.errand(input.errandId)))
     if (!held.ok) return held
     if (held.value && !held.value.doneAt && (held.value.need ?? needOf(held.value)) === 'approval')
       return err({
@@ -1418,7 +1416,7 @@ export async function finishErrand(
   const failure = runFailureOf({ run: input.run, note: input.note?.trim() || null })
   if (failure) return keepOpen(deps, input.errandId, { kind: 'run', failure })
 
-  const found = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.errand(input.errandId)))
+  const found = await deps.uow.run(async ({ errands }) => ok(await errands.errand(input.errandId)))
   if (!found.ok) return found
   const checkCommand = found.value?.doneAt ? null : (found.value?.checkCommand ?? null)
   if (checkCommand === null) return closeErrand(deps, { ...input, outcome })
@@ -1488,7 +1486,7 @@ export async function turnBackErrandWith(
   }
   const joined = await eachJoined(stores, errand, end)
   if (!joined.ok) return joined
-  await stores.checkpoints.finishErrand(errand.id, at, why, { kind: 'turned_back', by: 'loop' })
+  await stores.errands.finishErrand(errand.id, at, why, { kind: 'turned_back', by: 'loop' })
   await stores.checkpoints.cancelPages(errand.id, at)
   return ok(null)
 }
@@ -1500,8 +1498,8 @@ type KeptOpen =
 
 /** The Errand stays open and says why: the run that failed, or the check that overruled the done. A replay when it is done already. */
 function keepOpen(deps: CheckpointDeps, errandId: ErrandId, why: KeptOpen): Promise<CheckpointResult<ErrandWritten>> {
-  return deps.uow.run(async ({ work, checkpoints }) => {
-    const errand = await checkpoints.lockErrand(errandId)
+  return deps.uow.run(async ({ work, checkpoints, errands }) => {
+    const errand = await errands.lockErrand(errandId)
     if (!errand) return err(notFound('Errand', errandId))
     if (errand.doneAt) {
       const issue = errand.issueId ? await issueOf(work, errand.issueId) : null
@@ -1510,21 +1508,21 @@ function keepOpen(deps: CheckpointDeps, errandId: ErrandId, why: KeptOpen): Prom
     const at = deps.clock.now()
     if (why.kind === 'run') {
       const { head, tail } = headTail(why.failure.output)
-      await checkpoints.recordRun(errand.id, { at, status: why.failure.status, exit: why.failure.exit, head, tail })
-      const after = await checkpoints.errand(errand.id)
+      await errands.recordRun(errand.id, { at, status: why.failure.status, exit: why.failure.exit, head, tail })
+      const after = await errands.errand(errand.id)
       // the same command that came back unsuccessful twice is not offered a third time: the lead or the asker is told
       if (after && why.failure.status !== 'running' && after.runAttempts >= MAX_RUN_TRIES) {
-        const retired = await retireFailed({ work, checkpoints }, deps, after)
+        const retired = await retireFailed({ work, checkpoints, errands }, deps, after)
         if (!retired.ok) return retired
       }
     } else {
       if (why.ran) {
         const { head, tail } = headTail(why.ran.output)
-        await checkpoints.recordRun(errand.id, { at, status: 'done', exit: why.ran.exit, head, tail })
+        await errands.recordRun(errand.id, { at, status: 'done', exit: why.ran.exit, head, tail })
       }
-      await checkpoints.recordCheck(errand.id, { at, note: STILL_NEEDED_NOTE, fails: 0 })
+      await errands.recordCheck(errand.id, { at, note: STILL_NEEDED_NOTE, fails: 0 })
     }
-    const kept = await checkpoints.errand(errand.id)
+    const kept = await errands.errand(errand.id)
     if (!kept) throw new Error(`errand ${errand.id} vanished inside its own transaction`)
     return ok<ErrandWritten>({ result: 'applied', errand: kept, issue: null })
   })
@@ -1548,8 +1546,8 @@ function closeErrand(
 ): Promise<CheckpointResult<ErrandWritten>> {
   const { outcome } = input
   const by = input.by ?? 'owner'
-  return deps.uow.run(async ({ work, checkpoints }) => {
-    const errand = await checkpoints.errand(input.errandId)
+  return deps.uow.run(async ({ work, checkpoints, errands }) => {
+    const errand = await errands.errand(input.errandId)
     if (!errand) return err(notFound('Errand', input.errandId))
     const issue = errand.issueId ? await issueOf(work, errand.issueId) : null
     if (errand.issueId && !issue) return err({ kind: 'unknown_issue', issueId: errand.issueId })
@@ -1606,11 +1604,11 @@ function closeErrand(
       if (!ended.ok) return ended
       move = ended.value
     }
-    const joined = await eachJoined({ work, checkpoints }, errand, endFor)
+    const joined = await eachJoined({ work, checkpoints, errands }, errand, endFor)
     if (!joined.ok) return joined
-    await checkpoints.finishErrand(errand.id, at, note, { kind: outcome, by })
+    await errands.finishErrand(errand.id, at, note, { kind: outcome, by })
     await checkpoints.cancelPages(errand.id, at)
-    const done = await checkpoints.errand(errand.id)
+    const done = await errands.errand(errand.id)
     if (!done) throw new Error(`errand ${errand.id} vanished inside its own transaction`)
     return ok<ErrandWritten>({ result: 'applied', errand: done, issue: move })
   })
@@ -1662,13 +1660,13 @@ function requestedErrand(deps: CheckpointDeps, input: { raw: unknown }): Promise
     ruled('empty_place', refuseEmptyPlace(request, request.need)) ??
     ruled('unroutable', refuseUnroutable(request, request.need))
   if (refused) return Promise.resolve(refusal(refused.rule, refused.detail))
-  return deps.uow.run(async ({ work, checkpoints }) => {
+  return deps.uow.run(async ({ work, checkpoints, errands }) => {
     // the expiry is relative to now, so it is not part of what makes a request the same one
     const same = digest(
       JSON.stringify([request.summary, request.detail, request.command, request.check, request.host, request.key]),
     )
     const sameKey = key('errand_request', request.source, request.key ?? 'unkeyed', same)
-    const existing = await checkpoints.errandByKey(sameKey)
+    const existing = await errands.errandByKey(sameKey)
     if (existing && !existing.doneAt)
       return ok<ErrandRequested>({ result: 'replayed', errand: existing, superseded: [] })
     // the same command, check or ask as an open Errand, an Issue's or a request: it is that Errand. The one exception is a
@@ -1680,7 +1678,7 @@ function requestedErrand(deps: CheckpointDeps, input: { raw: unknown }): Promise
       command: request.command,
       summary: request.summary,
     })
-    const open = await checkpoints.openMatching({ command: request.command, check: request.check, matchKey })
+    const open = await errands.openMatching({ command: request.command, check: request.check, matchKey })
     const corrected =
       open !== null &&
       request.key !== null &&
@@ -1688,15 +1686,15 @@ function requestedErrand(deps: CheckpointDeps, input: { raw: unknown }): Promise
       (open.command !== request.command ||
         (request.command === null && (open.detail !== request.detail || open.checkCommand !== request.check)))
     if (open && !corrected) return ok<ErrandRequested>({ result: 'joined', errand: open, superseded: [] })
-    const held = await declinedRefusal(checkpoints, matchKey, at)
+    const held = await declinedRefusal(errands, matchKey, at)
     if (held) return refusal('declined', held)
     const id = deps.ids.next('errand')
     // asked again after the first was closed: a new Errand, under a key of its own
     const errandKey = existing ? key('errand_request', id) : sameKey
-    const superseded = request.key ? await checkpoints.supersedeRequests(request.key, id, at) : []
+    const superseded = request.key ? await errands.supersedeRequests(request.key, id, at) : []
     for (const gone of superseded) {
       const ended = await endJoined(
-        { work, checkpoints },
+        { work, checkpoints, errands },
         deps,
         { id: gone },
         {
@@ -1705,7 +1703,7 @@ function requestedErrand(deps: CheckpointDeps, input: { raw: unknown }): Promise
       )
       if (!ended.ok) return ended
     }
-    const stored = await checkpoints.insertErrand({
+    const stored = await errands.insertErrand({
       id,
       key: errandKey,
       issueId: null,
@@ -1753,7 +1751,7 @@ function requestedErrand(deps: CheckpointDeps, input: { raw: unknown }): Promise
       matchKey,
     })
     if (!stored) return err({ kind: 'invalid', detail: `the request ${errandKey} is stored already` })
-    const errand = await checkpoints.errand(id)
+    const errand = await errands.errand(id)
     if (!errand) throw new Error(`errand ${id} vanished inside its own transaction`)
     return ok<ErrandRequested>({ result: 'applied', errand, superseded })
   })
@@ -1763,7 +1761,7 @@ export function listErrands(
   deps: CheckpointDeps,
   filter: { issueId?: IssueId; open?: boolean; limit: number },
 ): Promise<CheckpointResult<ErrandRecord[]>> {
-  return deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.errands(filter)))
+  return deps.uow.run(async ({ errands }) => ok(await errands.errands(filter)))
 }
 
 export function listPages(deps: CheckpointDeps, limit: number): Promise<CheckpointResult<PageRecord[]>> {

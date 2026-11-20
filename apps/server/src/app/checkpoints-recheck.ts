@@ -1,7 +1,8 @@
 import type { ErrandScreenRequest } from '@software-factory/contract'
 import { type DecisionId, type JudgeInput, judgeInputOf, precedentTerms } from '../domains/checkpoints/decision.ts'
-import { checkErrandScreen, type ErrandId, errandScreenFields } from '../domains/checkpoints/errand.ts'
-import { type DecisionRecord, type ErrandRecord, statusOf } from '../domains/checkpoints/ports.ts'
+import { checkErrandScreen, type ErrandId, errandScreenFields } from '../domains/errands/errand.ts'
+import { type DecisionRecord, statusOf } from '../domains/checkpoints/ports.ts'
+import { type ErrandRecord } from '../domains/errands/ports.ts'
 import {
   eventLines,
   type Recheck,
@@ -125,7 +126,7 @@ async function lookErrand(deps: SettleDeps, seen: Seen, errand: ErrandRecord): P
     const ended = await endJoined(stores, deps, errand, { turnedAway: `${reason}: raise it again if it still applies` })
     if (!ended.ok)
       throw new Error(`errand ${errand.id} could not end its joined Issues: ${JSON.stringify(ended.error)}`)
-    await stores.checkpoints.finishErrand(errand.id, at, reason)
+    await stores.errands.finishErrand(errand.id, at, reason)
     await stores.checkpoints.cancelPages(errand.id, at)
     await record(stores, deps, { ...base, outcome: 'withdrawn', by: 'factory', reason })
     return { action: 'done', outcome: 'withdrawn' }
@@ -143,7 +144,7 @@ async function lookErrand(deps: SettleDeps, seen: Seen, errand: ErrandRecord): P
 
 /** The checkpoint under its lock when it is still open and still at the owner; null otherwise. */
 async function lockedAtOwner(
-  { checkpoints }: CheckpointStores,
+  { checkpoints, errands }: CheckpointStores,
   candidate: RecheckCandidate,
 ): Promise<{ decision: DecisionRecord } | { errand: ErrandRecord } | null> {
   if (candidate.kind === 'decision') {
@@ -151,7 +152,7 @@ async function lockedAtOwner(
     if (!decision || statusOf(decision) !== 'open') return null
     return decision.steps.find((step) => step.step === 'owner')?.outcome === 'open' ? { decision } : null
   }
-  const errand = await checkpoints.lockErrand(candidate.id as ErrandId)
+  const errand = await errands.lockErrand(candidate.id as ErrandId)
   return errand?.issueId && !errand.doneAt && errand.reachedOwnerAt ? { errand } : null
 }
 
@@ -259,7 +260,7 @@ async function recordErrand(
 ): Step<Recorded> {
   return deps.uow.run<Recorded, CheckpointError>(async (stores) => {
     const { errand, seen } = looked
-    const fresh = await stores.checkpoints.lockErrand(errand.id)
+    const fresh = await stores.errands.lockErrand(errand.id)
     if (!fresh || fresh.doneAt || !fresh.reachedOwnerAt) return ok('dropped')
     const found = await issueAndLog(stores, candidate)
     if (!unmoved(found?.issue, seen)) return ok('dropped')

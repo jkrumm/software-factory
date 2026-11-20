@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { matchKeyOf, normalizeAsk, normalizeCommand } from '../../src/domains/checkpoints/match.ts'
-import { readErrand } from '../../src/domains/checkpoints/errand.ts'
+import { matchKeyOf, normalizeAsk, normalizeCommand } from '../../src/domains/errands/match.ts'
+import { readErrand } from '../../src/domains/errands/errand.ts'
 
 test('a command is the same through whitespace and a trailing separator', () => {
   expect(normalizeCommand('  make   -C ~/x  keys ;\n')).toBe('make -C ~/x keys')

@@ -4,6 +4,7 @@ import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { srcHash } from '@software-factory/contract'
 import { fileBlobStore } from '../../src/adapters/blobs/filesystem.ts'
 import { postgresCheckpointStore } from '../../src/adapters/postgres/checkpoint-store.ts'
+import { postgresErrandStore } from '../../src/adapters/postgres/errand-store.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresUnitOfWork } from '../../src/adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
@@ -39,7 +40,7 @@ import { readSince } from '../../src/read/since.ts'
 import type { ArtifactId } from '../../src/domains/checkpoints/artifact.ts'
 import { JUDGE_BACKOFF_MS, type DecisionId, type JudgeVerdict } from '../../src/domains/checkpoints/decision.ts'
 import { AUTO_RUN_NOTE } from '../../src/kernel/auto-run.ts'
-import { ERRAND_SCREEN_BACKOFF_MS, type ErrandId } from '../../src/domains/checkpoints/errand.ts'
+import { ERRAND_SCREEN_BACKOFF_MS, type ErrandId } from '../../src/domains/errands/errand.ts'
 import type { ErrandScreenAnswer, ErrandScreenRequest } from '@software-factory/contract'
 import type { Notifier } from '../../src/domains/checkpoints/ports.ts'
 import { fakeAgw, type Handler } from '../support/agw.ts'
@@ -121,6 +122,7 @@ beforeEach(async () => {
   const uow = postgresUnitOfWork(db.sql, (tx) => ({
     work: postgresWorkStore(tx),
     checkpoints: postgresCheckpointStore(tx),
+    errands: postgresErrandStore(tx),
   }))
   deps = {
     uow,
@@ -1971,8 +1973,8 @@ describe('errands', () => {
 })
 
 const raiseErrandRead = (id: ErrandId) =>
-  deps.uow.run(async ({ checkpoints }) => {
-    const errand = await checkpoints.errand(id)
+  deps.uow.run(async ({ errands }) => {
+    const errand = await errands.errand(id)
     return errand ? ok(errand) : err({ kind: 'not_found', what: 'Errand', id } as const)
   })
 

@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import * as z from 'zod'
-import type { QueuedAsk } from '../../domains/checkpoints/errand.ts'
+import type { QueuedAsk } from '../../domains/errands/errand.ts'
 
 const Req = z.object({
   id: z.string(),

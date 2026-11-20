@@ -1,12 +1,12 @@
 import type { ErrandCheckReply } from '@software-factory/contract'
-import type { ErrandId } from '../domains/checkpoints/errand.ts'
-import type { ErrandRecord } from '../domains/checkpoints/ports.ts'
+import type { ErrandId } from '../domains/errands/errand.ts'
+import type { ErrandRecord } from '../domains/errands/ports.ts'
 import { err, ok } from '../kernel/result.ts'
 import type { CheckpointResult } from './checkpoints.ts'
 import { resolveErrand, tellCheckBroken } from './checkpoints-errands.ts'
 import type { SettleDeps } from './checkpoints-settle.ts'
 import { runCheck } from './loops/errands.ts'
-import { CHECK_BROKEN_NOTE } from '../domains/checkpoints/request.ts'
+import { CHECK_BROKEN_NOTE } from '../domains/errands/request.ts'
 
 export interface ErrandChecked {
   outcome: ErrandCheckReply['outcome']
@@ -24,7 +24,7 @@ export async function checkErrandNow(
   deps: SettleDeps,
   input: { errandId: ErrandId },
 ): Promise<CheckpointResult<ErrandChecked>> {
-  const read = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.errand(input.errandId)))
+  const read = await deps.uow.run(async ({ errands }) => ok(await errands.errand(input.errandId)))
   if (!read.ok) return read
   const errand = read.value
   if (!errand) return err({ kind: 'not_found', what: 'Errand', id: input.errandId })
@@ -53,7 +53,7 @@ export async function checkErrandNow(
   )
   // the check said "not needed" but the close was refused: say so, never "needed"
   if (refusals[0]) return refusals[0]
-  const after = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.errand(input.errandId)))
+  const after = await deps.uow.run(async ({ errands }) => ok(await errands.errand(input.errandId)))
   if (!after.ok) return after
   const now = after.value ?? errand
   if (now.doneAt) return ok({ outcome: 'closed', note: now.doneNote, errand: now })

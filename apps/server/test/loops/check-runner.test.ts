@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { checkPath, shellCheckRunner } from '../../src/adapters/shell/check-runner.ts'
 import { exitedNote } from '../../src/kernel/run.ts'
-import { checkVerdict } from '../../src/domains/checkpoints/request.ts'
+import { checkVerdict } from '../../src/domains/errands/request.ts'
 
 /** The real shell: what a check's exit and output come to. Short commands only. */
 const runner = shellCheckRunner(undefined, 5_000)

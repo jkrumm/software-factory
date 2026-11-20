@@ -1,5 +1,5 @@
-import { isSyncCommand, needOf } from '../domains/checkpoints/need.ts'
-import type { SyncPort } from '../domains/checkpoints/ports.ts'
+import { isSyncCommand, needOf } from '../domains/errands/need.ts'
+import type { SyncPort } from '../domains/errands/ports.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import { outputNote } from '../kernel/run.ts'
 import { type CheckpointDeps, finishErrand } from './checkpoints.ts'
@@ -27,7 +27,7 @@ export interface SyncPass {
  */
 export async function syncPlaceErrands(deps: CheckpointDeps, port: SyncPort): Promise<Result<SyncPass, PortError>> {
   const pass: SyncPass = { looked: 0, synced: 0, problems: [] }
-  const read = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.openErrands(READ_LIMIT)))
+  const read = await deps.uow.run(async ({ errands }) => ok(await errands.openErrands(READ_LIMIT)))
   if (!read.ok) return read
   const open = read.value.filter(
     (errand) =>

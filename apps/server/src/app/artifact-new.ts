@@ -1,5 +1,5 @@
 import { readSubmission } from '../domains/checkpoints/artifact.ts'
-import type { ArtifactRecord, CheckpointStore, RevisionRecord } from '../domains/checkpoints/ports.ts'
+import type { ArtifactRecord, CheckpointStore, CollectionStore, RevisionRecord } from '../domains/checkpoints/ports.ts'
 import { projectOf, repoNameOf, repoTextOf } from '../domains/planning/sync.ts'
 import type { ArtifactId } from '../domains/checkpoints/artifact.ts'
 import type { IssueId } from '../kernel/ids.ts'
@@ -12,7 +12,7 @@ import type { UnitOfWork } from './unit-of-work.ts'
 
 /** What `artifact new` and `artifact link` need: the filing's dependencies (the repo's trust boundary, the blob store, the planning stores). */
 export type StandaloneArtifactDeps = Pick<NewIssueDeps, 'locate' | 'blobs' | 'clock' | 'ids'> & {
-  uow: UnitOfWork<PlanningStores & { checkpoints: CheckpointStore }>
+  uow: UnitOfWork<PlanningStores & { checkpoints: CheckpointStore; collections: CollectionStore }>
 }
 
 export type StandaloneArtifactError =

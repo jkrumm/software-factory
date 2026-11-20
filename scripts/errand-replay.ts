@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Replays recorded Errands through the rules that decide an Errand before it reaches the owner
- * (`apps/server/src/domains/checkpoints/triage.ts`): which would still reach him and why, which a rule refuses, which a fixed
+ * (`apps/server/src/domains/errands/triage.ts`): which would still reach him and why, which a rule refuses, which a fixed
  * MacBook verb runs. Usage: `factory errand list --limit 200 --format json | bun scripts/errand-replay.ts [--rows]`
  * (or a file path instead of stdin). Exits 1 when a recorded secret or hands Errand would run. The Errand text is the owner's:
  * the output goes to the terminal, never to a tracked file.
@@ -12,7 +12,7 @@ import {
   type ReplayRow,
   summarize,
   wronglyRun,
-} from '../apps/server/src/domains/checkpoints/triage-replay.ts'
+} from '../apps/server/src/domains/errands/triage-replay.ts'
 
 const args = process.argv.slice(2)
 const rowsToo = args.includes('--rows')

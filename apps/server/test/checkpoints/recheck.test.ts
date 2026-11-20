@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type DecisionForm, type DecisionId, judgeInputOf } from '../../src/domains/checkpoints/decision.ts'
-import { errandScreenFields } from '../../src/domains/checkpoints/errand.ts'
+import { errandScreenFields } from '../../src/domains/errands/errand.ts'
 import {
   eventLines,
   type LogEntry,
