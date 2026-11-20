@@ -129,10 +129,10 @@ test('the first pass counts only the new core, files each pattern over its rate 
   await regress(issue, OLD)
   await regress(issue, OLD)
 
-  // the new core's own: 40 Issues closed, so a rate of 0.1 is four
+  // the new core's own: 40 Issues closed, so a rate of 0.05 is two
   await close(issue, 40)
-  await refuse(issue, 'noted', 'not allowed here', 5) // 0.125 per Issue closed: over 0.1
-  await refuse(issue, 'started', 'too early', 3) // 0.075: three, but under the rate
+  await refuse(issue, 'noted', 'not allowed here', 5) // 0.125 per Issue closed: over 0.05
+  await refuse(issue, 'started', 'too early', 2) // under the count
   await refuse(issue, 'closed', 'a typo', 2) // under the count
   await refuseShips(issue, 'ship refused, review missing: review v4 at the tier `agw review route`…', 8) // retired
   for (let i = 0; i < 3; i++) await regress(issue) // 0.075 per Issue closed: over 0.05
@@ -144,7 +144,7 @@ test('the first pass counts only the new core, files each pattern over its rate 
 
   const signals = await filedSignals()
   expect(signals.map((s) => s.title)).toEqual([
-    'Friction: A noted event was refused: not allowed here',
+    'Friction: An event was refused: not allowed here',
     'Friction: Watches that ended in a regression',
     RETRO_TITLE,
   ])
@@ -152,7 +152,7 @@ test('the first pass counts only the new core, files each pattern over its rate 
   if (!refusal) throw new Error('no signal for the refusals')
   expect(refusal.text).toContain('Count: 5 (0.13 per Issue closed)')
   expect(refusal.text).toContain('closed: 40')
-  expect(refusal.text).toContain('Threshold: 3 in the window and 0.10 per Issue closed (judged from 10 closed)')
+  expect(refusal.text).toContain('Threshold: 3 in the window and 0.05 per Issue closed (judged from 10 closed)')
   expect(refusal.text).toContain('cut at the import')
   expect(refusal.text).toContain(`Evidence (the most recent Issues, up to 5): ${issue}`)
   expect(refusal.text).toContain('factory read friction --days 7')
