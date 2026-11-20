@@ -12,7 +12,7 @@ Two arrows chasing each other round one closed loop: the cycle the factory autom
 | `AppIcon.icns` | macOS, on Apple's icon grid |
 | `social-1280x640.png` | GitHub's social preview (repository Settings, "Social preview": an upload by hand, GitHub has no API for it) |
 
-The web icons are in `apps/console/public/icons/`: `mark.svg` and `favicon.ico` for the tab, `icon-192.png` and `icon-512.png` for the PWA and the sidebar, `icon-maskable-512.png` for Android (full bleed, the arrows sit inside the safe circle), `apple-touch-icon.png` for the iPhone home screen, and `og.png` for link previews.
+The web icons are in `apps/console/public/icons/`: `mark.svg` and `favicon.ico` for the tab, `icon-192.png` and `icon-512.png` for the PWA (the sidebar shows `mark.svg`), `icon-maskable-512.png` for Android (full bleed, the arrows sit inside the safe circle), `apple-touch-icon.png` for the iPhone home screen, and `og.png` for link previews.
 
 ## Rebuild the set
 
