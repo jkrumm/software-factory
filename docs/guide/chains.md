@@ -45,7 +45,7 @@ An inferred edge is one the factory added, not the filer.
 
 - [`chain.ts` L3-L17](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/chain.ts#L3-L17): `Edge`, the one shape of a dependency.
 - [`chain.ts` L19-L42](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/chain.ts#L19-L42): the cycle check and the edges a close satisfies.
-- [`docs/architecture.md` L811-L813](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L811-L813): the evidence rule and the readiness measure.
+- [`docs/architecture.md` L810-L812](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L810-L812): the evidence rule and the readiness measure.
 
 ## Plans
 
@@ -83,7 +83,7 @@ burn-in-day-7	done	issue_1384	-	Burn-in report, day 7
 
 **Example files:**
 
-- [`plan.yaml` L199-L215](https://github.com/jkrumm/software-factory/blob/master/docs/plan.yaml#L199-L215): the two burn-in rows, one after the other.
+- [`plan.yaml` L201-L217](https://github.com/jkrumm/software-factory/blob/master/docs/plan.yaml#L201-L217): the two burn-in rows, one after the other.
 - [`plan.ts` L10-L43](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/plan.ts#L10-L43): the four row states and what a status carries.
 - [`plan.md` L8-L99](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L8-L99): the file, a row's keys, and when a row is filed.
 
@@ -158,8 +158,8 @@ This guide's Spec shows a wait behind another repo's Issue. On 2026-11-17 the ow
 
 **Read more:**
 
-- [The plan file](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L1-L99), [Changing an edge](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L201-L233) and [Replan](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L293-L309) in `docs/plan.md`.
-- [Inferred edges and edge readiness](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L811-L813) in `docs/architecture.md`.
+- [The plan file](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L1-L99), [Changing an edge](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L210-L242) and [Replan](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L302-L318) in `docs/plan.md`.
+- [Inferred edges and edge readiness](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L810-L812) in `docs/architecture.md`.
 - [Defer](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L71) in `docs/language.md`.
 
 Next: [Checkpoints](./checkpoints.md)

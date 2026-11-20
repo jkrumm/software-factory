@@ -15,7 +15,7 @@ Admission is the pure function that answers, for one Issue the chain lets throug
 
 <!-- snippet: apps/server/src/domains/capacity/admission.ts REFUSALS -->
 ```ts
-export const REFUSALS = [
+const REFUSALS = [
   'drain',
   'doctor',
   'boot',
@@ -101,9 +101,9 @@ A load of 61.6 against a ceiling of 36 refuses nothing by itself. A reading back
 
 **Example files:**
 
-- [`host.ts` L41-L60](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L41-L60): `overMemory` and the measured basis of the tripwire.
-- [`host.ts` L72-L86](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L72-L86): `loadTrip`.
-- [`host.ts` L92-L98](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L92-L98): the per-core ceiling and the process cap.
+- [`host.ts` L39-L58](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L39-L58): `overMemory` and the measured basis of the tripwire.
+- [`host.ts` L70-L84](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L70-L84): `loadTrip`.
+- [`host.ts` L90-L96](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L90-L96): the per-core ceiling and the process cap.
 
 ## Seats and accounts
 
@@ -264,8 +264,8 @@ export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
 
 **Read more:**
 
-- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L149-L418) in `docs/architecture.md`.
+- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L149-L417) in `docs/architecture.md`.
 - [Work](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L7-L46) and [The host](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L150-L161) in `docs/language.md`.
-- [Lanes](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L112-L155) in `docs/plan.md`.
+- [Lanes](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L121-L164) in `docs/plan.md`.
 
 Next: [Chains and Plans](./chains.md)

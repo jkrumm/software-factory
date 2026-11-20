@@ -187,7 +187,7 @@ The first check came 1 minute 32 seconds after the ship. It found CI still runni
 
 **Read more:**
 
-- [Quality](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L495-L532): ship, review evidence, watch and verify
+- [Quality](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L494-L531): ship, review evidence, watch and verify
 - [Merging](https://github.com/jkrumm/software-factory/blob/master/docs/operations.md#L111-L129): the window, the guard and the merge method
 - [Shipping](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L114-L149): Gate, Ship, Watch, Verify, Regressed, Friction
 
