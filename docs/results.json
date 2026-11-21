@@ -1,12 +1,12 @@
 {
-  "at": "2026-11-21T11:41:55.978Z",
+  "at": "2026-11-21T12:57:44.502Z",
   "window": {
     "from": "2026-11-15T11:03:08.359Z",
-    "to": "2026-11-21T11:41:55.978Z"
+    "to": "2026-11-21T12:57:44.502Z"
   },
-  "filed": 1365,
-  "loopFiled": 266,
-  "closed": 1434,
+  "filed": 1388,
+  "loopFiled": 267,
+  "closed": 1450,
   "decisionsAnswered": {
     "judge": 36,
     "default": 6,
@@ -15,8 +15,8 @@
   },
   "kpis": {
     "avoidable_touches": {
-      "value": 0.00545950864422202,
-      "n": 1099,
+      "value": 0.0053523639607493305,
+      "n": 1121,
       "count": 6,
       "target": {
         "kind": "at_most",
@@ -25,9 +25,9 @@
       }
     },
     "first_verification_passes": {
-      "value": 0.9742738589211618,
-      "n": 1205,
-      "count": 1174,
+      "value": 0.9729508196721312,
+      "n": 1220,
+      "count": 1187,
       "target": {
         "kind": "at_least",
         "min": 0.9,
@@ -35,9 +35,9 @@
       }
     },
     "asks_not_needed": {
-      "value": 0.3176470588235294,
-      "n": 85,
-      "count": 27,
+      "value": 0.43373493975903615,
+      "n": 83,
+      "count": 36,
       "target": {
         "kind": "at_most",
         "min": null,
@@ -45,8 +45,8 @@
       }
     },
     "errands_reached_per_100": {
-      "value": 3.4432234432234434,
-      "n": 1365,
+      "value": 3.386167146974063,
+      "n": 1388,
       "count": 47,
       "target": {
         "kind": "trend",
@@ -55,8 +55,8 @@
       }
     },
     "cycle_p50": {
-      "value": 5132616,
-      "n": 1434,
+      "value": 5116916,
+      "n": 1450,
       "count": null,
       "target": {
         "kind": "at_most",
@@ -65,8 +65,8 @@
       }
     },
     "queue_wait_p90": {
-      "value": 13479224.400000002,
-      "n": 1515,
+      "value": 13438940.5,
+      "n": 1536,
       "count": null,
       "target": {
         "kind": "at_most",
