@@ -10,6 +10,7 @@ import { holdWalledLeads } from './leads-held.ts'
 import { type ApiErrorMemory, handleApiErrors } from './leads-api-errors.ts'
 import { type LeadDeps } from './leads.ts'
 import { runOutbox } from './outbox.ts'
+import { startWorktreeSweep, type WorktreeSweepMemory } from './leads-sweep.ts'
 
 /** The effect ports the leads bring; the composition adds the other packages' (`start_watch` is quality's). */
 export function leadPorts(deps: LeadDeps): Pick<EffectPorts, 'start_lead' | 'note_lead' | 'finalize'> {
@@ -27,6 +28,8 @@ export interface LeadTickDeps {
   replaySpool: () => Promise<number>
   /** what the API-error path keeps between passes */
   apiErrorMemory: ApiErrorMemory
+  /** the retry of kept worktrees: omitted, none runs */
+  worktreeSweep?: WorktreeSweepMemory
   /** the server's drain: once aborted, the pass starts no further step */
   signal?: AbortSignal
 }
@@ -65,6 +68,7 @@ export async function leadTick(deps: LeadTickDeps): Promise<Result<TickAnswer, P
     })
   }
   if (draining()) return ok({ outbox: { ran: 0, failed: 0 }, replayed, lost, apiErrors })
+  if (deps.worktreeSweep) startWorktreeSweep(deps.leads, deps.worktreeSweep, deps.signal)
   const outbox = await runOutbox({
     uow: deps.leads.uow,
     clock: deps.leads.clock,

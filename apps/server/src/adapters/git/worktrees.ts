@@ -1,5 +1,6 @@
 import { existsSync, realpathSync } from 'node:fs'
-import { join } from 'node:path'
+import { cp, lstat, mkdir, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import type { Worktree, WorktreeRemoval, WorktreeRemovalInput, Worktrees } from '../../domains/leads/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { CannotExecute, EXIT_TIMEOUT, GitTimeout, gitIn as runGit, runProcess } from '../process.ts'
@@ -41,9 +42,14 @@ export async function refOnBase(gitIn: GitProbe, repo: string, ref: string, base
   return merged !== undefined && merged === (await gitIn(repo, 'rev-parse', `${base}^{tree}`))
 }
 
+/** More untracked bytes than this are no scratch: the worktree is kept and says so. */
+const MAX_SCRATCH_BYTES = 50 * 1024 * 1024
+
 export interface GitWorktreesOptions {
   git?: string
   wtp?: string
+  /** where the untracked files of a removed worktree go (`<dir>/<issue>/<attempt>/worktree/`); without it, any untracked file keeps the tree */
+  archiveDir?: string
 }
 
 /**
@@ -206,11 +212,72 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     return false
   }
 
+  /** `target/` beside a tracked `Cargo.toml`, `node_modules` beside a tracked `package.json`: what a build left and a build brings back. */
+  async function clearBuildOutput(path: string): Promise<void> {
+    const listing =
+      (await gitIn(path, 'ls-files', '-z', '--', '*Cargo.toml', '*package.json', 'Cargo.toml', 'package.json')) ?? ''
+    const outputs = new Set(['node_modules'])
+    for (const file of listing.split('\0')) {
+      const name = file.split('/').pop()
+      const dir = dirname(file)
+      if (name === 'Cargo.toml') outputs.add(join(dir, 'target'))
+      if (name === 'package.json') outputs.add(join(dir, 'node_modules'))
+    }
+    for (const output of outputs) {
+      // Never a directory the repo tracks files in.
+      if ((await gitIn(path, 'ls-files', '--', output)) !== '') continue
+      await rm(join(path, output), { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
+
+  /** Copies the untracked files to the archive; the reason it could not, else nothing. */
+  async function archiveScratch(
+    files: readonly string[],
+    from: string,
+    input: WorktreeRemovalInput,
+  ): Promise<string | undefined> {
+    if (!options.archiveDir) return 'it has uncommitted changes'
+    let bytes = 0
+    for (const file of files) {
+      if (file.endsWith('/')) return `it holds a repository of its own (${file})`
+      const info = await lstat(join(from, file)).catch(() => undefined)
+      bytes += info?.size ?? 0
+    }
+    if (bytes > MAX_SCRATCH_BYTES) return `its untracked files are over ${MAX_SCRATCH_BYTES / 1024 / 1024} MB`
+    const dest = join(options.archiveDir, String(input.issue), String(input.attempt), 'worktree')
+    try {
+      for (const file of files) {
+        await mkdir(dirname(join(dest, file)), { recursive: true })
+        await cp(join(from, file), join(dest, file), { verbatimSymlinks: true })
+      }
+    } catch (cause) {
+      return `its untracked files could not be archived: ${String(cause)}`
+    }
+    return undefined
+  }
+
   async function remove(input: WorktreeRemovalInput): Promise<WorktreeRemoval> {
     const { repo, branch, shipped } = input
     await gitIn(repo, 'worktree', 'prune')
     const path = await find(repo, branch, input.path)
-    if (path && (await gitIn(path, 'status', '--porcelain')) !== '') return { kept: 'it has uncommitted changes', path }
+    let scratch: string[] = []
+    if (path) {
+      await clearBuildOutput(path)
+      const status = (await gitIn(path, 'status', '--porcelain')) ?? ''
+      const changes = status.split('\n').filter(Boolean)
+      const tracked = changes.filter((line) => !line.startsWith('??'))
+      if (tracked.length > 0) {
+        const shown = tracked.slice(0, 3).map((line) => line.replace(/^\s*\S+\s+/, ''))
+        const more = tracked.length > 3 ? `, +${tracked.length - 3} more` : ''
+        return { kept: `it has uncommitted changes to tracked files (${shown.join(', ')}${more})`, path }
+      }
+      if (changes.length > 0) {
+        scratch = ((await gitIn(path, 'ls-files', '-z', '--others', '--exclude-standard')) ?? '')
+          .split('\0')
+          .filter(Boolean)
+        if (scratch.length === 0) return { kept: 'it has uncommitted changes', path }
+      }
+    }
     // A failed fetch reads what the last one left, which can only keep more.
     await gitIn(repo, 'fetch', '-q', 'origin')
     const base = await originDefault(repo)
@@ -218,8 +285,14 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     // The tree's own HEAD counts as much as the branch: a detached lead's commits sit on no branch.
     const safe = (await onBase(repo, branch, base)) && (path === null || (await refOnBase(gitIn, path, 'HEAD', base)))
     if (!safe && !(await landed(repo, shipped, base))) return { kept: `its commits are not on ${base}`, path }
-    if (path && (await gitIn(repo, 'worktree', 'remove', path)) === undefined) {
-      return { kept: 'git worktree remove refused', path }
+    if (path) {
+      if (scratch.length > 0) {
+        const why = await archiveScratch(scratch, path, input)
+        if (why) return { kept: why, path }
+      }
+      // Forced only for the untracked files just archived: tracked changes were refused above.
+      const args = scratch.length > 0 ? ['worktree', 'remove', '--force', path] : ['worktree', 'remove', path]
+      if ((await gitIn(repo, ...args)) === undefined) return { kept: 'git worktree remove refused', path }
     }
     await gitIn(repo, 'branch', '-D', branch)
     return { removed: true }

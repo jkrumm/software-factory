@@ -322,14 +322,18 @@ describe('git worktrees', () => {
   test('remove takes a clean worktree whose branch is on the base; one with changes or commits is kept, and says why', async () => {
     const work = await repo()
     const clean = await value(trees.create({ repo: work, branch: 'factory/2-1' }))
-    expect(await value(trees.remove({ repo: work, branch: 'factory/2-1', path: null, shipped: [] }))).toEqual({
+    expect(
+      await value(trees.remove({ repo: work, branch: 'factory/2-1', path: null, shipped: [], issue: 1, attempt: 1 })),
+    ).toEqual({
       removed: true,
     })
     expect(existsSync(clean.path)).toBe(false)
 
     const dirty = await value(trees.create({ repo: work, branch: 'factory/3-1' }))
     writeFileSync(join(dirty.path, 'new.txt'), 'x')
-    expect(await value(trees.remove({ repo: work, branch: 'factory/3-1', path: null, shipped: [] }))).toEqual({
+    expect(
+      await value(trees.remove({ repo: work, branch: 'factory/3-1', path: null, shipped: [], issue: 1, attempt: 1 })),
+    ).toEqual({
       kept: 'it has uncommitted changes',
       path: dirty.path,
     })
@@ -338,13 +342,17 @@ describe('git worktrees', () => {
     writeFileSync(join(ahead.path, 'b.txt'), 'b')
     await git(ahead.path, 'add', '.')
     await git(ahead.path, 'commit', '-q', '-m', 'work')
-    expect(await value(trees.remove({ repo: work, branch: 'factory/4-1', path: null, shipped: [] }))).toEqual({
+    expect(
+      await value(trees.remove({ repo: work, branch: 'factory/4-1', path: null, shipped: [], issue: 1, attempt: 1 })),
+    ).toEqual({
       kept: 'its commits are not on origin/master',
       path: ahead.path,
     })
     // pushed and merged on the remote: now it is on the base
     await git(ahead.path, 'push', '-q', 'origin', 'factory/4-1:master')
-    expect(await value(trees.remove({ repo: work, branch: 'factory/4-1', path: null, shipped: [] }))).toEqual({
+    expect(
+      await value(trees.remove({ repo: work, branch: 'factory/4-1', path: null, shipped: [], issue: 1, attempt: 1 })),
+    ).toEqual({
       removed: true,
     })
   })
@@ -354,6 +362,67 @@ describe('git worktrees', () => {
     branch,
     path,
     shipped,
+    issue: 1,
+    attempt: 1,
+  })
+
+  test('remove archives the untracked files of a worktree and takes it; a tracked change keeps it, and says which', async () => {
+    const work = await repo()
+    const archiveDir = mkdtempSync(join(base, 'archive-'))
+    const archiving = gitWorktrees({ archiveDir })
+    const scratch = await value(trees.create({ repo: work, branch: 'factory/20-2' }))
+    writeFileSync(join(scratch.path, '.review-reply.json'), '{"a":1}')
+    mkdirSync(join(scratch.path, 'notes'))
+    writeFileSync(join(scratch.path, 'notes', 'x.md'), 'x')
+    writeFileSync(join(scratch.path, '.gitignore'), '')
+    expect(await value(archiving.remove({ ...input(work, 'factory/20-2', null), issue: 20, attempt: 2 }))).toEqual({
+      removed: true,
+    })
+    expect(existsSync(scratch.path)).toBe(false)
+    const dest = join(archiveDir, '20', '2', 'worktree')
+    expect(readFileSync(join(dest, '.review-reply.json'), 'utf8')).toBe('{"a":1}')
+    expect(readFileSync(join(dest, 'notes', 'x.md'), 'utf8')).toBe('x')
+    expect(await git(work, 'branch', '--list', 'factory/20-2')).toBe('')
+
+    const modified = await value(trees.create({ repo: work, branch: 'factory/21-1' }))
+    writeFileSync(join(modified.path, 'a.txt'), 'changed\n')
+    writeFileSync(join(modified.path, 'scratch.txt'), 's')
+    expect(await value(archiving.remove({ ...input(work, 'factory/21-1', null), issue: 21 }))).toEqual({
+      kept: 'it has uncommitted changes to tracked files (a.txt)',
+      path: modified.path,
+    })
+    expect(existsSync(modified.path)).toBe(true)
+    expect(existsSync(join(archiveDir, '21'))).toBe(false)
+  })
+
+  test('remove deletes build output beside a tracked Cargo.toml or package.json, kept or not, and leaves ignored files out of the archive', async () => {
+    const work = await repo()
+    const archiveDir = mkdtempSync(join(base, 'archive-'))
+    writeFileSync(join(work, 'Cargo.toml'), '[package]\n')
+    writeFileSync(join(work, '.gitignore'), 'target/\nnode_modules/\n')
+    await git(work, 'add', '.')
+    await git(work, 'commit', '-q', '-m', 'rust')
+    await git(work, 'push', '-q', 'origin', 'master')
+    const archiving = gitWorktrees({ archiveDir })
+    const tree = await value(trees.create({ repo: work, branch: 'factory/22-1' }))
+    mkdirSync(join(tree.path, 'target', 'debug'), { recursive: true })
+    writeFileSync(join(tree.path, 'target', 'debug', 'big'), 'x')
+    mkdirSync(join(tree.path, 'node_modules', 'p'), { recursive: true })
+    writeFileSync(join(tree.path, 'a.txt'), 'changed\n')
+    expect(await value(archiving.remove({ ...input(work, 'factory/22-1', null), issue: 22 }))).toMatchObject({
+      kept: expect.stringContaining('tracked files'),
+    })
+    expect(existsSync(join(tree.path, 'target'))).toBe(false)
+    expect(existsSync(join(tree.path, 'node_modules'))).toBe(false)
+
+    await git(tree.path, 'checkout', '-q', '--', 'a.txt')
+    mkdirSync(join(tree.path, 'target'))
+    writeFileSync(join(tree.path, 'scratch.txt'), 's')
+    expect(await value(archiving.remove({ ...input(work, 'factory/22-1', null), issue: 22 }))).toEqual({
+      removed: true,
+    })
+    expect(existsSync(join(archiveDir, '22', '1', 'worktree', 'scratch.txt'))).toBe(true)
+    expect(existsSync(join(archiveDir, '22', '1', 'worktree', 'target'))).toBe(false)
   })
 
   test('remove finds a worktree whose lead detached HEAD or renamed the branch, by the path it was made at', async () => {

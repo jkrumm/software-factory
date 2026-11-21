@@ -137,6 +137,8 @@ export async function finalizeLead(deps: LeadDeps, effect: FinalizeEffect): Prom
               branch: leadBranch(issue, attempt),
               path: row.worktreePath,
               shipped,
+              issue: issueNumber(issue),
+              attempt,
             })
           : ok({ kept: `the repo ${repo} cannot be found: ${located.error.detail}`, path: row.worktreePath })
         if (!removal.ok) return removal

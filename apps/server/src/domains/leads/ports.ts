@@ -107,9 +107,16 @@ export interface WorktreeRemovalInput {
   path: string | null
   /** the commits the attempt shipped: one on the base means the work landed, however the merge rewrote it */
   shipped: readonly string[]
+  /** whose worktree it is: its untracked files are archived under this Issue and attempt before the tree goes */
+  issue: number
+  attempt: number
 }
 
-/** git on the host. `create` is idempotent per branch; `remove` takes the worktree away only when nothing would be lost. */
+/**
+ * git on the host. `create` is idempotent per branch. `remove` takes the worktree away only when nothing would be lost: the
+ * untracked files a lead left (scratch, replies) are copied to the archive first, a tracked change or a commit that is not
+ * on the base keeps it. Whatever the outcome, the build output in it (`target/` beside a `Cargo.toml`, `node_modules`) goes.
+ */
 export interface Worktrees {
   create(input: { repo: string; branch: string }): Promise<Result<Worktree>>
   remove(input: WorktreeRemovalInput): Promise<Result<WorktreeRemoval>>
@@ -362,7 +369,19 @@ export interface SeatOrigin {
   text: string
 }
 
+/** A finalized attempt of a closed Issue whose worktree was kept: what `remove` may take another look at. */
+export interface KeptWorktree {
+  issue: IssueId
+  attempt: number
+  repo: string
+  path: string
+  /** the reason stored with it (may also carry branch notes) */
+  kept: string | null
+}
+
 export interface LeadStore {
+  /** the kept worktrees of closed Issues, newest Issue first */
+  keptWorktrees(): Promise<KeptWorktree[]>
   /** the signals an Issue was filed from or joined, oldest first, at most `limit` */
   signalsOf(issue: IssueId, limit: number): Promise<BriefSignal[]>
   /** the Spec the Issue was filed with, or null */
