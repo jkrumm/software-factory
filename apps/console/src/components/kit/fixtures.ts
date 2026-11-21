@@ -1,5 +1,5 @@
 /** Data for the `/kit` route: real-shaped Issues, projects and series, pure data with no I/O. */
-import type { LeadSeat } from '@software-factory/contract'
+import type { DecisionView, LeadSeat } from '@software-factory/contract'
 import type { StatCardProps } from './stat-card'
 import type { IssueKind } from '@software-factory/contract'
 import type { LozengeState } from './lozenge'
@@ -268,3 +268,235 @@ export const KIT_FIX_BARS = [
 
 /** Six windows of a KPI with a gap in the middle and a target range, as the Improve cards draw them. */
 export const KIT_KPI_HISTORY: (number | null)[] = [0.31, 0.24, null, 0.12, 0.09, 0.06]
+
+/** One Decision as `GET /v1/decisions/<id>` shows it: the form of `factory issue ask`, with the wait and the answer fields of a Decision still open. */
+const decision = (
+  n: number,
+  form: Partial<DecisionView> & Pick<DecisionView, 'question' | 'recommendation' | 'options'>,
+): DecisionView => ({
+  id: `decision_kit_${n}`,
+  issueId: `issue_${9000 + n}`,
+  repo: 'example',
+  attempt: 1,
+  class: null,
+  whyYours: null,
+  checked: 'Read the Spec and the code it names.',
+  exhibit: null,
+  spec: null,
+  noAnswer: { consequence: 'The lead goes on with the recommended option.', default: null, waitMinutes: null },
+  askedAt: ago(90),
+  defaultAt: null,
+  status: 'open',
+  answer: null,
+  settledBy: null,
+  source: null,
+  answeredAt: null,
+  withdrawnReason: null,
+  worthAsking: null,
+  path: [],
+  judge: null,
+  ...form,
+})
+
+/** A Decision's wireframe, drawn for this ask: not a screenshot of the lead's build. */
+const WIREFRAME = {
+  dock: 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20300%22%3E%3Crect%20width%3D%22400%22%20height%3D%22300%22%20fill%3D%22%23f4f4f8%22%2F%3E%3Crect%20x%3D%220%22%20y%3D%220%22%20width%3D%22400%22%20height%3D%2226%22%20fill%3D%22%23e2e2e5%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%229%22%20width%3D%2270%22%20height%3D%228%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%220%22%20y%3D%2226%22%20width%3D%2246%22%20height%3D%22264%22%20fill%3D%22%23e8e8ec%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2240%22%20width%3D%2226%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2256%22%20width%3D%2226%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2272%22%20width%3D%2226%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%2244%22%20width%3D%22190%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%2278%22%20width%3D%22190%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22112%22%20width%3D%22190%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22146%22%20width%3D%22190%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22180%22%20width%3D%22190%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22214%22%20width%3D%22190%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%22276%22%20y%3D%2226%22%20width%3D%22124%22%20height%3D%22264%22%20fill%3D%22%23fafafd%22%2F%3E%3Crect%20x%3D%22288%22%20y%3D%2240%22%20width%3D%2270%22%20height%3D%228%22%20rx%3D%223%22%20fill%3D%22%234374a6%22%2F%3E%3Crect%20x%3D%22288%22%20y%3D%2262%22%20width%3D%22100%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23c8c8cc%22%2F%3E%3Crect%20x%3D%22288%22%20y%3D%2278%22%20width%3D%2290%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23c8c8cc%22%2F%3E%3Crect%20x%3D%22288%22%20y%3D%2294%22%20width%3D%2296%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23c8c8cc%22%2F%3E%3Ctext%20x%3D%22200%22%20y%3D%22288%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2211%22%20fill%3D%22%2369696c%22%3EPage%20reflows%20beside%20the%20panel%3C%2Ftext%3E%3C%2Fsvg%3E',
+  float:
+    'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20300%22%3E%3Crect%20width%3D%22400%22%20height%3D%22300%22%20fill%3D%22%23f4f4f8%22%2F%3E%3Crect%20x%3D%220%22%20y%3D%220%22%20width%3D%22400%22%20height%3D%2226%22%20fill%3D%22%23e2e2e5%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%229%22%20width%3D%2270%22%20height%3D%228%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%220%22%20y%3D%2226%22%20width%3D%2246%22%20height%3D%22264%22%20fill%3D%22%23e8e8ec%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2240%22%20width%3D%2226%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2256%22%20width%3D%2226%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2272%22%20width%3D%2226%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%2244%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%2278%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22112%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22146%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22180%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22214%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%22196%22%20y%3D%2226%22%20width%3D%22204%22%20height%3D%22264%22%20fill%3D%22%23fafafd%22%20opacity%3D%220.97%22%2F%3E%3Crect%20x%3D%22210%22%20y%3D%2240%22%20width%3D%2280%22%20height%3D%228%22%20rx%3D%223%22%20fill%3D%22%234374a6%22%2F%3E%3Crect%20x%3D%22210%22%20y%3D%2262%22%20width%3D%22170%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23c8c8cc%22%2F%3E%3Crect%20x%3D%22210%22%20y%3D%2278%22%20width%3D%22150%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23c8c8cc%22%2F%3E%3Crect%20x%3D%22210%22%20y%3D%2294%22%20width%3D%22160%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23c8c8cc%22%2F%3E%3Ctext%20x%3D%22200%22%20y%3D%22288%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2211%22%20fill%3D%22%2369696c%22%3EPanel%20floats%20over%20the%20page%3C%2Ftext%3E%3C%2Fsvg%3E',
+  pin: 'data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20400%20300%22%3E%3Crect%20width%3D%22400%22%20height%3D%22300%22%20fill%3D%22%23f4f4f8%22%2F%3E%3Crect%20x%3D%220%22%20y%3D%220%22%20width%3D%22400%22%20height%3D%2226%22%20fill%3D%22%23e2e2e5%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%229%22%20width%3D%2270%22%20height%3D%228%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%220%22%20y%3D%2226%22%20width%3D%2246%22%20height%3D%22264%22%20fill%3D%22%23e8e8ec%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2240%22%20width%3D%2226%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2256%22%20width%3D%2226%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2272%22%20width%3D%2226%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23b4b4b8%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%2244%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%2278%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22112%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22146%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22180%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%2262%22%20y%3D%22214%22%20width%3D%22310%22%20height%3D%2222%22%20rx%3D%224%22%20fill%3D%22%23d9d9de%22%2F%3E%3Crect%20x%3D%22196%22%20y%3D%2226%22%20width%3D%22204%22%20height%3D%22264%22%20fill%3D%22%23fafafd%22%20opacity%3D%220.97%22%2F%3E%3Crect%20x%3D%22210%22%20y%3D%2240%22%20width%3D%2280%22%20height%3D%228%22%20rx%3D%223%22%20fill%3D%22%234374a6%22%2F%3E%3Ccircle%20cx%3D%22380%22%20cy%3D%2244%22%20r%3D%227%22%20fill%3D%22%234374a6%22%2F%3E%3Crect%20x%3D%22210%22%20y%3D%2262%22%20width%3D%22170%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23c8c8cc%22%2F%3E%3Crect%20x%3D%22210%22%20y%3D%2278%22%20width%3D%22150%22%20height%3D%226%22%20rx%3D%223%22%20fill%3D%22%23c8c8cc%22%2F%3E%3Ctext%20x%3D%22200%22%20y%3D%22288%22%20text-anchor%3D%22middle%22%20font-family%3D%22sans-serif%22%20font-size%3D%2211%22%20fill%3D%22%2369696c%22%3EFloats%3B%20a%20pin%20docks%20it%3C%2Ftext%3E%3C%2Fsvg%3E',
+}
+
+/**
+ * Five asks of 2026-11-14 to 2026-11-21 in the form of a Decision, one per exhibit type: each question and each option is one a
+ * real Spec of that week put to its owner, cut to the form's limits. `/kit` shows them as the card the owner reads.
+ */
+export const KIT_DECISIONS: DecisionView[] = [
+  decision(1, {
+    class: 'look',
+    whyYours: 'He has not seen the screen, and three real variants exist.',
+    question: 'Should a record open in a panel that shrinks the page, or float over it?',
+    recommendation: 'Float, with a pin to dock',
+    spec: 'artifact_kit_dock',
+    exhibit: {
+      kind: 'pictures',
+      pictures: [
+        { option: 'Dock, shrink the page', image: WIREFRAME.dock },
+        { option: 'Float over the page', image: WIREFRAME.float },
+        { option: 'Float, with a pin to dock', image: WIREFRAME.pin },
+      ],
+    },
+    options: [
+      {
+        label: 'Dock, shrink the page',
+        leadsTo: 'A 26 rem panel at the end edge; the page reflows beside it.',
+        reversible: true,
+        cost: 'One layout track to remove.',
+      },
+      {
+        label: 'Float over the page',
+        leadsTo: 'The panel as it is today; nothing reflows.',
+        reversible: true,
+        cost: 'None: it is today.',
+      },
+      {
+        label: 'Float, with a pin to dock',
+        leadsTo: 'The floating panel, plus a pin that docks the record.',
+        reversible: true,
+        cost: 'One more button in every panel.',
+      },
+    ],
+    checked:
+      'At 1440 px with the rail open, a docked panel of the floating width leaves 592 px for the page; 26 rem leaves 784.',
+    noAnswer: {
+      consequence: 'The lead builds the recommended variant.',
+      default: 'Float, with a pin to dock',
+      waitMinutes: 1440,
+    },
+    defaultAt: ago(-1350),
+  }),
+  decision(2, {
+    class: 'own_surface',
+    whyYours: "It changes what his MacBook runs on a lead's words.",
+    question: 'Which MacBook commands may run with no click while he is at the MacBook?',
+    recommendation: 'Classes he said yes to once',
+    exhibit: {
+      kind: 'diagram',
+      caption: 'A command runs by itself only when its class has his one yes.',
+      mermaid:
+        'flowchart LR\n  A[A lead writes a command] --> B{A class he said yes to?}\n  B -->|yes| C{Needs his fingertip?}\n  B -->|no| D[Waits for his Run click]\n  C -->|no| E[Runs by itself]\n  C -->|yes| F[1Password prompt starts]\n  F --> E\n  D --> G[He clicks Run]\n  G --> E',
+    },
+    options: [
+      {
+        label: 'Classes he said yes to once',
+        leadsTo: 'A command of a known class runs by itself; the factory proposes each new class.',
+        reversible: true,
+        cost: 'One answer per class, ever.',
+      },
+      {
+        label: 'Every command off a never list',
+        leadsTo: "A lead's text runs as typed on his MacBook.",
+        reversible: true,
+        cost: 'One switch to turn off.',
+      },
+      {
+        label: 'Keep the click',
+        leadsTo: 'Every command waits for his Run.',
+        reversible: true,
+        cost: 'None: it is today.',
+      },
+    ],
+    checked:
+      '149 requests since 2026-10-15; none was refused by hand, and 28 failed on a command fault, never on consent.',
+    noAnswer: { consequence: 'Every command still needs his click.', default: null, waitMinutes: null },
+  }),
+  decision(3, {
+    class: 'spend',
+    whyYours: 'It decides how much of a paid subscription sits idle.',
+    question: 'Hold back a whole account for Fable, or only the half of it Fable can use?',
+    recommendation: 'Reserve the Fable share only',
+    exhibit: {
+      kind: 'numbers',
+      figures: [
+        { label: 'Fable can use', value: '50', unit: "% of an account's weekly points" },
+        { label: 'Held back today', value: '100', unit: '% of an account' },
+        { label: 'Accounts checked', value: '3', unit: 'on 2026-11-19' },
+      ],
+    },
+    options: [
+      {
+        label: 'Reserve the Fable share only',
+        leadsTo: 'The account also takes other work while its Fable budget still fits.',
+        reversible: true,
+        cost: 'One mode per account to change.',
+      },
+      {
+        label: 'Hold back the whole account',
+        leadsTo: 'The account serves only Fable, as today.',
+        reversible: true,
+        cost: 'None: it is today.',
+      },
+    ],
+    checked: 'The usage endpoint caps Fable at 50 weekly points per account, with the same reset as the weekly total.',
+    noAnswer: {
+      consequence: 'The lead builds the recommended mode.',
+      default: 'Reserve the Fable share only',
+      waitMinutes: 1440,
+    },
+    defaultAt: ago(-1350),
+  }),
+  decision(4, {
+    class: 'direction',
+    whyYours: 'What his app does after a merge is what its users get.',
+    question: 'Should a shipped desktop change publish a release by itself?',
+    recommendation: 'Release on ship',
+    exhibit: {
+      kind: 'before_after',
+      today: [
+        'A merge changes the code; the app he runs stays on the old build.',
+        'Someone runs the release by hand on the mini.',
+      ],
+      after: [
+        'A merged desktop change starts a release by itself, 25 to 35 minutes.',
+        'A failed release leaves the feed on the last one.',
+      ],
+    },
+    options: [
+      {
+        label: 'Release on ship',
+        leadsTo: 'A shipped desktop change publishes a release; a share-only change releases nothing.',
+        reversible: true,
+        cost: 'One hook to remove.',
+      },
+      {
+        label: 'Keep releasing by hand',
+        leadsTo: 'A desktop change is done when merged; he runs the release.',
+        reversible: true,
+        cost: 'None: it is today.',
+      },
+    ],
+    checked: 'The release script already leaves the feed unchanged on any failure before its last step.',
+    noAnswer: { consequence: 'The lead builds the hook.', default: 'Release on ship', waitMinutes: 1440 },
+    defaultAt: ago(-1350),
+  }),
+  decision(5, {
+    class: 'direction',
+    whyYours: "The address is the guide's public face.",
+    question: "Where should the factory's guide live?",
+    recommendation: "The repo's own github.io address",
+    exhibit: {
+      kind: 'table',
+      criteria: ['Setup', 'Address', 'Switching later'],
+      rows: [
+        {
+          option: "The repo's own github.io address",
+          cells: ['None, works today', 'Under his GitHub account', '10 minutes, one setting'],
+        },
+        {
+          option: 'A subdomain of his own domain',
+          cells: ['One CNAME, one Pages setting', 'His own domain', '10 minutes, one setting'],
+        },
+      ],
+    },
+    options: [
+      {
+        label: "The repo's own github.io address",
+        leadsTo: 'The guide builds and goes live with no setup.',
+        reversible: true,
+        cost: 'Ten minutes and one setting.',
+      },
+      {
+        label: 'A subdomain of his own domain',
+        leadsTo: 'The guide lives on his domain; GitHub redirects the old address.',
+        reversible: true,
+        cost: 'Ten minutes and one setting.',
+      },
+    ],
+    checked: "The address software-factory.github.io is taken, so the repo's address is under his account.",
+    noAnswer: {
+      consequence: "The lead builds on the repo's address.",
+      default: "The repo's own github.io address",
+      waitMinutes: 1440,
+    },
+    defaultAt: ago(-1350),
+  }),
+]

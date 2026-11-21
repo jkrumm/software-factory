@@ -212,8 +212,8 @@ export const fetchIssue = (id: string, signal?: AbortSignal) =>
   getJson(`/v1/issues/${encodeURIComponent(id)}`, ReadIssueDetail, signal)
 export const fetchErrands = (signal?: AbortSignal) => getJson('/v1/errands', ErrandList, signal)
 
-export const answerDecision = (id: string, answer: string) =>
-  postJson(`/v1/decisions/${encodeURIComponent(id)}/answer`, { answer }, DecisionReply)
+export const answerDecision = (id: string, answer: string, note = '') =>
+  postJson(`/v1/decisions/${encodeURIComponent(id)}/answer`, note ? { answer, note } : { answer }, DecisionReply)
 export const giveVerdict = (id: string, verdict: string, note: string) =>
   postJson(`/v1/artifacts/${encodeURIComponent(id)}/verdict`, { verdict, ...(note ? { note } : {}) }, ArtifactReply)
 export const annotateArtifact = (id: string, quote: string, comment: string) =>

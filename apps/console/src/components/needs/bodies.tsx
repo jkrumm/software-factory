@@ -1,8 +1,8 @@
-import type { ErrandList, ErrandReply, NeedItem } from '@software-factory/contract'
+import { type ErrandList, type ErrandReply, type NeedItem, specHead } from '@software-factory/contract'
 import { ArrowSquareOutIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
-import { InfoHint, Lozenge, PropertyList } from '@/components/kit'
+import { InfoHint, PropertyList } from '@/components/kit'
 import { VerdictButton } from '@/components/verdict-button'
 import { VERDICT_CONSEQUENCES } from '@/lib/artifact'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -23,25 +23,23 @@ import {
   agoWords,
   ARTIFACT_KIND_LABEL,
   decisionParts,
+  holdsWords,
   approveWords,
   doneWords,
   isApproval,
   alsoWaiting,
   NEED_LABEL,
-  repeatsTitle,
   defaultLine,
-  defaultWords,
   httpLink,
   issueNumber,
-  optionIndex,
   projectOf,
-  reversibleLozenge,
   VERDICTS,
 } from '@/lib/needs'
 import { artifactPreview, plainExcerpt } from '@/lib/plain'
 import { useArtifact, useDecision, useErrands } from '@/lib/queries'
 import { CardBodySkeleton } from '@/components/skeletons'
 import { Command } from '@/components/needs/desk'
+import { DecisionCase } from '@/components/needs/decision-case'
 import { useSettle } from '@/lib/settle'
 import { cn } from '@/lib/utils'
 
@@ -148,25 +146,27 @@ const LastTry = ({ tried, run }: { tried: string | null; run: ErrandList['errand
     </Labelled>
   ) : null
 
-/** What any option does to the lead: the Decision's answer comes back to it as a note, and it goes on with that choice. */
-const ANSWER_CONSEQUENCE = 'The lead goes on with this choice.'
-
 function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
   const { data } = useDecision(item.id)
-  const [text, setText] = useState('')
-  const settle = useSettle<string>({
-    send: (answer) => answerDecision(item.id, answer),
+  const settle = useSettle<{ answer: string; note: string }>({
+    send: ({ answer, note }) => answerDecision(item.id, answer, note),
     keys: [['needs'], ['decision', item.id]],
     onSent: () => onSent(SENT),
     onConflict: () => onSent(ANSWERED),
   })
+  const spec = useArtifact(data?.spec ?? '', undefined, Boolean(data?.spec))
   if (!data) return <CardBodySkeleton />
   const open = data.status === 'open'
-  const answerWith = (answer: string) => settle.send(answer)
-  const recommended = optionIndex(data.options, data.recommendation)
-  const defaultOption = data.defaultAt && data.noAnswer.default ? optionIndex(data.options, data.noAnswer.default) : -1
   const now = Date.now()
   const narration = decisionParts(projectOf(item), issueTitle)
+  const { holds, wentAhead } = holdsWords(item)
+  const behind = [
+    holds ?? 'Nothing else waits on this answer.',
+    wentAhead,
+    data.noAnswer.default && data.defaultAt
+      ? defaultLine(data.noAnswer.consequence, data.defaultAt, now)
+      : `With no answer: ${data.noAnswer.consequence}`,
+  ].filter((line): line is string => line !== null)
   return (
     <div className="grid gap-5">
       <div className="grid gap-1">
@@ -192,115 +192,17 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
           <p className="text-sm text-muted-foreground">Raised about its artifact under review.</p>
         ) : null}
       </div>
-      {repeatsTitle(data.question, item.title) ? null : (
-        <p className="font-heading text-lg font-semibold">{data.question}</p>
-      )}
-      {recommended === -1 && data.recommendation.trim() ? (
-        <div className="grid gap-2 rounded-xl bg-muted/50 px-4 py-3">
-          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Recommendation</span>
-          <p className="text-base font-semibold">{data.recommendation}</p>
-          {data.checked ? <Prose>{data.checked}</Prose> : null}
-          {open ? (
-            <div className="grid gap-1">
-              <Button
-                className="justify-self-start"
-                disabled={settle.disabled}
-                onClick={() => answerWith(data.recommendation)}
-              >
-                Take the recommendation
-              </Button>
-              <p className="text-xs text-muted-foreground">{ANSWER_CONSEQUENCE}</p>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,20rem),1fr))] gap-3">
-        {data.options.map((option, index) => {
-          const isRecommended = index === recommended
-          const lozenge = reversibleLozenge(option.reversible)
-          return (
-            <li
-              key={option.label}
-              data-recommended={isRecommended}
-              className={cn(
-                'flex flex-col gap-3 rounded-xl p-4',
-                isRecommended ? 'bg-primary/8 ring-1 ring-primary/40' : 'bg-muted/40',
-              )}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                {isRecommended ? <Lozenge tone="accent">Recommended</Lozenge> : null}
-                <Lozenge state={lozenge.state}>{lozenge.words}</Lozenge>
-              </div>
-              <p className="text-base font-semibold">{option.label}</p>
-              <p className="text-sm text-muted-foreground">{option.cost}</p>
-              {isRecommended && data.checked ? (
-                <p className="text-sm">
-                  <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Reason </span>
-                  {data.checked}
-                </p>
-              ) : null}
-              {index === defaultOption && data.defaultAt ? (
-                <p className="text-sm text-muted-foreground">
-                  {defaultLine(data.noAnswer.consequence, data.defaultAt, now)}
-                </p>
-              ) : null}
-              {open ? (
-                <div className="mt-auto grid gap-1 pt-1">
-                  <Button
-                    className="justify-self-start"
-                    variant={isRecommended ? 'default' : 'outline'}
-                    disabled={settle.disabled}
-                    onClick={() => answerWith(option.label)}
-                  >
-                    {isRecommended ? 'Take the recommendation' : `Choose ${option.label}`}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">{ANSWER_CONSEQUENCE}</p>
-                </div>
-              ) : null}
-            </li>
-          )
-        })}
-      </ul>
-      {defaultOption === -1 ? (
-        <Labelled label="With no answer">
-          <Prose>{data.noAnswer.consequence}</Prose>
-          {data.defaultAt && data.noAnswer.default ? (
-            <p className="text-sm text-muted-foreground">
-              {defaultWords(data.defaultAt, now)}: {data.noAnswer.default}
-            </p>
-          ) : null}
-        </Labelled>
-      ) : null}
-      {open ? (
-        <form
-          className="grid gap-2"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (text.trim()) answerWith(text.trim())
-          }}
-        >
-          <Textarea
-            aria-label="Your own answer"
-            placeholder="Or answer in your own words"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-          />
-          <div className="grid gap-1">
-            <Button
-              className="justify-self-start"
-              type="submit"
-              variant="secondary"
-              disabled={settle.disabled || !text.trim()}
-            >
-              Send answer
-            </Button>
-            <p className="text-xs text-muted-foreground">The lead reads your words as the answer and goes on.</p>
-          </div>
-        </form>
-      ) : (
-        <p className="text-sm text-muted-foreground">{ANSWERED}</p>
-      )}
-      <Problem words={settle.error} />
+      <DecisionCase
+        data={data}
+        open={open}
+        disabled={settle.disabled}
+        error={settle.error}
+        now={now}
+        spec={spec.data ? specHead(spec.data.content) : null}
+        behind={behind}
+        onAnswer={(answer, note) => settle.send({ answer, note })}
+      />
+      {open ? null : <p className="text-sm text-muted-foreground">{ANSWERED}</p>}
     </div>
   )
 }
