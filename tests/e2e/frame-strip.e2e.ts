@@ -230,7 +230,8 @@ test.describe('the palette', () => {
       await expect(first).toContainText(`#${issue.number}`)
       await expect(first).toContainText('Issue')
       await expect(first).toHaveAttribute('aria-selected', 'true')
-      await expect(first.locator('mark')).toHaveText(String(issue.number))
+      // the title can hold the number too (an Issue 22 titled "...22..."), and that match is marked as well
+      await expect(first.locator('mark').first()).toHaveText(String(issue.number))
       await page.keyboard.press('Escape')
       await expect(dialog(page)).toBeHidden()
     }
