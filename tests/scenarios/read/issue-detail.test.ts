@@ -75,7 +75,12 @@ beforeAll(async () => {
     'artifact',
     'submit',
     issue,
-    ...body({ attempt: 1, kind: 'spec', title: 'The queue spec', content: '# Queue\n\nPostgres.' }),
+    ...body({
+      attempt: 1,
+      kind: 'spec',
+      title: 'The queue spec',
+      content: '# Queue\n\n## Build\n\nPostgres.\n\n## Decided\n\nPostgres: it is there.',
+    }),
   ])
   await must(lw, ['artifact', 'verdict', submitted.artifact.id, ...body({ verdict: 'looks_good' })])
   sha = await commit(lw, 'src/a.ts', 'export const a = 1\n', 'feat: a')

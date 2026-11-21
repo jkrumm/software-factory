@@ -123,6 +123,8 @@ export {
   NewCollectionBody,
   SPEC_SCREEN_CONTENT_MAX,
   SPEC_SCREEN_PRECEDENTS,
+  SPEC_BUILD_LINES,
+  SPEC_VISIBLE_MAX,
   SPEC_SOURCES,
   type SpecSource,
   SpecPrecedent,

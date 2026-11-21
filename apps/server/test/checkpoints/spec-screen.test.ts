@@ -234,8 +234,12 @@ async function workingIssue(
   return id
 }
 
+/** A Spec opens with Build and Decided: a fixture that is only a title gets them after it. */
+const FORM = '## Build\n\nIt.\n\n## Decided\n\nIt: why.\n\n'
+const formed = (content: string) =>
+  content.includes('## Build') ? content : content.replace(/^(# .*\n+)?/, (title) => `${title}${FORM}`)
 const handOver = async (issueId: IssueId, title: string, content: string) =>
-  value(await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'spec', title, content } }))
+  value(await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'spec', title, content: formed(content) } }))
 
 const submit = async (issueId: IssueId, title: string, content: string): Promise<ArtifactId> =>
   (await handOver(issueId, title, content)).artifact.id
@@ -299,7 +303,7 @@ describe("a lead's Spec is its plan", () => {
     const stale = await submitArtifact(deps, {
       issueId,
       attempt: 2,
-      raw: { kind: 'spec', title: 'A stale plan', content: '# Stale' },
+      raw: { kind: 'spec', title: 'A stale plan', content: '# Stale\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.' },
     })
     expect(stale.ok ? null : stale.error).toMatchObject({
       kind: 'machine_refused',
@@ -309,7 +313,7 @@ describe("a lead's Spec is its plan", () => {
     const closed = await submitArtifact(deps, {
       issueId,
       attempt: 1,
-      raw: { kind: 'spec', title: 'A late plan', content: '# Late' },
+      raw: { kind: 'spec', title: 'A late plan', content: '# Late\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.' },
     })
     expect(closed.ok ? null : closed.error).toMatchObject({ kind: 'machine_refused' })
     expect(await db.sql`SELECT 1 FROM factory.artifacts WHERE issue_id = ${issueId}`).toHaveLength(0)

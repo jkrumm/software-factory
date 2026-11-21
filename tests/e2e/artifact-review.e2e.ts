@@ -377,7 +377,17 @@ test('the contents list the headings, mark the section in view while scrolling, 
   await page.goto(`/artifacts/${review}`)
   const nav = contents(page)
   await expect(nav).toBeVisible()
-  const names = ['Weather rollout', 'Context', 'Options', 'Risks', 'Proof', 'Rollout', 'Open questions']
+  const names = [
+    'Weather rollout',
+    'Build',
+    'Decided',
+    'Context',
+    'Options',
+    'Risks',
+    'Proof',
+    'Rollout',
+    'Open questions',
+  ]
   for (const name of names) await expect(nav.getByRole('button', { name, exact: true })).toBeVisible()
   const current = nav.locator('[aria-current="location"]')
   await expect(current).toHaveText('Weather rollout')

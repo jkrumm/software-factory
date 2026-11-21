@@ -47,7 +47,8 @@ async function ok<T>(parse: (json: unknown) => T, ...args: string[]): Promise<T>
 
 const flow = () => ({ world, server })
 const body = (value: unknown): string[] => ['--body', JSON.stringify(value)]
-const SPEC = '# Route spec\n\nWhat I will build.\n\n## Open choices\n\n1. A default.\n'
+const SPEC =
+  '# Route spec\n\n## Build\n\nWhat I will build.\n\n## Decided\n\nA default: why.\n\n## Open choices\n\n1. A default.\n'
 
 /** Files an Issue with the Spec in a file, as the filing session does. */
 async function file(repo: string, title: string, extra: string[] = []) {
@@ -91,6 +92,17 @@ async function backdate(issueId: string, hours: number): Promise<void> {
     WHERE artifact_id IN (SELECT id FROM factory.artifacts WHERE issue_id = ${issueId})`
   await sql`UPDATE factory.artifacts SET created_at = created_at - ${ago}::interval WHERE issue_id = ${issueId}`
 }
+
+test('a Spec that does not fit a page refuses the filing, with the count, and files nothing', async () => {
+  const path = join(dir, 'too-long.md')
+  await writeFile(path, `# Long\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.\n\n${'word '.repeat(900)}`)
+  const refused = await cli('issue', 'new', '--repo', 'example-filed-a', '--title', 'too long', '--spec', `@${path}`)
+  expect(refused.code).not.toBe(0)
+  expect(refused.err).toContain('at most 4000')
+  expect(refused.err).toContain('factory artifact new')
+  const rows: { count: number }[] = await world.db.sql`SELECT count(*)::int AS count FROM factory.artifacts`
+  expect(rows[0]?.count).toBe(0)
+})
 
 test('filed with a Spec: stored once, queued behind its verdict, admitted after the owner gave it, the brief names it', async () => {
   const { issue, artifact } = await file('example-filed-a', 'a new public route')

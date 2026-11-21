@@ -73,7 +73,11 @@ export async function seedHistory(lab: Lab): Promise<SeededHistory> {
   await must(lab, ['decision', 'answer', second.decision.id, 'log only'])
   const submit = (kind: string, title: string, content: string) =>
     api<{ artifact: { id: string } }>(url, `/v1/issues/${rich}/artifacts`, { attempt: 2, kind, title, content })
-  const spec = await submit('spec', 'The probe spec', '# Probe\n\nThe job reports its free disk space on /health.')
+  const spec = await submit(
+    'spec',
+    'The probe spec',
+    '# Probe\n\n## Build\n\nThe job reports its free disk space on /health.\n\n## Decided\n\nOn /health: it is read already.',
+  )
   await api(url, `/v1/artifacts/${spec.artifact.id}/verdict`, { verdict: 'looks_good' })
   const concept = await submit(
     'concept',

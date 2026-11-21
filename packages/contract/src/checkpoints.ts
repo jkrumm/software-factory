@@ -599,6 +599,13 @@ export const ErrandScreenAnswer = z
   .meta({ id: 'ErrandScreenAnswer' })
 export type ErrandScreenAnswer = z.infer<typeof ErrandScreenAnswer>
 
+/**
+ * A Spec fits a page: its text outside details blocks, fenced code and images is at most this many characters, and its
+ * Build section at most `SPEC_BUILD_LINES` lines (`artifact submit`, `artifact revise` and `issue new --spec` refuse more).
+ */
+export const SPEC_VISIBLE_MAX = 4000
+export const SPEC_BUILD_LINES = 8
+
 /** How much of a Spec the screen reads; a longer one is cut, and the cut is said. */
 export const SPEC_SCREEN_CONTENT_MAX = 20_000
 export const SPEC_SCREEN_PRECEDENTS = 12
