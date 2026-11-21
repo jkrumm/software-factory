@@ -61,6 +61,9 @@ test('recordPass keeps the newest time of each loop and never moves it backwards
   const later = new Date(at.getTime() + 60_000)
   await loops.recordPass('fix-causes', later)
   expect((await loops.passes()).get('fix-causes')).toEqual(later)
+  // a loop this release does not have (an older release's name after a rollback) is skipped, the rest still read
+  await db.sql`INSERT INTO factory.loop_passes (loop, last_pass_at) VALUES ('settle', ${at})`
+  expect([...(await loops.passes()).keys()].sort()).toEqual(['fix-causes', 'steward'])
 })
 
 // ---- finders ------------------------------------------------------------------------------------------------------

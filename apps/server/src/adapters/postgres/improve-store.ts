@@ -243,10 +243,11 @@ export function postgresImproveStore(tx: SQL): ImproveStore {
 
     async passes() {
       const rows: unknown[] = await tx`SELECT loop, last_pass_at FROM factory.loop_passes`
+      // a row of a loop this release does not have (a renamed loop after a rollback) is skipped, not a failed read
       return new Map(
-        rows.map((raw) => {
-          const row = z.object({ loop: z.enum(LOOP_NAMES), last_pass_at: z.date() }).parse(raw)
-          return [row.loop, row.last_pass_at]
+        rows.flatMap((raw) => {
+          const row = z.object({ loop: z.enum(LOOP_NAMES), last_pass_at: z.date() }).safeParse(raw)
+          return row.success ? [[row.data.loop, row.data.last_pass_at] as const] : []
         }),
       )
     },
