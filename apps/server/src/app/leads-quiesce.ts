@@ -94,6 +94,8 @@ export async function quiesceLeads(deps: LeadDeps): Promise<number> {
       return ok(true)
     })
     if (!marked.ok || !marked.value) continue
+    // A lead the Judge's back woke in its Decision wait took a claim for it: asleep again, it has no place to hold.
+    await deps.claims.release({ issue: row.issueId, attempt: row.attempt })
     const ended = await deps.terminals.quiesce(name)
     if (ended.ok) dormant++
   }

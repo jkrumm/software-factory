@@ -24,7 +24,7 @@ import { testLineOf } from '../domains/capacity/slots.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountDesk, AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
-import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
+import { type Claim, type Claimant, claimRoom, holdsClaim, keepsClaim } from '../domains/capacity/claims.ts'
 import { planWaits, type SeenWait, waitKindOf } from '../domains/capacity/waits.ts'
 import type { Edge } from '../domains/planning/chain.ts'
 import type { CapacityFacts } from '../domains/improve/ports.ts'
@@ -354,10 +354,19 @@ async function snapshotOf(stores: PlanningStores, now: Date): Promise<Snapshot> 
   }
 }
 
+/** The claims that stand: an Issue's own (`keepsClaim`); a closed Issue has none. */
+function standingClaims(snap: Snapshot): Claim[] {
+  const rows = new Map(snap.issues.map((i) => [i.id, i]))
+  return snap.claims.filter((claim) => {
+    const row = rows.get(claim.issue)
+    return row !== undefined && keepsClaim(row, claim)
+  })
+}
+
 /** The claims of Issues that no longer work in their repo go back; run under the capacity lock. */
 async function sweepClaims(stores: PlanningStores, snap: Snapshot): Promise<IssueId[]> {
-  const holding = new Set(snap.issues.filter((i) => holdsClaim(i.state, i.waitReason)).map((i) => i.id))
-  const stale = snap.claims.filter((claim) => !holding.has(claim.issue)).map((claim) => claim.issue)
+  const standing = new Set(standingClaims(snap).map((claim) => claim.issue))
+  const stale = snap.claims.filter((claim) => !standing.has(claim.issue)).map((claim) => claim.issue)
   if (stale.length === 0) return []
   const released = await stores.capacity.releaseClaims(stale)
   snap.claims = snap.claims.filter((claim) => !released.includes(claim.issue))
@@ -941,8 +950,7 @@ export async function claimStalled(
   return deps.uow.run(async (stores) => {
     const snap = await snapshotOf(stores, deps.clock.now())
     // The claims of Issues that stopped working are not released here (a read), but they are no one's any more.
-    const holding = new Set(snap.issues.filter((i) => holdsClaim(i.state, i.waitReason)).map((i) => i.id))
-    snap.claims = snap.claims.filter((claim) => holding.has(claim.issue))
+    snap.claims = standingClaims(snap)
     const stalled: StalledClaim[] = []
     for (const issue of issues) {
       const row = snap.issues.find((i) => i.id === issue)

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { finalizeLead } from '../../src/app/leads-finalize.ts'
 import { noteLead } from '../../src/app/leads-note.ts'
+import { quiesceLeads } from '../../src/app/leads-quiesce.ts'
 import { startLead } from '../../src/app/leads-start.ts'
 import {
   type Effect,
@@ -222,6 +223,90 @@ describe('note_lead', () => {
     expect((await noteLead(w.deps, effect)).ok).toBe(true)
     expect(w.claims.resumed).toEqual([{ issue, attempt: 1 }])
     expect(w.terminals.typed).toHaveLength(1)
+  })
+
+  /** A dormant lead whose Issue waits on a Decision the Judge sent back: the back is the note typed to it. */
+  async function withBackToDormantLead(dormant = true) {
+    w.seatAccount = 'me'
+    const issue = await w.admitted()
+    await startLead(w.deps, asEffect(startEffect(issue, 1), 'start_lead', issue))
+    await w.event(issue, 'ask', {
+      kind: 'asked',
+      payload: { attempt: 1, decision: { id: 'd1', summary: 'which?' } },
+      actor: 'lead',
+    })
+    const back = (await w.event(issue, 'back', {
+      kind: 'noted',
+      payload: { text: 'look at the migration again', back: 'd1' },
+      actor: 'judge',
+    })) as { effects: Effect[] }
+    const effect = back.effects[0]
+    if (!effect) throw new Error('no effect planned')
+    await w.db.sql`
+      INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)
+      VALUES ('lead-1-1:session_started:0', 'lead-1-1', ${issue}, 1, 'session_started', ${w.clock.now()}, ${w.clock.now()},
+        ${JSON.stringify({ claudeSessionId: 'c-1', transcriptPath: '/x/c-1.jsonl' })}::text::jsonb)`
+    if (dormant) {
+      await w.db.sql`UPDATE factory.lead_attempts SET dormant_at = ${w.clock.now()} WHERE issue_id = ${issue}`
+      w.terminals.lose('lead-1-1')
+    }
+    return { issue, effect: asEffect(effect, 'note_lead', issue) }
+  }
+
+  test("the Judge's back to a dormant lead takes the repo claim before the session starts; a full repo starts nothing and is asked again", async () => {
+    const { issue, effect } = await withBackToDormantLead()
+    w.claims.resumeError = portError('refused', 'Issue 1 waits for a claim in example: the repo is full')
+    expect(await noteLead(w.deps, effect)).toEqual({ ok: false, error: w.claims.resumeError })
+    expect(w.terminals.revived).toEqual([])
+
+    w.claims.resumeError = null
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.claims.resumed).toEqual([{ issue, attempt: 1 }])
+    expect(w.terminals.revived).toHaveLength(1)
+    expect(w.terminals.revived[0]?.prompt).toContain('look at the migration again')
+  })
+
+  test("the Judge's back to a live lead is typed as before, with no claim taken", async () => {
+    const { effect } = await withBackToDormantLead(false)
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.claims.resumed).toHaveLength(0)
+    expect(w.terminals.typed).toHaveLength(1)
+  })
+
+  test('a lead asleep again gives back the claim its Decision wait took', async () => {
+    const issue = await w.admitted()
+    await startLead(w.deps, asEffect(startEffect(issue, 1), 'start_lead', issue))
+    const hook = (kind: string, n: number, payload: unknown = {}) =>
+      w.db.sql`
+        INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)
+        VALUES (${`lead-1-1:${kind}:${n}`}, 'lead-1-1', ${issue}, 1, ${kind}, ${w.clock.now()}, ${w.clock.now()}, ${JSON.stringify(payload)}::text::jsonb)`
+    await hook('session_started', 0, { claudeSessionId: 'c-1', transcriptPath: '/x/c-1.jsonl' })
+    await hook('turn_started', 1)
+    await w.event(issue, 'ask', {
+      kind: 'asked',
+      payload: { attempt: 1, decision: { id: 'd1', summary: 'which?' } },
+      actor: 'lead',
+    })
+    await hook('turn_ended', 1)
+    const quiet = {
+      ...w.deps,
+      quiesce: {
+        afterMs: 30 * 60_000,
+        maxReviveTries: 3,
+        slotCwds: async () => [],
+        processes: async () => [
+          { pid: 1, ppid: 0, session: null },
+          { pid: 100, ppid: 1, session: 'lead-1-1' },
+        ],
+      },
+    }
+    expect(await quiesceLeads(quiet)).toBe(0)
+    expect(w.claims.released).toEqual([])
+
+    w.clock.advance(40 * 60_000)
+    expect(await quiesceLeads(quiet)).toBe(1)
+    expect(w.terminals.dormant).toEqual(['lead-1-1'])
+    expect(w.claims.released).toEqual([{ issue, attempt: 1 }])
   })
 
   test('a note for a lead that waits again takes no claim', async () => {

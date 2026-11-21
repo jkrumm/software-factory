@@ -94,3 +94,19 @@ export function holdsClaim(state: string, waitReason: string | null): boolean {
   if (state === 'working' || state === 'watching') return true
   return state === 'waiting' && waitReason !== null && !CLAIM_FREEING_WAITS.has(waitReason)
 }
+
+/**
+ * Whether a claim that exists stands. A lead that works holds it (`holdsClaim`). One exception inside a claim-freeing wait: the
+ * Judge's back on a Decision wakes a lead whose Issue still waits on it, and that lead takes its place before it is
+ * told (`noteLead`). Its claim is taken after the wait began, which no other path does, so it stands until the lead
+ * answers the Decision itself, goes dormant again (`quiesceLeads`) or ends (finalize).
+ */
+export function keepsClaim(
+  issue: { state: string; waitReason: string | null; since: Date | null },
+  claim: { takenAt: Date },
+): boolean {
+  if (holdsClaim(issue.state, issue.waitReason)) return true
+  return (
+    issue.state === 'waiting' && issue.waitReason === 'decision' && issue.since !== null && claim.takenAt > issue.since
+  )
+}
