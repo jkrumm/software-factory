@@ -590,7 +590,7 @@ share). One SQL expression per judge says it (`outcomeOf`; an edge's is `edgeOut
 | The Judge | the owner or his delegate answered the Decision or noted the Issue within 7 days |
 | The steward (wake, requeue) | the Issue did not move within 30 minutes, or stalled again on the cause of the stall it answered (`unreported` for an idle lead) within a day |
 | Triage | an amend whose words came back as an Issue of their own within 14 days; an edge whose Issues touched no common file (`read/edge-need.ts`) |
-| The queue loop | an edge needed or not, as above, or one the loop took back |
+| The queue loop | an edge needed or not, as above, or one the loop took back because the Issues share no file (a removal for `owner_wait` says nothing of the edge) |
 | The screen | a dismissed fingerprint came back as work within 14 days |
 | The Errand screen and check | the same need (match key or one-line ask, same repo) was raised again within 14 days |
 
