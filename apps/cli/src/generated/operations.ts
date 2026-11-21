@@ -2522,7 +2522,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/needs',
     summary:
-      'everything that waits on the owner: open Decisions, artifacts awaiting a verdict, open Errands and quarantined signals, newest first within a kind',
+      'everything that waits on the owner: open Decisions, artifacts awaiting a verdict, open Errands and quarantined signals; within a kind, the item that holds the most first, then newest',
     pathParams: [],
     queryParams: [],
     body: false,
