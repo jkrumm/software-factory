@@ -113,7 +113,9 @@ interface StewardPass {
 /** Stalled Issues looked at per pass: wide, because those the rules leave waiting (a closed wall, backoff) keep their place. */
 const STALL_LIMIT = 100
 const PASS_LIMIT = 20
-const HISTORY_LINES = 12
+/** The history lines the steward is sent, and how much of each: the workflow's own limits. */
+const HISTORY_LINES = 40
+const HISTORY_LINE_CHARS = 500
 
 const stallCause = (issue: Issue): StallCause | null => {
   const reason = issue.wait?.reason
@@ -128,7 +130,7 @@ const field = (payload: unknown, name: string): string => {
 /** One line of the Issue's history: its version, the kind, and what it says of itself. Notes are marked, not quoted. */
 function lineOf(record: AppliedRecord): string {
   const said = record.kind === 'noted' ? 'a note' : field(record.payload, 'detail') || field(record.payload, 'reason')
-  return `v${record.version} ${record.kind}${said ? `: ${said.replace(/\s+/g, ' ').slice(0, 160)}` : ''}`
+  return `v${record.version} ${record.kind}${said ? `: ${said.replace(/\s+/g, ' ').slice(0, HISTORY_LINE_CHARS)}` : ''}`
 }
 
 /**

@@ -447,6 +447,83 @@ export async function answerIn(
   return ok({ status: 'answered', decision: decision ?? fresh, recorded: recorded.value })
 }
 
+/** The note key of the Judge's back on a Decision: one per Decision, so a replayed pass types it once. */
+const backNoteKey = (decision: DecisionId) => key('noted', 'back', decision)
+
+/** Whether the Judge sent this Decision back before: its note is on the Issue (an amend clears the steps, never the events). */
+export const sentBackBefore = (history: readonly { kind: string; payload: unknown }[], decision: DecisionId): boolean =>
+  history.some(
+    (record) =>
+      record.kind === 'noted' &&
+      typeof record.payload === 'object' &&
+      record.payload !== null &&
+      (record.payload as { back?: unknown }).back === decision,
+  )
+
+/** The option the lead's own settle takes: the default it named, else its recommendation when that can be taken back. */
+function ownSettleOf(form: DecisionForm): string | null {
+  if (form.noAnswer.default !== null) return form.noAnswer.default
+  const recommended = form.options.find((option) => option.label === form.recommendation)
+  return recommended?.reversible ? recommended.label : null
+}
+
+/**
+ * What the lead hears of a back: the Judge's note, that nothing reached the owner, and the two ways on: settle it itself
+ * (`take-default`, which takes its default or, with none, its reversible recommendation) or ask again, which amends the
+ * Decision and gets the second look: an answer or the owner, never back twice.
+ */
+function backNote(decision: DecisionRecord, kind: 'yours' | 'not_ready', note: string): string {
+  const why =
+    kind === 'yours'
+      ? 'the Judge reads it as yours to decide'
+      : "the Judge reads it as the owner's, but not ready for him"
+  const own = ownSettleOf(decision.form)
+  const settle = own
+    ? `settle it yourself with \`factory decision take-default ${decision.id} --attempt ${decision.attempt}\` (it takes ${own})`
+    : 'its recommendation cannot be taken back, so it is not yours to settle'
+  return (
+    `The Judge sent Decision ${decision.id} back to you (${why}): ${note.trim()} It stays open and has not reached the owner. ` +
+    `Decide: ${settle}, or ask again with \`factory issue ask\` and what was missing; that amends it, and the second look ` +
+    'answers it or hands it to the owner, never back again.'
+  )
+}
+
+/**
+ * The Judge's back, inside a transaction the caller holds: the step is `back` and the lead hears the note now, while the
+ * Issue still waits on the Decision (the `noted` event names it, and the machine types only that note to a waiting lead).
+ * Nothing reaches the owner: the owner's step is never recorded for it. A Decision the Issue no longer waits for is withdrawn.
+ */
+export async function sendBackIn(
+  { work, checkpoints }: CheckpointStores,
+  deps: WriteDeps,
+  input: { decision: DecisionRecord; kind: 'yours' | 'not_ready'; note: string },
+): Promise<Result<'sent' | 'withdrawn', CheckpointError>> {
+  const at = deps.clock.now()
+  const fresh = await checkpoints.lockDecision(input.decision.id)
+  if (!fresh) return err(notFound('Decision', input.decision.id))
+  const issue = await issueOf(work, fresh.issueId)
+  if (!issue) return err({ kind: 'unknown_issue', issueId: fresh.issueId })
+  if (fresh.withdrawnAt || !waitingOn(issue, 'decision', fresh.id)) {
+    if (!fresh.withdrawnAt) await checkpoints.withdrawDecision(fresh.id, 'the Issue no longer waits for it', at)
+    await checkpoints.cancelPages(fresh.id, at)
+    return ok('withdrawn')
+  }
+  await checkpoints.finishStep(fresh.id, 'judge', { outcome: 'back', detail: `${input.kind}: ${input.note}`, at })
+  const noted = applied(
+    await recordIn(work, deps, {
+      issueId: fresh.issueId,
+      key: backNoteKey(fresh.id),
+      event: {
+        kind: 'noted',
+        payload: { text: backNote(fresh, input.kind, input.note), back: fresh.id },
+        actor: 'judge',
+      },
+    }),
+    'noted',
+  )
+  return noted.ok ? ok('sent') : noted
+}
+
 export interface Answered {
   decision: DecisionRecord
   /** null when the Decision was withdrawn: the Issue no longer waited for it */
@@ -502,19 +579,28 @@ export function takeDefault(
         detail: `${decision.id} was raised in attempt ${decision.attempt}; this is attempt ${input.attempt}`,
       })
     }
-    const label = decision.form.noAnswer.default
+    // A Decision the Judge sent back is the lead's to settle while it stays sent back: with no default, its recommendation,
+    // when that can be taken back. An amend clears the step, so a Decision asked again and handed to the owner is his.
+    const sentBack =
+      decision.form.noAnswer.default === null &&
+      decision.steps.find((step) => step.step === 'judge')?.outcome === 'back'
+    const label = sentBack ? ownSettleOf(decision.form) : decision.form.noAnswer.default
     if (label === null) {
       return err({
         kind: 'invalid',
-        detail: `${decision.id} names no default, so there is none to take: it waits for an answer (or ask again with a default)`,
+        detail: sentBack
+          ? `${decision.id} names no default and its recommendation cannot be taken back, so it is not yours to settle: ask again with what the Judge found missing`
+          : `${decision.id} names no default, so there is none to take: it waits for an answer (or ask again with a default)`,
       })
     }
     const outcome = await answerIn(stores, deps, {
       decision,
       text: label,
       by: 'default',
-      source: 'the lead took the default and went on with it',
-      note: `You took the default of ${decision.id} (${label}) and went on with it; the Decision is closed and no longer holds the Issue. The owner can still overrule it with a note.`,
+      source: sentBack
+        ? 'the lead settled it after the Judge sent it back'
+        : 'the lead took the default and went on with it',
+      note: `You ${sentBack ? 'settled' : 'took the default of'} ${decision.id} (${label}) and went on with it; the Decision is closed and no longer holds the Issue. The owner can still overrule it with a note.`,
     })
     if (!outcome.ok) return outcome
     if (outcome.value.status === 'withdrawn') return ok<Answered>({ decision: outcome.value.decision, issue: null })

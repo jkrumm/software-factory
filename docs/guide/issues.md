@@ -106,8 +106,8 @@ Six states times 25 events is 150 cells. A queued Issue shows what most of them 
 **Example files:**
 
 - [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L30-L38): `Cell` and `Table`, the type that makes it total
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L569-L623): `settling` and `queued`, every event of two states
-- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L127-L146): `apply`, the one decision
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L595-L648): `settling` and `queued`, every event of two states
+- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L137-L152): `apply`, the one decision
 
 ## States and where work stands
 
@@ -252,7 +252,7 @@ The Issue's insights, from the same read: 2 h 8 min from filed to closed, 12.7 m
 
 **Example files:**
 
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L569-L734): `TABLE`, the cells this timeline walked through
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L594-L758): `TABLE`, the cells this timeline walked through
 
 **Read more:**
 

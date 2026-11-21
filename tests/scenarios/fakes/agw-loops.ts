@@ -25,7 +25,10 @@ export async function loopsFake(args: string[]): Promise<number> {
   const log = process.env.FACTORY_FAKE_LOG
   if (log) appendFileSync(log, `${JSON.stringify({ tool: 'agw', args, stdin })}\n`)
   const input = JSON.parse(stdin) as Record<string, unknown>
-  const words = JSON.stringify(input).toLowerCase()
+  // The phrase is read from the request's own words, never from its case file: the case carries the other open Issues of
+  // the repo, and a phrase of one of them would answer for the wrong Issue.
+  const { case: _case, ...own } = input
+  const words = JSON.stringify(own).toLowerCase()
 
   if (args[0] === 'factory-steward') {
     const scripted = scriptOf('FACTORY_FAKE_STEWARD_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))

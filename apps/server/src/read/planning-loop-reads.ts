@@ -104,10 +104,11 @@ export function planningLoopReads(tx: SQL): PlanningLoopReads {
       return rows.map((raw) => Candidate.parse(raw)).map((row) => ({ ...row, id: row.id as IssueId }))
     },
 
+    // The summary is the words it was filed with, as `settling` reads them: the first signal's text, else its first note.
     async queueIssues() {
       const rows: unknown[] = await tx`
         SELECT i.id, i.repo, i.state, f.payload->>'title' AS title, COALESCE((SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1), f.payload->>'kind') AS kind, f.at AS filed_at,
-          COALESCE((SELECT s.text FROM factory.intake_signals s WHERE s.issue_id = i.id ORDER BY s.received_at LIMIT 1), '') AS summary,
+          COALESCE((SELECT s.text FROM factory.intake_signals s WHERE s.issue_id = i.id ORDER BY s.received_at LIMIT 1), (SELECT n.payload->>'text' FROM factory.issue_events n WHERE n.issue_id = i.id AND n.kind = 'noted' AND n.result = 'applied' ORDER BY n.version LIMIT 1), '') AS summary,
           COALESCE((SELECT p.value FROM factory.planning_prios p WHERE p.issue_id = i.id ORDER BY p.at DESC, p.id DESC LIMIT 1), 0) AS prio,
           (SELECT z.payload->>'size' FROM factory.issue_events z WHERE z.issue_id = i.id AND z.kind = 'settled' AND z.result = 'applied' AND z.payload->>'size' IS NOT NULL ORDER BY z.version DESC LIMIT 1) AS size,
           COALESCE((SELECT string_agg(e.after_issue, ',' ORDER BY e.after_issue) FROM factory.planning_edges e JOIN factory.issues b ON b.id = e.after_issue WHERE e.issue_id = i.id AND e.satisfied_at IS NULL AND b.state <> 'closed'), '') AS blockers

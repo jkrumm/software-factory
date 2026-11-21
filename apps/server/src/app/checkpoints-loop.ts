@@ -1,4 +1,5 @@
 import {
+  BACK_NOTE_MAX,
   defaultDue,
   type DecisionForm,
   type DecisionId,
@@ -8,6 +9,7 @@ import {
   precedentTerms,
   type Answerer,
 } from '../domains/checkpoints/decision.ts'
+import type { ArtifactId } from '../domains/checkpoints/artifact.ts'
 import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
 import { type DecisionRecord, type DecisionStatus, type StepClaim, statusOf } from '../domains/checkpoints/ports.ts'
@@ -22,6 +24,8 @@ import {
   answerIn,
   formDigest,
   issueOf,
+  sendBackIn,
+  sentBackBefore,
   waitingOn,
 } from './checkpoints.ts'
 
@@ -94,8 +98,9 @@ export async function tryAnswer(deps: CheckpointLoopDeps, id: DecisionId): Step<
     // A call of another pass is in flight: leave the Decision as it is. Going on to the owner now would page him for work
     // the factory is about to answer.
     if (stepped.value === BUSY) return current(deps, id)
-    // The Judge has not seen it yet (its call failed and tries are left): the default may still come due, the owner waits.
-    if (stepped.value === RETRY) {
+    // The Judge has not seen it yet (its call failed and tries are left), or sent it back to its lead: the default may still
+    // come due, the owner waits (a sent-back Decision reaches him only after the lead asks again).
+    if (stepped.value === RETRY || stepped.value === BACK) {
       judging = true
       continue
     }
@@ -120,7 +125,9 @@ async function current(deps: CheckpointDeps, id: DecisionId): Step<DecisionOutco
  */
 const BUSY = 'busy' as const
 const RETRY = 'retry' as const
-type Stepped = DecisionRecord | typeof BUSY | typeof RETRY | null
+/** The Judge sent it back to its lead: it stays open, and the owner is not reached until the lead asks again. */
+const BACK = 'back' as const
+type Stepped = DecisionRecord | typeof BUSY | typeof RETRY | typeof BACK | null
 type StepResult = Step<Stepped>
 
 /**
@@ -140,32 +147,52 @@ async function unchanged(
 const answered = (outcome: Awaited<ReturnType<typeof answerIn>>): Result<DecisionRecord, CheckpointError> =>
   outcome.ok ? ok(outcome.value.decision) : outcome
 
+/**
+ * Whether the Judge may send the Decision back to its lead: a lead's own Decision, the one its Issue waits on (not one raised
+ * about an artifact under review), on its first look: never sent back before, and never amended (an amend is a second look,
+ * whatever the first one said; its form is the artifact's next revision).
+ */
+async function mayGoBack({ work, checkpoints }: CheckpointStores, decision: DecisionRecord): Promise<boolean> {
+  if (decision.askedBy !== 'lead') return false
+  const issue = await issueOf(work, decision.issueId)
+  if (issue?.wait?.reason !== 'decision' || issue.wait.holds.id !== decision.id) return false
+  if ((await checkpoints.revisions(decision.id as string as ArtifactId)).length > 1) return false
+  return !sentBackBefore((await work.history(decision.issueId)) ?? [], decision.id)
+}
+
 /** The Judge: precedent from the ledger, then the `factory-ask` workflow through its port. */
 async function judgeStep(deps: CheckpointLoopDeps, decision: DecisionRecord, title: string): StepResult {
+  // Sent back to its lead: it waits for the lead's settle or its second ask, and the owner is not reached meanwhile.
+  if (decision.steps.find((step) => step.step === 'judge')?.outcome === 'back') return ok(BACK)
   const now = deps.clock.now()
-  const claimed = await deps.uow.run<{ precedents: Precedent[]; tries: number } | Exclude<StepClaim, 'claimed'>, never>(
-    async ({ checkpoints }) => {
-      const claim = await checkpoints.claimStep(decision.id, 'judge', now, new Date(now.getTime() + STEP_LEASE_MS))
-      if (claim !== 'claimed') return ok(claim)
-      const terms = precedentTerms(decision.form.question)
-      const tries = (await checkpoints.decision(decision.id))?.steps.find((step) => step.step === 'judge')?.tries ?? 1
-      return ok({
-        precedents: terms ? await checkpoints.precedents(terms, { excluding: decision.id, limit: 5 }) : [],
-        tries,
-      })
-    },
-  )
+  const claimed = await deps.uow.run<
+    { precedents: Precedent[]; tries: number; sendBack: boolean } | Exclude<StepClaim, 'claimed'>,
+    never
+  >(async (stores) => {
+    const { checkpoints } = stores
+    const claim = await checkpoints.claimStep(decision.id, 'judge', now, new Date(now.getTime() + STEP_LEASE_MS))
+    if (claim !== 'claimed') return ok(claim)
+    const terms = precedentTerms(decision.form.question)
+    const tries = (await checkpoints.decision(decision.id))?.steps.find((step) => step.step === 'judge')?.tries ?? 1
+    return ok({
+      precedents: terms ? await checkpoints.precedents(terms, { excluding: decision.id, limit: 5 }) : [],
+      tries,
+      sendBack: await mayGoBack(stores, decision),
+    })
+  })
   if (!claimed.ok) return claimed
   if (claimed.value === 'in_flight') return ok(BUSY)
   if (claimed.value === 'retry_later') return ok(RETRY)
   if (claimed.value === 'done') return ok(null)
 
+  const { sendBack } = claimed.value
   const input = judgeInputOf({
     decision: decision.id,
     repo: decision.repo,
     issue: title,
     form: decision.form,
     precedents: claimed.value.precedents,
+    sendBack,
   })
   // The key names the try and the form: a retry or a re-judge of an amended form must not find the earlier run.
   const verdict = await deps.agw.run(
@@ -192,6 +219,15 @@ async function judgeStep(deps: CheckpointLoopDeps, decision: DecisionRecord, tit
         return ok(RETRY)
       }
       return done('failed', `the Judge could not be reached after ${JUDGE_MAX_TRIES} tries: ${why}`)
+    }
+    if (verdict.value.verdict === 'back') {
+      const { note, back } = verdict.value
+      // A back the request did not allow, or one with no note, is no back: the owner's (agw's guard holds the same).
+      if (!sendBack || !back || !note?.trim()) {
+        return done('passed', `${verdict.value.reason || 'the Judge passed it on'} (a back it could not give)`)
+      }
+      const sent = await sendBackIn(stores, deps, { decision, kind: back, note: note.trim().slice(0, BACK_NOTE_MAX) })
+      return sent.ok ? ok(sent.value === 'sent' ? BACK : null) : sent
     }
     if (verdict.value.verdict === 'owner') return done('passed', verdict.value.reason || 'the Judge passed it on')
     const guarded = guardVerdict(decision.form, verdict.value)
@@ -266,6 +302,8 @@ async function ownerStep(deps: CheckpointLoopDeps, decision: DecisionRecord): St
     if (!fresh || statusOf(fresh) !== 'open') return ok(null)
     // Amended since it was read: its steps are cleared and the Judge has not seen this form. The next pass answers it afresh.
     if (formDigest(fresh.form) !== formDigest(decision.form)) return ok(null)
+    // Sent back to its lead by a pass that ran meanwhile: it is the lead's now, not the owner's.
+    if (fresh.steps.find((step) => step.step === 'judge')?.outcome === 'back') return ok(null)
     const issue = await issueOf(work, fresh.issueId)
     if (!issue || !waitingOn(issue, 'decision', fresh.id)) {
       await checkpoints.withdrawDecision(fresh.id, 'the Issue no longer waits for it', at)

@@ -2,6 +2,11 @@ import { REVIEWER_CHEAP_ROLE, REVIEWER_ROLE } from '@software-factory/contract'
 import { connect } from './adapters/postgres/connection.ts'
 import { agwAmend } from './adapters/agw/amend.ts'
 import { agwPort } from './adapters/agw/port.ts'
+import { gitAgentsHead } from './adapters/git/agents-head.ts'
+import { claudeProjectsDirs } from './adapters/hc/terminals.ts'
+import { fileTranscriptTails } from './adapters/leads/transcripts.ts'
+import { casedAgw } from './app/case-agw.ts'
+import { readCaseFile } from './read/case-file.ts'
 import { askQueueDir, queuedAsksIn } from './adapters/checkpoints/queued-asks.ts'
 import { shellCheckRunner } from './adapters/shell/check-runner.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
@@ -89,6 +94,9 @@ const DOOR_LINES_RECENT_MS = 24 * 3_600_000
 /** The queue view the read routes share is reused this long (`queueReasons`): the queue loop moves it every 10 s. */
 const QUEUE_REASONS_FRESH_MS = 5_000
 
+/** A hang guard on reading a repo's AGENTS.md for a case file, never a budget. */
+const CASE_GIT_TIMEOUT_MS = 10_000
+
 const fail = (message: string): never => {
   console.error(message)
   process.exit(1)
@@ -132,7 +140,15 @@ async function main(env: Environment): Promise<void> {
   const leadSettings = loadLeadSettings(env, { agentToken: settings.tokens.agent, port: settings.port })
   const loopSettings = loadLoopSettings(env)
   // The one way to ask agw for a judgment: every workflow in `WORKFLOWS` goes through it.
-  const agw = agwPort({ bin: settings.agwBin })
+  // Every judgment request carries the case file: what the factory holds about it, read when the call is made.
+  const tails = fileTranscriptTails({
+    projectsDirs: () => claudeProjectsDirs({ accountsFile: leadSettings.accountsFile, home: leadSettings.home }),
+  })
+  const agw = casedAgw(agwPort({ bin: settings.agwBin }), {
+    read: (subject) => readCaseFile(sql, subject),
+    agents: gitAgentsHead({ timeoutMs: CASE_GIT_TIMEOUT_MS }),
+    lastWords: (transcript, max) => tails.lastWords(transcript, max),
+  })
   // The counting epoch: a missing or bad `config/throughput.json` stops the start, so no read quietly counts everything.
   const epoch = loadEpoch(settings.throughputFile)
   const needsSettings = loadNeedsSettings(env)

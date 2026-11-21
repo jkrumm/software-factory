@@ -92,7 +92,8 @@ export const PAYLOADS = {
     role: text.optional(),
   }),
   /** an amend or a note reaches the lead */
-  noted: z.object({ text, via: z.enum(['orchestrator']).optional() }),
+  /** `back`: the Judge sent this Decision back to the lead, which hears it now though the Issue waits on it (old events carry none) */
+  noted: z.object({ text, via: z.enum(['orchestrator']).optional(), back: text.optional() }),
   /** the lead raised a Decision and waits for its answer (or the steward did, for a stall it cannot end by itself) */
   asked: z.object({ attempt, decision: checkpoint }),
   /** a Decision got its answer */

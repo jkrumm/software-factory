@@ -182,6 +182,26 @@ const noteWatching = (ctx: Ctx<'noted'>): Cell => ({
   effects: [noteLead(ctx.issue.id, ctx.issue.attempt, next(ctx.issue), next(ctx.issue))],
 })
 
+/**
+ * A note to a waiting Issue is recorded: the note_lead of whatever ends the wait carries it (resume); a new attempt's brief
+ * reads it otherwise. The one note typed now is the Judge's back on the Decision the Issue waits for: the lead asked it and
+ * is at its prompt, the Decision still holds the Issue, and only the lead's settle or second ask moves it.
+ */
+const noteWaiting = (ctx: Ctx<'noted'>): Cell => {
+  const { issue, event } = ctx
+  const { wait } = issue
+  const back = event.payload.back
+  if (back === undefined || event.actor !== 'judge' || wait?.reason !== 'decision' || wait.holds.id !== back) {
+    return { to: 'waiting', effects: [] }
+  }
+  return {
+    to: 'waiting',
+    update: wait,
+    heard: true,
+    effects: [noteLead(issue.id, issue.attempt, wait.told + 1, next(issue))],
+  }
+}
+
 const ask = byLead((ctx: Ctx<'asked'>): Cell => ({
   to: 'waiting',
   wait: { reason: 'decision', holds: ctx.event.payload.decision },
@@ -659,9 +679,8 @@ export const TABLE: Table = {
     admitted: said('it is admitted already'),
     lead_started: said('waiting: a lead starts only from queued'),
     lead_gone: said('waiting: the wait ends first, and its note finds the lead gone'),
-    // Recorded: the note_lead of whatever ends the wait carries it (resume); a new attempt's brief reads it otherwise.
     seated: seatTaken,
-    noted: () => ({ to: 'waiting', effects: [] }),
+    noted: noteWaiting,
     asked: askedWhileWaiting,
     answered: answerWhileWaiting,
     submitted: fromTimer(submit),

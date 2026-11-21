@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { JudgeCase } from './case-file.ts'
 import { ISSUE_ID_META, IssueRefInput } from './issues.ts'
 import { ISSUE_ORIGINS } from './vocab.ts'
 
@@ -344,6 +345,7 @@ export const ScreenRequest = z
     projects: z.array(z.string()).max(60),
     /** the signal has been held 72 hours and was screened before: this is the last look, and `promote` or `dismiss` is wanted, not `leave` */
     final: z.boolean().optional(),
+    case: JudgeCase.optional(),
   })
   .meta({ id: 'ScreenRequest' })
 export type ScreenRequest = z.infer<typeof ScreenRequest>

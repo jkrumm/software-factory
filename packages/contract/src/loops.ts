@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { JudgeCase } from './case-file.ts'
 import { SPEC_SCREEN_PRECEDENTS, SpecPrecedent } from './checkpoints.ts'
 import { ISSUE_KINDS, ISSUE_SIZES } from './vocab.ts'
 
@@ -15,6 +16,12 @@ const Text = z.string().trim().min(1).max(4_000)
 
 // ---- factory-ask: the Judge (today's ask is the running factory's; this is the new core's Decision) ----------------------
 
+/** A checkout named outside agw's fence is held to plain path characters (agw's own rule): no prose rides on it. */
+export const CHECKOUT_PATH = /^\/[A-Za-z0-9._@+/-]+$/
+
+/** Why the Judge sends a question back: it is the lead's to decide, or the owner's but not ready for him. */
+export const BACK_KINDS = ['yours', 'not_ready'] as const
+
 export const JudgeInputWire = z.object({
   decision: z.string().min(1),
   repo: z.string().min(1),
@@ -28,22 +35,25 @@ export const JudgeInputWire = z.object({
     default: z.string().min(1).nullable(),
     waitMinutes: z.number().int().min(1).nullable(),
   }),
-  precedents: z.array(
-    z.object({
-      question: z.string(),
-      answer: z.string(),
-      settledBy: z.string(),
-      worthAsking: z.boolean().nullable(),
-      repo: z.string(),
-    }),
-  ),
+  precedents: z.array(z.object({ question: z.string(), answer: z.string(), settledBy: z.string(), repo: z.string() })),
+  /** the Issue as filed, scrubbed and cut to agw's 8,000 */
+  facts: z.string().max(8_000).optional(),
+  /** the repo's main checkout, which the Judge reads with read, glob and grep */
+  checkout: z.string().max(500).regex(CHECKOUT_PATH).optional(),
+  case: JudgeCase.optional(),
+  /** the Judge may send the question back to its lead (verdict `back`): a lead's Decision on its first look only */
+  sendBack: z.boolean().optional(),
 })
 
 export const JudgeVerdictWire = z.object({
-  verdict: z.enum(['answer', 'owner']),
+  verdict: z.enum(['answer', 'owner', 'back']),
   answer: z.string(),
   reason: z.string(),
   source: z.string(),
+  /** `back` only: what the lead hears, at most 600 characters */
+  note: z.string().optional(),
+  /** `back` only: `yours` (the lead decides) or `not_ready` (the owner's, not ready for him) */
+  back: z.enum(BACK_KINDS).optional(),
 })
 
 // ---- factory-steward -----------------------------------------------------------------------------------------------------
@@ -66,6 +76,7 @@ export const StewardStall = z.object({
   stewardWakes: z.number().int().min(0),
   notes: z.array(z.string().max(500)).max(20),
   history: z.array(z.string().max(500)).max(40),
+  case: JudgeCase.optional(),
 })
 export type StewardStall = z.infer<typeof StewardStall>
 
@@ -124,6 +135,7 @@ export const TriageAmendRequest = z.object({
     kind: z.enum(['alert', 'request', 'feedback', 'remark']),
     origin: z.string().min(1).max(40),
   }),
+  case: JudgeCase.optional(),
 })
 
 export const TriageSettleRequest = z.object({
@@ -139,6 +151,7 @@ export const TriageSettleRequest = z.object({
   }),
   /** the owner's newest needed-me marks on Specs (data): what made a Spec owed that did not need him, and what did */
   precedents: z.array(SpecPrecedent).max(SPEC_SCREEN_PRECEDENTS).default([]),
+  case: JudgeCase.optional(),
 })
 
 export const TriageRequest = z.discriminatedUnion('mode', [TriageAmendRequest, TriageSettleRequest])
@@ -186,6 +199,7 @@ export const QueueRequest = z.object({
     .min(1)
     .max(200),
   issues: z.array(QueueIssue).min(1).max(40),
+  case: JudgeCase.optional(),
 })
 export type QueueRequest = z.infer<typeof QueueRequest>
 

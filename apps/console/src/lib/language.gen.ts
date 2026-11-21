@@ -60,7 +60,7 @@ export const LANGUAGE = {
     "The share of all the host's cores that were working (user plus system time), percent, from top. 100 % is every core fully used, the rest is idle. It says how much of the machine is in use, where Load says how many threads wanted it. What to do: near 100 % for many minutes while Issues are Ready means the host is the limit; read Load next, and wait rather than start more",
   cycle: 'The time from an Issue filed to closed',
   decision:
-    'One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it. Raised while its Concept or Spec waits for review, it is about that artifact and waits together with the review',
+    "One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it. The Judge may send back a lead's own Decision once, on its first look: it stays open and out of Needs you, and the lead hears why (yours to decide, or not ready for the owner) and settles it or asks again. Raised while its Concept or Spec waits for review, it is about that artifact and waits together with the review",
   'decision status': 'open, answered, or withdrawn (the Issue no longer waits for it: it closed or was cancelled)',
   defer:
     "The lead's verb for a wait it can name: until a time, until other Issues close, or on the review of its pull request (--review, which is the external wait) (factory issue defer). The event is deferred",
@@ -212,7 +212,7 @@ export const LANGUAGE = {
   'swap used':
     "The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts. What to do: if it keeps growing, read Memory by class on Throughput to find what writes memory out; a full but steady swap needs nothing",
   'take the default':
-    "The lead's verb that answers its own open Decision with the default it named, once it went on with that option (factory decision take-default <id> --attempt <n>). Recorded as answered by default, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it)",
+    "The lead's verb that answers its own open Decision with the default it named, once it went on with that option (factory decision take-default <id> --attempt <n>); a Decision the Judge sent back, with no default, with its reversible recommendation. Recorded as answered by default, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it)",
   'taste pass':
     "The weekly retro's reading of the owner's verdict notes, comments and Decision answers in his own words: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
   'test slot':

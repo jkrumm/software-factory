@@ -87,6 +87,7 @@ const decisionHelp = [
   'It carries your recommendation, what you checked (--checked), the cost of each option and what happens with no answer. Asking again on a question still open amends the open Decision. The Judge sees every Decision before the owner, and it reaches him only if the Judge passes it on. The answer comes back to you as a note.',
   "What in your Spec is the owner's is a Decision raised beside it, before or after you submit it. Raised after a Spec that waits for his verdict (an owner gate), it waits together with the review, and you hear the verdict and the answers in one note.",
   'A Decision that names a default and that you already went on with is settled by you, not waited out: `factory decision take-default <decision id>` closes it as the default taken and ends the wait, so `ship` is not refused for the time it would have run.',
+  'The Judge may send your Decision back once, with a note: it is yours to decide, or not ready for the owner. Settle it with `take-default` (its default, or with none its reversible recommendation), or ask again with what was missing.',
 ].join('\n')
 
 const errandHelp = [

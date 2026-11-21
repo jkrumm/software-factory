@@ -359,13 +359,21 @@ export function idleClockStart(
 /** The facts as the workflow takes them: cut to its limits, credentials scrubbed by the caller's `clean`. */
 export function stallRequest(facts: StallFacts, now: Date, clean: (text: string) => string): StewardStall {
   const cut = (text: string, max: number) => clean(text).slice(0, max)
+  // What the factory itself holds of the stall goes after the lead's words, on lines of its own, and is never cut off.
+  const known = [
+    facts.repeatOf
+      ? `[factory] the same stall as the one the steward's Decision answered at v${facts.repeatOf.answeredAt}${facts.repeatOf.backedOff ? ', with a backoff' : ''}: nothing new came since`
+      : '',
+    facts.backoffs > 0 ? `[factory] backoffs this attempt: ${facts.backoffs}; the next one waits longer` : '',
+  ].filter(Boolean)
+  const tail = known.length ? `\n${known.join('\n')}` : ''
   return {
     issue: facts.issue,
     repo: facts.repo,
     title: cut(facts.title, 500) || facts.issue,
     kind: facts.kind,
     cause: facts.cause,
-    detail: cut(facts.detail, 4_000),
+    detail: cut(facts.detail, 4_000 - tail.length) + tail,
     stalledMinutes: Math.max(0, Math.floor((now.getTime() - facts.stalledAt.getTime()) / 60_000)),
     attempt: facts.attempt,
     restarts: facts.restarts,

@@ -185,13 +185,21 @@ export function defaultAt(form: Pick<DecisionForm, 'noAnswer'>, askedAt: Date): 
   return label === null || waitMinutes === null ? null : new Date(askedAt.getTime() + waitMinutes * 60_000)
 }
 
-/** The Judge's verdict, already parsed: it answers (`answer`) or hands the Decision on (`owner`). */
+/**
+ * The Judge's verdict, already parsed: it answers (`answer`), hands the Decision on (`owner`), or sends it back to its lead
+ * (`back`, only when the request allowed it) with a note and why: the lead's to decide (`yours`) or not ready for the owner.
+ */
 export interface JudgeVerdict {
-  verdict: 'answer' | 'owner'
+  verdict: 'answer' | 'owner' | 'back'
   answer: string
   reason: string
   source: string
+  note?: string | undefined
+  back?: 'yours' | 'not_ready' | undefined
 }
+
+/** The most of the Judge's note the lead is typed: agw clips it to the same. */
+export const BACK_NOTE_MAX = 600
 
 export type Guarded = { ok: true; answer: string; source: string } | { ok: false; why: string }
 
@@ -219,7 +227,10 @@ export interface Precedent {
   repo: string
 }
 
-/** What `factory-ask` is given: scrubbed and cut, never a path or a secret. */
+/**
+ * What `factory-ask` is given: scrubbed and cut, never a secret. The case file, the Issue as filed (`facts`) and the
+ * checkout the Judge reads with its tools are added when the call is made (`app/case-agw.ts`).
+ */
 export interface JudgeInput {
   decision: string
   repo: string
@@ -229,7 +240,9 @@ export interface JudgeInput {
   checked: string
   options: DecisionOption[]
   noAnswer: NoAnswer
-  precedents: (Precedent & { worthAsking: null })[]
+  precedents: Precedent[]
+  /** the Judge may send it back to its lead: a lead's Decision on its first look only */
+  sendBack?: boolean
 }
 
 const MAX_JUDGE_TEXT = 2000
@@ -245,6 +258,7 @@ export function judgeInputOf(input: {
   issue: string
   form: DecisionForm
   precedents: readonly Precedent[]
+  sendBack?: boolean
 }): JudgeInput {
   const { form } = input
   return {
@@ -256,14 +270,13 @@ export function judgeInputOf(input: {
     checked: cut(form.checked),
     options: form.options.map((option) => ({ ...option, label: cut(option.label), cost: cut(option.cost) })),
     noAnswer: { ...form.noAnswer, consequence: cut(form.noAnswer.consequence) },
-    // agw's `factory-ask` still requires the field; no precedent carries a mark any more (drop it there, then here)
     precedents: input.precedents.map((p) => ({
       ...p,
-      worthAsking: null,
       repo: repoName(p.repo),
       question: cut(p.question),
       answer: cut(p.answer),
     })),
+    ...(input.sendBack ? { sendBack: true } : {}),
   }
 }
 
