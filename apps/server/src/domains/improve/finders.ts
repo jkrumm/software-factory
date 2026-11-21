@@ -2,6 +2,8 @@
 // passes of a loop flood noise: the first friction pass filed 5 Issues of which 4 were noise, the co-change probe 11 of 11.
 // The outcomes of a finder's Issues are the evidence: a finder whose Issues are mostly dropped or cancelled stops filing.
 
+import type { IssueOutcome } from '@software-factory/contract'
+
 export type FindingLoop = 'friction' | 'hygiene' | 'selfwatch'
 
 /** The ten newest decided Issues of the current epoch are judged: old history ages out, a long record does not mute a finder forever. */
@@ -13,14 +15,12 @@ const NOISE_SHARE = 0.5
 /** A muted finder is asked again this long after its last Issue closed. */
 export const MUTE_MS = 14 * 86_400_000
 
-export type FinderOutcome = 'done' | 'healed' | 'dropped' | 'cancelled'
-
 /** One Issue a finder filed; `closedAt` and `outcome` are null while it is open. */
 export interface FinderIssue {
   issue: string
   filedAt: Date
   closedAt: Date | null
-  outcome: FinderOutcome | null
+  outcome: IssueOutcome | null
 }
 
 /** `open` files freely, `probation` files one Issue at a time after it was muted, `muted` files nothing. */

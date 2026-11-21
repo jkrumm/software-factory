@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { ChainModel, NeedItem, NeedKind, NeedsModel } from '@software-factory/contract'
-import { ERRAND_NEEDS } from '@software-factory/contract'
+import { ERRAND_NEEDS, UNSTARTED_ISSUE_STATES } from '@software-factory/contract'
 import { readChain } from './chain.ts'
 import { holdsOf, nodeName } from './holds.ts'
 import { JUDGE_MAX_TRIES } from '../kernel/judge-tries.ts'
@@ -227,7 +227,7 @@ export async function readNeeds(
         (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin,
         EXISTS (SELECT 1 FROM factory.issue_events g WHERE g.issue_id = i.id AND g.kind = 'filed' AND g.version = 1 AND g.payload->>'checkpoint' = 'gate') AS gate
       FROM factory.artifacts a
-      JOIN factory.issues i ON i.id = a.issue_id AND i.state IN ('settling', 'queued')
+      JOIN factory.issues i ON i.id = a.issue_id AND i.state = ANY(${sql.array([...UNSTARTED_ISSUE_STATES], 'TEXT')})
       JOIN LATERAL (
         SELECT n, created_at FROM factory.artifact_revisions WHERE artifact_id = a.id ORDER BY n DESC LIMIT 1
       ) r ON true

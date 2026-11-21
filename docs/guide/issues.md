@@ -105,9 +105,9 @@ Six states times 25 events is 150 cells. A queued Issue shows what most of them 
 
 **Example files:**
 
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L31-L39): `Cell` and `Table`, the type that makes it total
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L570-L624): `settling` and `queued`, every event of two states
-- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L126-L145): `apply`, the one decision
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L30-L38): `Cell` and `Table`, the type that makes it total
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L569-L623): `settling` and `queued`, every event of two states
+- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L127-L146): `apply`, the one decision
 
 ## States and where work stands
 
@@ -136,7 +136,7 @@ export const WORK_WORDS = ['running', 'paused', 'ready', 'held', 'checking'] as 
 **Example files:**
 
 - [`contract/src/work-words.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/work-words.ts#L79-L100): `workOf`, a stored state to one of the five words
-- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L34-L64): `WAITS`, each wait with its exit and how it ends
+- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L19-L56): `WAITS`, each wait with its exit and how it ends
 
 ## Outcomes
 
@@ -158,7 +158,7 @@ export const ISSUE_OUTCOMES = ['done', 'dropped', 'healed', 'cancelled'] as cons
 
 **Example files:**
 
-- [`contract/vocab.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/vocab.ts#L36-L42): the four outcomes
+- [`contract/vocab.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/vocab.ts#L34-L39): the four outcomes
 
 ## Deterministic keys
 
@@ -213,7 +213,7 @@ The version-guarded update:
 **Example files:**
 
 - [`adapters/postgres/work-store.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/postgres/work-store.ts#L106-L113): the version-guarded update
-- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L147-L159): `replay`, the Issue from its applied events
+- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L148-L160): `replay`, the Issue from its applied events
 
 ## issue_1809, end to end
 
