@@ -8,7 +8,8 @@
  * - a relative link or image resolves to a file inside `docs/guide/`; a root-absolute link (`/x`) is refused, it
  *   breaks on GitHub;
  * - a link into this repo on GitHub (`blob/` or `tree/`) points at `master`, never a commit, and the path exists and
- *   holds every line a `#Lx-Ly` anchor names;
+ *   holds every line a `#Lx-Ly` anchor names, and a symbol named beside
+ *   the link declares it (a keyword form, or a quoted kind) inside them; a method or a key is named in prose, unchecked;
  * - a `ts` block quotes code, and the line above it names where: `<!-- snippet: <path> <symbol> -->`. The block must
  *   equal the code of that symbol in that file, line for line (indentation aside); a line `// …` stands for code left
  *   out between two parts. A quoted line that changed in the code fails the check, so the page is edited with it.
@@ -47,9 +48,12 @@ const LINK = /(!?)\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g
 const SNIPPET = /^<!--\s*snippet:\s*(\S+)\s+(\S+)\s*-->$/
 const ELISION = /^\s*\/\/\s*(…|\.\.\.)\s*$/
 
+/** A code span: a backtick run, the text up to the same run. */
+const CODE_SPAN = /(`+)[\s\S]*?\1/g
+
 /** The text of a line outside inline code spans, so a link written as code is not a link. */
 function stripInlineCode(line: string): string {
-  return line.replace(/(`+)[\s\S]*?\1/g, '')
+  return line.replace(CODE_SPAN, '')
 }
 
 /** Parses a GitHub URL into this repo; null when it is not one, 'unpinned' when it names a ref other than master. */
@@ -170,6 +174,37 @@ export function checkSnippet(tree: Tree, path: string, symbol: string, block: st
   return `the block is not the code of ${symbol} in ${path}: ${closest.miss}`
 }
 
+/** The symbol a permalink names beside it: `](url): \`sym\`` or a `, \`sym\`` at the end of the link text. */
+function namedSymbol(raw: string, url: string, occurrence: number): string | null {
+  const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const close = new RegExp(`${escaped}>?(?:\\s+"[^"]*")?\\)`, 'g')
+  let m: RegExpExecArray | null = null
+  const outside = raw.replace(CODE_SPAN, (code) => ' '.repeat(code.length))
+  for (let k = 0; k <= occurrence; k++) m = close.exec(outside)
+  if (!m) return null
+  const text = raw.slice(0, m.index).match(/\[([^\]]*)\]\(<?$/)?.[1] ?? ''
+  const after = raw.slice(m.index + m[0].length).match(/^:\s*`([A-Za-z_$][\w$]*)`/)?.[1]
+  return after ?? text.match(/,\s*`([A-Za-z_$][\w$]*)`$/)?.[1] ?? null
+}
+
+/** The 1-based lines that declare `symbol` in `source`: a keyword declaration (function, const, let, var, class, interface,
+type, enum, namespace) or, where none, the lines that quote it as a kind ('x'). A method or a key is neither: it is not declared. */
+export function declaredAt(source: string, symbol: string): number[] {
+  const name = symbol.replace(/\$/g, '\\$')
+  const top = new RegExp(
+    `^(?:export\\s+|default\\s+|declare\\s+|async\\s+|abstract\\s+)*(?:(?:const\\s+)?enum|function\\*?|const|let|var|class|interface|type|namespace)\\s+${name}\\b`,
+  )
+  const topLines = source.split('\n').flatMap((line, i) => (top.test(line) ? [i + 1] : []))
+  if (topLines.length > 0) return topLines
+  const nested = new RegExp(
+    `^\\s*(?:export\\s+|default\\s+|declare\\s+|async\\s+|abstract\\s+)*(?:(?:const\\s+)?enum|function\\*?|const|let|var|class|interface|type|namespace)\\s+${name}\\b`,
+  )
+  const nestedLines = source.split('\n').flatMap((line, i) => (nested.test(line) ? [i + 1] : []))
+  if (nestedLines.length > 0) return nestedLines
+  const quoted = new RegExp(`(['"])${name}\\1`)
+  return source.split('\n').flatMap((line, i) => (quoted.test(line) ? [i + 1] : []))
+}
+
 /** Every finding of one page. `file` is relative to the repo root; `exists` answers for a path relative to it. */
 export function checkPage(file: string, text: string, tree: Tree, exists: (path: string) => boolean): Finding[] {
   const findings: Finding[] = []
@@ -202,7 +237,9 @@ export function checkPage(file: string, text: string, tree: Tree, exists: (path:
     if (/^\s*<[A-Z][\w.]*[\s/>]/.test(raw) || /^\s*<script\b/.test(raw))
       add(n, 'component tag: GitHub shows it as text')
 
-    for (const m of stripInlineCode(raw).matchAll(LINK)) {
+    const links = [...stripInlineCode(raw).matchAll(LINK)]
+    for (const [at, m] of links.entries()) {
+      const nth = links.slice(0, at).filter((x) => x[2] === m[2]).length
       const target = m[2] ?? ''
       if (target.startsWith('#') || target.startsWith('mailto:')) continue
       if (target.startsWith('/')) {
@@ -210,7 +247,7 @@ export function checkPage(file: string, text: string, tree: Tree, exists: (path:
         continue
       }
       if (/^[a-z]+:/i.test(target)) {
-        if (target.startsWith(`${REPO_URL}/`)) checkPermalink(target, n)
+        if (target.startsWith(`${REPO_URL}/`)) checkPermalink(target, n, namedSymbol(raw, target, nth))
         continue
       }
       const path = relative('.', resolve(dirname(file), decodeURIComponent(target.split('#')[0] ?? '')))
@@ -231,14 +268,21 @@ export function checkPage(file: string, text: string, tree: Tree, exists: (path:
     if (problem) add(block.start, problem)
   }
 
-  function checkPermalink(url: string, n: number): void {
+  function checkPermalink(url: string, n: number, symbol: string | null): void {
     const link = parsePermalink(url)
     if (link === null) return
     if (link === 'unpinned') return add(n, `${url}: link master, a commit goes stale`)
     const count = tree.lines(link.path)
     if (count === null) return add(n, `${url}: ${link.path} does not exist`)
     if (link.to !== undefined && (link.to > count || (link.from ?? 1) > link.to))
-      add(n, `${url}: lines ${link.from}-${link.to} are outside ${link.path} (${count} lines)`)
+      return add(n, `${url}: lines ${link.from}-${link.to} are outside ${link.path} (${count} lines)`)
+    if (symbol === null || link.from === undefined || link.to === undefined) return
+    const source = tree.text(link.path)
+    if (source === null) return add(n, `${url}: ${link.path} is not a file`)
+    const at = declaredAt(source, symbol)
+    if (at.length === 0) return add(n, `${url}: ${symbol} is not declared in ${link.path}`)
+    if (!at.some((line) => line >= (link.from ?? 0) && line <= (link.to ?? 0)))
+      add(n, `${url}: ${symbol} starts at line ${at[0]}, outside lines ${link.from}-${link.to}`)
   }
 }
 
