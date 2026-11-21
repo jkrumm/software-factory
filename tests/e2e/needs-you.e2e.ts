@@ -76,8 +76,8 @@ test('the list groups what waits and the open cards show everything the owner de
   const decision = card(page, 'Which logging library')
   await expect(decision.getByText('Recommended', { exact: true })).toBeVisible()
   await expect(decision.getByText('pino', { exact: true }).first()).toBeVisible()
-  await expect(decision.getByText('one dependency, fast to swap later')).toBeVisible()
-  await expect(decision.getByText('heavier, with more moving parts')).toBeVisible()
+  await expect(decision.getByText('one dependency, fast to swap later').first()).toBeVisible()
+  await expect(decision.getByText('heavier, with more moving parts').first()).toBeVisible()
   await expect(decision.getByText('Cannot be undone', { exact: true })).toBeVisible()
   await expect(decision.getByText(/Taken on silence in \d+ hours?/)).toBeVisible()
   // what waits behind the answer is closed until it is clicked
