@@ -313,12 +313,13 @@ const REVIEW_ASK =
  * A pull request's review is the reviewer's, not the owner's. An Errand that asks the owner to approve or merge a named pull
  * request, or to bypass its review rule, is turned back (the burn-in of 2026-11-13: the owner was asked to approve his own
  * work account's pull request in a work repo, which GitHub refuses, and to bypass the team's review). The Issue waits on the
- * pull request instead: the `reviews` loop wakes it when the reviewer acts. Null when the text names no pull request or asks
- * for something else; a text with no number is left to the screen and the lead brief (`factory issue defer --review`).
+ * pull request instead: the `reviews` loop wakes it when the reviewer acts. The ask is the summary: a detail that only names a
+ * pull request as the step after the owner's ("only then merge PR 335") is context, so a portal setting that precedes a merge
+ * still reaches him. Null when the text names no pull request or the summary asks for something else; a text with no number is left to the screen and the lead brief (`factory issue defer --review`).
  */
 export function screenByReview(input: ErrandInput): { review: string; reason: string } | null {
   const text = `${input.summary}\n${input.detail ?? ''}`
-  if (!REVIEW_ASK.test(text.toLowerCase())) return null
+  if (!REVIEW_ASK.test(input.summary.toLowerCase())) return null
   const url = PR_URL.exec(text)?.[0]
   const number = PR_NUMBER.exec(text)
   const review = url ?? (number ? `#${number[1] ?? number[2]}` : null)
