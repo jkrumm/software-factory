@@ -656,6 +656,39 @@ describe('claims and the claim on resume', () => {
     expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'held' })
   })
 
+  test("a claim taken inside a Decision wait (the Judge's back) stands past the pass until the lead settles; one from before the wait goes back", async () => {
+    const one = await world.queued({ repo: 'solo' })
+    const two = await world.queued({ repo: 'solo' })
+    await pass()
+    await asked()
+    const claims = async () =>
+      (await world.db.sql`SELECT issue_id FROM factory.capacity_claims ORDER BY issue_id`).map(
+        (r: { issue_id: string }) => r.issue_id,
+      )
+    // the claim from before the wait is no one's: Issue 2 takes the place
+    nextSample()
+    await pass()
+    expect(await claims()).toEqual([issueId(2)])
+    await world.send(two, 'closed', 'closed', { attempt: 1, outcome: 'done', reason: 'done' }, 'lead')
+
+    // the lead the Judge's back woke takes a claim after the wait began: it stands, and counts as a lead at work
+    world.clock.advance(1_000)
+    expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'taken' })
+    nextSample()
+    await pass()
+    expect(await claims()).toEqual([one])
+    const three = await world.queued({ repo: 'solo' })
+    nextSample()
+    expect(reasons(await pass())[three]).toBe('claim')
+
+    // it settles: the Issue works again and keeps the place
+    await world.send(one, 'answered', 'answered', { decision: 'd1', answer: 'the first' }, 'owner')
+    nextSample()
+    await pass()
+    expect(await claims()).toEqual([one])
+    expect(value(await releaseClaim(world.deps, one))).toBe(true)
+  })
+
   test('a lead back from a wait takes its lane place back too: refused while another lead of a capped lane works, granted when it closes', async () => {
     world.accounts.rows = [account('a'), account('b')]
     const one = await world.queued({ repo: 'lab', lane: 'apple' })

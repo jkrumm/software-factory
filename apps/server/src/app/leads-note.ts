@@ -39,6 +39,8 @@ type Look =
       done: false
       delivery: Pick<Delivery, 'claimedAt' | 'text'>
       working: boolean
+      /** the Issue waits on a Decision (a note typed now is the Judge's back; any other wait has nothing to take) */
+      waiting: boolean
       dormant: Dormant | null
       /** what starting the session again needs, dormant or not: a lead moved to another account is started again while it runs */
       resume: Dormant
@@ -63,6 +65,7 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
     const loaded = await loadIssue(work, issue)
     if (!loaded || loaded.issue.state === 'closed' || loaded.issue.attempt !== attempt) return ok({ done: true })
     const working = loaded.issue.state === 'working' || loaded.issue.state === 'watching'
+    const waiting = loaded.issue.state === 'waiting' && loaded.issue.wait?.reason === 'decision'
     const row = await leads.attempt(issue, attempt)
     // A lead that never started, or is gone, hears nothing: the next attempt's brief carries the notes.
     if (!row?.terminal || row.goneAt) return ok({ done: true })
@@ -82,6 +85,7 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
         done: false,
         delivery: existing,
         working,
+        waiting,
         dormant: dormantOf(row, loaded.issue, view.claudeSession),
         resume: resumeOf(row, loaded.issue, view.claudeSession),
         idleSince,
@@ -98,6 +102,7 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
       done: false,
       delivery: { claimedAt, text },
       working,
+      waiting,
       dormant,
       resume: resumeOf(row, loaded.issue, view.claudeSession),
       idleSince,
@@ -105,7 +110,7 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
   })
   if (!looked.ok) return looked
   if (looked.value.done) return ok(undefined)
-  const { delivery, working, dormant, resume, idleSince } = looked.value
+  const { delivery, working, waiting, dormant, resume, idleSince } = looked.value
 
   const found = await deps.terminals.find(name)
   if (!found.ok) return found
@@ -136,6 +141,14 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
     resume.account && resume.session && seat.value.account !== 'default' && seat.value.account !== resume.account
       ? seat.value.account
       : null
+  const moves = Boolean(movedTo && (live || dormant))
+  // A note typed to a waiting Issue (the Judge's back) that starts the session again makes a lead at work in a wait that
+  // gave its claim up: it takes the place before the start, and a full repo starts nothing, as for a wait that ended. A
+  // lead that is live is typed to as it is: it was running already. The claim stands until the lead settles, sleeps or ends.
+  if (waiting && (moves || !live)) {
+    const taken = await deps.claims.resume({ issue, attempt })
+    if (!taken.ok) return taken.error.kind === 'gone' ? ok(undefined) : taken
+  }
   if (movedTo && (live || dormant)) {
     if (!dormant) {
       const marked = await deps.uow.run(async ({ leads }) => {

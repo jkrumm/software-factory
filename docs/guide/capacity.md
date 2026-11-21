@@ -135,6 +135,7 @@ A claim is a lead's place in its repo. A lane is a resource inside a repo with i
 
 - **`leads: N`** in `project.yaml` is the repo's claim count, plus one place that only a fix may use.
 - **Owed first.** A wait that needs a person, a clock or another Issue gives the claim back. When the wait ends the Issue is owed: it works without a claim and is served before any new lead, in order of wait end, then Issue number.
+- **The Judge's back takes a place.** A lead the Judge sent a Decision back to, and whose session must start again to hear it, takes its claim first, like a lead whose wait ended; a full repo starts nothing and the note is asked again. The claim stands through the Decision wait and goes back when the lead settles into work, sleeps again or ends.
 - **A stall keeps the claim.** A wall, an unreported stop or a block leaves the lead alive, so it keeps its place and the steward ends the stall.
 - **Lanes cap a class.** `lanes: {apple: 1}` lets one Apple lead run in the repo at once, within `leads`. An undeclared lane is unlimited.
 
