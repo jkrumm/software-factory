@@ -270,6 +270,12 @@ export async function startWorld(): Promise<World> {
         this.archived.push(input)
         return ok({ archived: input.sessions.length })
       },
+      async resolve(input) {
+        return input.path
+      },
+      async tidy() {
+        return ok(null)
+      },
     },
     repoError: null,
     checkTiers: null,

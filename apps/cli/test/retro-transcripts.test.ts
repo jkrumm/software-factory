@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { zstdCompressSync } from 'node:zlib'
 import { digestOf, transcriptPass, type TranscriptSession } from '../src/retro-transcripts.ts'
 
 const at = (s: number): string => new Date(Date.UTC(2026, 10, 10, 10, 0, s)).toISOString()
@@ -100,6 +101,14 @@ describe('digestOf', () => {
     expect(stats.toolErrors).toBe(1)
     expect(text).toContain('[make check 60s] make -C apps/x check')
     expect(text).toContain('ERR: Blocked: sleep 60')
+  })
+  test('an archived (zstd) transcript reads like the plain one', () => {
+    const archived = join(dir, 'a.jsonl.zst')
+    writeFileSync(archived, zstdCompressSync(readFileSync(session.transcriptPath)))
+    const plain = digestOf(session)
+    const packed = digestOf({ ...session, transcriptPath: archived })
+    expect(packed.stats).toEqual(plain.stats)
+    expect(packed.text).toBe(plain.text)
   })
   test('an unreadable path yields an empty digest', () => {
     expect(digestOf(missing).text).toBe('')

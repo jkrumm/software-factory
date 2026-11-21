@@ -142,10 +142,11 @@ async function main(env: Environment): Promise<void> {
   // The one way to ask agw for a judgment: every workflow in `WORKFLOWS` goes through it.
   // Every judgment request carries the case file: what the factory holds about it, read when the call is made.
   const tails = fileTranscriptTails({
+    archiveDir: leadSettings.archiveDir,
     projectsDirs: () => claudeProjectsDirs({ accountsFile: leadSettings.accountsFile, home: leadSettings.home }),
   })
   const agw = casedAgw(agwPort({ bin: settings.agwBin }), {
-    read: (subject) => readCaseFile(sql, subject),
+    read: (subject) => readCaseFile(sql, subject, undefined, undefined, leadSettings.archiveDir),
     agents: gitAgentsHead({ timeoutMs: CASE_GIT_TIMEOUT_MS }),
     lastWords: (transcript, max) => tails.lastWords(transcript, max),
   })
@@ -259,6 +260,16 @@ async function main(env: Environment): Promise<void> {
   })
   // The hook socket comes after the lock and the migrations: a second copy never reaches it.
   const socket = await leads.listen()
+  // The archive's first pass compresses what an older version left plain: minutes of work, so nothing waits for it.
+  void leads.tidyArchive().then((tidied) => {
+    if (!tidied.ok) return console.error(tidied.error.detail)
+    if (!tidied.value) return
+    const { expired, converted, projectsRemoved } = tidied.value
+    if (expired + converted.files + projectsRemoved > 0)
+      console.log(
+        `transcript archive: ${expired} attempt(s) expired, ${converted.files} file(s) compressed (${converted.from} -> ${converted.to} bytes), ${projectsRemoved} project dir(s) removed`,
+      )
+  })
 
   const ci = githubCi({ token: intakeEnv.github.token, apiUrl: intakeEnv.github.apiUrl })
   const draining = new AbortController()
@@ -416,10 +427,12 @@ async function main(env: Environment): Promise<void> {
       queueReasons,
       seatTable,
       uptime: () => uptime.snapshot(),
+      archiveDir: leadSettings.archiveDir,
     }),
     readModels: {
       sql,
       dataDir,
+      archiveDir: leadSettings.archiveDir,
       epoch,
       // the owner's Herdr groups, the file the Herdr app reads (`make herdr-app-setup` in dotfiles links it here)
       projectGroupsFile: settings.projectGroupsFile,

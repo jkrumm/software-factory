@@ -159,7 +159,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
     const movedUp = movedFrom && {
       attempt: movedFrom.attempt,
       why: movedFrom.why,
-      lastWords: await lastWordsOf(deps, movedFrom.transcript),
+      lastWords: await lastWordsOf(deps, { issue, attempt: movedFrom.attempt, transcript: movedFrom.transcript }),
     }
 
     const reviewer = await reviewerOf(deps, issue, role.value.rule !== null)
@@ -305,9 +305,14 @@ async function reviewerOf(
 }
 
 /** The last words of a moved-up light lead, for its successor's brief; nothing when they cannot be read. */
-async function lastWordsOf(deps: LeadDeps, transcript: string | null): Promise<string | null> {
-  if (!transcript || !deps.apiErrors) return null
-  const words = await deps.apiErrors.tails.lastWords(transcript, LAST_WORDS_CHARS)
+async function lastWordsOf(
+  deps: LeadDeps,
+  of: { issue: IssueId; attempt: number; transcript: string | null },
+): Promise<string | null> {
+  if (!of.transcript || !deps.apiErrors) return null
+  // The attempt is finished by now: its transcript may only be left in the archive.
+  const path = await deps.transcripts.resolve({ issue: of.issue, attempt: of.attempt, path: of.transcript })
+  const words = await deps.apiErrors.tails.lastWords(path, LAST_WORDS_CHARS)
   return words.ok ? words.value : null
 }
 

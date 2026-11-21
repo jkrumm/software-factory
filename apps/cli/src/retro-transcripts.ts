@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { zstdDecompressSync } from 'node:zlib'
 
 // The transcript pass of a weekly retro: a deterministic read (no model call) of Claude Code lead-session transcripts.
 // Transcript text is untrusted data: it is parsed and counted, never evaluated.
@@ -154,7 +155,10 @@ const toolUse = (b: Json): { category: string; short: string } => {
 function analyze(session: TranscriptSession): Analysis | null {
   let raw: string
   try {
-    raw = readFileSync(session.transcriptPath, 'utf8')
+    // an archived transcript is zstd-compressed (`.zst`); Claude's own is plain
+    raw = session.transcriptPath.endsWith('.zst')
+      ? zstdDecompressSync(readFileSync(session.transcriptPath)).toString('utf8')
+      : readFileSync(session.transcriptPath, 'utf8')
   } catch {
     return null
   }

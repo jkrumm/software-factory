@@ -13,6 +13,7 @@ import {
   type RetroThroughput,
 } from '@software-factory/contract'
 import type { CiTimes } from '../domains/improve/ports.ts'
+import { transcriptPathNow } from '../kernel/transcript-archive.ts'
 import { apiBlockedMinutes } from './api-errors.ts'
 import { capacityFigures, tuneConstant } from './capacity-tuning.ts'
 import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'
@@ -35,7 +36,7 @@ const FLAT_WITHIN = 0.05
 
 const Ref = z.object({ issue_id: z.string() })
 
-const sessionsOf = async (sql: SQL, w: Window): Promise<RetroSession[]> => {
+const sessionsOf = async (sql: SQL, w: Window, archiveDir?: string): Promise<RetroSession[]> => {
   const rows: unknown[] = await sql`
     SELECT DISTINCT ON (issue_id, attempt, payload->>'transcriptPath') issue_id, attempt,
       payload->>'model' AS model, payload->>'account' AS account, payload->>'transcriptPath' AS path
@@ -57,7 +58,13 @@ const sessionsOf = async (sql: SQL, w: Window): Promise<RetroSession[]> => {
       attempt: row.attempt,
       model: row.model,
       account: row.account,
-      transcriptPath: row.path,
+      transcriptPath: row.path
+        ? transcriptPathNow(archiveDir, {
+            issue: Number(row.issue_id.slice('issue_'.length)),
+            attempt: row.attempt,
+            path: row.path,
+          })
+        : null,
     }
   })
 }
@@ -311,13 +318,15 @@ export async function readRetro(
     epoch?: Date | null
     /** why each queued Issue stays queued now */
     queue?: QueueReasons | null
+    /** the transcript archive: a session whose own transcript is gone reads from it */
+    archiveDir?: string
   },
 ): Promise<RetroModel> {
   const { now, days } = options
   const w = windowOf(now, days)
   const kpis = await readKpis(sql, { now, days, epoch: options.epoch ?? null })
   const friction: FrictionModel = await readFriction(sql, { now, days, epoch: options.epoch ?? null })
-  const sessions = await sessionsOf(sql, w)
+  const sessions = await sessionsOf(sql, w, options.archiveDir)
   const build = await readRetroBuild(sql, {
     now,
     days,

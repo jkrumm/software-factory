@@ -30,6 +30,8 @@ const Env = z.object({
   FACTORY_SOCKET: z.string().min(1).optional(),
   /** where a finished attempt's transcripts are archived */
   FACTORY_ARCHIVE_DIR: z.string().min(1).optional(),
+  /** an attempt's archived transcripts are deleted this many days after they were archived; 0 keeps them */
+  FACTORY_ARCHIVE_RETENTION_DAYS: z.coerce.number().int().min(0).optional(),
   /** after a restart, how long a live terminal may run no agent before its lead counts as lost */
   FACTORY_GRACE_MS: z.coerce.number().int().min(0).optional(),
   /** how long a lead's turn may read as ended before a note is typed into it anyway */
@@ -71,6 +73,8 @@ export interface LeadSettings {
   spoolDir: string
   socket: string
   archiveDir: string
+  /** days an archived attempt is kept; 0 forever */
+  archiveRetentionDays: number
   home: string
   startBudgetMs: number
   graceMs: number
@@ -125,6 +129,7 @@ export function loadLeadSettings(env: Record<string, string | undefined>, api: L
     spoolDir: e.FACTORY_SPOOL_DIR ?? `${e.HOME}/.local/share/factory/spool`,
     socket: e.FACTORY_SOCKET ?? `${e.HOME}/.local/share/factory/hook.sock`,
     archiveDir: e.FACTORY_ARCHIVE_DIR ?? `${e.HOME}/.local/share/factory/archive`,
+    archiveRetentionDays: e.FACTORY_ARCHIVE_RETENTION_DAYS ?? 90,
     home: e.HOME,
     startBudgetMs: START_BUDGET_MS,
     graceMs: e.FACTORY_GRACE_MS ?? 120_000,

@@ -3,6 +3,7 @@ import * as z from 'zod'
 import { CASE_OUTCOMES } from '@software-factory/contract'
 import type { CaseRead, CaseSubject } from '../kernel/case-file.ts'
 import { scrub } from '../kernel/scrub.ts'
+import { transcriptPathNow } from '../kernel/transcript-archive.ts'
 import { boundedRead } from './bounded.ts'
 import { callOutcome, edgeOutcomes, outcomeOf } from './judgments.ts'
 
@@ -304,7 +305,13 @@ async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue
  * The parts of a case the database holds, for the subject a judgment request names. A subject whose Issue or repo the
  * factory does not know reads an empty case; the caller sends the request as it is.
  */
-export function readCaseFile(sql: SQL, subject: CaseSubject, timeoutMs = 10_000, now = new Date()): Promise<CaseRead> {
+export function readCaseFile(
+  sql: SQL,
+  subject: CaseSubject,
+  timeoutMs = 10_000,
+  now = new Date(),
+  archiveDir?: string,
+): Promise<CaseRead> {
   return boundedRead(sql, timeoutMs, async (tx) => {
     const issueId = await issueOfSubject(tx, subject)
     const [issueRaw]: unknown[] = issueId
@@ -321,7 +328,13 @@ export function readCaseFile(sql: SQL, subject: CaseSubject, timeoutMs = 10_000,
         SELECT h.payload->>'transcriptPath' AS path FROM factory.lead_hook_events h
         WHERE h.session = ${`lead-${issue.id.slice('issue_'.length)}-${subject.attempt}`} AND h.payload->>'transcriptPath' IS NOT NULL
         ORDER BY h.at DESC, h.seq DESC LIMIT 1`
-      found.transcript = hook?.path ?? null
+      found.transcript = hook?.path
+        ? transcriptPathNow(archiveDir, {
+            issue: Number(issue.id.slice('issue_'.length)),
+            attempt: subject.attempt,
+            path: hook.path,
+          })
+        : null
     }
     if (issue) Object.assign(found.case, await issuePart(tx, issue.id, issue.title ?? ''))
     if (issue) {

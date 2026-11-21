@@ -118,6 +118,9 @@ export async function finalizeLead(deps: LeadDeps, effect: FinalizeEffect): Prom
     if (!archived.ok) return archived
     const marked = await mark('transcripts', { archived: archived.value.archived })
     if (!marked.ok) return marked
+    // The archive keeps itself: what retention or an earlier plain copy left is dealt with on every finalize. It never fails one.
+    const tidied = await deps.transcripts.tidy()
+    if (!tidied.ok) console.error(tidied.error.detail)
   }
 
   if (!done('worktree')) {
