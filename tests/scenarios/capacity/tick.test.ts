@@ -31,11 +31,15 @@ afterAll(async () => {
   await lab.stop()
 })
 
-/** What kept the plan row out, read when the wait ends: its state, the queue's reason and the passes' notes. */
+/** What kept the plan row out, read when the wait ends: its state and the queue order (each entry's reason, and the notes). A failed read is the answer, so the server output below it is never lost. */
 const whyNot = async (): Promise<string> => {
-  const [row] = await lab.world.db.sql`SELECT state FROM factory.issues WHERE id = 'issue_1'`
-  const order = await lab.cli(['queue', 'order'])
-  return `issue_1 state: ${row?.state ?? 'not filed'}; queue order: ${order.out || order.err}`
+  try {
+    const [row] = await lab.world.db.sql`SELECT state FROM factory.issues WHERE id = 'issue_1'`
+    const order = await lab.cli(['queue', 'order'])
+    return `issue_1 state: ${row?.state ?? 'not filed'}; queue order: ${order.out || order.err}`
+  } catch (error) {
+    return `the reading failed: ${error instanceof Error ? error.message : String(error)}`
+  }
 }
 
 const until = async <T>(read: () => Promise<T | undefined>, what: string): Promise<T> => {
