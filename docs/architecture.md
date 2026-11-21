@@ -588,7 +588,7 @@ share). One SQL expression per judge says it (`outcomeOf`; an edge's is `edgeOut
 | Judge | Did not stand |
 |-|-|
 | The Judge | the owner or his delegate answered the Decision or noted the Issue within 7 days |
-| The steward (wake, requeue) | the Issue did not move within 30 minutes, or stalled again on the cause of the stall it answered within a day |
+| The steward (wake, requeue) | the Issue did not move within 30 minutes, or stalled again on the cause of the stall it answered (`unreported` for an idle lead) within a day |
 | Triage | an amend whose words came back as an Issue of their own within 14 days; an edge whose Issues touched no common file (`read/edge-need.ts`) |
 | The queue loop | an edge needed or not, as above, or one the loop took back |
 | The screen | a dismissed fingerprint came back as work within 14 days |

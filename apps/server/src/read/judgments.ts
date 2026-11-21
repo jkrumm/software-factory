@@ -47,15 +47,17 @@ export function outcomeOf(sql: SQL, judge: LedgerJudge, now: Date) {
         WHEN d.answered_at + make_interval(secs => ${secs(HORIZON_MS.judge)}::float8) <= ${now} THEN 'stood'
         ELSE 'unknown' END`
     case 'steward':
+      // the cause is that of the stall at the subject's version (`wait:<version>[:turn<n>]`); a call about an idle lead, whose
+      // Issue is still working, names no stall event there and answers `unreported` (`app/loops/steward.ts`)
       return sql`CASE
         WHEN c.loop <> 'steward' OR c.outcome IS DISTINCT FROM 'answered' OR c.answer->>'action' NOT IN ('wake', 'requeue') THEN 'unknown'
         WHEN EXISTS (SELECT 1 FROM factory.issue_events r
           WHERE r.issue_id = c.issue_id AND r.result = 'applied' AND r.to_state = 'waiting' AND r.from_state IS DISTINCT FROM 'waiting'
             AND r.at > c.finished_at AND r.at <= c.finished_at + make_interval(secs => ${secs(HORIZON_MS.stewardStalled)}::float8)
-            AND r.wait->>'reason' = (SELECT w.wait->>'reason' FROM factory.issue_events w
+            AND r.wait->>'reason' = COALESCE((SELECT w.wait->>'reason' FROM factory.issue_events w
               WHERE w.issue_id = c.issue_id AND w.result = 'applied' AND w.to_state = 'waiting'
-                AND w.wait->>'reason' IN ${sql([...STALL_CAUSES])} AND w.at <= c.claimed_at
-              ORDER BY w.version DESC LIMIT 1)) THEN 'raised_again'
+                AND w.wait->>'reason' IN ${sql([...STALL_CAUSES])}
+                AND w.version = substring(c.subject from '^wait:([0-9]+)')::int), 'unreported')) THEN 'raised_again'
         WHEN EXISTS (SELECT 1 FROM factory.issue_events m
           WHERE m.issue_id = c.issue_id AND m.result = 'applied' AND m.kind <> 'woken' AND m.to_state IS DISTINCT FROM m.from_state
             AND m.at > c.finished_at AND m.at <= c.finished_at + make_interval(secs => ${secs(HORIZON_MS.stewardMoved)}::float8)) THEN 'stood'

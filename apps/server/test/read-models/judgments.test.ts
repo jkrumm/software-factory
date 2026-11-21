@@ -106,12 +106,17 @@ beforeAll(async () => {
   ] as const) {
     const at = n === 4 ? new Date(NOW.getTime() - 5 * 60_000) : ago(5)
     await event(id, 2, 'stalled', new Date(at.getTime() - HOUR), 'working', 'waiting', { wait: { reason: 'wall' } })
-    // an idle episode names its turn (steward.ts): the same stall, read from the wait the call answered
-    await call(n, id, at, 'wake', n === 2 ? 'wait:2:turn1' : 'wait:2')
+    await call(n, id, at)
   }
   await event('issue_21', 3, 'lead_started', new Date(ago(5).getTime() + 10 * 60_000), 'waiting', 'working')
   await event('issue_22', 3, 'lead_started', new Date(ago(5).getTime() + 10 * 60_000), 'waiting', 'working')
   await event('issue_22', 4, 'stalled', ago(3), 'working', 'waiting', { wait: { reason: 'wall' } })
+
+  // an idle lead (its Issue still working, so no waiting event at the subject's version): the cause is unreported, and it stalled so again
+  await issue('issue_25')
+  await event('issue_25', 2, 'woken', days(1), 'waiting', 'working')
+  await call(5, 'issue_25', ago(5), 'wake', 'wait:2:turn1')
+  await event('issue_25', 3, 'stalled', ago(3), 'working', 'waiting', { wait: { reason: 'unreported' } })
 
   // triage amends: stood, and one whose words came back as an Issue of their own
   await signal('signal_t1', 'fp-t1', days(20), 'amended', { key: null, issue: 'issue_31' })
@@ -170,11 +175,12 @@ test('the Judge: an answer the owner noted within 7 days did not stand; one noth
 
 test('the steward: moved within 30 minutes stood; stalled again on the same cause or did not move did not', async () => {
   const steward = await ledger('steward')
-  expect(steward).toMatchObject({ answers: 4, stood: 1, didNotStand: 2, unknown: 1 })
-  expect(steward.share).toBeCloseTo(2 / 3)
+  expect(steward).toMatchObject({ answers: 5, stood: 1, didNotStand: 3, unknown: 1 })
+  expect(steward.share).toBeCloseTo(3 / 4)
   expect(Object.fromEntries(steward.newest.map((a) => [a.issue, a.outcome]))).toEqual({
     issue_22: 'raised_again',
     issue_23: 'overruled',
+    issue_25: 'raised_again',
   })
 })
 
@@ -239,7 +245,13 @@ test("the case file's precedents carry what became of each earlier answer", asyn
   expect((await outcomes('triage')).toSorted()).toEqual(['overruled', 'stood'])
   expect(await outcomes('queue')).toEqual(['overruled'])
   expect((await outcomes('judge')).toSorted()).toEqual(['overruled', 'stood', 'unknown'])
-  expect((await outcomes('steward')).toSorted()).toEqual(['overruled', 'raised_again', 'stood', 'unknown'])
+  expect((await outcomes('steward')).toSorted()).toEqual([
+    'overruled',
+    'raised_again',
+    'raised_again',
+    'stood',
+    'unknown',
+  ])
   expect((await outcomes('screen')).toSorted()).toEqual(['raised_again', 'stood', 'unknown'])
   expect((await outcomes('errand')).toSorted()).toEqual(['raised_again', 'stood'])
   expect((await outcomes('errandNeeded')).toSorted()).toEqual(['raised_again', 'stood'])
