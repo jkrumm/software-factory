@@ -88,7 +88,7 @@ export function unloadedPictures(
     }
     return found
   }
-  const prose = withoutFences(content).replace(INLINE_CODE, ' ')
+  const prose = withoutFences(content.replace(/\r\n?/g, '\n')).replace(INLINE_CODE, ' ')
   for (const match of prose.matchAll(MD_IMAGE)) {
     const src = (match[2] ?? '').replace(/^<|>$/g, '')
     const reason = markdownProblem(src, hosts, now)
