@@ -2,10 +2,10 @@
 
 A loop is a recurring job inside the factory server. Four loops file Issues against the factory's own repo, like any other signal source:
 
-- **Friction** counts what leads hit.
+- **Friction** counts what leads hit, and its weekly pass asks for the retro, a review of the week.
 - **Hygiene** probes each project's health.
 - **Selfwatch** alerts on the factory's own symptoms.
-- **The retro** reviews the week.
+- **Throughput** reads where the host's memory and the leads' hours go, and looks again after its own ships.
 
 The steward ends stalls. Yield reports what each loop's signals became. Triggers, budgets and the yield figures are below.
 

@@ -2,30 +2,34 @@
 
 Signals become Issues. A lead, an interactive Claude Code session, owns each Issue from root cause to verified production. One person decides only what a person must.
 
-A coding agent writes a change faster than a person can supervise it. Keep a person at the spec, at every question and at the merge, and ten agents wait on one inbox. Take the person out without replacing what they did, and nothing checks the work. This guide explains one implementation that replaces it: a lifecycle server on Bun and Postgres, built and run by one developer on one always-on machine, shown through its own code and its own Issues.
+This guide goes through one implementation chapter by chapter: a lifecycle server on Bun and Postgres, built and run by one developer on one always-on machine, shown through its own code and its own Issues. Why a factory is needed, the domain model one concept at a time and the design principles are in the [README](https://github.com/jkrumm/software-factory#readme); this is the code and the story of one Issue.
 
 ## The result
 
-The scarce resource is the owner's attention, so the factory counts it. `factory read kpis` and `factory read friction`, the 7 days to 2026-11-20 09:38 UTC, all projects:
+The scarce resource is the owner's attention, so the factory counts it.
 
-| What | Count |
+<!-- results:start -->
+From 2026-11-15 11:03 UTC (the counting epoch) to 2026-11-21 11:41 UTC, all projects. Read on 2026-11-21 with `factory read kpis` and `factory read friction`; `bun scripts/readme-results.ts --refresh` reads them again.
+
+| What | Result |
 |-|-|
-| Issues filed | 1,545, of which the factory's own loops filed 282 |
-| Issues closed | 1,604, or 229 a day |
-| Median time from filed to closed | 85 minutes |
-| First verifications that passed | 1,290 of 1,338 (96.4 %; the target is 90 %) |
-| Decisions leads raised | 58: the Judge settled 45, a default 7, the owner 5, his delegate 1 |
-| Specs, Concepts and Reports the owner judged | 95 |
-| Errands that reached the owner's hands | 77 |
-| Times the owner stepped in where the factory should have settled it | 58, mostly notes to a lead (0.038 per Issue; the target is at most 0.07) |
+| Issues filed | 1,365, of which the factory's own loops filed 266 |
+| Issues closed | 1,434 |
+| Median time from filed to closed | 86 minutes (the target is at most 3.0 h) |
+| Queue wait, 90th percentile | 3.7 h (the target is at most 8.0 h) |
+| First verifications that passed | 97.4 % of 1,205 (the target is at least 90 %) |
+| Decisions answered | 48: the Judge 36, a default 6, the owner 5, his delegate 1 |
+| Times the owner stepped in where the factory should have settled it | 6 (0.005 per Issue filed by a person, an agent or an alert; the target is at most 0.07) |
+| Specs the owner marked not needed | 5.1 % of 78 verdicts (the target is at most 20 %) |
+| Errands that reached the owner | 3.4 per 100 Issues (47; no target yet) |
+| Quota used at the weekly reset | 97.0 % over 4 resets (the target is at least 90 %) |
+<!-- results:end -->
 
-No person read a diff. A touch pattern that repeats becomes an Issue the friction loop files.
+No person read a diff in this window. A kind of owner touch that repeats becomes an Issue the friction loop files.
 
 ## Position
 
-**Dark for code, lit for decisions.** No person reviews a change before production. The lead's own review, the gates, a watch window and probes do that job.
-
-What reaches the owner: product direction, spend, irreversible data loss, other people, security policy, rare big architecture and taste. The factory settles everything else. A touch of the owner that the factory should have avoided counts as friction.
+**Dark for code, lit for decisions:** no person reviews a change before production, and only what a person must decide reaches the owner. The README states the position and what it rests on: [dark for code, lit for decisions](https://github.com/jkrumm/software-factory#dark-for-code-lit-for-decisions).
 
 ## The loop
 

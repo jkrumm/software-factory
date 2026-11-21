@@ -4,19 +4,19 @@
 
 **The design of a closed loop that turns signals into verified production changes. Agents do the work, code supervises them, and one person decides only what a person must.**
 
-This README explains the concept: what a software factory is, its mental model, its domain model and the rules that hold it together. The code in this repo is one working implementation. It is the example throughout, and the last part of this page describes it. In the week to 2026-11-20 it closed 1,604 Issues across one developer's repos ([the evidence](#the-evidence)).
+This README explains the concept: what a software factory is, its mental model, its domain model and the rules that hold it together. The code in this repo is one working implementation. It is the example throughout, and the last part of this page describes it. What it has done is counted, not claimed: [the result](#the-result) is read from the factory itself.
 
 Everything here is a recommendation drawn from one implementation, not a standard. Every factory is set up for its place: take the parts that fit ([MIT](LICENSE)). The [guide](docs/guide/README.md) ([software-factory.jkrumm.com](https://software-factory.jkrumm.com)) goes through the implementation chapter by chapter.
 
 ## Contents
 
-Short on time: [the loop](#the-loop), then [one Issue's life](#one-issues-life) and [the evidence](#the-evidence).
+Short on time: [the loop](#the-loop), then [the result](#the-result) and [one Issue's life](#one-issues-life).
 
-- **[The idea](#the-idea):** [the problem](#the-problem) · [what a software factory is](#what-a-software-factory-is) · [dark for code, lit for decisions](#dark-for-code-lit-for-decisions) · [what it gives and what it costs](#what-it-gives-and-what-it-costs)
+- **[The idea](#the-idea):** [the problem](#the-problem) · [what a software factory is](#what-a-software-factory-is) · [the result](#the-result) · [dark for code, lit for decisions](#dark-for-code-lit-for-decisions) · [what it gives and what it costs](#what-it-gives-and-what-it-costs)
 - **[The mental model](#the-mental-model):** [the loop](#the-loop) · [four questions](#four-questions) · [the ladder of judgment](#the-ladder-of-judgment) · [attention is the budget](#attention-is-the-budget)
 - **[The domain model](#the-domain-model):** [the language](#the-language) · [Signal](#signal) · [Triage and incidents](#triage-and-incidents) · [Issue](#issue) · [Event](#event) · [State and the transition table](#state-and-the-transition-table) · [Wait and stall](#wait-and-stall) · [Admission](#admission) · [Chain and plan](#chain-and-plan) · [Lead and attempt](#lead-and-attempt) · [Gate](#gate) · [Ship, watch and verify](#ship-watch-and-verify) · [Checkpoint](#checkpoint) · [Loop](#loop) · [Friction](#friction)
 - **[Design principles](#design-principles):** [claim, commit, call, record](#claim-commit-call-record) · [every effect has a key](#every-effect-has-a-key) · [a caller is its token](#a-caller-is-its-token) · [supervision never speaks](#supervision-never-speaks) · [rules are pure, I/O sits behind ports](#rules-are-pure-io-sits-behind-ports) · [the build holds the words](#the-build-holds-the-words)
-- **[The example implementation](#the-example-implementation):** [architecture](#architecture) · [one Issue's life](#one-issues-life) · [the evidence](#the-evidence) · [where it falls short](#where-it-falls-short) · [the Console](#the-console) · [layout](#layout) · [run it](#run-it)
+- **[The example implementation](#the-example-implementation):** [architecture](#architecture) · [one Issue's life](#one-issues-life) · [where it falls short](#where-it-falls-short) · [the Console](#the-console) · [layout](#layout) · [run it](#run-it)
 - **[Further reading](#further-reading)**
 
 # The idea
@@ -40,6 +40,29 @@ It is not one of these, though it uses all three:
 | CI/CD | moves a finished change to production | where the change came from and whether it did what was asked |
 
 A factory owns the whole lifecycle: intake, admission, supervision, gates, verification, escalation, and the measurement of its own waste.
+
+## The result
+
+Read from the factory on the day shown:
+
+<!-- results:start -->
+From 2026-11-15 11:03 UTC (the counting epoch) to 2026-11-21 11:41 UTC, all projects. Read on 2026-11-21 with `factory read kpis` and `factory read friction`; `bun scripts/readme-results.ts --refresh` reads them again.
+
+| What | Result |
+|-|-|
+| Issues filed | 1,365, of which the factory's own loops filed 266 |
+| Issues closed | 1,434 |
+| Median time from filed to closed | 86 minutes (the target is at most 3.0 h) |
+| Queue wait, 90th percentile | 3.7 h (the target is at most 8.0 h) |
+| First verifications that passed | 97.4 % of 1,205 (the target is at least 90 %) |
+| Decisions answered | 48: the Judge 36, a default 6, the owner 5, his delegate 1 |
+| Times the owner stepped in where the factory should have settled it | 6 (0.005 per Issue filed by a person, an agent or an alert; the target is at most 0.07) |
+| Specs the owner marked not needed | 5.1 % of 78 verdicts (the target is at most 20 %) |
+| Errands that reached the owner | 3.4 per 100 Issues (47; no target yet) |
+| Quota used at the weekly reset | 97.0 % over 4 resets (the target is at least 90 %) |
+<!-- results:end -->
+
+The owner's part is in the table: the Decisions the factory could not settle, the Specs and Concepts it handed over, the Errands only hands can do.
 
 ## Dark for code, lit for decisions
 
@@ -253,14 +276,14 @@ An Issue has six states. Every `(state, event)` pair has a cell, and a cell is o
 
 ```ts
 export type Cell =
-  | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; effects: Effect[] }
-  | { to: 'closed'; outcome: Outcome; effects: Effect[] }
+  | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; heard?: true; effects: Effect[] }
+  | { to: 'closed'; outcome: IssueOutcome; effects: Effect[] }
   | { to: 'settling' | 'queued' | 'working' | 'watching'; effects: Effect[] }
   | { refuse: string }
   | { ignore: string }
 
 /** The total table: every state takes every event. A missing cell fails `tsc`. */
-export type Table = { [S in State]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } }
+export type Table = { [S in IssueState]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } }
 ```
 
 - The table is **total**: a new state or a new event fills every cell before the build passes.
@@ -295,9 +318,10 @@ A wait is a pause with a named exit. A waiting Issue always says why it waits an
 | blocked | the steward re-checks the cause | machine, a stall |
 | lead gone | the steward starts a new attempt | machine, a stall |
 | regressed | the steward wakes it, or turns it into a Decision | machine, a stall |
-| decision | the question is answered | person |
+| decision | the question is answered, by the Judge, a default or the owner | person |
 | review | the verdict on the Concept or Spec is given | person |
 | errand | the owner has done it by hand, or turned it back with a note | person |
+| paused | the owner's word, or the time he paused it until | person |
 
 **Why.** "Stuck" is not a state. If the exit is a machine's, a loop owns it and a person never hears of it. If the exit is a person's, it is on one screen with what it holds back.
 
@@ -312,9 +336,10 @@ A wait is a pause with a named exit. A waiting Issue always says why it waits an
 Admission decides when a queued Issue may start. A queued Issue does not "wait for capacity": a rule keeps it out, the first rule that says no names itself, and the answer carries its numbers.
 
 ```ts
-export const REFUSALS = [
+const REFUSALS = [
   'drain', 'doctor', 'boot', 'load', 'memory', 'disk', 'tests', 'lane', 'claim', 'window', 'cap',
 ] as const
+export type RefusalKind = (typeof REFUSALS)[number]
 ```
 
 - Admission is **decided again at every claim**, from measured samples: the subscriptions' usage windows, the host's memory and load, the repo's claims, the test slots.
@@ -422,15 +447,15 @@ A checkpoint is where the factory stops for a person. There are three, and a mer
 
 - A checkpoint is a **contract**: at most a few open choices, each with a default, and what changing it later costs.
 - **The queue never waits on the owner by accident.** A Spec without a verdict in 24 hours goes ahead on the defaults it named.
-- A Decision passes the steps in order and stops at the first that answers it:
+- A Decision passes the steps in order and stops at the first that answers it. `policy` is history: no step of that name runs any more, but old rows still hold it.
 
   ```ts
-  export const STEPS = ['judge', 'default', 'owner'] as const
+  export const STEPS = ['policy', 'judge', 'default', 'owner'] as const
   ```
 
 - What the owner answers becomes **precedent** the Judge reads the next time the question comes up.
 
-**Why.** This is the ladder of judgment applied to the scarce resource. Of 58 Decisions leads raised in the week measured below, 5 reached the owner.
+**Why.** This is the ladder of judgment applied to the scarce resource. [The result](#the-result) counts which step answered the Decisions of the window: the Judge answers most, and the owner the fewest that no machine could.
 
 **Example files:**
 
@@ -665,32 +690,14 @@ The lead stated one acceptance line met and two not met, each with its reason. T
 The guide follows this Issue through five chapters, starting at [Issues](docs/guide/issues.md).
 
 
-## The evidence
-
-The 7 days from 2026-11-13 09:38 UTC to 2026-11-20 09:38 UTC, all projects, from `factory read kpis` and `factory read friction`:
-
-| What | Count |
-|-|-|
-| Issues filed | 1,545, of which the factory's own loops filed 282 |
-| Issues closed | 1,604, or 229 a day |
-| Median time from filed to closed | 85 minutes |
-| First verifications that passed | 1,290 of 1,338 (96.4 %; the target is 90 %) |
-| Decisions leads raised | 58: the Judge answered 45, a default 7, the owner 5, his delegate 1 |
-| Specs, Concepts and Reports the owner judged | 95 |
-| Errands that reached the owner's hands | 77 |
-| Times the owner stepped in where the factory should have handled it | 58, mostly notes to a lead (0.038 per Issue filed; the target is at most 0.07) |
-
-No person reviewed a change before it reached production. What the owner did that week: judge 95 handed-over pages, answer 5 questions, and do 77 things only hands can do, such as a biometric prompt.
-
-
 ## Where it falls short
 
-An audit of 2026-11-20 ([`docs/research/2026-11-maturation`](docs/research/2026-11-maturation/README.md)) found the core sound and four weaknesses around it. They are the open rows of [`docs/plan.yaml`](docs/plan.yaml).
+An audit of 2026-11-20 ([`docs/research/2026-11-maturation`](docs/research/2026-11-maturation/README.md)) found the core sound and four weaknesses around it. The `mat-*` rows of [`docs/plan.yaml`](docs/plan.yaml) are the ones still open; the figures below are the audit's, counted on 2026-11-20.
 
-- **It measured more than it acted on.** 28 KPIs, 5 with a target, and no code acted on one; the friction loop had thresholds of its own. Now seven KPIs carry their targets in one table with the friction rules, and a KPI off its target over a whole window is a friction finding.
-- **Most loops do not check their own effect.** They file 18 % of all Issues, and only throughput looks again after the ship to see whether its number moved.
-- **A lead pays for what the server knows.** The gate refused 101 ships that week, about 70 for a commit sha typed by hand.
-- **The reference documents are too long.** `docs/architecture.md` is about 59 KB; this page and the guide are the way in.
+- **It measured more than it acted on.** 28 KPIs, 5 with a target, and no code acted on one; the friction loop had thresholds of its own. Since then seven KPIs carry their targets in one table with the friction rules, and a KPI off its target over a whole window is a friction finding.
+- **Most loops do not check their own effect.** They filed 18 % of all Issues in the audit's week, and only throughput looks again after the ship to see whether its number moved.
+- **A lead pays for what the server knows.** The gate refused 101 ships in the audit's week, about 70 for a commit sha typed by hand.
+- **The reference documents were too long.** `docs/architecture.md` was 201 KB and is now about 60 KB; this page and the guide are the way in.
 
 
 ## The Console
