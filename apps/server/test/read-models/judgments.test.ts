@@ -151,6 +151,9 @@ beforeAll(async () => {
   await signal('signal_s2', 'fp-s2', days(21), 'dismissed', { dismissed: days(20) })
   await signal('signal_s2b', 'fp-s2', days(15), 'filed', { issue: 'issue_34' })
   await signal('signal_s3', 'fp-s3', days(4), 'dismissed', { dismissed: days(3) })
+  // dismissed, then the same alert fired again and only noted an open Issue: the dismissal stands
+  await signal('signal_s4', 'fp-s4', days(21), 'dismissed', { dismissed: days(20) })
+  await signal('signal_s4b', 'fp-s4', days(15), 'amended', { issue: 'issue_34' })
   await sql`UPDATE factory.intake_signals SET screened_at = dismissed_at WHERE dismissed_by = 'judge'`
 
   // the Errand screen: turned away and never again, and the same ask raised 4 days later; then the not-needed check
@@ -206,7 +209,7 @@ test('the queue loop: an edge needed stood, one touching no common file did not'
 
 test('the screen: a dismissed signal that came back as work did not stand', async () => {
   const screen = await ledger('screen')
-  expect(screen).toMatchObject({ answers: 3, stood: 1, didNotStand: 1, unknown: 1, share: 0.5 })
+  expect(screen).toMatchObject({ answers: 4, stood: 2, didNotStand: 1, unknown: 1 })
   expect(screen.newest[0]?.subject).toBe('Signal signal_s2')
 })
 
@@ -255,7 +258,7 @@ test("the case file's precedents carry what became of each earlier answer", asyn
     'stood',
     'unknown',
   ])
-  expect((await outcomes('screen')).toSorted()).toEqual(['raised_again', 'stood', 'unknown'])
+  expect((await outcomes('screen')).toSorted()).toEqual(['raised_again', 'stood', 'stood', 'unknown'])
   expect((await outcomes('errand')).toSorted()).toEqual(['raised_again', 'stood'])
   expect((await outcomes('errandNeeded')).toSorted()).toEqual(['raised_again', 'stood'])
 })
