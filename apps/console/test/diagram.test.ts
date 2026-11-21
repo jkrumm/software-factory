@@ -15,6 +15,7 @@ describe('scripts/diagram.ts', () => {
 
   test('draws with the Pele variables the template maps, and holds no script, namespace or link', () => {
     const figure = figureOf(FLOW, 'x')
+    expect(figure).toMatch(/^<figure>\n<svg [^>]*class="pele /)
     expect(figure).toContain('var(--pele-bg')
     expect(figure).not.toMatch(/<script|on\w+=|https?:|xmlns/i)
   })
