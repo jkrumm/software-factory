@@ -597,6 +597,12 @@ async function slotRun(input: { name?: string; command: string[] }, io: Io): Pro
       await measuring
     }
     const exitCode = limited ? EX_RUN_LIMIT : exitCodeOf(child)
+    // The kill's own errors ("Browser closed" on the test that was running) end the log; the cause is repeated last.
+    if (limited) {
+      io.err(
+        `factory: slot timeout, not a test failure: "${name}" was stopped after ${describeLimit(limitMs)} and exits 124; a repo whose gate runs longer sets slots.run in project.yaml (at most 6h)\n`,
+      )
+    }
     if (holding && meter) {
       const tests = junitDir === undefined ? [] : await collectJunit(junitDir)
       await reportCost({
