@@ -187,7 +187,7 @@ export function alertStillDown(down: readonly string[]): string {
  * line within the hour, so the ship says it now with the missing step. `detail` is the check's own line.
  */
 export function notDeployed(detail: string, project: string): string {
-  return `ship refused: ${detail}. Deploy first (\`make deploy\`, from the main checkout, never a worktree: \`factory deploy-lock --project ${project} -- make -C "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")" deploy\` where leads share the deploy), then ship again with the same commits`
+  return `ship refused: ${detail}. Deploy first (\`make deploy\`, from the main checkout, never a worktree: \`factory deploy-lock --project ${project} -- make -B -C "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")" deploy\` where leads share the deploy), then ship again with the same commits`
 }
 
 export function outcomeOf(checks: readonly Check[]): Outcome {
