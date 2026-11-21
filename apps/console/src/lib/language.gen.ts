@@ -102,7 +102,7 @@ export const LANGUAGE = {
     'How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each',
   judge: 'The agw workflow that tries to answer a Decision before the owner sees it',
   kind: "What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue. A failing check of a project's default branch is an incident, never a bug",
-  lane: 'A resource inside a repo (apple) that an Issue or plan row names; lanes: {apple: 1} in the repo\'s project.yaml caps how many leads of the lane run at once, within leads. An undeclared lane is unlimited (docs/plan.md "Lanes")',
+  lane: 'A resource inside a repo (apple) that an Issue or plan row names; lanes: {apple: 1} in the repo\'s project.yaml caps how many leads of the lane run at once, within leads. An undeclared lane is unlimited (docs/project.md "Lanes")',
   lead: 'The Claude Code session that owns one attempt of one Issue: understand, build, review, ship, verify',
   'light seat':
     "The role table's light row, the cheap seat a lead starts on when the Issue is mechanical: every hygiene finding, kind docs, a monitor with no route, and while the delivery tripwire is met, triage's small with no design choice, migration, security word or new surface. The filer's seat always wins, and is moved up like a light lead's only when it says moveUp: true. A light lead that struggles is moved up: the next lead starts on the lead row (apps/server/src/domains/leads/light.ts)",

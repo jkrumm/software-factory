@@ -158,7 +158,7 @@ This guide's Spec shows a wait behind another repo's Issue. On 2026-11-17 the ow
 
 **Read more:**
 
-- [The plan file](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L1-L99), [Changing an edge](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L210-L242) and [Replan](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L302-L318) in `docs/plan.md`.
+- [The plan file](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L1-L99) and [Changing an edge](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L147-L158) in `docs/plan.md`, and [Replan](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L221-L237) in `docs/architecture.md`.
 - [Inferred edges and edge readiness](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#loops-and-agw) in `docs/architecture.md`.
 - [Defer](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L71) in `docs/language.md`.
 
