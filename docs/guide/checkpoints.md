@@ -96,7 +96,7 @@ Across the 300 newest closed Issues of this repo (2026-11-17), 24 Decisions were
 
 An artifact is what a lead hands to a person. A Concept and a Spec wait for a verdict, a Report never waits, and a Decision is answered, not judged.
 
-- **Verdicts.** Looks good, With notes, Changes, No longer applies.
+- **Verdicts.** Looks good (an optional note; the lead applies the note and every open comment), Changes, No longer applies. `with_notes` is still accepted and stored as `looks_good`.
 - **His delegate may give a Spec's verdict for him.** The orchestrator (the owner's planning session) calls `factory artifact verdict` with its own token on a Spec that is no owner gate; a Concept, a Report and a gate stay his alone. It is recorded as `orchestrator`, shown as "By your delegate", and left out of the verdict KPI and the retro's taste. The lead hears who gave it. The owner reopens it by giving his own verdict on the same revision: that replaces the delegate's, clears its "needed me" mark, and the lead hears one more note. Annotations and the "needed me" mark stay his alone.
 - **Annotations are anchored.** The owner comments on a quote of one revision, with the occurrence he selected and the text around it, so a sentence that stands three times is painted at the one he chose, and stays there when a later revision adds text above it. If the quote is gone from a later revision, the comment moves to "Unanchored". A comment can hang on a picture instead (a screenshot, a diagram), optionally at a spot on it: it follows the picture by its source, then its caption, so a revision that reorders the pictures keeps each comment on its own.
 - **Every annotation is answered.** The lead replies `applied`, `deferred` or `declined`. A deferral names the Issue or signal it filed, and a decline gives its reason. A deferral or decline without that detail is refused.
@@ -128,7 +128,7 @@ issue_1797 is this guide. Its Spec went through the whole cycle on 2026-11-17 (`
 | 07:20:57 | Verdict on revision 1: Changes, with four annotations |
 | 07:24:38 | Revision 2 handed over, 3 minutes 41 seconds later |
 | 07:24:47 | Spec screen: passed by rule, "a revision the owner asked for with his verdict of changes" |
-| 07:41:19 | Verdict on revision 2: With notes, with three annotations |
+| 07:41:19 | Verdict on revision 2: Looks good, with three annotations |
 
 Two of revision 1's annotations and the lead's replies:
 

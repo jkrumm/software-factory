@@ -576,6 +576,10 @@ const labelOf: Record<Verdict, string> = {
   no_longer_applies: 'No longer applies',
 }
 
+/** How many open comments a Looks good note quotes; the rest wait in the artifact. */
+const OPEN_COMMENTS_INLINE = 6
+const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
+
 async function written(
   checkpoints: CheckpointStore,
   id: ArtifactId,
@@ -1031,9 +1035,13 @@ export async function verdictIn(
       if (!reopens && by !== 'orchestrator' && !note && verdict !== 'changes' && open.length === 0) return ok(null)
       const comments =
         verdict === 'looks_good' && open.length > 0
-          ? ` Apply ${open.length === 1 ? 'his open comment' : `his ${open.length} open comments`} as you build, and answer each with factory artifact annotation-reply:${open.map((a) => ` on "${a.quote}": ${a.comment}`).join(';')}.`
+          ? ` Apply ${open.length === 1 ? 'his open comment' : `his ${open.length} open comments`} as you build and answer each with factory artifact annotation-reply (${Math.min(open.length, OPEN_COMMENTS_INLINE)} quoted here, the rest are in the artifact):${open
+              .slice(0, OPEN_COMMENTS_INLINE)
+              .map((a) => ` on "${clip(a.quote, 80)}": ${clip(a.comment, 300)}`)
+              .join(';')}.`
           : ''
-      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}.${comments} Read it with: factory artifact show ${artifact.id}`
+      // the pointer comes before the comments: a note is cut at its length cap, and the cut must never take the pointer
+      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}.${comments}`
 
       return applied(
         await recordIn(work, deps, {
