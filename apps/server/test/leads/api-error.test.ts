@@ -252,6 +252,14 @@ describe('the screen of a session that ended on an API error', () => {
     expect(atPrompt(empty, { pressOnly: true })).toBe(true)
   })
 
+  test('a draft in the box is a prompt for Enter and for a forced note, never an empty one (issue 2751)', () => {
+    const draft = screen('❯ rerun make caddy-tailnet', '⏺ Done.')
+    expect(atPrompt(draft)).toBe(false)
+    expect(atPrompt(draft, { pressOnly: true })).toBe(true)
+    const running = ['⏺ Working', '✻ Thinking… (esc to interrupt)', '', rule, '❯ rerun make', rule].join('\n')
+    expect(atPrompt(running, { pressOnly: true })).toBe(false)
+  })
+
   test('an error further up the conversation, or none, is not the state', () => {
     expect(apiErrorAbove(screen('❯ ', '⏺ Done.'))).toBeNull()
     const old = ['⏺ API Error: 529', '⏺ a', '⏺ b', '⏺ c', '⏺ d', '', rule, '❯ ', rule].join('\n')
