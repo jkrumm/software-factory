@@ -25,7 +25,7 @@ describe('project.yaml generated files', () => {
     expect(pageWithReference(page, referenceText(keyRows(grown)))).not.toBe(page)
   })
 
-  test('every key the reference lists names its consumer, and the page lists no key the schema lacks', async () => {
+  test('every key names its consumer in the schema, and the page lists no key the schema lacks', async () => {
     const rows = keyRows()
     expect(rows.filter((row) => row.consumer === '—').map((row) => row.path)).toEqual([])
     const listed = [...(await readFile(PAGE_FILE, 'utf8')).matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1])

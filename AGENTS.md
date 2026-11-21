@@ -1,8 +1,8 @@
 # software-factory
 
 The lifecycle server for agent-built software, CLI `factory`: signals become Issues, each Issue is owned by an
-interactive Claude Code session in a herdr-core terminal from root cause to production evidence. Live on the mini since
-2026-11-08; `docs/plan.yaml` is the open work.
+interactive Claude Code session in a herdr-core terminal from root cause to production evidence. Live on the mini;
+`docs/plan.yaml` is the open work.
 
 **Start here:** `docs/product.md` → `docs/language.md` (the words) → `docs/architecture.md` (what is built) → `docs/decisions.md` (why).
 
@@ -22,6 +22,8 @@ is in `docs/operations.md` "Rules behind AGENTS.md".
 - **Facts are stored, state is derived.** An Issue's state is the result of its applied events, kept on the row because its
   `version` guards the write. A count or timer that `issue_events` can answer is never a column. `domains/work/table.ts` is
   total; `make check` fails when `docs/language.md`'s diagram is stale.
+- **Dependencies point one way:** factory → agw, herdr-core, GitHub; nothing here is imported by agent-workflows.
+- **One schema (`factory`), one process:** a session-level advisory lock first; keys live in `adapters/postgres/locks.ts`.
 - **A repo is stored as its project name, never a path** (`repoNameOf`, `projectOf`).
 - **Every effect has a deterministic key** (`kernel/keys.ts`), so a replayed pass never spawns, prompts or posts twice.
 - **Never call a port inside a transaction.** A pass claims and commits, calls the port (every call has a process timeout;
@@ -34,7 +36,7 @@ is in `docs/operations.md` "Rules behind AGENTS.md".
 - **Tooling:** Bun, TypeScript strict, zod at boundaries, exact pins (no `^`/`~`; a 3-day release-age cooldown, never
   excluded). oxlint and oxfmt, no Biome. No Effect (NL11).
 - **Who may call what:** `apps/server/src/api/policy.ts`. A route with no row is 403 for everyone, so its row comes first
-  (`apps/server/test/policy.test.ts`). Only `GET /health` is public. When in doubt, the owner alone.
+  (`apps/server/test/policy.test.ts`). Only `GET /health` is public; when in doubt, the owner alone.
 - **Trust boundary.** The owner's and orchestrator's tokens can start Claude Code with `--dangerously-skip-permissions`, so a
   spawn's repo must be inside `FACTORY_REPO_ROOTS` after `realpath`, or be one of `FACTORY_REPO_ALLOW` (`adapters/git/repos.ts`).
   A work repo of another organisation is admitted by name through the allowlist, never by adding its parent as a root.
@@ -53,10 +55,13 @@ is in `docs/operations.md` "Rules behind AGENTS.md".
 - **Migrations** (`apps/server/migrations/NNNN_words.sql`) are expand then contract, and never edited once applied (a checksum
   refuses it). A number is used once.
 - **Settings:** secrets in `.env*.tpl`; non-secret settings in `~/.config/factory/env`, allow-listed by `scripts/env-file.sh`.
+- **A request's `check`** is a shell command the server runs: never settable by `machine`, `signal` or `read`.
+- **The throughput epoch** (`config/throughput.json`): no read counts a sample before it; a bad file stops the start.
+- **Hygiene probes** are one catalogue: `packages/contract/src/hygiene-catalogue.ts`.
 - **Heartbeat names** on `GET /health` (`ok`, `reason`, `tickAt`, `queueMovedAt`) are read by a pusher outside this repo:
   do not rename them.
 - **State words stay off screens:** `scripts/vocabulary.ts` and `scripts/retired-words.ts` fail on them.
-- **The README states counts and lists;** `make docs-check` fails on a mismatch, so change it in the commit that changes one.
+- **The README states counts and lists;** `make docs-check` fails on a mismatch.
 
 ## Validate and ship
 
@@ -78,6 +83,6 @@ that fixes a red master. `make deploy`, `make rollback` and `make verify` act on
   (the server files its rows as Issues). Writing a plan file: `docs/plan.md`; a `project.yaml`: `docs/project.md`.
 - Before changing the Console listener, the CLI's credentials, the merge window, a deploy variable or a CI job, read `docs/operations.md`.
 - Why a lead is briefed as it is: `apps/server/src/domains/leads/brief.ts`. What a reviewer treats as failure: `REVIEW.md`.
-- The client pieces (Herdr glance mod, hook entries, `rd`'s contract, the Hermes `fleet` skill): `integrations/`, the copies this repo sources.
+- Client pieces (Herdr glance mod, hook entries, `rd`'s contract, Hermes `fleet` skill): `integrations/`.
 
 Update this file with the code it describes; a detail that is in the code or in `docs/` is deleted here.
