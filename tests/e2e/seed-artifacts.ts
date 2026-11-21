@@ -106,6 +106,9 @@ const FILLER = (topic: string) =>
     )
     .join('\n\n')
 
+/** A fenced log leaves the page room to scroll (a Spec's text is capped at a page; fenced code is not counted). */
+const TRACE = `\`\`\`text\n${Array.from({ length: 50 }, (_, n) => `step ${n + 1}: the forecast is fetched, cached and shown`).join('\n')}\n\`\`\``
+
 export const REVIEW_QUOTE = 'The cache holds the last forecast for ten minutes.'
 export const EXTERNAL_URL = 'https://example.com/weatherorb-v2'
 
@@ -146,6 +149,8 @@ ${FILLER('the rollout')}
 ## Open questions
 
 ${FILLER('the open questions')}
+
+${TRACE}
 `
 
 export const LINKS_HTML = `<!doctype html>
