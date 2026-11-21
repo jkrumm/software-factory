@@ -148,21 +148,34 @@ function startOf(nodes: readonly Text[], index: ReturnType<typeof textIndex>['in
   return low < index.at.length ? low : null
 }
 
+/** The part of a selection that lies in `root`, or null. A triple-click on the last block runs its end past the root. */
+function insideRoot(root: Element, range: Range): Range | null {
+  if (!range.intersectsNode(root)) return null
+  const part = range.cloneRange()
+  if (!root.contains(part.startContainer)) part.setStart(root, 0)
+  if (!root.contains(part.endContainer)) {
+    const nodes = textNodes(root)
+    const last = nodes[nodes.length - 1]
+    if (!last) return null
+    part.setEnd(last, last.length)
+  }
+  return part.collapsed ? null : part
+}
+
 /** The owner's current selection inside `root`: its quote, heading path, which occurrence it is, position and range, or null. */
 export function selectionIn(
   root: Element,
 ): ({ quote: string; path: string; rect: SelectionRect; range: Range } & Occurrence) | null {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null
-  const range = selection.getRangeAt(0)
-  if (!root.contains(range.commonAncestorContainer)) return null
+  const range = insideRoot(root, selection.getRangeAt(0))
+  if (!range) return null
   const quote = normalizeQuote(selection.toString())
   if (quote === '') return null
   const path = pathBefore([...root.querySelectorAll('h1,h2,h3,h4,h5,h6')], range.startContainer)
   const { nodes, index } = textIndex(root)
-  const kept = range.cloneRange()
-  const around = anchorAround(index.flat, quote, startOf(nodes, index, kept))
-  return { quote, path, ...(around ?? {}), rect: rectOf(kept), range: kept }
+  const around = anchorAround(index.flat, quote, startOf(nodes, index, range))
+  return { quote, path, ...(around ?? {}), rect: rectOf(range), range }
 }
 
 /** The words of a search: lower-cased, split on spaces, a leading `#` dropped ("#534" is the number 534). */

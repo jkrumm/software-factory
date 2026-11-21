@@ -472,3 +472,12 @@ test.describe('on a phone', () => {
     await expect(composer).toBeHidden()
   })
 })
+
+test('a triple-click on the last block of a Markdown artifact opens the comment box', async ({ page }) => {
+  const { spec } = seeded()
+  await page.goto(`/artifacts/${spec}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'The storage spec' })).toBeVisible()
+  // the last cell of the Spec's table: its triple-click selection runs past the end of the document prose
+  await page.getByText('one more service', { exact: true }).click({ clickCount: 3 })
+  await expect(page.getByRole('form', { name: 'Comment on the selection' })).toBeVisible()
+})
