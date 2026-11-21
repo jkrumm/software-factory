@@ -215,9 +215,6 @@ Errand.
 **Backoffs** (`kernel/backoff.ts`). A Judge's answer that reads as a backoff makes the wait a timer: one hour, doubling per backoff, at
 most twelve.
 
-**Replans** (`app/planning-replan.ts`, `factory.replans`). One open Replan per project. The lead applies an approved
-Spec with `factory issue replan` (`applyReplan`); its only cancel is `factory issue withdraw` (`withdrawIssue`).
-
 ### Replan
 
 A Replan is an Issue (`Replan: <project>`) whose lead rereads the plan against the open and recently closed Issues and
@@ -243,7 +240,9 @@ good or With notes verdict, and every Issue it re-edges or cancels must be an Is
 blocker may be any open Issue; one exception: a removed edge's dependent may be another project's open Issue when every Issue it
 waits after is of this project, since removing the edge only frees it). The whole call is refused otherwise, nothing applied; each op then answers for itself, and
 a repeated `call` changes nothing more. The owner-only edge and cancel routes stay shut to a lead: the verb is what an
-approved Spec buys. It acts as the orchestrator, so the owner-touch counts stay the owner's alone.
+approved Spec buys. It acts as the orchestrator, so the owner-touch counts stay the owner's alone. Code: `app/planning-replan.ts`,
+`factory.replans`; one open Replan per project. The lead applies an approved Spec with `factory issue replan` (`applyReplan`); its
+only cancel is `factory issue withdraw` (`withdrawIssue`).
 
 Code: `app/planning-replan.ts` (`applyReplan`, `withdrawIssue`), `factory.replans`. The only cancel is `factory issue withdraw`.
 

@@ -38,7 +38,7 @@ is in `docs/operations.md` "Rules behind AGENTS.md".
 - **Trust boundary.** The owner's and orchestrator's tokens can start Claude Code with `--dangerously-skip-permissions`, so a
   spawn's repo must be inside `FACTORY_REPO_ROOTS` after `realpath`, or be one of `FACTORY_REPO_ALLOW` (`adapters/git/repos.ts`).
   A work repo of another organisation is admitted by name through the allowlist, never by adding its parent as a root.
-  The API is loopback only.
+  The API is loopback only; `FACTORY_REF=<branch>` deploys that branch, the same boundary.
 - **The Console listener** (`api/console.ts`) answers 405 to anything but `GET`/`HEAD` bar its `WRITES` verbs, and can never
   start a session or cancel, reopen or file an Issue by its own words. **A new write goes through the Issue, never onto that
   list.** `docs/operations.md` "The Console listener".
