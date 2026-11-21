@@ -116,7 +116,7 @@ interface SelfwatchPass {
   filed: { key: string; title: string; why: string }[]
   /** due to be filed, left for the next tick by the cap */
   deferred: number
-  /** due to be filed and not: their class is held by the class gate (mostly noise) */
+  /** due to be filed and not: their finder is muted by the finder gate (mostly noise) */
   held: string[]
   cleared: number
   failed: { key: string; reason: string }[]
@@ -337,7 +337,7 @@ async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<SelfwatchPass,
   if (!settled.ok) return settled
   const gated = await readGate(deps, { loop: 'selfwatch', now })
   if (!gated.ok) return gated
-  // a held class is named before the cap counts: it does not use up a slot
+  // a muted finder is named before the cap counts: it does not use up a slot
   const held: string[] = []
   const allowed = plan.file.filter((action) => {
     if (gated.value.allows(subjectKeyOf(action.finding))) return true
@@ -418,7 +418,7 @@ const selfwatchSummary = (pass: SelfwatchPass): string =>
   [
     `saw ${pass.seen} condition(s): filed ${pass.filed.length}`,
     pass.deferred > 0 ? `${pass.deferred} left for the next tick` : null,
-    pass.held.length > 0 ? `held by the class gate: ${pass.held.join(', ')}` : null,
+    pass.held.length > 0 ? `muted by the finder gate: ${pass.held.join(', ')}` : null,
     `cleared ${pass.cleared}`,
     pass.failed.length > 0 ? `${pass.failed.length} failed` : null,
     ...pass.notes,

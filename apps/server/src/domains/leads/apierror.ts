@@ -2,14 +2,14 @@ import type { IssueId } from '../../kernel/ids.ts'
 
 /**
  * A lead's turn that ended on an API error (Claude Code's `StopFailure` hook, or the error line at the end of its
- * transcript). What the factory does about it depends on the class: a `transient` error is the edge's or the API's and a
+ * transcript). What the factory does about it depends on the kind: a `transient` error is the edge's or the API's and a
  * `continue` gets the session going again; an `auth` error is the account's login and only a person can mend it;
  * anything else (`other`) is left to the steward's usual nudge.
  */
-export type ApiErrorClass = 'transient' | 'auth' | 'other'
+export type ApiErrorKindName = 'transient' | 'auth' | 'other'
 
 export interface ApiErrorKind {
-  class: ApiErrorClass
+  name: ApiErrorKindName
   /** a few words for a note and a line: "Cloudflare 403", "HTTP 529 overloaded" */
   label: string
   /** the error came in the middle of a response ("Server error mid-response. The response above may be incomplete."): what the lead did last may be cut off */
@@ -56,29 +56,29 @@ export function kindOfApiError(facts: ApiErrorText): ApiErrorKind {
 function sortApiError(facts: ApiErrorText): ApiErrorKind {
   const status = statusOf(facts)
   const at = status === null ? '' : ` ${status}`
-  if (CLOUDFLARE.test(facts.text)) return { class: 'transient', label: `Cloudflare challenge${at}` }
+  if (CLOUDFLARE.test(facts.text)) return { name: 'transient', label: `Cloudflare challenge${at}` }
   if (status === 401 || AUTH_TEXT.test(facts.text)) {
-    return { class: 'auth', label: status === null ? 'authentication failed' : `HTTP ${status} authentication failed` }
+    return { name: 'auth', label: status === null ? 'authentication failed' : `HTTP ${status} authentication failed` }
   }
   // The fields Claude Code writes (`error`, `apiErrorStatus`) before the words: all ten 403s typed `authentication_failed` on
   // 2026-11-13 were a Cloudflare challenge (a real login failure is a 401), whether or not the text still says so.
   if (status === 403 && facts.error === 'authentication_failed') {
-    return { class: 'transient', label: 'HTTP 403 edge challenge' }
+    return { name: 'transient', label: 'HTTP 403 edge challenge' }
   }
   if (status !== null && TRANSIENT_STATUS.has(status)) {
     const overloaded = /overloaded/i.test(facts.text) || status === 529
-    return { class: 'transient', label: `HTTP ${status}${overloaded ? ' overloaded' : ''}` }
+    return { name: 'transient', label: `HTTP ${status}${overloaded ? ' overloaded' : ''}` }
   }
-  if (TRANSIENT_TEXT.test(facts.text)) return { class: 'transient', label: 'network or server error' }
+  if (TRANSIENT_TEXT.test(facts.text)) return { name: 'transient', label: 'network or server error' }
   if (facts.error && TRANSIENT_TYPES.has(facts.error)) {
-    return { class: 'transient', label: PARTIAL.test(facts.text) ? 'server error mid-response' : facts.error }
+    return { name: 'transient', label: PARTIAL.test(facts.text) ? 'server error mid-response' : facts.error }
   }
-  if (PARTIAL.test(facts.text)) return { class: 'transient', label: 'server error mid-response' }
+  if (PARTIAL.test(facts.text)) return { name: 'transient', label: 'server error mid-response' }
   // A bare type with no status and no text is all there is: an authentication type then is a login.
   if (status === null && facts.error && AUTH_TYPES.has(facts.error)) {
-    return { class: 'auth', label: 'authentication failed' }
+    return { name: 'auth', label: 'authentication failed' }
   }
-  return { class: 'other', label: status === null ? (facts.error ?? 'API error') : `HTTP ${status}` }
+  return { name: 'other', label: status === null ? (facts.error ?? 'API error') : `HTTP ${status}` }
 }
 
 const textOf = (value: unknown): string | null => (typeof value === 'string' && value ? value : null)
@@ -259,9 +259,9 @@ export function planResumes(input: {
   )
   for (const pending of ordered) {
     const { incident } = pending
-    if (incident.kind.class === 'other') continue
+    if (incident.kind.name === 'other') continue
     const reopened = pending.mark?.clearedAt != null && pending.mark.clearedAt > incident.lastAt
-    if (incident.kind.class === 'auth' && !reopened) {
+    if (incident.kind.name === 'auth' && !reopened) {
       const open = pending.mark?.clearedAt === null
       // A mark closed before this error does not hold for it: the login broke again.
       if (pending.account && !open && !marked.has(pending.account)) {

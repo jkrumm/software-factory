@@ -21,8 +21,8 @@ export interface IdleKind {
   count: number
   example: string
 }
-export interface ErrorClass {
-  class: string
+export interface ErrorKind {
+  kind: string
   count: number
   example: string
 }
@@ -44,7 +44,7 @@ export interface TranscriptReport {
   wallSeconds: number
   byCategory: Record<string, CategorySeconds>
   idle: IdleKind[]
-  toolErrors: { total: number; perSession: number | null; classes: ErrorClass[] }
+  toolErrors: { total: number; perSession: number | null; kinds: ErrorKind[] }
   makeCheckRuns: { total: number; perIssue: number | null }
   perSession: SessionDigestStats[]
 }
@@ -74,8 +74,8 @@ const BASH_CATEGORIES: readonly (readonly [string, RegExp])[] = [
   ['install/build', /\bbun\s+(install|run build)|npm (ci|install)|make\s+build/],
 ]
 
-// Tool-error classes, first match wins; anything unmatched is 'other'.
-const ERROR_CLASSES: readonly (readonly [string, RegExp])[] = [
+// Tool-error kinds, first match wins; anything unmatched is 'other'.
+const ERROR_KINDS: readonly (readonly [string, RegExp])[] = [
   ['blocked sleep', /Blocked: sleep\b/],
   ['hook denied', /hook error|hook denied|denied by (a )?hook|permission (to use|denied)|doesn't want to proceed/i],
   ['file not read yet / not found', /File has not been read yet|No such file or directory|File does not exist|ENOENT/i],
@@ -89,7 +89,7 @@ const OTHER_ERROR = 'other'
 const bashCategory = (command: string): string =>
   BASH_CATEGORIES.find(([, re]) => re.test(command))?.[0] ?? 'bash other'
 
-const errorClassOf = (text: string): string => ERROR_CLASSES.find(([, re]) => re.test(text))?.[0] ?? OTHER_ERROR
+const errorKindOf = (text: string): string => ERROR_KINDS.find(([, re]) => re.test(text))?.[0] ?? OTHER_ERROR
 
 const clip = (text: string, max = EXAMPLE_CHARS): string => text.slice(0, max).replaceAll('\n', ' ')
 
@@ -126,7 +126,7 @@ interface Analysis {
   header: string
   categories: Map<string, CategorySeconds>
   idleGaps: { kind: string; seconds: number; example: string }[]
-  errors: { class: string; example: string }[]
+  errors: { kind: string; example: string }[]
 }
 
 interface PendingUse {
@@ -240,7 +240,7 @@ function analyze(session: TranscriptSession): Analysis | null {
         let tail = ''
         if (b.is_error) {
           toolErrors++
-          errors.push({ class: errorClassOf(text), example: clip(text) })
+          errors.push({ kind: errorKindOf(text), example: clip(text) })
           tail = ` ERR: ${text.slice(0, 300).replaceAll('\n', ' ')}`
         } else if (seconds > 60 || /^(make|factory|gh|merge|agw|subagent)/.test(use.category)) {
           tail = ` -> ${text.slice(-160).replaceAll('\n', ' ')}`
@@ -311,7 +311,7 @@ export function transcriptPass(
   const seen = new Set<string>()
   const byCategory = new Map<string, CategorySeconds>()
   const idle = new Map<string, IdleKind>()
-  const classes = new Map<string, ErrorClass>()
+  const kinds = new Map<string, ErrorKind>()
   const perSession: SessionDigestStats[] = []
   const makeCheckIssues = new Set<string>()
   let read = 0
@@ -356,9 +356,9 @@ export function transcriptPass(
       idle.set(g.kind, entry)
     }
     for (const e of a.errors) {
-      const entry = classes.get(e.class) ?? { class: e.class, count: 0, example: e.example }
+      const entry = kinds.get(e.kind) ?? { kind: e.kind, count: 0, example: e.example }
       entry.count++
-      classes.set(e.class, entry)
+      kinds.set(e.kind, entry)
     }
     if (options.digestDir && (!options.digestIssues || options.digestIssues.includes(session.issue))) {
       appendFileSync(join(options.digestDir, `${session.issue}.txt`), digestText(a))
@@ -377,7 +377,7 @@ export function transcriptPass(
     toolErrors: {
       total: toolErrors,
       perSession: orNull(toolErrors, read),
-      classes: [...classes.values()].sort((a, b) => b.count - a.count),
+      kinds: [...kinds.values()].sort((a, b) => b.count - a.count),
     },
     makeCheckRuns: {
       total: makeCheckRuns,

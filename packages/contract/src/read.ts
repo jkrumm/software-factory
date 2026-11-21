@@ -135,7 +135,7 @@ export const ReadIssueCard = z
     seat: z.object({ tier: z.string(), effort: z.string(), role: z.string().nullable() }).nullable(),
     /** the seat of the Issue's lead for the badge: what the current attempt started on, else (`planned`) what it will start on; null when neither is known or the Issue is closed with no lead */
     leadSeat: LeadSeat.nullable(),
-    /** the resource class the Issue was filed in (the repo's `lanes:` cap it); null for none */
+    /** the resource the Issue was filed in (the repo's `lanes:` cap it); null for none */
     lane: z.string().nullable(),
   })
   .meta({ id: 'ReadIssueCard' })

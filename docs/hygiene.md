@@ -226,7 +226,7 @@ One agent reads the living documents whose code moved on since they were last ed
 
 - **Default:** on for every project.
 - **Runs:** in the weekly pass, and only monthly on an idle repo; one model call on the cheap seat.
-- **Silence it:** Not switchable: it takes at most two sections of a pass and a held class stops it.
+- **Silence it:** Not switchable: it takes at most two sections of a pass and a muted finder stops it.
 
 ## For a repo author
 

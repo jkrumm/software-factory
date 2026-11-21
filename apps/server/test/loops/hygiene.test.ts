@@ -496,7 +496,7 @@ const noisy = (n: number): FinderIssue[] =>
     outcome: 'dropped' as const,
   }))
 
-test('a held class files nothing and is named; the rest of the budget is still used; filed findings are recorded once', async () => {
+test('a muted finder files nothing and is named; the rest of the budget is still used; filed findings are recorded once', async () => {
   const findings = [
     finding('deadcode', 'deadcode:a|b', 9),
     finding('deadcode', 'deadcode:c|d', 8),
@@ -509,7 +509,7 @@ test('a held class files nothing and is named; the rest of the budget is still u
   const w = world(['a'], new Set(), undefined, { findings, classes: { deadcode: held } })
   const pass = await hygienePass(w.deps)
   expect(pass.ok).toBe(true)
-  // the three links fill the three probe slots; the held class does not take one
+  // the three links fill the three probe slots; the muted finder does not take one
   // and they are one signal: one Issue, a section each
   expect(w.filedBodies).toHaveLength(1)
   expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:x.md', 'links:y.md', 'links:z.md'])

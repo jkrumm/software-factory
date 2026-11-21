@@ -283,7 +283,7 @@ async function judge(
   for (const finding of checked.findings) {
     // A document whose finding is an open Issue (or closed lately) is that Issue's life: not filed again.
     if (input.held.has(judgmentKey(finding))) continue
-    // The model was asked already; a finding of a held class is named, not filed.
+    // The model was asked already; a finding of a muted finder is named, not filed.
     if (!gate.allows(judgmentKey(finding))) {
       added.overBudget.push({ key: judgmentKey(finding), title: finding.title })
       continue
@@ -426,7 +426,7 @@ async function sweepPass(
       // one Issue, one step: the record keeps a row per key, as the project page reads it
       if (applied) lifecycle.push(...step.keys.map((stepKey) => ({ ...applied, key: stepKey })))
     }
-    // A held class is named before the budget counts: it does not use up a slot.
+    // A muted finder is named before the budget counts: it does not use up a slot.
     const ranked = rankProbeFindings(
       report.findings.filter((finding) => !plan.suppress.has(finding.key) && !deferred.has(finding.key)),
     )

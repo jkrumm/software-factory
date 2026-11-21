@@ -150,7 +150,7 @@ function pointsOf(entries: readonly Entry[], now: Date): ErrorPoint[] {
   const from = now.getTime() - POINT_HORIZON_MS
   return entries.flatMap(({ name, facts }) =>
     facts.flatMap((fact) =>
-      fact.kind === 'api_error' && fact.at.getTime() >= from && kindOfPayload(fact.payload).class === 'transient'
+      fact.kind === 'api_error' && fact.at.getTime() >= from && kindOfPayload(fact.payload).name === 'transient'
         ? [{ session: name, key: fact.key, at: fact.at }]
         : [],
     ),

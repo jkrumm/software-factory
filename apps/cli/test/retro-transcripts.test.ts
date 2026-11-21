@@ -69,7 +69,7 @@ describe('transcriptPass', () => {
     expect(report.idle[0]).toMatchObject({ kind: 'factory note', seconds: 390, count: 1 })
     expect(report.toolErrors.total).toBe(1)
     expect(report.toolErrors.perSession).toBe(1)
-    expect(report.toolErrors.classes[0]).toMatchObject({ class: 'blocked sleep', count: 1 })
+    expect(report.toolErrors.kinds[0]).toMatchObject({ kind: 'blocked sleep', count: 1 })
     expect(report.makeCheckRuns).toEqual({ total: 1, perIssue: 1 })
     expect(report.perSession[0]).toMatchObject({ userTurns: 2, requests: 5 })
   })

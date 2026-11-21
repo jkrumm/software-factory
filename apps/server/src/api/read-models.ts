@@ -580,7 +580,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.finders',
           summary:
-            'the kinds of finding the friction and hygiene loops file, each open, on probation or held for mostly dropped or cancelled Issues, with its counts and when a held class is asked again',
+            'the kinds of finding the friction and hygiene loops file, each open, on probation or muted for mostly dropped or cancelled Issues, with its counts and when a muted finder is asked again',
         },
       },
     )

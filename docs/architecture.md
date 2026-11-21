@@ -167,7 +167,7 @@ list; the two that pin a step are named under Steps off the mini. Each rule name
   memory of the newest host sample less headroom and less what young leads still take (`leadGrowth`). A falling cost
   is believed after three settled attempts. Refusal kind `memory`.
 - **Disk fit** (`domains/capacity/disk.ts`).
-- **Lanes and claims**: `lanes` in `project.yaml` caps a resource class inside a repo (`domains/capacity/lanes.ts`);
+- **Lanes and claims**: `lanes` in `project.yaml` caps a resource inside a repo (`domains/capacity/lanes.ts`);
   `leads` in `project.yaml` caps the repo's claims. A fix is never held.
 - **Test line and lead aim**: `lineRefusal` (`domains/capacity/admission.ts`, kind `tests`) and `leadAimStep` hold new
   leads; see Test slots.
@@ -229,7 +229,7 @@ so repair still runs.
   newest runs; a step with nothing learned is sized by a prior and never refused (`stepPrior`). Free memory is the
   kernel's (`freeMibOf`, `kernel_free_pct`).
 - **Order**: `lineOrder`. A small step passes a head that does not fit; a passed head's memory is reserved after ten
-  minutes (`reservedStartMs`). Host-wide classes (`stepClassOf`): an `apple` step runs one at a time, whichever repo
+  minutes (`reservedStartMs`). Exclusive steps (`exclusiveStepOf`): an `apple` step runs one at a time, whichever repo
   runs it.
 - **Aim** (`domains/capacity/slot-aim.ts`, `app/capacity-aim.ts`): once a minute the slot count moves AIMD on the
   kernel's pressure level and swap (`factory.slot_aim`, `factory.slot_shadow`). The lead aim (`leadAimStep`,
@@ -462,7 +462,7 @@ What each decides in code and what it files:
   `budgets:` against its last 24 hours of `step_costs`, `readBudgetFacts` in `read/throughput-loop.ts`). The host
   kinds read the host loop's rows; the overload kinds (`load_over_ceiling`, `slot_line`, `gates_passed`) carry an
   evidence block (`overloadEvidence`). A subject is its newest row in `loop_findings`: filed once and through the
-  class gate; the same evidence files nothing; changed evidence is filed again, which intake turns into a note on the
+  finder gate; the same evidence files nothing; changed evidence is filed again, which intake turns into a note on the
   open Issue; a subject that no longer holds is cleared. A red default branch is filed by `signals.github.checks`
   alone. `docs/guide/loops.md` lists the kinds.
 - `ci-ledger` (`app/loops/ci-ledger.ts`, `githubCiLedger`): the finished workflow runs of this repo and of every

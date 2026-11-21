@@ -95,7 +95,7 @@ export interface PlanningStore {
 /** An open Issue before its repo is resolved to a project. */
 export type OpenIssueRow = Omit<OpenIssue, 'project'> & {
   repo: string
-  /** the resource class it was filed in; null: none */
+  /** the resource it was filed in; null: none */
   lane: string | null
   /** when its newest applied event happened: for a lead working without a claim, the end of the wait that gave it up */
   since: Date | null

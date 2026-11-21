@@ -36,7 +36,7 @@ check, `docs/architecture.md`).
 | **Queue state** | `run` (admission decides), `pace` (one lead per project), `drain` (no new lead), for the whole queue or one project. The more restrictive of the two applies | |
 | **Queue reason** | Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: `chain`, `line`, `finalizing`, `spec`, `unknown_project`, `drain`, `doctor`, `boot`, `load`, `memory`, `disk` (the repo's worktree, build output included, is learned to take more than the free disk less the headroom), `tests` (the test line is long: more steps wait for a slot than run, for longer than a step takes), `lane`, `claim`, `window`, `cap` | Hold (the memory and load hold) |
 | **Claim** | A lead's place in its repo: `leads: N` (64 when the project states none: the host's fit is the limit, NL32) plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over | |
-| **Lane** | A resource class inside a repo (`apple`) that an Issue or plan row names; `lanes: {apple: 1}` in the repo's `project.yaml` caps how many leads of the lane run at once, within `leads`. An undeclared lane is unlimited (`docs/plan.md` "Lanes") | |
+| **Lane** | A resource inside a repo (`apple`) that an Issue or plan row names; `lanes: {apple: 1}` in the repo's `project.yaml` caps how many leads of the lane run at once, within `leads`. An undeclared lane is unlimited (`docs/plan.md` "Lanes") | |
 | **Owed** | Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. An owed lead counts in the leads of the account it resumes on, and the account cap never refuses its resume. A note refused for a claim for 15 minutes while a claim would be granted to that lead now is a steward stall; a herd waiting its turn is not | |
 | **Window** | An account's 5-hour or weekly reset | |
 | **Account** | One Claude Code subscription the factory runs leads on. Whether it takes work, why not, when it opens again and the order of the open ones are `packages/accounts`' to decide (`claude-account status`, `GET /v1/accounts`); the factory adds only its allowance and the leads running on it. A mode (normal, drain, reserve, paused) can be set on it for a time | |
@@ -166,6 +166,7 @@ The figures Throughput leads with, read once a minute from the host (`top`, `vm_
 | **Memory pressure** | The kernel's own verdict on memory: normal, warning or critical. It is the one memory figure that says the host is struggling now: a host can hold 90 % of its RAM at normal pressure. What to do: at warning or critical, read Memory by class on Throughput to see what holds the memory; no new lead is admitted until it is normal again | |
 | **Load** | The number of threads that wanted a core, averaged over the last minute (the 1-minute load average). It is a count, not a percentage, and it is not CPU busy: on 12 cores load 4 is a third of the cores' worth of threads, load 12 is one thread for every core, and above that threads wait. It also counts threads waiting on the disk, so it can be high with the CPU quiet. Admission uses load because a storm of waiting processes (git, tests) starves everything on the host whatever the CPU percent says. What to do: above the load ceiling nothing new starts, so wait it out; read CPU busy to tell real work from threads stuck on the disk | |
 | **Load ceiling** | The load above which no new lead is admitted, stored with every minute so the page reads the ceiling that was in force. Under the throughput rule it is 3 per core. What to do: minutes above it are minutes Ready Issues waited; a ceiling that is crossed every day is the next improvement to file | |
+| **Class** | The group a host process works for: `lead`, `step`, `tenant`, `factory`, `system`, `owner`, `other` (Memory by class on Throughput). The word's one sense | Class, for a kind of finding (finder), why a fix was needed (fix cause), a step one at a time host-wide (exclusive step), a refusal, error or heartbeat (kind), a lane (resource) |
 
 ## The figures on a card
 
@@ -221,8 +222,8 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 
 - **Cancel** is the owner's stop of an Issue; **withdraw** is the filer's take-back of an Issue only its own signals made, while no lead has it. "Stop" stays Claude Code's hook.
 - **Review level** (standard, deep) is not **model tier** (haiku, sonnet, opus).
-- **Owner class** (product direction, spend, irreversible data loss, other people, security policy, big architecture)
-  is not a classification field.
+- **The owner's call** (product direction, spend, irreversible data loss, other people, security policy, big architecture)
+  is not a triage field.
 - Deleting code in git is not irreversible data loss.
 
 ## Warp, mapped

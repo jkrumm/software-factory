@@ -253,7 +253,7 @@ export const HYGIENE_CATALOGUE = [
     cadence: 'weekly',
     idle: 'monthly',
     skippable: false,
-    silence: 'Not switchable: it takes at most two sections of a pass and a held class stops it.',
+    silence: 'Not switchable: it takes at most two sections of a pass and a muted finder stops it.',
   },
 ] as const satisfies readonly HygieneCatalogueEntry[]
 

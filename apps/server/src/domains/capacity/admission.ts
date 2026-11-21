@@ -147,7 +147,7 @@ const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, par
  * Whether a new lead may start now, in the order of the rules: the queue state (`drain` starts nothing), the host's
  * boot grace, its load (the tripwire: sustained minutes over the ceiling), its memory (the reading, then the learned fit
  * of the candidate's lead), its disk (the learned worktree footprint of the candidate's repo against the free disk), the host's test line (`lineRefusal`), the candidate's lane (the repo's
- * cap on a resource class), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an account with room.
+ * cap on a resource), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an account with room.
  * Never spills: with every account closed the answer is to wait for the first opening. Pure: the readings are passed
  * in, and the caller decides again at every claim, inside one transaction.
  */

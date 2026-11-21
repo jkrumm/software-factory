@@ -539,7 +539,7 @@ export async function loadIdle(
     // auth error waits for the owner's login, and a nudge typed into it would only meet the same error. Once its resumes are
     // spent (or the error is neither kind) it is a quiet lead like any other.
     const incident = view.apiIncident
-    if (incident && incident.kind.class !== 'other') {
+    if (incident && incident.kind.name !== 'other') {
       const prefix = resumePrefix(leadKey(id, issue.attempt), incident.key)
       const resumes = (await leads.resumesOf(id, issue.attempt)).filter((delivery) => delivery.key.startsWith(prefix))
       if (!spent({ resumes: resumes.map((delivery) => delivery.claimedAt) }, deps.resume ?? DEFAULT_RESUME_RULES)) {

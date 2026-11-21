@@ -194,7 +194,7 @@ export type HygieneProbeRow = z.infer<typeof HygieneProbeRow>
 /**
  * How the newest pass handled a finding: `filed` an Issue was filed; `tracked` an Issue of its key is open already, so none was;
  * `reopened` its Issue closed done and was opened again; `kept` it is red again after reopens and left to a person; `left_out`
- * the pass's cap or a held class kept it out; `refused` intake refused it; `not_filed` none of these.
+ * the pass's cap or a muted finder kept it out; `refused` intake refused it; `not_filed` none of these.
  */
 export const HYGIENE_FINDING_STATUSES = [
   'filed',

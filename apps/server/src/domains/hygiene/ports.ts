@@ -23,7 +23,7 @@ export interface HygienePassRecord {
   report: SweepReport
   judgment: HygieneJudgment
   filed: { key: string; title: string }[]
-  /** left out by the cap or by a held class */
+  /** left out by the cap or by a muted finder */
   overBudget: { key: string; title: string }[]
   failed: { key: string; reason: string }[]
   /** what the pass did to findings already filed (`migrations/1047_hygiene_lifecycle.sql`) */

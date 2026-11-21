@@ -5,7 +5,7 @@ import { readEdgeIncidents } from './api-errors.ts'
 import { avoidableTouches, issuesFiled, orchestratorSteering, ownerVerdict, TOUCH_LABELS, type Window } from './kpis.ts'
 import { specSourceSql } from './spec-screen.ts'
 import { per, windowOf } from './stats.ts'
-import { refusalClass } from './refusal-class.ts'
+import { refusalKind } from './refusal-kind.ts'
 import { isCut } from '../kernel/epoch.ts'
 
 /** A note of a lead that is still there and not typed this long after it was claimed is undelivered. */
@@ -50,7 +50,7 @@ const Grouped = Count.extend({ key: z.string().nullable(), detail: z.string().nu
 function byCause(rows: readonly { detail: string | null; n: number }[]): { id: string; words: string; n: number }[] {
   const classes = new Map<string, { id: string; words: string; n: number }>()
   for (const row of rows) {
-    const { id, words } = refusalClass(row.detail)
+    const { id, words } = refusalKind(row.detail)
     const seen = classes.get(id)
     if (seen) seen.n += row.n
     else classes.set(id, { id, words, n: row.n })

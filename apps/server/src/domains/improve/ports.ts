@@ -26,7 +26,7 @@ export interface FrictionPassRecord {
   windowTo: Date
   issues: number
   filed: { key: string; count: number; title: string }[]
-  /** left out by the cap or by a held class */
+  /** left out by the cap or by a muted finder */
   overBudget: { key: string; count: number }[]
   failed: { key: string; reason: string }[]
 }

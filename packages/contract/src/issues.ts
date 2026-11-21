@@ -36,7 +36,7 @@ export const NewIssueBody = z
     facts: z.record(z.string(), z.unknown()).optional(),
     /** the lead's tier and effort: `{tier, effort}` or `{role}`; checked by the server (422 `seat_refused`, naming the field) */
     seat: SeatInput.optional(),
-    /** the resource class it runs in; the repo's `project.yaml` `lanes:` caps how many leads of a lane run at once */
+    /** the resource it runs in; the repo's `project.yaml` `lanes:` caps how many leads of a lane run at once */
     lane: LaneName.optional(),
     /** `spec`: its lead owes a one-page Spec before it builds, and the ship is refused without one */
     checkpoint: CheckpointName.optional(),

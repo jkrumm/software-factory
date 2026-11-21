@@ -41,7 +41,7 @@ import {
   type SlotView,
   type PeakFrom,
   type StepHost,
-  stepClassOf,
+  exclusiveStepOf,
   touchSlots,
   type Waited,
   WAITER_TTL_MS,
@@ -613,7 +613,7 @@ function declaredRemoteStep(input: {
     return `${owner.name} is not admitted to the VPS (FACTORY_STEP_REMOTE_PROJECTS)`
   const kind = stepKindOf(key)
   // an Apple step is the host's (its simulators and signing keychain), whatever a file says
-  if (stepClassOf(key) === 'apple') return 'an apple step runs on the mini only'
+  if (exclusiveStepOf(key) === 'apple') return 'an apple step runs on the mini only'
   const step = key === `${owner.name} ${kind}` ? owner.project.steps[kind] : undefined
   if (!step) return `${owner.name}'s project.yaml declares no step "${kind}"`
   const held = step.needs.filter((need) => MINI_ONLY_NEEDS.includes(need))

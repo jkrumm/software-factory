@@ -112,7 +112,7 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
       // the KPIs are one input of the pass: a failed read is named in the record, the counts are still judged
       kpiFailure = `the KPIs could not be read: ${String(error).slice(0, 250)}`
     }
-    // A KPI off its target leads: it is the figure the owner set a line for. A held class is named before the budget
+    // A KPI off its target leads: it is the figure the owner set a line for. A muted finder is named before the budget
     // counts: it does not use up a slot.
     const found = [...kpisOffTarget(kpis, { whole: model.since === null }), ...patternsOver(model.counts, model.closed)]
     const allowed = found.filter((pattern) => {

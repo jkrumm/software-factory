@@ -50,7 +50,7 @@ Two groups share the field. The chain answers first with `chain`, `line`, `final
 | `memory` | swapouts or swap over their ceilings, the repo's learned lead cannot fit the free memory at all, or as many leads run as the lead aim allows at the host's pressure now |
 | `disk` | a worktree of the repo, with its build output, does not fit the free disk beside the leads still growing, and a lead already runs |
 | `tests` | more steps wait for a test slot than run, for longer than a step takes |
-| `lane` | the repo's cap on a resource class is full |
+| `lane` | the repo's cap on a resource is full |
 | `claim` | the repo runs `leads` leads already |
 | `window` | every account is closed; the sentence names when the first opens |
 | `cap` | every open account is at its lead cap |
@@ -131,7 +131,7 @@ The same reading, accounts only (account names changed):
 
 ## Claims and lanes
 
-A claim is a lead's place in its repo. A lane is a resource class inside a repo with its own cap.
+A claim is a lead's place in its repo. A lane is a resource inside a repo with its own cap.
 
 - **`leads: N`** in `project.yaml` is the repo's claim count, plus one place that only a fix may use.
 - **Owed first.** A wait that needs a person, a clock or another Issue gives the claim back. When the wait ends the Issue is owed: it works without a claim and is served before any new lead, in order of wait end, then Issue number.

@@ -324,7 +324,7 @@ test('the migration copies the two old ledgers into loop_findings: the status be
   }
 })
 
-test('the self-watch loop is on the class gate: a kind whose Issues were mostly dropped files nothing, another kind still does', async () => {
+test('the self-watch loop is on the finder gate: a kind whose Issues were mostly dropped files nothing, another kind still does', async () => {
   const loops = postgresLoopStore(db.sql)
   const uow = {
     run: async (work: (s: never) => Promise<unknown>) => work({ loops, loopReads: loopReads(db.sql) } as never),

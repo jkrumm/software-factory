@@ -719,7 +719,7 @@ const projectObject = <L extends LaneSchema>(lane: L) =>
         .default({})
         .meta(
           about(
-            'resource classes inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory: 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and this does not declare is unlimited within `leads`',
+            'resources inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory: 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and this does not declare is unlimited within `leads`',
             ADMISSION,
             { shownDefault: {} },
           ),
