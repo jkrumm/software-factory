@@ -31,6 +31,13 @@ afterAll(async () => {
   await lab.stop()
 })
 
+/** What kept the plan row out, read when the wait ends: its state, the queue's reason and the passes' notes. */
+const whyNot = async (): Promise<string> => {
+  const [row] = await lab.world.db.sql`SELECT state FROM factory.issues WHERE id = 'issue_1'`
+  const order = await lab.cli(['queue', 'order'])
+  return `issue_1 state: ${row?.state ?? 'not filed'}; queue order: ${order.out || order.err}`
+}
+
 const until = async <T>(read: () => Promise<T | undefined>, what: string): Promise<T> => {
   const deadline = Date.now() + patient(10_000)
   while (Date.now() < deadline) {
@@ -38,7 +45,7 @@ const until = async <T>(read: () => Promise<T | undefined>, what: string): Promi
     if (value !== undefined) return value
     await Bun.sleep(100)
   }
-  throw new Error(`the tick did not ${what} within the deadline:\n${lab.server.output()}`)
+  throw new Error(`the tick did not ${what} within the deadline:\n${await whyNot()}\n${lab.server.output()}`)
 }
 
 test('the tick reads the project, files the plan row, settles it and admits it, with no verb called', async () => {
