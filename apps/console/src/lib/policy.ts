@@ -68,7 +68,7 @@ const AGGREGATES = new Set([
   'flow-trend',
   'project-hygiene',
 ])
-/** What `needs`, `flow` and `chain` read: Issues, their Decisions, artifacts, Errands and held signals. Hook events (`session`) are not among them. */
+/** What `needs`, `flow` and `chain` read: Issues, their Decisions, artifacts, Errands and quarantined signals. Hook events (`session`) are not among them. */
 const LISTED_KINDS = new Set(['issue', 'decision', 'artifact', 'errand', 'signal'])
 
 const rootOf = (key: Key): unknown => key[0]

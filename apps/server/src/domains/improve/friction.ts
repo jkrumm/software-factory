@@ -58,7 +58,7 @@ export const isRetired = (key: string): boolean => RETIRED.some((pattern) => pat
 
 const ruleOf = (key: string, group: Judged): Rule => BY_KEY[key] ?? GROUP_RULES[group]
 
-/** Groups whose events map to Issues; the others (an undelivered note, a held signal) carry no Issue refs. */
+/** Groups whose events map to Issues; the others (an undelivered note, a quarantined signal) carry no Issue refs. */
 const WITHOUT_ISSUES = new Set<PatternGroup>(['undelivered_note', 'signal', 'kpi'])
 
 /** A friction count's group, or `kpi`: one of the seven KPIs off its target. */
@@ -194,7 +194,7 @@ export function signalText(
 ): string {
   if (pattern.kpi) return kpiSignalText(pattern, pattern.kpi, facts, last)
   const evidence = !hasIssueRefs(pattern)
-    ? 'Evidence: this count has no Issue behind it (it counts notes or held signals, not Issue events), so there are no refs.'
+    ? 'Evidence: this count has no Issue behind it (it counts notes or quarantined signals, not Issue events), so there are no refs.'
     : refs.length === 0
       ? 'Evidence: no Issue ref could be read for this count.'
       : `Evidence (the most recent Issues, up to ${MAX_EVIDENCE}): ${refs.slice(0, MAX_EVIDENCE).join(', ')}`

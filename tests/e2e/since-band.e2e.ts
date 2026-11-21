@@ -12,7 +12,7 @@ import { seedSince, type SeededSince } from './seed-since.ts'
  * "Since you were here" on Needs you, on a seeded history (seed-since.ts: events before and after a visit moment, planted
  * when this file starts so no earlier spec sees them). Every figure on the band is compared with a count this file takes
  * from the event log and the tables by SQL, never from `GET /v1/since`. The file runs after the others (`shell*`), which
- * leave a Decision, a review, an Errand and held signals on the list for the deep links and the screenshots.
+ * leave a Decision, a review, an Errand and quarantined signals on the list for the deep links and the screenshots.
  */
 const OUT = join(import.meta.dir, 'out', 'screenshots', 'console-needs-you')
 const HALF_HOUR_MS = 30 * 60_000
@@ -405,7 +405,7 @@ for (const { variant, viewport, colorScheme, shots } of SHOTS) {
   test.describe(`screenshots ${variant}`, () => {
     test.use({ viewport, colorScheme, hasTouch: viewport.width < 768 })
 
-    test('the band, an open Decision, Errand and held signal, and a project filter', async ({ page, apiUrl }) => {
+    test('the band, an open Decision, Errand and quarantined signal, and a project filter', async ({ page, apiUrl }) => {
       await arm(apiUrl)
       const { items } = await api<{ items: { id: string; kind: string; title: string; repo: string | null }[] }>(
         apiUrl,

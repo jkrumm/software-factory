@@ -29,7 +29,7 @@ const KIND_WORD = {
   decision: 'Decisions',
   review: 'Reviews',
   errand: 'Errands',
-  held_signal: 'Held signals',
+  held_signal: 'Quarantined signals',
   long_wait: 'Long waits',
 } as const
 
@@ -218,7 +218,7 @@ test('Needs you: a kind in the sidebar shows only that kind, a second click show
 test('Needs you: the sidebar kinds have an InfoHint beside the row, not inside the toggle', async ({ page }) => {
   await page.goto('/needs-you')
   const kinds = section(page, 'Kinds')
-  for (const word of ['review', 'decision', 'errand', 'held signal', 'long wait'] as const) {
+  for (const word of ['review', 'decision', 'errand', 'quarantined signal', 'long wait'] as const) {
     await expectHint(kinds, word)
   }
   // a hint is a separate control: the toggles still hold only their label and count

@@ -98,14 +98,14 @@ quiet minutes; inside a visit every read returns the same band), so only this sc
 never polls, is never refetched by the stream (an open tab would keep the visit alive) and never enters the persisted snapshot, and it loads when the screen opens and when the window gets focus, and only while the tab is on screen (a hidden tab that reloads after a deploy waits until it is shown). A
 loading band is a skeleton of its height, and an error leaves the band out while the checkpoints show.
 
-The checkpoints are grouped by kind (Decisions, Reviews, Errands, Held signals, each with its count and an InfoHint). Every
+The checkpoints are grouped by kind (Decisions, Reviews, Errands, Quarantined signals, each with its count and an InfoHint). Every
 card leads with its project, a chip that opens `/projects/<repo>` (the word "App feedback" when it names none), then the
 title, the age in the verb of its kind (open, raised, received; the absolute time on hover), a Stale lozenge, and the
 Issue's title as a link. Closed, the whole card opens it (the title button is stretched over the card, the links sit above it).
 Opened, a Decision says what it is, shows the Judge's note when it passed it on, and lays its options out as cards with the
 reversible lozenge, the cost, the reason on the recommended one and the default-if-nobody-answers on the option that is the
 default; a recommendation that is a sentence matching no option is a block above the cards with a "Take the recommendation"
-button. An Errand says what it is, then its summary, Issue, project, when it was raised and the screen's note. A held signal
+button. An Errand says what it is, then its summary, Issue, project, when it was raised and the screen's note. A quarantined signal
 says what it is, its source in a person's word and origin, a link to the source (only `http(s)`, `target=_blank`), when it was
 received and the screen's note, then Promote and Dismiss.
 
@@ -173,7 +173,7 @@ API with the owner token; an extension-less path falls back to `index.html`. So 
 auth header and no base URL, and every response is parsed with the schema from `@software-factory/contract`. The service
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
 invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly fifteen writes, the owner's answers, a collection's pin and unpin and an account's mode set and clear (a Decision's answer, an
-artifact's verdict and its needed-me mark, a comment and the edit or deletion of one, an Errand done, an Errand approved, a held signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
+artifact's verdict and its needed-me mark, a comment and the edit or deletion of one, an Errand done, an Errand approved, a quarantined signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the queries a change can alter (`affected` in `src/lib/policy.ts`: a frame's `kind`, `ref` and `detail` name them; a frame that does not parse, or has an unknown kind, alters all but the strip's readings); while it is not open the
 queries poll every 15 s and the strip's Live says `Polling`, and while it is open they still poll once a minute, because the
 stream's keepalive is an SSE comment `EventSource` cannot see: a watchdog (`src/lib/live.ts`) also replaces the connection

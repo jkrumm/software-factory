@@ -207,7 +207,7 @@ test("the repo comes from the door's routes, never from a payload", async () => 
   expect(stored).toMatchObject({ repo: 'vps' })
 }, 20000)
 
-test('a held signal is dismissed with a reason: out of Needs you, on record, nothing filed', async () => {
+test('a quarantined signal is dismissed with a reason: out of Needs you, on record, nothing filed', async () => {
   const held = await signalFile({ from: 'feedback:argo', title: 'Spam about a prize', text: 'click here' })
   expect(held).toMatchObject({ outcome: 'held' })
   const id = held.signal as string

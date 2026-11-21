@@ -167,7 +167,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.needs',
           summary:
-            'everything that waits on the owner: open Decisions, artifacts awaiting a verdict, open Errands and held signals, newest first within a kind',
+            'everything that waits on the owner: open Decisions, artifacts awaiting a verdict, open Errands and quarantined signals, newest first within a kind',
         },
       },
     )
@@ -508,7 +508,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.friction',
           summary:
-            'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who settled Decisions, held signals',
+            'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who settled Decisions, quarantined signals',
         },
       },
     )

@@ -7,7 +7,7 @@ import { patient } from '../patience.ts'
 /**
  * Group C, the recorded requests: what the Herdr board, Hermes, Iris, agw and the repo's own scripts ask of the factory,
  * replayed against the real server over HTTP or the CLI exactly as the client does it, with the token it holds, on a
- * world seeded through real flows (an Issue working with a lead, an open Decision, an open Errand, a held signal, a
+ * world seeded through real flows (an Issue working with a lead, an open Decision, an open Errand, a quarantined signal, a
  * closed Issue, a health line, a work repo).
  *
  * Argo: the sweep found no call to the factory (`grep -rn "7793\|FACTORY_\|/v1/\|factory read"` over
@@ -536,7 +536,7 @@ describe('work-repo redaction', () => {
     expect(cards.issues.find((c) => c.id === Number(number(working)))?.title).toBe('The checkout page hangs on submit')
   })
 
-  test('the held signal of outside text is redacted for the read token and read by the owner', async () => {
+  test('the quarantined signal of outside text is redacted for the read token and read by the owner', async () => {
     const owner = (await (await http('/v1/signals')).json()) as { signals: { id: string; redacted: boolean }[] }
     const read = (await (await http('/v1/signals', { as: 'read' })).json()) as {
       signals: { id: string; text: string; redacted: boolean }[]

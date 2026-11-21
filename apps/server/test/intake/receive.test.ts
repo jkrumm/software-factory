@@ -914,7 +914,7 @@ describe('the door', () => {
     expect(listed.ok && listed.value.unrouted.map((row) => row.monitor)).toEqual(['mystery'])
   })
 
-  test('a down monitor nobody can place becomes a held signal after hours, once, and a route answers it', async () => {
+  test('a down monitor nobody can place becomes a quarantined signal after hours, once, and a route answers it', async () => {
     intake = createIntake({
       uow,
       clock,
@@ -1061,7 +1061,7 @@ describe('app feedback through the door', () => {
     })
   })
 
-  test('the fingerprint ignores version and route: the same complaint from two builds is one held signal', async () => {
+  test('the fingerprint ignores version and route: the same complaint from two builds is one quarantined signal', async () => {
     const first = done(await intake.feedback(feedback()))
     const again = done(await intake.feedback(feedback({ version: '1.3.0', route: '/settings', text: 'more' })))
     expect(again).toMatchObject({ outcome: 'held', detail: 'replayed', signal: first.signal })
@@ -1271,7 +1271,7 @@ describe("a lead's follow-up for a work repo", () => {
   })
   const owned = (title: string) => intake.file({ ...request('owner:hermes', title), repo: 'argo' }, 'owner')
 
-  test('an owner-filed Issue’s lead gets a held signal for the owner, never an Issue', async () => {
+  test('an owner-filed Issue’s lead gets a quarantined signal for the owner, never an Issue', async () => {
     done(await owned('Consolidate the databases'))
     const held = done(await intake.file(request('agent:argo', 'Move the chat database', 'issue_1'), 'agent'))
     expect(held).toMatchObject({ outcome: 'held', detail: 'quarantined' })

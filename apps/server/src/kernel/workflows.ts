@@ -155,7 +155,7 @@ export const WORKFLOWS = {
     failsWhenUnavailable: true,
     retry: { tries: 3, backoffMs: 6 * HOUR },
   }),
-  /** the Judge's look at one held signal */
+  /** the Judge's look at one quarantined signal */
   screen: workflow({
     agw: 'factory-screen',
     request: ScreenRequest,

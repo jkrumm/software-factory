@@ -58,7 +58,7 @@ const form = (question: string, recommendation: string, others: string[]) => ({
  * A world with something on every screen. Six Issues, one per repo, are admitted and their leads started against the fake `hc`;
  * each lead then raises one thing through its own verbs, as a lead does (`issue ask`, `artifact submit`, `errand raise`):
  * two of each kind (one the tests read and one they settle; the read Decision is a row with a default, see below). The rest: Issues filed by signals (settling) and one
- * settled into the queue, an Errand on a work repo as a row the checkpoints would leave, and held signals through the route.
+ * settled into the queue, an Errand on a work repo as a row the checkpoints would leave, and quarantined signals through the route.
  */
 export async function seed(lab: Lab): Promise<void> {
   const url = lab.server.url

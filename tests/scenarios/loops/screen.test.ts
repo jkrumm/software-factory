@@ -6,7 +6,7 @@ import { type Lab, startLab } from '../planning/lab.ts'
 import { callsOf, runLoop, script } from './support.ts'
 
 /**
- * The screen loop against the real server and Postgres with the fake agw: the Judge looks at held signals and promotes,
+ * The screen loop against the real server and Postgres with the fake agw: the Judge looks at quarantined signals and promotes,
  * dismisses or leaves them. `factory-screen` is scripted by a phrase of the signal (`FACTORY_FAKE_SCREEN_SCRIPT`); every pass
  * is driven through `factory loop run screen` (the interval is off).
  */
@@ -116,7 +116,7 @@ test('a pass dismisses the probe and the duplicate, leaves the unclear one with 
   const calls = await screenCalls()
   expect(calls).toBe(3)
   const second = await runLoop(lab, 'screen')
-  expect(second.summary).toBe('no held signal to screen')
+  expect(second.summary).toBe('no quarantined signal to screen')
   expect(await screenCalls()).toBe(calls)
 }, 30000)
 

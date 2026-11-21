@@ -102,7 +102,7 @@ export const THRESHOLDS = {
       signal: {
         min: 3,
         rate: 0.2,
-        why: 'held signals from one source on one in five closed Issues is a route or a trust rule to settle',
+        why: 'quarantined signals from one source on one in five closed Issues is a route or a trust rule to settle',
       },
       spec_unneeded: {
         min: 2,

@@ -13,10 +13,10 @@ check, `docs/architecture.md`).
 | **Incident** | One root cause seen through many signals: the VPS is down, so HyperDX and Kuma all fire. Triage groups them under one Issue | An Issue per alert |
 | **Amend** | Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note | |
 | **Triage outcome** | What triage did with a signal: `filed`, `amended`, `incident`, `held` (quarantined, or a `down` waiting out its heal grace), `dropped`. Its detail says why: `new`, `matched`, `replayed`, `repeat`, `joined`, `regression`, `healed`, `quiet`, `unrouted`, `quarantined`, `promoted`; for a drop `work_repo`, `no_project`, `not_listened`, `loop_guard`, `no_repo`, `probe`, `settled` (the workflow found an Issue closed in the last day already settles it) | |
-| **Held signal** | Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two held signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there | |
-| **Promote** | A held signal becomes work: the owner's or the Judge's call | |
-| **Dismiss** | A held signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as `dismissed` | |
-| **Screen** | The Judge looks at a held signal (bar a work repo's; the `screen` loop, `factory-screen`) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most | |
+| **Quarantined signal** | Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two quarantined signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there | |
+| **Promote** | A quarantined signal becomes work: the owner's or the Judge's call | |
+| **Dismiss** | A quarantined signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as `dismissed` | |
+| **Screen** | The Judge looks at a quarantined signal (bar a work repo's; the `screen` loop, `factory-screen`) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it quarantined (stored as `held`) with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most | |
 | **Probe** | A test signal a lead marks (`probe: true`) so it is stored dismissed and never held; its ack is `dropped`, detail `probe` | |
 | **Door route** | The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git | |
 | **Work repo** | A repo no `project.yaml` describes, or whose `project.yaml` says `work: true`. The read token never sees its words | |
@@ -58,7 +58,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Running** | A lead works on it now: the Issue is in the working state and counts against the allowance. A lead standing in line for a test slot is still Running. The count is of Issues, not sessions: one Running Issue may have no session open for an instant between two sessions, and a Checking Issue's session is open without being counted here | |
 | **Paused** | A lead began it and it waits on a named wait, no session running. Its split: on you (a Decision, a review, an Errand, or your own pause), on a timer, on another Issue (a dependency, or someone else's review of its pull request), stalled (the account's window, a lead that stopped without reporting, a block, a lost lead, a regression) | |
 | **Ready** | No lead has begun it and nothing but capacity keeps it out: it starts when its turn and room in the allowance come. Its limit names what binds it: room in the allowance, the host (load, memory, boot, doctor), the repo's claims, the lane or the cap, or the account's window | |
-| **Held** | No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a held signal | |
+| **Held** | No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a quarantined signal | |
 | **Checking** | Shipped and deployed: the watch is on, the factory runs Verify and the probes, and the Issue closes when they pass. Its own small count, in no other word | |
 | **Planned** | A plan row not yet filed as an Issue: due to be filed, after another Issue, or not before a date. Never an Issue, so never part of the five | |
 
@@ -112,7 +112,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Revision** | One version of an artifact's content. A Decision has one; a Concept or Spec gains one with each `revise` | |
 | **Annotation** | A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored" | |
 | **Page** | One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is settled | |
-| **Needs** | What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, held signals, long waits | Needs you, as a page title only |
+| **Needs** | What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, quarantined signals, long waits | Needs you, as a page title only |
 
 ## Shipping
 

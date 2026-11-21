@@ -5,7 +5,7 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { FINAL_SCREEN_MS, MAX_SCREEN_ATTEMPTS, SCREEN_BATCH } from '../../src/domains/intake/screen.ts'
 import { readNeeds } from '../../src/read/needs.ts'
 
-/** Which held signals the screen loop picks up, and which leave Needs you once the last look decided: over a real Postgres. */
+/** Which quarantined signals the screen loop picks up, and which leave Needs you once the last look decided: over a real Postgres. */
 let db: TestCluster
 const NOW = new Date('2026-11-13T08:00:00Z')
 const HOUR = 3_600_000
@@ -49,7 +49,7 @@ test('a signal 72 h old is screened again once, even after a leave, and failed c
   expect((await due()).toSorted()).toEqual(['old_capped', 'old_left', 'old_unscreened_capped'])
 })
 
-test('a held signal that the last look promoted or dismissed is no longer a need', async () => {
+test('a quarantined signal that the last look promoted or dismissed is no longer a need', async () => {
   await hold('old_left', ago(100), { at: ago(99) })
   expect((await readNeeds(db.sql, NOW)).items.map((item) => item.kind)).toEqual(['held_signal'])
   await db.sql`UPDATE factory.intake_signals SET state = 'dismissed', dismissed_at = ${NOW}, dismissed_by = 'judge', dismissed_reason = 'held 72 hours with no decision' WHERE id = 'old_left'`

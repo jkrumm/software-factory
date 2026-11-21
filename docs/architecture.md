@@ -137,10 +137,10 @@ Every input is one envelope (`source`, `kind`, `origin`, `trust`, `repo`, `finge
   its repo (`adapters/intake/runbook.ts`) before an Issue is filed.
 - **Quarantine.** An outside signal is held and reaches a lead only when the owner or the Judge promotes it, fenced as
   data. A later outside signal with a promoted one's fingerprint amends the Issue while it is open (`noted`, fenced),
-  else is held anew. A held signal can be dismissed (`POST /signals/:id/dismiss`, owner or Judge, a reason of 1 to 500
-  characters; `dismissed_by` is `owner`, `judge` or `probe`); only a held signal can be dismissed or promoted. A
+  else is held anew. A quarantined signal can be dismissed (`POST /signals/:id/dismiss`, owner or Judge, a reason of 1 to 500
+  characters; `dismissed_by` is `owner`, `judge` or `probe`); only a quarantined signal can be dismissed or promoted. A
   **probe** (`probe: true`) passes the guards, is stored dismissed by `probe`, files nothing and never reaches triage.
-- **Screen.** The `screen` loop has the Judge look at held signals; its verdict can only promote, dismiss or leave the
+- **Screen.** The `screen` loop has the Judge look at quarantined signals; its verdict can only promote, dismiss or leave the
   one signal it was shown (`domains/intake/screen.ts`), and a promoted signal's text stays outside text, fenced in the
   brief.
 - **Loop guard.** A change a loop made never fires that loop again.
@@ -468,10 +468,10 @@ What each decides in code and what it files:
 - `ci-ledger` (`app/loops/ci-ledger.ts`, `githubCiLedger`): the finished workflow runs of this repo and of every
   stored project, queued, started and finished per run in `factory.ci_runs` (pruned after 30 days). An unreadable repo
   is a note in the pass.
-- `screen` (`app/loops/screen.ts`, `domains/intake/screen.ts`): up to 10 held signals not yet screened, one
+- `screen` (`app/loops/screen.ts`, `domains/intake/screen.ts`): up to 10 quarantined signals not yet screened, one
   `factory-screen` call each outside any transaction. The answer is checked before anything is done (a promote needs a
   known non-work repo, a duplicate must be an open Issue it was shown, else `leave`), then promote or dismiss as
-  `judge`. A failed call leaves the signal held with a backoff of `min(10 min * 2^n, 6 h)`, 5 attempts; a held signal
+  `judge`. A failed call leaves the signal held with a backoff of `min(10 min * 2^n, 6 h)`, 5 attempts; a quarantined signal
   72 h old (`FINAL_SCREEN_MS`) gets a last look whose `leave` is replaced (`decideFinal`) by promote, for a known
   non-work project, or dismiss.
 - `errands` (`app/loops/errands.ts`): hourly over open requests (Errands no Issue raised): past `expires_at` closes
@@ -562,7 +562,7 @@ Issues, how they ended, the median time to close and how many done Issues moved 
   `orchestrator`, `agent` (a lead), `machine` (the door), `signal` (Hermes) and `read`; every other token is optional
   and a caller whose token is unset does not exist. The orchestrator, the owner's delegate, has every owner row except
   eight that are the owner's own judgment or hands (a Decision's worth-asking flag, an artifact's annotations with
-  edit and delete, its needed mark, an Errand's approve, a held signal's promote and dismiss). Its events carry the
+  edit and delete, its needed mark, an Errand's approve, a quarantined signal's promote and dismiss). Its events carry the
   actor `orchestrator`; `ownerTouch` (`read/kpis.ts`) counts the owner alone, and its steering is the friction group
   `orchestrator_steer`.
 - **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction,
@@ -590,7 +590,7 @@ rows (the Console on :8797, to its loopback listener); the perimeter is the tail
 `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25). There is no per-request identity: anything that reaches
 :8797 reads what the owner reads, plus the owner's fifteen write verbs and never a session start. The door holds only
 its own token; the Console proxy never uses the orchestrator's. The Console listener forwards exactly eleven answers
-(Decisions, artifact verdicts, marks and annotations, Errands done or approved, held signals promoted or dismissed), a
+(Decisions, artifact verdicts, marks and annotations, Errands done or approved, quarantined signals promoted or dismissed), a
 collection's pin and unpin and an account's mode set and clear, guarded against a cross-site page (JSON only bar a
 delete, no cross-site fetch metadata, no foreign `origin`, 64 KiB). It starts no session and cancels or reopens no
 Issue; promote files one only from a signal already held, dismiss files nothing. The artifact frame (`/frame.html`,

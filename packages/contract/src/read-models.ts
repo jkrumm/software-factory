@@ -21,7 +21,7 @@ export type NeedKind = (typeof NEED_KINDS)[number]
 export const NeedItem = z
   .strictObject({
     kind: z.enum(NEED_KINDS),
-    /** the checkpoint's own id: the Decision, the artifact under review, the Errand, the held signal */
+    /** the checkpoint's own id: the Decision, the artifact under review, the Errand, the quarantined signal */
     id: z.string(),
     issue: IssueRef.nullable(),
     repo: z.string().nullable(),
@@ -38,16 +38,16 @@ export const NeedItem = z
     link: z.strictObject({ type: z.enum(['decision', 'artifact', 'errand', 'signal', 'issue']), id: z.string() }),
     /** the artifact under review a Decision was raised about; null for everything else */
     artifact: z.string().nullable(),
-    /** where it came from, in the words of `SIGNAL_ORIGINS`: a held signal's own origin, else the Issue's; null when unknown */
+    /** where it came from, in the words of `SIGNAL_ORIGINS`: a quarantined signal's own origin, else the Issue's; null when unknown */
     origin: z.string().nullable(),
-    /** a held signal's source in a person's word (never a tool name); a request's asker (`ask-human`); null for everything else */
+    /** a quarantined signal's source in a person's word (never a tool name); a request's asker (`ask-human`); null for everything else */
     source: z.string().nullable(),
     /** a request's command to copy, and where the hands must be; null for everything else and for a work-repo item the caller may not read */
     command: z.string().nullable(),
     host: z.enum(['macbook', 'iphone', 'portal', 'any']).nullable(),
-    /** a held signal that is a monitor down with no route: its source in a person's word, its name and the repo the screen's note names (the one promoting it routes to); null for everything else */
+    /** a quarantined signal that is a monitor down with no route: its source in a person's word, its name and the repo the screen's note names (the one promoting it routes to); null for everything else */
     unrouted: z.strictObject({ source: z.string(), monitor: z.string(), proposal: z.string().nullable() }).nullable(),
-    /** a held signal's link to the thing it is about; null for everything else and for a work-repo item the caller may not read */
+    /** a quarantined signal's link to the thing it is about; null for everything else and for a work-repo item the caller may not read */
     sourceLink: z.string().nullable(),
     /** an Errand whose last run failed or whose check overruled a done: "tried, failed: <first error line>" or the check's note; null for everything else and for a work-repo item the caller may not read */
     tried: z.string().nullable(),

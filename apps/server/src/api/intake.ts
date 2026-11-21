@@ -159,7 +159,7 @@ export const intakeRoutes = (api: IntakeApi) =>
       params: z.object({ id: z.string() }),
       body: PromoteRequest,
       response: RESPONSES,
-      detail: { operationId: 'signal.promote', summary: 'Let a held signal become work' },
+      detail: { operationId: 'signal.promote', summary: 'Let a quarantined signal become work' },
     })
     .post(
       '/signals/:id/dismiss',
@@ -168,7 +168,7 @@ export const intakeRoutes = (api: IntakeApi) =>
         params: z.object({ id: z.string() }),
         body: DismissRequest,
         response: { 200: SignalDismissed, ...errorResponses(400, 404, 409, 422, 503) },
-        detail: { operationId: 'signal.dismiss', summary: 'Turn a held signal away, with a reason' },
+        detail: { operationId: 'signal.dismiss', summary: 'Turn a quarantined signal away, with a reason' },
       },
     )
     .get(

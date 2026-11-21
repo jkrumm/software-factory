@@ -218,7 +218,7 @@ export const StoredSignal = z
     /** why a dismissed signal was turned away (it can quote outside text: the read token does not see it) */
     dismissedReason: z.string().nullable(),
     dismissedBy: z.enum(DISMISSERS).nullable(),
-    /** what the Judge made of a held signal it left to the owner (it can quote outside text: the read token does not see it) */
+    /** what the Judge made of a quarantined signal it left to the owner (it can quote outside text: the read token does not see it) */
     screenNote: z.string().nullable(),
     /** the text was hidden: the read token does not see outside text */
     redacted: z.boolean(),
@@ -228,16 +228,16 @@ export type StoredSignal = z.infer<typeof StoredSignal>
 
 export const SignalList = z.object({ signals: z.array(StoredSignal) }).meta({ id: 'SignalList' })
 
-/** `POST /signals/{id}/promote`: the owner (or the Judge) lets a held signal become work. */
+/** `POST /signals/{id}/promote`: the owner (or the Judge) lets a quarantined signal become work. */
 export const PromoteRequest = z
   .strictObject({
-    /** a held signal may have no repo (app feedback): the promoter names it */
+    /** a quarantined signal may have no repo (app feedback): the promoter names it */
     repo: z.string().min(1).max(256).nullish(),
   })
   .meta({ id: 'PromoteRequest' })
 export type PromoteRequest = z.infer<typeof PromoteRequest>
 
-/** `POST /signals/{id}/dismiss`: the owner (or the Judge) turns a held signal away, with a reason. */
+/** `POST /signals/{id}/dismiss`: the owner (or the Judge) turns a quarantined signal away, with a reason. */
 export const DismissRequest = z
   .strictObject({ reason: z.string().trim().min(1).max(500) })
   .meta({ id: 'DismissRequest' })
@@ -320,7 +320,7 @@ export type DoorReport = z.infer<typeof DoorReport>
 
 export const DoorReportAck = z.object({ ok: z.literal(true) }).meta({ id: 'DoorReportAck' })
 
-// ---- factory-screen: the Judge looks at a held signal -----------------------------------------------------------------------
+// ---- factory-screen: the Judge looks at a quarantined signal -----------------------------------------------------------------------
 
 const ScreenLine = z.string().trim().min(1).max(300)
 

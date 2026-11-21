@@ -62,7 +62,7 @@ export const LANGUAGE = {
   'desk pass':
     'The desk loop\'s one pass over every open Errand when the owner returns (a Console read after two hours or more away, the MacBook answering after it was unreachable, or his button "Push what waits to my MacBook"; each starts it at once) and every six hours otherwise: each check runs (the resolved ones close and wake their lead), the rest are screened again, and the MacBook commands are pushed through ask-human.sh push, every pending one oldest first on a return and one while he is away',
   dismiss:
-    'A held signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as dismissed',
+    'A quarantined signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as dismissed',
   'door route':
     "The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git",
   dormant:
@@ -83,9 +83,7 @@ export const LANGUAGE = {
   gate: 'A machine check a lead cannot talk past. Evidence is what a gate reads',
   gone: 'Session state: its session ended or its terminal is gone',
   healed: 'Outcome: an incident that went away before a lead started',
-  held: "No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a held signal",
-  'held signal':
-    "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two held signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there",
+  held: "No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a quarantined signal",
   idle: 'Session state: its last turn ended',
   'idle allowance-hours':
     'The hours the allowance stood unused while Issues were queued: per minute the allowance less the leads running, counted only where an Issue waited, over 60. The hours behind a drained queue are left out, because the owner stopped admission. What to do: many hours with the load low mean a limit is too tight; Binding reason names which, and the settings in force show its value.',
@@ -116,7 +114,7 @@ export const LANGUAGE = {
   'needed me':
     'The owner\'s one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
   needs:
-    'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, held signals, long waits',
+    'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, quarantined signals, long waits',
   'not measured':
     'A KPI with no figure: nothing was counted in the window, fewer samples than the floor of three stand under a share or a duration, or the source is not there (the usage schema). It never reads as zero, and its card says which. A friction count is read against the window of the same length just before it',
   'not started': 'The Issues no lead has begun: Ready and Held. The trend shows them as one line',
@@ -141,7 +139,9 @@ export const LANGUAGE = {
     'A test signal a lead marks (probe: true) so it is stored dismissed and never held; its ack is dropped, detail probe',
   project:
     "A repo the factory knows, described by its project.yaml (every key: docs/project.md). signals: says which automatic sources it listens to; a work repo listens to the owner only. host: names the host its alerts sit on (a key of config/infra.json's hosts), so its Kuma and HyperDX alerts join that host's incident. doctor: make doctor is the project saying whether this host can run it: a read-only command of seconds that exits non-zero with one line per missing prerequisite and its fix; while it is red the project's Issues stay queued (kind doctor, with those lines) and hygiene skips its check probe",
-  promote: "A held signal becomes work: the owner's or the Judge's call",
+  promote: "A quarantined signal becomes work: the owner's or the Judge's call",
+  'quarantined signal':
+    "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two quarantined signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there",
   'queue reason':
     "Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, spec, unknown_project, drain, doctor, boot, load, memory, disk (the repo's worktree, build output included, is learned to take more than the free disk less the headroom), tests (the test line is long: more steps wait for a slot than run, for longer than a step takes), lane, claim, window, cap",
   'queue state':
@@ -173,7 +173,7 @@ export const LANGUAGE = {
   running:
     "A lead works on it now: the Issue is in the working state and counts against the allowance. A lead standing in line for a test slot is still Running. The count is of Issues, not sessions: one Running Issue may have no session open for an instant between two sessions, and a Checking Issue's session is open without being counted here",
   screen:
-    "The Judge looks at a held signal (bar a work repo's; the screen loop, factory-screen) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most",
+    "The Judge looks at a quarantined signal (bar a work repo's; the screen loop, factory-screen) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it quarantined (stored as held) with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most",
   seat: "The tier, effort and role a lead runs on: the role table's row, or the one a filer or the owner set (factory issue seat, the event seated)",
   'session state':
     "What a lead's session is, derived from its hook events: starting (no hook yet), working (a turn is running), idle (its last turn ended), compacted (its context was just compacted, no turn since), walled (its account hit a limit), gone (its session ended or its terminal is gone)",

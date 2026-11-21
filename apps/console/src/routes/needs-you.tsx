@@ -34,7 +34,7 @@ const KIND_HINT = {
   review: 'review',
   decision: 'decision',
   errand: 'errand',
-  held_signal: 'held signal',
+  held_signal: 'quarantined signal',
   long_wait: 'long wait',
 } as const satisfies Record<NeedItem['kind'], InfoWord>
 

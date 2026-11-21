@@ -8,7 +8,7 @@ import { fileIn, recordIn } from './issues.ts'
 import { MAX_DISMISS_REASON, type Out, refuse, triaged, type IntakeDeps } from './intake-kit.ts'
 import { type Routes } from './intake-routes.ts'
 
-/** A held signal the owner (or the Judge) promotes to an Issue or dismisses. */
+/** A quarantined signal the owner (or the Judge) promotes to an Issue or dismisses. */
 export function createHeld(d: { deps: IntakeDeps; routes: Routes }) {
   const { deps } = d
   const { uow, clock } = d.deps
@@ -80,8 +80,8 @@ export function createHeld(d: { deps: IntakeDeps; routes: Routes }) {
   }
 
   /**
-   * A held signal that is a monitor down with no route: promoting it sets the route in the repo and files the monitor's
-   * last alert there (`routeIn`, which also answers this held signal). A monitor that came back up meanwhile has nothing
+   * A quarantined signal that is a monitor down with no route: promoting it sets the route in the repo and files the monitor's
+   * last alert there (`routeIn`, which also answers this quarantined signal). A monitor that came back up meanwhile has nothing
    * to file: the route stays and the signal is dismissed with that reason.
    */
   async function promoteUnrouted(id: string, info: RepoSignals, by: 'owner' | 'judge'): Out<Triaged> {
@@ -115,7 +115,7 @@ export function createHeld(d: { deps: IntakeDeps; routes: Routes }) {
     })
   }
 
-  /** The owner (or the Judge) turns a held signal away: it files nothing and stays on record as dismissed. */
+  /** The owner (or the Judge) turns a quarantined signal away: it files nothing and stays on record as dismissed. */
   async function dismiss(id: string, body: DismissRequest, by: 'owner' | 'judge' = 'owner'): Out<SignalDismissed> {
     const reason = body.reason.trim()
     if (reason.length === 0 || reason.length > MAX_DISMISS_REASON) {

@@ -117,7 +117,7 @@ test('a signal the owner dismissed meanwhile is counted, not an error', async ()
   expect(pass).toMatchObject({ ok: true, value: { looked: 1, notHeld: 1, dismissed: 0, problems: [] } })
 })
 
-test('a held signal of a work repo is left to the owner without a workflow call', async () => {
+test('a quarantined signal of a work repo is left to the owner without a workflow call', async () => {
   const recorded: unknown[] = []
   const store = {
     screenable: async () => [row()],
@@ -203,7 +203,7 @@ test('the last look is told so, and a leave becomes a promote with a known proje
   })
 })
 
-test('a held signal older than 72 h is screened again with final, a leave is promoted with the steer and it leaves the held list', async () => {
+test('a quarantined signal older than 72 h is screened again with final, a leave is promoted with the steer and it leaves the held list', async () => {
   const asked: unknown[] = []
   const promoted: unknown[] = []
   let held = true

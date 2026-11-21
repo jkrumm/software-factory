@@ -103,7 +103,7 @@ export function apiForward(options: {
 
 const forwarded = (path: string): boolean => path === '/health' || path === '/v1' || path.startsWith('/v1/')
 
-/** The owner's fifteen verbs, his eleven answers, the pin and unpin of a collection and the set and clear of an account's mode: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a held signal, dismiss files nothing; a pin moves one timestamp; a mode ends at its time or when cleared, and `claude-account mode` shows and clears it. */
+/** The owner's fifteen verbs, his eleven answers, the pin and unpin of a collection and the set and clear of an account's mode: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a quarantined signal, dismiss files nothing; a pin moves one timestamp; a mode ends at its time or when cleared, and `claude-account mode` shows and clears it. */
 const WRITES: { method: string; path: RegExp }[] = [
   { method: 'POST', path: /^\/v1\/decisions\/[^/]+\/answer$/ },
   { method: 'POST', path: /^\/v1\/artifacts\/[^/]+\/verdict$/ },

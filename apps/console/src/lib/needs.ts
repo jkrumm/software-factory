@@ -113,7 +113,7 @@ export const KIND_LABEL = {
   decision: 'Decisions',
   review: 'Reviews',
   errand: 'Errands',
-  held_signal: 'Held signals',
+  held_signal: 'Quarantined signals',
   long_wait: 'Long waits',
 } as const satisfies Record<NeedItem['kind'], string>
 

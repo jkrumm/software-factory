@@ -18,7 +18,7 @@ const KIND_ONE: Record<keyof typeof KIND_LABEL, string> = {
   decision: 'Decision',
   review: 'Review',
   errand: 'Errand',
-  held_signal: 'Held signal',
+  held_signal: 'Quarantined signal',
   long_wait: 'Long wait',
 }
 

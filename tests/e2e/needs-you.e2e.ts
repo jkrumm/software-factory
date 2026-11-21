@@ -60,7 +60,7 @@ test('the list groups what waits and the open cards show everything the owner de
 }) => {
   const all = await needs(apiUrl)
   await page.goto('/needs-you')
-  for (const heading of ['Decisions', 'Reviews', 'Errands', 'Held signals']) {
+  for (const heading of ['Decisions', 'Reviews', 'Errands', 'Quarantined signals']) {
     await expect(page.getByRole('heading', { level: 2, name: new RegExp(`^${heading}`) })).toBeVisible()
   }
   await expect(card(page, 'Which logging library').getByText('Open 2 hours')).toBeVisible()
@@ -94,7 +94,7 @@ test('the list groups what waits and the open cards show everything the owner de
   await everything()
 
   const held = all.find((need) => need.kind === 'held_signal')
-  if (!held) throw new Error('no held signal is seeded')
+  if (!held) throw new Error('no quarantined signal is seeded')
   await open(page, held.title)
   await expect(
     card(page, held.title)
@@ -165,8 +165,8 @@ test('the kind headings and the kind entries of the sidebar carry an InfoHint wi
   page,
 }) => {
   await page.goto('/needs-you')
-  const kinds = { review: 'Reviews', decision: 'Decisions', errand: 'Errands', held_signal: 'Held signals' } as const
-  const words = { review: 'review', decision: 'decision', errand: 'errand', held_signal: 'held signal' } as const
+  const kinds = { review: 'Reviews', decision: 'Decisions', errand: 'Errands', held_signal: 'Quarantined signals' } as const
+  const words = { review: 'review', decision: 'decision', errand: 'errand', held_signal: 'quarantined signal' } as const
   for (const kind of Object.keys(kinds) as (keyof typeof kinds)[]) {
     await expectHint(page.locator(`main section[aria-labelledby="needs-${kind}"]`), words[kind])
     await expectHint(page.locator('aside').getByRole('group', { name: 'Kinds' }), words[kind])
@@ -212,7 +212,7 @@ test('a deep link opens the item expanded and focused; the ntfy link lands on th
   await expect(page.getByText('That one is already settled.')).toHaveCount(0)
 })
 
-test('a held signal dismissed with a reason leaves Needs you and stays on record', async ({ page, apiUrl }) => {
+test('a quarantined signal dismissed with a reason leaves Needs you and stays on record', async ({ page, apiUrl }) => {
   // its own signal, so the held ones the other tests settle are left alone
   await holdSignal(apiUrl, 'The footer link is dead', 'dismissal')
   const held = await needNamed(apiUrl, 'The footer link is dead')
@@ -232,7 +232,7 @@ test('a held signal dismissed with a reason leaves Needs you and stays on record
   })
 })
 
-test('a held signal with a markdown fence shows no fence', async ({ page, apiUrl }) => {
+test('a quarantined signal with a markdown fence shows no fence', async ({ page, apiUrl }) => {
   await api(apiUrl, '/signals', {
     from: 'feedback:fencedapp',
     title: 'The export crashes',
@@ -248,7 +248,7 @@ test('a held signal with a markdown fence shows no fence', async ({ page, apiUrl
   await expect(page.getByRole('status').filter({ hasText: 'Dismissed' })).toBeVisible()
 })
 
-test('an Errand done, a held signal promoted and a verdict each move the API state', async ({ page, apiUrl }) => {
+test('an Errand done, a quarantined signal promoted and a verdict each move the API state', async ({ page, apiUrl }) => {
   // Errand
   const errand = await needNamed(apiUrl, 'Plug in the test phone')
   await open(page, 'Plug in the test phone')
@@ -262,9 +262,9 @@ test('an Errand done, a held signal promoted and a verdict each move the API sta
   expect(errands.find((e) => e.id === errand.id)).toMatchObject({ doneNote: 'Done, it passed' })
   expect(errands.find((e) => e.id === errand.id)?.doneAt).not.toBeNull()
 
-  // Held signal (app feedback names no repo: the owner does)
+  // Quarantined signal (app feedback names no repo: the owner does)
   const held = (await needs(apiUrl)).find((need) => need.kind === 'held_signal')
-  if (!held) throw new Error('no held signal is left')
+  if (!held) throw new Error('no quarantined signal is left')
   await open(page, held.title)
   const signal = card(page, held.title)
   if (held.repo === null) {
