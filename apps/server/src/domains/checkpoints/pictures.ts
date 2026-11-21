@@ -14,14 +14,22 @@ const INLINE_CODE = /(`+)[^`][\s\S]*?\1(?!`)/g
 const MD_IMAGE = /!\[([^\]]*)\]\(\s*(<[^>\n]*>|[^\s)]*)/g
 const HTML_IMG = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi
 
-/** The text with every fenced code block (and its fences) dropped, line by line. */
+/** The text with every fenced code block (and its fences) dropped: a fence closes on its own character, as long, bare. */
 function withoutFences(content: string): string {
-  let fenced = false
+  let open: { char: string; length: number } | null = null
   return content
     .split('\n')
     .filter((line) => {
-      if (/^\s{0,3}(?:```|~~~)/.test(line)) fenced = !fenced
-      else if (!fenced) return true
+      const run = /^\s{0,3}(`{3,}|~{3,})(.*)$/.exec(line)
+      const marker = run?.[1]
+      if (!open) {
+        if (!run || !marker) return true
+        open = { char: marker.charAt(0), length: marker.length }
+        return false
+      }
+      if (run && marker && marker.charAt(0) === open.char && marker.length >= open.length && run[2]?.trim() === '') {
+        open = null
+      }
       return false
     })
     .join('\n')

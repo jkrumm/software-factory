@@ -37,6 +37,9 @@ describe('unloadedPictures (markdown)', () => {
     )
     const code = '```md\nfirst\n![a](https://x.example.com/a.png)\n```\n`![b](https://x.example.com/b.png)`'
     expect(unloadedPictures(code, 'markdown', HOSTS, NOW)).toEqual([])
+    const nested =
+      '````md\n```md\n![a](https://x.example.com/a.png)\n```\n````\n```\n~~~\n![b](https://x.example.com/b.png)\n~~~\n```'
+    expect(unloadedPictures(nested, 'markdown', HOSTS, NOW)).toEqual([])
     const after = '```\nx\ny\n```\n![c](https://x.example.com/c.png)'
     expect(unloadedPictures(after, 'markdown', HOSTS, NOW)).toHaveLength(1)
   })
