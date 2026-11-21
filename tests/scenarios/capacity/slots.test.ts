@@ -89,6 +89,7 @@ test("a command past its run limit is killed and the exit is 124; the limit is t
   })
   expect(result.code).toBe(124)
   expect(result.err).toContain('ran past the test-slot run limit of 300 ms')
+  expect(result.err.trimEnd().split('\n').at(-1)).toContain('slot timeout, not a test failure')
   expect(Date.now() - started).toBeLessThan(10_000)
   expect(await slotRows()).toEqual([])
 
