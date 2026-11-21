@@ -254,7 +254,7 @@ The Issue's insights, from the same read: 2 h 8 min from filed to closed, 12.7 m
 
 **Read more:**
 
-- [`docs/architecture.md` The Issue machine](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L64-L85): one writer, the review wait, the model test
+- [`docs/architecture.md` The Issue machine](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#the-issue-machine): one writer, the review wait, the model test
 - [`docs/language.md` Events](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L180-L211): every event, what it means and who sends it
 - [`docs/language.md` Where work stands](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L48-L62): the five words and Planned
 
