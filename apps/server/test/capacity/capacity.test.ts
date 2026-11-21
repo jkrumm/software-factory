@@ -679,6 +679,29 @@ describe('test slots', () => {
         granted: false,
         why: 'headroom 2.6 GiB',
       },
+      {
+        name: 'a tripped load tripwire holds the second base slot: one step at a time',
+        holders: 1,
+        fit: {
+          loadOk: false,
+          loadTripped: true,
+          loadWhy: 'load over 36 in each of the last 5 minutes (61, 64, 66, 63, 62)',
+        },
+        granted: false,
+        why: 'one step at a time until it settles',
+      },
+      {
+        name: 'a lone step is granted even while the tripwire is tripped',
+        holders: 0,
+        fit: { loadOk: false, loadTripped: true },
+        granted: true,
+      },
+      {
+        name: 'one peak (load over the ceiling, tripwire not tripped) holds no base slot',
+        holders: 1,
+        fit: { loadOk: false },
+        granted: true,
+      },
       { name: 'an unknown peak grants a base slot', holders: 1, fit: { peakMib: null }, granted: true },
       { name: 'an unknown free memory grants a base slot', holders: 1, fit: { freeMib: null }, granted: true },
       {

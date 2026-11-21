@@ -99,6 +99,11 @@ export interface SlotFit {
   max: number
   /** whether the host's load allows a step beyond the base slots */
   loadOk: boolean
+  /**
+   * The load tripwire is tripped (minutes on end over the ceiling, never one peak): no step starts beside a running one,
+   * a base slot included. The first step always starts, so the line moves one step at a time and never deadlocks.
+   */
+  loadTripped?: boolean
   headroomMib: number
   /** swap in use rose over the newest host samples (`swapGrowing`): a second step would page the first one's memory out */
   swapGrowing?: boolean
@@ -204,6 +209,12 @@ function decide(
     kind: 'memory',
     why: `waiting for memory: needs ${gib(peakMib ?? 0)} (${PEAK_SOURCE[step.peakFrom]}), ${gib(Math.max(0, (freeMib ?? 0) - fit.growthMib))} free after ${gib(fit.growthMib)} the running steps still grow${room === 0 ? ', no headroom for a base slot' : `, headroom ${gib(room)}`}`,
   })
+  if (holders < base && fit.loadTripped)
+    return {
+      grant: false,
+      kind: 'load',
+      why: `${fit.loadWhy ?? 'load is too high'}: one step at a time until it settles`,
+    }
   if (holders < base) return !known || fits ? { grant: true } : memory()
   if (!fit.loadOk) {
     const over =
