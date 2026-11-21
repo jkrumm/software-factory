@@ -421,7 +421,7 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   APFS clones are counted in full, so the figure errs towards refusing) and admission learns a repo's footprint as the p80 of the
   newest ten attempts (at least three, `learnedWorktreeMib`, a size is a plateau, not a burst, so the upper share, unlike the
   memory fit's median). A lead stays queued as `disk` when that figure does not fit the free disk of the home volume less the
-  headroom (10 GiB or 5 % of the volume) and what the leads started in the last 10 minutes will still take
+  headroom (10 GiB or 10 % of the volume, raised from 5 % on 2026-11-21 so admission stops under the disk alert's 93 %) and what the leads started in the last 10 minutes will still take
   (`diskRefusal`, `youngDiskMib`); with no lead running, no learned figure or no reading it keeps nobody out. A disk reason
   needs no static cap. (3) **`factory project check` and the hygiene `project` probe** warn on a `leads` below the default
   whose comment names a resource the factory models: the merge window (pointer to `factory merge-lock`), the deploy queue
