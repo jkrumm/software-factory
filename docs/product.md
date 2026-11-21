@@ -7,11 +7,9 @@ build in `docs/architecture.md`.
 
 ## The position
 
-**Dark for code, lit for decisions.** No person reviews a change before production. The lead's own review, gates,
-the watch window and probes do that job. What reaches the owner is product direction, spend, irreversible data loss,
-other people, security policy, rare big architecture and taste, set once per project in a Concept. Warp keeps a person
-at spec, question and merge ("agents never merge on your behalf") and calls dark factories "not realistic right now".
-This factory exists to show how far past that a solo setup can go.
+**Dark for code, lit for decisions.** The README states the position, what reaches the owner and why
+([README.md](../README.md#dark-for-code-lit-for-decisions)); this page does not repeat it. What this page adds is that the
+owner's taste is set once per project, in a Concept.
 
 ## For whom
 

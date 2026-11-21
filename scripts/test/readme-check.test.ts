@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { checkReadme, countOf, type Facts, readFacts, ROOT } from '../readme-check.ts'
+import { checkResults, RESULT_PAGES, type Results, renderResults } from '../readme-results.ts'
 
 const README = readFileSync(join(ROOT, 'README.md'), 'utf8')
 const facts = readFacts(ROOT)
@@ -79,4 +80,31 @@ test('counts are read as digits or number words', () => {
   expect(countOf('23')).toBe(23)
   expect(countOf('Eight')).toBe(8)
   expect(countOf('many')).toBeUndefined()
+})
+
+describe('the result numbers', () => {
+  const results = JSON.parse(readFileSync(join(ROOT, 'docs/results.json'), 'utf8')) as Results
+  const page = (path: string) => readFileSync(join(ROOT, path), 'utf8')
+
+  test('the README and the guide start page carry docs/results.json', () => {
+    for (const path of RESULT_PAGES) expect(checkResults(path, page(path), results)).toEqual([])
+  })
+
+  test('a number edited by hand, a deleted block and a KPI with no figure fail', () => {
+    const readme = page('README.md')
+    expect(
+      checkResults('README.md', readme.replace(/Issues closed \| [\d,]+/, 'Issues closed | 1'), results).join('\n'),
+    ).toContain('not docs/results.json')
+    expect(checkResults('README.md', readme.replace('<!-- results:start -->', ''), results).join('\n')).toContain(
+      'no result block',
+    )
+    const { cycle_p50: _dropped, ...rest } = results.kpis
+    expect(checkResults('README.md', readme, { ...results, kpis: rest }).join('\n')).toContain(
+      'no figure for the KPI cycle_p50',
+    )
+  })
+
+  test('the block says the window it was read over', () => {
+    expect(renderResults(results)).toContain(results.window.from.slice(0, 10))
+  })
 })

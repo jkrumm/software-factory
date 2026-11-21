@@ -5,13 +5,15 @@
  * which tokens the server reads, which screens the Console has, which domains the server owns, which states an Issue has,
  * the Console's port and how many writes its listener forwards. Each is read from the code and compared; a README that
  * disagrees fails with the statement to fix. A statement the README no longer makes fails too, so the check cannot
- * go quiet by deleting the sentence.
+ * go quiet by deleting the sentence. The result numbers of the README and the guide's start page are held against
+ * `docs/results.json` (`scripts/readme-results.ts`).
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CALLERS } from '../apps/server/src/api/policy.ts'
 import { ISSUE_STATES } from '../packages/contract/src/vocab.ts'
 import { PAYLOADS } from '../apps/server/src/domains/work/events.ts'
+import { checkResults, RESULT_PAGES, type Results } from './readme-results.ts'
 
 /** What the code says: every list and count the README states. */
 export interface Facts {
@@ -142,7 +144,7 @@ export function checkReadme(
     readme,
     'the domains',
     new RegExp(`\\b(${NUMBER})\\s+domains\\b`, 'i'),
-    'Write "Eight domains" above the domain table.',
+    'Write "Ten domains" above the domain table.',
   )
   compare('the domains', domains, facts.domains.length)
   const domainRows = readme
@@ -219,6 +221,8 @@ if (import.meta.main) {
   const problems = checkReadme(readFileSync(join(ROOT, 'README.md'), 'utf8'), readFacts(ROOT), (p) =>
     existsSync(join(ROOT, p)),
   )
+  const results = JSON.parse(readFileSync(join(ROOT, 'docs/results.json'), 'utf8')) as Results
+  for (const page of RESULT_PAGES) problems.push(...checkResults(page, readFileSync(join(ROOT, page), 'utf8'), results))
   for (const line of problems) console.error(line)
   if (problems.length) process.exit(1)
   console.log('README agrees with the code')

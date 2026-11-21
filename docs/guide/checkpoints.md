@@ -88,7 +88,7 @@ Across the 300 newest closed Issues of this repo (2026-11-17), 24 Decisions were
 
 **Example files:**
 
-- [`decision.ts` L9-L17](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L9-L17): the four steps and who may settle.
+- [`decision.ts` L9-L17](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L9-L17): the steps (`policy` is history) and who may settle.
 - [`decision.ts` L203-L217](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L203-L217): `guardVerdict`, the factory's checks on an answer.
 - [`decision.ts` L227-L273](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L227-L273): `JudgeInput`, what the workflow is given.
 
