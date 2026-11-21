@@ -1,6 +1,6 @@
 import { MAX_IMAGE_LABEL, resolveImage, srcHash } from '@software-factory/contract'
 import { useRouter } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -196,6 +196,35 @@ function MarkdownImage({ src, alt, annotate }: { src?: string; alt?: string; ann
     </span>
   )
 }
+
+/**
+ * The elements react-markdown renders through our own components. They are module-level and the maps are constants: a
+ * component defined in the render is a new type on every render, so React would replace the whole table, link or picture
+ * (new DOM nodes) each time the page re-renders, and the passages painted inside them would lose their text nodes and mark
+ * nothing. `annotate` (the primary document only) is the one thing the picture needs, so there are two maps.
+ */
+const MARKDOWN_PARTS = {
+  table: ({ node: _node, ...props }: ComponentProps<'table'> & { node?: unknown }) => (
+    <div className="my-3 overflow-x-auto">
+      <table {...props} />
+    </div>
+  ),
+  a: ({ node: _node, href, children }: ComponentProps<'a'> & { node?: unknown }) => (
+    <MarkdownLink href={href}>{children}</MarkdownLink>
+  ),
+}
+const markdownImage =
+  (annotate: boolean) =>
+  ({ node: _node, src, alt }: ComponentProps<'img'> & { node?: unknown }) => (
+    <MarkdownImage
+      key={typeof src === 'string' ? src : ''}
+      src={typeof src === 'string' ? src : undefined}
+      alt={alt}
+      annotate={annotate}
+    />
+  )
+const MARKDOWN_COMPONENTS = { ...MARKDOWN_PARTS, img: markdownImage(true) }
+const MARKDOWN_COMPONENTS_PLAIN = { ...MARKDOWN_PARTS, img: markdownImage(false) }
 
 /** The pictures of a rendered Markdown document in order, each as the comments name them. */
 function markdownPictures(root: HTMLElement): {
@@ -425,22 +454,7 @@ function MarkdownContent({
         remarkPlugins={[remarkGfm]}
         skipHtml
         urlTransform={defaultUrlTransform}
-        components={{
-          table: ({ node: _node, ...props }) => (
-            <div className="my-3 overflow-x-auto">
-              <table {...props} />
-            </div>
-          ),
-          a: ({ node: _node, href, children }) => <MarkdownLink href={href}>{children}</MarkdownLink>,
-          img: ({ node: _node, src, alt }) => (
-            <MarkdownImage
-              key={typeof src === 'string' ? src : ''}
-              src={typeof src === 'string' ? src : undefined}
-              alt={alt}
-              annotate={primary}
-            />
-          ),
-        }}
+        components={primary ? MARKDOWN_COMPONENTS : MARKDOWN_COMPONENTS_PLAIN}
       >
         {content}
       </Markdown>

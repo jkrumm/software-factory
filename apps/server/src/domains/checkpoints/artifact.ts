@@ -236,6 +236,29 @@ const ENTITIES: Record<string, string> = {
   ne: '\u2260',
   le: '\u2264',
   ge: '\u2265',
+  check: '\u2713',
+  cross: '\u2717',
+  trade: '\u2122',
+  harr: '\u2194',
+  uarr: '\u2191',
+  darr: '\u2193',
+  rArr: '\u21d2',
+  hArr: '\u21d4',
+  ...Object.fromEntries(
+    // the Latin-1 block, U+00A0 to U+00FF in order: the accented letters and symbols a page writes by name
+    (
+      'nbsp iexcl cent pound curren yen brvbar sect uml copy ordf laquo not shy reg macr deg plusmn sup2 sup3 acute micro ' +
+      'para middot cedil sup1 ordm raquo frac14 frac12 frac34 iquest Agrave Aacute Acirc Atilde Auml Aring AElig Ccedil ' +
+      'Egrave Eacute Ecirc Euml Igrave Iacute Icirc Iuml ETH Ntilde Ograve Oacute Ocirc Otilde Ouml times Oslash Ugrave ' +
+      'Uacute Ucirc Uuml Yacute THORN szlig agrave aacute acirc atilde auml aring aelig ccedil egrave eacute ecirc euml ' +
+      'igrave iacute icirc iuml eth ntilde ograve oacute ocirc otilde ouml divide oslash ugrave uacute ucirc uuml yacute ' +
+      'thorn yuml'
+    )
+      .split(' ')
+      .map((name, i) => [name, String.fromCharCode(0xa0 + i)])
+      // `nbsp` stays the space it is shown as
+      .filter(([name]) => name !== 'nbsp'),
+  ),
 }
 
 /** Tags that sit inside a line of text: a browser shows `<code>make</code>,` as `make,`, so they leave no space behind. */
@@ -267,11 +290,20 @@ export function readableText(content: string, format: Format): string {
             .replace(new RegExp(`</?(?:${INLINE_TAGS})\\b[^>]*>`, 'gi'), '')
             .replace(/<[^>]*>/g, ' '),
         )
-      : content
-          .replace(/```[^\n]*\n?/g, ' ')
-          .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-          .replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '')
-          .replace(/[*_`~]/g, '')
+      : decodeEntities(
+          content
+            .replace(/```[^\n]*\n?/g, ' ')
+            // a table's rule row (`|-|:-:|`) shows nothing, and its cell borders are not text: cells read as separate words
+            .replace(/^[ \t]*[|:\- \t]*\|[|:\- \t]*$/gm, ' ')
+            .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+            // an autolink shows its address as the link text
+            .replace(/<([a-z][a-z0-9+.-]*:[^>\s]+|[^>\s@]+@[^>\s]+)>/gi, '$1')
+            // raw HTML in a source is dropped by the page: `a<br>b` reads `ab`
+            .replace(/<\/?[a-z][^>\n]*>/gi, '')
+            .replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '')
+            .replace(/\\([\\`*_{}[\]()#+\-.!|<>~])/g, '$1')
+            .replace(/[*_`~|]/g, (mark) => (mark === '|' ? ' ' : '')),
+        )
   return flat.replace(/\s+/g, ' ').trim()
 }
 

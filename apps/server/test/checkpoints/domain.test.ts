@@ -342,6 +342,38 @@ describe('artifacts', () => {
     expect(anchorOf(md, 'markdown', 'keep the queue in Redis')).toBe('unanchored')
   })
 
+  test('a Markdown quote is found across table cells, raw tags, escapes and entities, as the page shows them', () => {
+    const md = [
+      '| Option | Cost |',
+      '|:-|-:|',
+      '| Fair queue | low \\| cost |',
+      '',
+      'Alpha<br>beta &amp; gamma \\*not bold\\* caf&eacute; &check;',
+    ].join('\n')
+    expect(readableText(md, 'markdown')).toBe('Option Cost Fair queue low cost Alphabeta & gamma not bold café ✓')
+    // a quote taken from the rendered page: cells come apart with a tab, which folds to a space
+    for (const quote of [
+      'Option Cost',
+      'Fair queue low | cost',
+      'Fair queue\tlow | cost',
+      'Alphabeta & gamma *not bold* café ✓',
+    ])
+      expect(anchorOf(md, 'markdown', quote)).toBe('anchored')
+    expect(anchorOf(md, 'markdown', 'Option Redis')).toBe('unanchored')
+  })
+
+  test('an autolink keeps its text, a raw tag does not', () => {
+    const md = 'See <https://example.com/wait> or mail <me@example.com>, then a<br>b and <span>kept</span>.'
+    expect(readableText(md, 'markdown')).toBe('See https://example.com/wait or mail me@example.com, then ab and kept.')
+    for (const quote of ['https://example.com/wait', 'mail me@example.com', 'ab and kept.'])
+      expect(anchorOf(md, 'markdown', quote)).toBe('anchored')
+  })
+
+  test('a rule row of a table shows nothing, and a plain rule or list marker is not one', () => {
+    expect(readableText('| a | b |\n|-|-|\n| c | d |', 'markdown')).toBe('a b c d')
+    expect(readableText('above\n\n---\n\n- item - with a dash', 'markdown')).toBe('above --- item - with a dash')
+  })
+
   test('an HTML quote is found in its text, not its tags or scripts', () => {
     const html =
       '<h1>Plan</h1><p>We keep the <b>queue</b> in Postgres &amp; Redis.</p><script>const secret = "hidden"</script>'
@@ -364,6 +396,8 @@ describe('artifacts', () => {
     expect(readableText('<p>don&rsquo;t &ldquo;stop&rdquo; at 5&deg; &ne; 6</p>', 'html')).toBe(
       'don’t “stop” at 5° ≠ 6',
     )
+    // the accented letters of Latin-1 and a check mark, written by name, as a page shows them
+    expect(readableText('<p>caf&eacute; na&iuml;ve&nbsp;&check; &Uuml;ber</p>', 'html')).toBe('café naïve ✓ Über')
   })
 
   test('numeric entities out of range or unknown named ones stay as written', () => {
