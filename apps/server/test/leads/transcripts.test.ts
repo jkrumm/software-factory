@@ -186,6 +186,16 @@ describe('tidy', () => {
     expect(later.ok && later.value?.expired).toBe(1)
   })
 
+  test('the untracked files a finalize kept from a worktree stay plain', async () => {
+    const dir = plainArchive(5, 1, 30)
+    mkdirSync(join(dir, 'worktree'), { recursive: true })
+    writeFileSync(join(dir, 'worktree', 'notes.md'), 'scratch')
+    await store().tidy()
+    expect(readFileSync(join(dir, 'worktree', 'notes.md'), 'utf8')).toBe('scratch')
+    expect(existsSync(join(dir, 'worktree', 'notes.md.zst'))).toBe(false)
+    expect(existsSync(join(dir, 's1.jsonl.zst'))).toBe(true)
+  })
+
   test('the project directory of a finished worktree goes once its transcripts are archived; others stay', async () => {
     const archivedAttempt = project(5, 1)
     const unarchived = project(6, 1)

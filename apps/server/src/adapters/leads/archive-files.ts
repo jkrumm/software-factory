@@ -11,6 +11,9 @@ const LEVEL = 6
 
 const PARTIAL = '.partial'
 
+/** The directory of an attempt's archive that holds the worktree's untracked files (`adapters/git/worktrees.ts`): not a transcript. */
+const UNTRACKED_DIR = 'worktree'
+
 /** A `.partial` untouched this long is a crash's leftover. */
 const STALE_PARTIAL_MS = 86_400_000
 
@@ -157,6 +160,8 @@ export async function convertAttempt(
       continue
     }
     if (file.endsWith(ARCHIVE_SUFFIX)) continue
+    // the untracked files a finalize kept from the worktree stay as they were: a person reads them
+    if (file.split(sep)[0] === UNTRACKED_DIR) continue
     const done = await compressFile(join(dir, file), `${join(dir, file)}${ARCHIVE_SUFFIX}`)
     await rm(join(dir, file))
     sum.files++
