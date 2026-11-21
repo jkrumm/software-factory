@@ -16,6 +16,7 @@ import type { LeadDeps, LeadsUow } from './app/leads.ts'
 import { replayLines, recordHook, stopCheck } from './app/leads-hooks.ts'
 import { leadSession } from './app/leads-session.ts'
 import { apiErrorMemory, apiErrorPorts } from './app/leads-api-errors.ts'
+import { worktreeSweepMemory } from './app/leads-sweep.ts'
 import { leadPorts, leadTick } from './app/leads-tick.ts'
 import { blockIssue, closeIssue, deferIssue } from './app/leads-verbs.ts'
 import type { EffectPorts } from './domains/work/ports.ts'
@@ -93,7 +94,7 @@ export function composeLeads(input: {
       ...(s.agentToken ? { agentToken: s.agentToken } : {}),
       ...(s.apiUrl ? { apiUrl: s.apiUrl } : {}),
     }),
-    worktrees: gitWorktrees(),
+    worktrees: gitWorktrees({ archiveDir: s.archiveDir }),
     branches: gitBranches(input.github),
     repos: rootedRepos(s.repoRoots, s.repoAllow),
     checks: input.checks,
@@ -139,12 +140,14 @@ export function composeLeads(input: {
     },
   })
   const memory = apiErrorMemory()
+  const sweep = worktreeSweepMemory()
   const tick = (signal?: AbortSignal) =>
     leadTick({
       leads: deps,
       ports,
       replaySpool: async () => (await replayer.replay()).lines,
       apiErrorMemory: memory,
+      worktreeSweep: sweep,
       ...(signal ? { signal } : {}),
     })
 

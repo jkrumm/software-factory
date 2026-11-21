@@ -120,6 +120,14 @@ const FinalizationRow = z.object({
   done_at: z.date().nullable(),
 })
 
+const KeptRow = z.object({
+  issue_id: z.string(),
+  attempt: z.number().int(),
+  worktree_path: z.string(),
+  worktree_kept: z.string().nullable(),
+  repo: z.string(),
+})
+
 const SignalRow = z.object({
   source: z.string(),
   title: z.string(),
@@ -415,6 +423,25 @@ export function postgresLeadStore(tx: SQL): LeadStore {
         worktreePath: parsed.worktree_path,
         doneAt: parsed.done_at,
       }
+    },
+
+    async keptWorktrees() {
+      const rows: unknown[] = await tx`
+        SELECT f.issue_id, f.attempt, f.worktree_path, f.worktree_kept, i.repo
+        FROM factory.lead_finalizations f
+        JOIN factory.issues i ON i.id = f.issue_id
+        WHERE i.state = 'closed' AND f.done_at IS NOT NULL AND f.worktree_path IS NOT NULL
+        ORDER BY f.issue_id DESC, f.attempt DESC`
+      return rows.map((raw) => {
+        const row = KeptRow.parse(raw)
+        return {
+          issue: row.issue_id as IssueId,
+          attempt: row.attempt,
+          repo: row.repo,
+          path: row.worktree_path,
+          kept: row.worktree_kept,
+        }
+      })
     },
 
     async markStep(issue, attempt, step, at, detail) {

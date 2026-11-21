@@ -209,7 +209,11 @@ Errand.
 - **Stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once; the next stop is
   let through, since a finished background task can restart it.
 - **Finalize** (`app/leads-finalize.ts`): claim back, terminals closed, transcripts archived, worktree and branch
-  removed when clean and on the base. On close, every `factory/<issue>-*` branch goes once its work is on origin's
+  removed when its commits are on the base: the untracked files a lead left are copied to
+  `<archive>/<issue>/<attempt>/worktree/` first (ignored files are dropped), a tracked change keeps the tree and
+  says which file. The build output in it (`target/` beside a `Cargo.toml`, `node_modules`) is deleted at finalize
+  whether the tree stays or not. A kept tree of a closed Issue is looked at again hourly (`app/leads-sweep.ts`, started by
+  the lead tick, never awaited), which is also the pass that clears the trees kept before this rule. On close, every `factory/<issue>-*` branch goes once its work is on origin's
   default (`adapters/git/branches.ts`).
 
 **Backoffs** (`kernel/backoff.ts`). A Judge's answer that reads as a backoff makes the wait a timer: one hour, doubling per backoff, at
