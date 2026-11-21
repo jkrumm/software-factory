@@ -142,8 +142,8 @@ export interface Issue {
 export const MAX_RESTARTS = 2
 /** A regression goes back to the lead this many times; the next is a stall. */
 export const MAX_REGRESSIONS = 2
-/** A closed Issue reopens within this long; after it, file a new one. */
 /** Whether the lead of the current attempt may be moved up: the light rule seated it, or its filed seat asked for the move-up. */
 export const movable = (issue: Pick<Issue, 'ranOn'>): boolean => Boolean(issue.ranOn?.rule || issue.ranOn?.moveUp)
 
+/** A closed Issue reopens within this long; after it, file a new one. */
 export const REOPEN_WINDOW_MS = 30 * 24 * 60 * 60_000

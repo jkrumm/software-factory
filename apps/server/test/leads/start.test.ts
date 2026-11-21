@@ -234,6 +234,7 @@ describe('the seat badge (leadSeat)', () => {
     expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
     expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'haiku', effort: 'high' })
     expect((await detail(issue))?.ranOn).toMatchObject({ tier: 'haiku', effort: 'high', role: 'light' })
+    expect(w.terminals.started.at(-1)?.prompt).toContain('--out-of-depth')
 
     await w.event(issue, 'moved_up:1', {
       kind: 'moved_up',
@@ -244,6 +245,7 @@ describe('the seat badge (leadSeat)', () => {
     expect(await shown(issue)).toMatchObject({ tier: 'sonnet', effort: 'high', planned: true })
     expect((await startLead(w.deps, effect(issue, 2))).ok).toBe(true)
     expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'sonnet', effort: 'high' })
+    expect(w.terminals.started.at(-1)?.prompt).not.toContain('## Your seat')
   })
 
   test('with no lead row and no filed seat, nothing is shown', async () => {

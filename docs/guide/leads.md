@@ -80,7 +80,7 @@ A seat is the tier and effort a lead starts on, read from the role table.
 - **The light row** is haiku at high effort, a fifth of the cost. It starts mechanical, well-specified work that a check proves.
 - **A rule names the light start.** `lightRule` returns why an Issue starts light (`hygiene:<class>`, `kind:docs`, `alert:route`, `triage:small`) or null. An Issue with a design choice (`checkpoint: spec`) never starts light on size alone. A hygiene finding starts light whatever its size.
 - **Stated edges do not cost the size.** An Issue filed with `--after`, `--alone` or as a plan row has its edges final, but triage is still asked for its size and kind (with no Issue to wait for, so it names no edge). Before the planned lead starts, `factory issue show` reports the seat the rule gives it now, with the rule's name, or says the size is not known yet.
-- **A struggling light lead moves up once.** Its second stall or second refused ship, an out-of-depth block, or a regression on its first watch gives the next lead the lead row. After that, never light again.
+- **A struggling light lead moves up once.** Its second stall or second refused ship, an out-of-depth block, or a regression on its first watch gives the next lead the lead row. After that, never light again. A filed seat with `moveUp: true` is moved up and spent the same way; any other filed seat is not.
 
 An excerpt of `config/roles.json`, cut off before the end of the file:
 

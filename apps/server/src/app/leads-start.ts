@@ -189,6 +189,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       filedSpec,
       ...(previous ? { previous } : {}),
       light: role.value.rule,
+      moveUp: role.value.moveUp === true,
       reviewer: reviewer ? reviewerBrief(reviewer.role, reviewer.cheap) : null,
       movedUp,
     })
