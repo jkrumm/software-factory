@@ -748,6 +748,22 @@ describe('artifacts', () => {
     expect(text).toContain('**drop the table** (not reversible)')
     expect(text).toContain('After 30 minutes the default is taken: **pino**')
   })
+
+  test('a table exhibit keeps a pipe in a cell inside its cell', () => {
+    const text = renderDecisionForm({
+      ...form(),
+      exhibit: {
+        kind: 'table',
+        criteria: ['Speed | cost'],
+        rows: [
+          { option: 'pino', cells: ['fast | cheap'] },
+          { option: 'winston', cells: ['slow'] },
+        ],
+      },
+    })
+    expect(text).toContain('| Option | Speed \\| cost |')
+    expect(text).toContain('| pino | fast \\| cheap |')
+  })
 })
 
 describe('errands', () => {

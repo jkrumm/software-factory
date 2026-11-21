@@ -387,14 +387,17 @@ function renderExhibit(exhibit: Exhibit): string[] {
       return ['```mermaid', exhibit.mermaid, '```', '', exhibit.caption]
     case 'table':
       return [
-        `| Option | ${exhibit.criteria.join(' | ')} |`,
+        `| Option | ${exhibit.criteria.map(cell).join(' | ')} |`,
         `|-|${exhibit.criteria.map(() => '-').join('|')}|`,
-        ...exhibit.rows.map((row) => `| ${row.option} | ${row.cells.join(' | ')} |`),
+        ...exhibit.rows.map((row) => `| ${cell(row.option)} | ${row.cells.map(cell).join(' | ')} |`),
       ]
     case 'numbers':
       return exhibit.figures.map((figure) => `- ${figure.label}: **${figure.value} ${figure.unit}**`)
   }
 }
+
+/** A table cell: a pipe in it would split the row. */
+const cell = (text: string): string => text.replaceAll('|', '\\|')
 
 /** What a Decision looks like as an artifact: its form, as Markdown. Revision 1, and the only one. */
 export function renderDecisionForm(form: DecisionForm): string {
