@@ -268,7 +268,7 @@ describe('asking', () => {
           kind: 'spec',
           title: 'Panel',
           content:
-            '# Panel\n\n## Build\n\nA closed panel.\n\n## Decided\n\n- It stays closed: his words.\n\n## Detail\n\nLong tail that the Judge does not need.\n',
+            '## Build\n\nA closed panel.\n\n## Decided\n\n- It stays closed: his words.\n\n## Detail\n\nLong tail that the Judge does not need.\n',
         },
       }),
     )
@@ -290,7 +290,11 @@ describe('asking', () => {
       await submitArtifact(deps, {
         issueId,
         attempt: 1,
-        raw: { kind: 'spec', title: 'Panel', content: `# Panel\n\n## Build\n\n![a](${image})\n` },
+        raw: {
+          kind: 'spec',
+          title: 'Panel',
+          content: `## Build\n\n![a](${image})\n\n## Decided\n\nIt stays closed.\n`,
+        },
       }),
     )
     const pictures = (src: string) => ({

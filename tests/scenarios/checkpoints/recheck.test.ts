@@ -201,7 +201,7 @@ test('a stale Decision the Judge passed on is settled by it on the recheck once 
   const { issueId, id } = await atOwner(
     'example-recheck-settled',
     'Which retention for the export files?',
-    '# Export\n\n## Build\n\nExport files are pruned nightly.\n\n## Detail\n\nThe long tail.',
+    '## Build\n\nExport files are pruned nightly.\n\n## Decided\n\nNightly.\n\n## Detail\n\nThe long tail.',
   )
   await backdate(issueId, 7)
   const before = (await askCalls()).length
