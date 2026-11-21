@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { zstdDecompressSync } from 'node:zlib'
@@ -108,6 +108,25 @@ describe('archive', () => {
     const done = await store().tidy()
     expect(done.ok && done.value?.projectsRemoved).toBe(0)
     expect(existsSync(join(dir, 's2', 'subagents', 'agent-b.jsonl'))).toBe(true)
+  })
+
+  test('a project that cannot be read whole is kept, and the projects after it are still looked at', async () => {
+    const unreadable = project(11, 1)
+    const readable = project(12, 1)
+    plainArchive(11, 1, 1)
+    plainArchive(12, 1, 1)
+    const hidden = join(unreadable.dir, 's1', 'subagents')
+    chmodSync(hidden, 0o000)
+    try {
+      const done = await store().tidy()
+      // running as root reads it anyway: then there is nothing to keep
+      if (process.getuid?.() === 0) return
+      expect(done.ok && done.value?.projectsRemoved).toBe(1)
+      expect(existsSync(unreadable.dir)).toBe(true)
+      expect(existsSync(readable.dir)).toBe(false)
+    } finally {
+      chmodSync(hidden, 0o755)
+    }
   })
 
   test('the path a reader gets is the archive copy once the Claude copy is gone', async () => {

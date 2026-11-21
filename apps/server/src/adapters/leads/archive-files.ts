@@ -172,7 +172,8 @@ const WORKTREE_PROJECT = /--claude-worktrees-factory-(\d+)-(\d+)$/
 
 /**
  * Whether everything a session left in a Claude project directory has its archived copy: each top-level transcript, and
- * every file under a session's own directory (subagents, tool results). What else lies there (memory) is not a transcript.
+ * every file under a session's directory (all of it when its own transcript is there, else its subagents' and tool results'
+ * files). What else lies there (memory) is not a transcript.
  * An archive still being written is not full yet, so its project stays.
  */
 async function fullyArchived(project: string, attemptDir: string): Promise<boolean> {
