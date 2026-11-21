@@ -7,6 +7,19 @@ describe('parseSeat', () => {
     expect(parseSeat({ role: 'lead' })).toEqual({ ok: true, seat: { role: 'lead' } })
   })
 
+  test('takes moveUp beside either form and refuses a non-boolean', () => {
+    expect(parseSeat({ role: 'light', moveUp: true })).toEqual({ ok: true, seat: { role: 'light', moveUp: true } })
+    expect(parseSeat({ tier: 'haiku', effort: 'high', moveUp: true })).toEqual({
+      ok: true,
+      seat: { tier: 'haiku', effort: 'high', moveUp: true },
+    })
+    expect(parseSeat({ role: 'light', moveUp: false })).toEqual({ ok: true, seat: { role: 'light' } })
+    const bad = parseSeat({ role: 'light', moveUp: 'yes' })
+    expect(bad.ok ? null : bad.field).toBe('seat.moveUp')
+    const alone = parseSeat({ moveUp: true })
+    expect(alone.ok).toBe(false)
+  })
+
   test('refuses what is not a seat, naming the field', () => {
     const field = (raw: unknown) => {
       const parsed = parseSeat(raw)

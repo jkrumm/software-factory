@@ -1,12 +1,21 @@
 import * as z from 'zod'
 import { EFFORTS, type Effort, RoleName, TIERS, type Tier } from './roles.ts'
 
-/** What an Issue or a plan row asks for: the lead's tier and effort, or a role of the table that names both. */
-export type Seat = { tier: Tier; effort: Effort } | { role: string }
+/**
+ * What an Issue or a plan row asks for: the lead's tier and effort, or a role of the table that names both. `moveUp: true`
+ * keeps the light seat's safety net on a filed seat: a lead that struggles on it is moved up to the lead row as one the
+ * light rule seated would be.
+ */
+export type Seat = ({ tier: Tier; effort: Effort } | { role: string }) & { moveUp?: true }
 
 /** The seat as it is stored and read: tier and effort always, the role it was resolved from when it named one. */
 export const ResolvedSeat = z
-  .object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: z.string().optional() })
+  .object({
+    tier: z.enum(TIERS),
+    effort: z.enum(EFFORTS),
+    role: z.string().optional(),
+    moveUp: z.literal(true).optional(),
+  })
   .meta({ id: 'ResolvedSeat' })
 export type ResolvedSeat = z.infer<typeof ResolvedSeat>
 
@@ -15,12 +24,13 @@ export const SeatInput = z.record(z.string(), z.unknown())
 
 export type SeatParse = { ok: true; seat: Seat } | { ok: false; field: string; detail: string }
 
-const KEYS = ['tier', 'effort', 'role']
+const KEYS = ['tier', 'effort', 'role', 'moveUp']
 const words = (values: readonly string[]) => values.join(', ')
 
 /**
- * Checks the shape of a seat: exactly `{ tier, effort }` or `{ role }`, tiers and efforts from the lists (never model
- * ids). Whether a role exists is the role table's to say, at filing. A refusal names the field (`seat.tier`).
+ * Checks the shape of a seat: exactly `{ tier, effort }` or `{ role }`, either with an optional `moveUp: true`, tiers and
+ * efforts from the lists (never model ids). Whether a role exists is the role table's to say, at filing. A refusal names
+ * the field (`seat.tier`).
  */
 export function parseSeat(raw: unknown): SeatParse {
   const refuse = (field: string, detail: string): SeatParse => ({ ok: false, field, detail })
@@ -28,19 +38,23 @@ export function parseSeat(raw: unknown): SeatParse {
   const given = raw as Record<string, unknown>
   const unknown = Object.keys(given).find((name) => !KEYS.includes(name))
   if (unknown !== undefined) return refuse(`seat.${unknown}`, `unknown key; a seat has role, or tier and effort`)
-  const { tier, effort, role } = given
+  const { tier, effort, role, moveUp } = given
+  if (moveUp !== undefined && moveUp !== true && moveUp !== false) return refuse('seat.moveUp', 'must be true or false')
+  const keep = moveUp === true ? { moveUp: true as const } : {}
   if (role !== undefined) {
     if (tier !== undefined || effort !== undefined)
       return refuse('seat', 'give either role, or tier and effort, not both')
     const named = RoleName.safeParse(role)
-    return named.success ? { ok: true, seat: { role: named.data } } : refuse('seat.role', 'not a valid role name')
+    return named.success
+      ? { ok: true, seat: { role: named.data, ...keep } }
+      : refuse('seat.role', 'not a valid role name')
   }
   if (tier === undefined && effort === undefined) return refuse('seat', 'give a role, or tier and effort')
   if (tier === undefined) return refuse('seat.tier', 'required with effort')
   if (!TIERS.includes(tier as Tier)) return refuse('seat.tier', `must be one of ${words(TIERS)}`)
   if (effort === undefined) return refuse('seat.effort', 'required with tier')
   if (!EFFORTS.includes(effort as Effort)) return refuse('seat.effort', `must be one of ${words(EFFORTS)}`)
-  return { ok: true, seat: { tier: tier as Tier, effort: effort as Effort } }
+  return { ok: true, seat: { tier: tier as Tier, effort: effort as Effort, ...keep } }
 }
 
 /** A plan row's seat: parsed at the plan's parse, so a bad one keeps the last valid plan. */

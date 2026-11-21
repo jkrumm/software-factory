@@ -1,6 +1,7 @@
 import { moveUpWhy } from '../domains/leads/light.ts'
 import type { QualityStore } from '../domains/quality/store.ts'
 import { OUTLIVES_CLOSE } from '../domains/work/effects.ts'
+import { movable } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
 import type { IssueId } from '../kernel/ids.ts'
@@ -28,8 +29,9 @@ export async function moveUpIfDue(
   const history = await stores.work.history(input.issueId)
   if (!history) return ok(null)
   const issue = replay(input.issueId, history)
-  // Only a lead the light rule seated: a filed `light` seat is the filer's, and moving it up would start it there again.
-  if (issue.state === 'closed' || !issue.ranOn?.rule) return ok(null)
+  // Only a lead the light rule seated, or one whose filed seat asked for it (`moveUp`): any other filed seat is the filer's,
+  // and moving it up would start it there again.
+  if (issue.state === 'closed' || !movable(issue)) return ok(null)
   const stalls = history.filter(
     (record) =>
       record.kind === 'stalled' &&

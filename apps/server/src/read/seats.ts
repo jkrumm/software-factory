@@ -24,7 +24,7 @@ export interface SeatTable {
 
 interface EventRow {
   issue_id: string
-  kind: 'filed' | 'seated' | 'admitted' | 'lead_started'
+  kind: 'filed' | 'seated' | 'admitted' | 'lead_started' | 'moved_up'
   version: number
   payload: unknown
   state: string
@@ -94,7 +94,7 @@ export async function readLeadSeats(
   const rows: EventRow[] = await sql`
     SELECT DISTINCT ON (e.issue_id, e.kind) e.issue_id, e.kind, e.version, e.payload, i.state
     FROM factory.issue_events e JOIN factory.issues i ON i.id = e.issue_id
-    WHERE e.issue_id IN ${sql(ids)} AND e.result = 'applied' AND e.kind IN ('filed', 'seated', 'admitted', 'lead_started')
+    WHERE e.issue_id IN ${sql(ids)} AND e.result = 'applied' AND e.kind IN ('filed', 'seated', 'admitted', 'lead_started', 'moved_up')
     ORDER BY e.issue_id, e.kind, e.version DESC`
   const byIssue = new Map<string, Map<EventRow['kind'], EventRow>>()
   for (const row of rows) {
@@ -114,7 +114,11 @@ export async function readLeadSeats(
     }
     if (kinds.get('filed')?.state === 'closed') continue
     const filed = kinds.get('filed')?.payload
-    const seat = seatOf(kinds.get('seated')?.payload, true) ?? seatOf(isRecord(filed) ? filed.seat : null, true)
+    // A seat that asked for the move-up is spent once it was moved up: the next lead starts on the rule's seat (`seatOf` in `app/leads-start.ts`).
+    const spent = (named: unknown): boolean => kinds.has('moved_up') && isRecord(named) && named.moveUp === true
+    const seated = kinds.get('seated')?.payload
+    const filedSeat = isRecord(filed) ? filed.seat : null
+    const seat = (spent(seated) ? null : seatOf(seated, true)) ?? (spent(filedSeat) ? null : seatOf(filedSeat, true))
     if (seat) seats.set(id, seat)
     else unstarted.push(id)
   }

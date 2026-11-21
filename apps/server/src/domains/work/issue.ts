@@ -118,14 +118,14 @@ export interface Issue {
   kind: Kind
   origin: Origin
   /** the seat asked for at filing, resolved; absent: the lead row of the role table */
-  seat?: { tier: Tier; effort: Effort; role?: string }
+  seat?: { tier: Tier; effort: Effort; role?: string; moveUp?: true }
   /** `spec`: the lead owes a one-page Spec before it builds, and cannot ship without one; `gate`: the same, and only the owner's own verdict ends the wait */
   checkpoint?: 'spec' | 'gate'
   /** triage's size, when it judged one */
   size?: Size
   /** the seat the current attempt's lead started on; absent before its `lead_started` (and on old events) */
-  ranOn?: { tier: Tier; effort: Effort; role?: string; rule?: string }
-  /** times a light lead was moved up: the next lead starts on the lead row */
+  ranOn?: { tier: Tier; effort: Effort; role?: string; rule?: string; moveUp?: true }
+  /** times a light lead was moved up: the next lead starts on the lead row, a filed seat that asked for the move-up included */
   movedUp: number
   /** the lead number: 0 until admitted, one more with every admission */
   attempt: number
@@ -143,4 +143,7 @@ export const MAX_RESTARTS = 2
 /** A regression goes back to the lead this many times; the next is a stall. */
 export const MAX_REGRESSIONS = 2
 /** A closed Issue reopens within this long; after it, file a new one. */
+/** Whether the lead of the current attempt may be moved up: the light rule seated it, or its filed seat asked for the move-up. */
+export const movable = (issue: Pick<Issue, 'ranOn'>): boolean => Boolean(issue.ranOn?.rule || issue.ranOn?.moveUp)
+
 export const REOPEN_WINDOW_MS = 30 * 24 * 60 * 60_000
