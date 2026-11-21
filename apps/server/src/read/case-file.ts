@@ -4,8 +4,7 @@ import { CASE_OUTCOMES } from '@software-factory/contract'
 import type { CaseRead, CaseSubject } from '../kernel/case-file.ts'
 import { scrub } from '../kernel/scrub.ts'
 import { boundedRead } from './bounded.ts'
-import { edgeFacts } from './edge-need.ts'
-import { outcomeOf } from './judgments.ts'
+import { callOutcome, edgeOutcomes, outcomeOf } from './judgments.ts'
 
 /**
  * The case file's parts the database holds (`docs/architecture.md` §Loops and agw, "The case file"): the Issue as filed, the
@@ -180,6 +179,49 @@ async function planPart(tx: SQL, issue: string): Promise<string | undefined> {
   return cut(parts.join('\n'), CUT.plan)
 }
 
+const CallRow = z.object({ call_issue: z.string().nullable(), claimed_at: z.date(), finished_at: z.date() })
+
+/** A queue call's edges are the ones added while it ran, and this long after: the loop applies an answer once it has it. */
+const QUEUE_APPLY_MS = 5 * 60_000
+
+/**
+ * Sets the outcome of triage and queue precedents from the edges the call added (`read/judgments.ts`: the ledger's own
+ * expression): triage's are the edges of its Issue, the queue's are the repo's added while the call ran.
+ */
+async function withEdgeOutcomes(
+  tx: SQL,
+  judge: 'triage' | 'queue',
+  rows: unknown[],
+  repo: string,
+  now: Date,
+): Promise<unknown[]> {
+  const calls = rows.map((raw) => ({ raw: raw as Record<string, unknown>, call: CallRow.parse(raw) }))
+  if (calls.length === 0) return rows
+  const issues =
+    judge === 'triage'
+      ? [...new Set(calls.flatMap(({ call }) => (call.call_issue ? [call.call_issue] : [])))]
+      : undefined
+  const from =
+    judge === 'triage' ? new Date(0) : new Date(Math.min(...calls.map(({ call }) => call.claimed_at.getTime())))
+  const edges = await edgeOutcomes(tx, {
+    source: judge,
+    from,
+    to: now,
+    issues,
+    repo: judge === 'queue' ? repo : undefined,
+  })
+  return calls.map(({ raw, call }) => ({
+    ...raw,
+    outcome: callOutcome(
+      edges.filter((edge) =>
+        judge === 'triage'
+          ? edge.issue === call.call_issue
+          : edge.at >= call.claimed_at && edge.at.getTime() <= call.finished_at.getTime() + QUEUE_APPLY_MS,
+      ),
+    ),
+  }))
+}
+
 /** This judge's earlier answers in the repo, newest first, each with what became of it (`read/judgments.ts`: `unknown` while it is too early to say). */
 async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue: string | null, now: Date) {
   const limit = CUT.precedents
@@ -203,23 +245,18 @@ async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue
     case 'steward':
     case 'triage':
     case 'queue': {
-      // a triage call is judged by the edges it added to its Issue (needed or not); the queue's are repo-wide and read in the ledger
-      const outcome =
-        subject.judge === 'steward'
-          ? outcomeOf(tx, 'steward', now)
-          : subject.judge === 'triage'
-            ? tx`(SELECT CASE WHEN bool_or(f.measured AND NOT f.shared) THEN 'overruled' WHEN bool_or(f.measured AND f.shared) THEN 'stood' ELSE 'unknown' END
-                FROM (${edgeFacts(tx, { from: new Date(0), to: now })}) f WHERE f.issue_id = c.issue_id AND f.source = 'triage')`
-            : tx`'unknown'`
+      // a steward call is judged by the stall it ended; a triage or queue call by the edges it added (set below)
+      const outcome = subject.judge === 'steward' ? outcomeOf(tx, 'steward', now) : tx`'unknown'`
       rows = await tx`
         SELECT c.finished_at AS at,
           COALESCE((SELECT f.payload->>'title' FROM factory.issue_events f WHERE f.issue_id = c.issue_id AND f.kind = 'filed' AND f.version = 1) || ' (' || c.subject || ')', c.subject) AS subject,
-          c.answer::text AS answer, ${outcome} AS outcome
+          c.answer::text AS answer, ${outcome} AS outcome, c.issue_id AS call_issue, c.claimed_at, c.finished_at
         FROM factory.loop_calls c
         LEFT JOIN factory.issues i ON i.id = c.issue_id
         WHERE c.loop = ${subject.judge} AND c.outcome = 'answered' AND COALESCE(i.repo, c.repo) = ${repo}
           AND COALESCE(c.issue_id, '') <> ${issue ?? '-'}
         ORDER BY c.finished_at DESC LIMIT ${limit}`
+      if (subject.judge !== 'steward') rows = await withEdgeOutcomes(tx, subject.judge, rows, repo, now)
       break
     }
     case 'screen':

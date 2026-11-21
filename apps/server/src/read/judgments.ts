@@ -2,10 +2,12 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import {
   ANSWER_OUTCOMES,
+  type AnswerOutcome,
   type JudgmentAnswer,
   type JudgmentsModel,
   LEDGER_JUDGES,
   type LedgerJudge,
+  STALL_CAUSES,
   THRESHOLDS,
 } from '@software-factory/contract'
 import { isCut } from '../kernel/epoch.ts'
@@ -14,7 +16,7 @@ import { scrub } from '../kernel/scrub.ts'
 import { boundedRead } from './bounded.ts'
 import { edgeFacts } from './edge-need.ts'
 import { windowOf } from './stats.ts'
-import { isWorkRepo, loadOpenProjects } from './work.ts'
+import { isWorkRepo, loadOpenProjects, REDACTED_SUMMARY } from './work.ts'
 
 /**
  * The judge ledger: what became of each judge's answers, read from the events that followed, with no column of its own
@@ -26,7 +28,6 @@ import { isWorkRepo, loadOpenProjects } from './work.ts'
 /** Rows read per judge: a window of the busiest judge (the screen) is hundreds, never this many. */
 const CAP = 5_000
 const TEXT = 300
-const HIDDEN = 'An answer in a work repository.'
 
 const secs = (ms: number): number => ms / 1000
 
@@ -52,8 +53,9 @@ export function outcomeOf(sql: SQL, judge: LedgerJudge, now: Date) {
           WHERE r.issue_id = c.issue_id AND r.result = 'applied' AND r.to_state = 'waiting' AND r.from_state IS DISTINCT FROM 'waiting'
             AND r.at > c.finished_at AND r.at <= c.finished_at + make_interval(secs => ${secs(HORIZON_MS.stewardStalled)}::float8)
             AND r.wait->>'reason' = (SELECT w.wait->>'reason' FROM factory.issue_events w
-              WHERE w.issue_id = c.issue_id AND w.result = 'applied'
-                AND w.version = CASE WHEN c.subject ~ '^wait:[0-9]+$' THEN substring(c.subject from 6)::int END)) THEN 'raised_again'
+              WHERE w.issue_id = c.issue_id AND w.result = 'applied' AND w.to_state = 'waiting'
+                AND w.wait->>'reason' IN ${sql([...STALL_CAUSES])} AND w.at <= c.claimed_at
+              ORDER BY w.version DESC LIMIT 1)) THEN 'raised_again'
         WHEN EXISTS (SELECT 1 FROM factory.issue_events m
           WHERE m.issue_id = c.issue_id AND m.result = 'applied' AND m.kind <> 'woken' AND m.to_state IS DISTINCT FROM m.from_state
             AND m.at > c.finished_at AND m.at <= c.finished_at + make_interval(secs => ${secs(HORIZON_MS.stewardMoved)}::float8)) THEN 'stood'
@@ -111,6 +113,15 @@ const Row = z.object({
   repo: z.string().nullable(),
   subject: z.string().nullable(),
   answer: z.string().nullable(),
+  outcome: z.enum(ANSWER_OUTCOMES),
+})
+
+const EdgeRow = z.object({
+  at: z.coerce.date(),
+  issue: z.string(),
+  repo: z.string().nullable(),
+  after: z.string(),
+  removed: z.boolean(),
   outcome: z.enum(ANSWER_OUTCOMES),
 })
 
@@ -208,20 +219,51 @@ async function answersOf(
     }))
 }
 
+/** What became of an edge: taken back or touching no common file was overruled, needed stood, the rest is not known yet. */
+const edgeOutcome = (sql: SQL) =>
+  sql`CASE WHEN f.removed THEN 'overruled' WHEN f.measured AND f.shared THEN 'stood' WHEN f.measured THEN 'overruled' ELSE 'unknown' END`
+
 /**
- * The edges one source added in the window, as answers: needed (both Issues shipped and touched a file in common) stood,
- * measured and not needed was overruled, a taken-back edge was overruled, the rest is not known yet.
+ * The edges one source (`triage` or `queue`) added in `[from, to)`, each with its outcome: the one expression the ledger
+ * and the case file's precedents share. `issues` keeps the edges of those Issues only.
  */
-async function edgeAnswers(tx: SQL, source: 'triage' | 'queue', { from, to }: Span): Promise<unknown[]> {
-  return tx`
-    SELECT f.added_at AS at, f.issue_id AS issue, i.repo,
-      f.issue_id || ' waits for ' || f.after_issue AS subject,
-      'edge added by ' || f.source || CASE WHEN f.removed THEN ', taken back' ELSE '' END AS answer,
-      CASE WHEN f.measured AND f.shared THEN 'stood' WHEN f.measured OR f.removed THEN 'overruled' ELSE 'unknown' END AS outcome
-    FROM (${edgeFacts(tx, { from, to })}) f
+export async function edgeOutcomes(
+  tx: SQL,
+  options: { source: 'triage' | 'queue'; from: Date; to: Date; issues?: readonly string[]; repo?: string },
+): Promise<
+  { at: Date; issue: string; repo: string | null; after: string; removed: boolean; outcome: AnswerOutcome }[]
+> {
+  const { source, from, to, issues, repo } = options
+  if (issues?.length === 0) return []
+  const rows: unknown[] = await tx`
+    SELECT f.added_at AS at, f.issue_id AS issue, i.repo, f.after_issue AS after, f.removed, ${edgeOutcome(tx)} AS outcome
+    FROM (${edgeFacts(tx, { from, to }, issues)}) f
     JOIN factory.issues i ON i.id = f.issue_id
-    WHERE f.source = ${source}
+    WHERE f.source = ${source} AND (${repo ?? null}::text IS NULL OR i.repo = ${repo ?? null})
     ORDER BY f.added_at DESC LIMIT ${CAP}`
+  return rows.map((raw) => EdgeRow.parse(raw))
+}
+
+/** The edges one source added in the window, as answers. */
+async function edgeAnswers(tx: SQL, source: 'triage' | 'queue', { from, to }: Span): Promise<unknown[]> {
+  const edges = await edgeOutcomes(tx, { source, from, to })
+  return edges.map((edge) => ({
+    at: edge.at,
+    issue: edge.issue,
+    repo: edge.repo,
+    subject: `${edge.issue} waits for ${edge.after}`,
+    answer: `edge added by ${source}${edge.removed ? ', taken back' : ''}`,
+    outcome: edge.outcome,
+  }))
+}
+
+/**
+ * What became of a loop call by the edges it added: one overruled edge overrules it, else one that stood lets it stand.
+ * `edges` are the edges of the call's Issue (triage) or repo (queue) added while the call ran.
+ */
+export function callOutcome(edges: readonly { outcome: AnswerOutcome }[]): AnswerOutcome {
+  if (edges.some((edge) => edge.outcome === 'overruled')) return 'overruled'
+  return edges.some((edge) => edge.outcome === 'stood') ? 'stood' : 'unknown'
 }
 
 /**
@@ -241,7 +283,7 @@ export function readJudgments(
     const judges = []
     for (const judge of LEDGER_JUDGES) {
       const rows = (await answersOf(tx, judge, span)).map(({ repo, ...row }) =>
-        options.redact && isWorkRepo(repo, open) ? { ...row, subject: HIDDEN, answer: '' } : row,
+        options.redact && isWorkRepo(repo, open) ? { ...row, subject: REDACTED_SUMMARY, answer: '' } : row,
       )
       judges.push(foldAnswers(judge, rows))
     }

@@ -3,7 +3,7 @@ import {
   type JudgmentAnswer,
   type JudgmentLedger,
   type LedgerJudge,
-  THRESHOLDS,
+  judgeOverTheLine,
 } from '@software-factory/contract'
 
 // What became of a judge's answers, judged from the events that followed (`read/judgments.ts`). Pure: the read hands it rows.
@@ -82,8 +82,6 @@ export function foldAnswers(judge: LedgerJudge, rows: readonly JudgmentAnswer[])
   }
 }
 
-/** Whether a judge's ledger is a finding: enough decided answers and too large a share of them did not stand. */
-export function isFinding(ledger: Pick<JudgmentLedger, 'stood' | 'didNotStand' | 'share'>): boolean {
-  const { share, minAnswers } = { share: THRESHOLDS.judges.share, minAnswers: THRESHOLDS.judges.minAnswers }
-  return ledger.stood + ledger.didNotStand >= minAnswers && ledger.share !== null && ledger.share > share
-}
+/** Whether a judge's ledger is a finding (`judgeOverTheLine`, the one rule the Improve screen shares). */
+export const isFinding = (ledger: Pick<JudgmentLedger, 'stood' | 'didNotStand' | 'share'>): boolean =>
+  judgeOverTheLine(ledger)

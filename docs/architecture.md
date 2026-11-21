@@ -583,12 +583,12 @@ Issues, how they ended, the median time to close and how many done Issues moved 
 **The judge ledger.** `GET /v1/judgments` (`factory read judgments`, `read/judgments.ts`) checks each judge's answers
 against what followed, from `issue_events` and the tables the judges already write: no column of its own. Each answer is
 `stood`, `overruled`, `raised_again` or `unknown` (its horizon has not passed and nothing contradicted it; left out of the
-share). One SQL expression per judge says it, and the case file's precedents use the same one (`outcomeOf`):
+share). One SQL expression per judge says it (`outcomeOf`; an edge's is `edgeOutcomes`), and the case file's precedents use the same ones, a triage or queue call by the edges it added:
 
 | Judge | Did not stand |
 |-|-|
 | The Judge | the owner or his delegate answered the Decision or noted the Issue within 7 days |
-| The steward (wake, requeue) | the Issue did not move within 30 minutes, or stalled again on the same cause within a day |
+| The steward (wake, requeue) | the Issue did not move within 30 minutes, or stalled again on the cause of the stall it answered within a day |
 | Triage | an amend whose words came back as an Issue of their own within 14 days; an edge whose Issues touched no common file (`read/edge-need.ts`) |
 | The queue loop | an edge needed or not, as above, or one the loop took back |
 | The screen | a dismissed fingerprint came back as work within 14 days |

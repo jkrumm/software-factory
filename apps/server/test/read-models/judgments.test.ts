@@ -46,9 +46,9 @@ const decision = (id: string, issueId: string, at: Date) =>
     VALUES (${id}, ${`key_${id}`}, ${issueId}, 'app', 1, ${`Which logger for ${id}?`}, 'Use pino', 'checked', '[]'::jsonb,
       '{"consequence":"x","default":null,"waitMinutes":null}'::jsonb, ${new Date(at.getTime() - HOUR)}, 'Use pino', 'judge', ${at})`
 
-const call = (n: number, issueId: string, at: Date, action = 'wake') =>
+const call = (n: number, issueId: string, at: Date, action = 'wake', subject = 'wait:2') =>
   sql`INSERT INTO factory.loop_calls (key, loop, issue_id, subject, round, claimed_at, lease_until, outcome, answer, finished_at)
-    VALUES (${`steward:${n}`}, 'steward', ${issueId}, 'wait:2', 1, ${at}, ${at}, 'answered',
+    VALUES (${`steward:${n}`}, 'steward', ${issueId}, ${subject}, 1, ${at}, ${at}, 'answered',
       ${JSON.stringify({ action, note: 'n', reason: 'the block cleared', decision: null })}::text::jsonb, ${at})`
 
 const signal = (
@@ -106,7 +106,8 @@ beforeAll(async () => {
   ] as const) {
     const at = n === 4 ? new Date(NOW.getTime() - 5 * 60_000) : ago(5)
     await event(id, 2, 'stalled', new Date(at.getTime() - HOUR), 'working', 'waiting', { wait: { reason: 'wall' } })
-    await call(n, id, at)
+    // an idle episode names its turn (steward.ts): the same stall, read from the wait the call answered
+    await call(n, id, at, 'wake', n === 2 ? 'wait:2:turn1' : 'wait:2')
   }
   await event('issue_21', 3, 'lead_started', new Date(ago(5).getTime() + 10 * 60_000), 'waiting', 'working')
   await event('issue_22', 3, 'lead_started', new Date(ago(5).getTime() + 10 * 60_000), 'waiting', 'working')
@@ -127,6 +128,15 @@ beforeAll(async () => {
   await commits('issue_35', ['src/c.ts'])
   await edge('issue_36', 'issue_35', 'queue: guess')
   await commits('issue_36', ['src/z.ts'])
+  // an edge the queue loop took back: both Issues shipped a file in common, and it was still wrong
+  await sql`INSERT INTO factory.queue_edge_removals (issue_id, after_issue, inferred_by, added_at, removed_at, kind, reason)
+    VALUES ('issue_35', 'issue_34', 'queue: again', ${days(5)}, ${days(4)}, 'disjoint', 'no path in common')`
+  // the calls whose edges those are
+  await sql`INSERT INTO factory.loop_calls (key, loop, issue_id, subject, round, claimed_at, lease_until, outcome, answer, finished_at)
+    VALUES ('triage:1', 'triage', 'issue_32', 'settle', 1, ${days(5)}, ${days(5)}, 'answered', '{}'::jsonb, ${days(5)}),
+      ('triage:2', 'triage', 'issue_33', 'settle', 1, ${days(5)}, ${days(5)}, 'answered', '{}'::jsonb, ${days(5)})`
+  await sql`INSERT INTO factory.loop_calls (key, loop, repo, subject, round, claimed_at, lease_until, outcome, answer, finished_at)
+    VALUES ('queue:app:1', 'queue', 'app', 'shape', 1, ${days(5)}, ${days(5)}, 'answered', '{}'::jsonb, ${days(5)})`
 
   // the screen: dismissed and gone, dismissed and filed 5 days later, dismissed 3 days ago
   await signal('signal_s1', 'fp-s1', days(21), 'dismissed', { dismissed: days(20) })
@@ -177,8 +187,12 @@ test('triage: an amend whose words came back as their own Issue, and an edge tou
 
 test('the queue loop: an edge needed stood, one touching no common file did not', async () => {
   const queue = await ledger('queue')
-  expect(queue).toMatchObject({ answers: 2, stood: 1, didNotStand: 1, share: 0.5 })
-  expect(queue.newest[0]?.answer).toContain('queue')
+  // needed, touching no common file, and taken back though both shipped a file in common
+  expect(queue).toMatchObject({ answers: 3, stood: 1, didNotStand: 2 })
+  expect(queue.newest.map((a) => a.answer).toSorted()).toEqual([
+    'edge added by queue',
+    'edge added by queue, taken back',
+  ])
 })
 
 test('the screen: a dismissed signal that came back as work did not stand', async () => {
@@ -220,8 +234,10 @@ test('a judge is a finding from ten decided answers with a share over 0.2', () =
 })
 
 test("the case file's precedents carry what became of each earlier answer", async () => {
-  const outcomes = async (judge: 'judge' | 'steward' | 'screen' | 'errand' | 'errandNeeded') =>
+  const outcomes = async (judge: 'judge' | 'steward' | 'triage' | 'queue' | 'screen' | 'errand' | 'errandNeeded') =>
     ((await readCaseFile(sql, { judge, repo: 'app' }, 10_000, NOW)).case.precedents ?? []).map((p) => p.outcome)
+  expect((await outcomes('triage')).toSorted()).toEqual(['overruled', 'stood'])
+  expect(await outcomes('queue')).toEqual(['overruled'])
   expect((await outcomes('judge')).toSorted()).toEqual(['overruled', 'stood', 'unknown'])
   expect((await outcomes('steward')).toSorted()).toEqual(['overruled', 'raised_again', 'stood', 'unknown'])
   expect((await outcomes('screen')).toSorted()).toEqual(['raised_again', 'stood', 'unknown'])

@@ -12,6 +12,7 @@ import {
   type ReviewerKpiRow,
   type ReviewerKpis,
   type SeatKpis,
+  judgeOverTheLine,
   meetsTarget,
 } from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone'
@@ -246,16 +247,10 @@ export function yieldWords(window: LoopYieldWindow): string {
 export const shareWords = (share: number | null): string => (share === null ? '–' : `${Math.round(share * 100)}%`)
 
 /** Whether a judge is over the line the friction loop files a finding at: enough decided answers and too many of them did not stand. */
-export function overTheLine(
+export const overTheLine = (
   ledger: Pick<JudgmentLedger, 'stood' | 'didNotStand' | 'share'>,
   model: Pick<JudgmentsModel, 'findingShare' | 'findingMinAnswers'>,
-): boolean {
-  return (
-    ledger.stood + ledger.didNotStand >= model.findingMinAnswers &&
-    ledger.share !== null &&
-    ledger.share > model.findingShare
-  )
-}
+): boolean => judgeOverTheLine(ledger, { share: model.findingShare, minAnswers: model.findingMinAnswers })
 
 /** The line under the ledger: what counts as a finding. */
 export const judgmentsLineWords = (model: Pick<JudgmentsModel, 'findingShare' | 'findingMinAnswers'>): string =>

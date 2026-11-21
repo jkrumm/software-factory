@@ -131,6 +131,14 @@ export const THRESHOLDS = {
   judges: { share: 0.2, minAnswers: 10, windowDays: 30 },
 } as const
 
+/** Whether a judge's ledger is a finding: enough decided answers and too large a share of them did not stand (`THRESHOLDS.judges`). Strictly over the share. */
+export function judgeOverTheLine(
+  ledger: { stood: number; didNotStand: number; share: number | null },
+  line: { share: number; minAnswers: number } = THRESHOLDS.judges,
+): boolean {
+  return ledger.stood + ledger.didNotStand >= line.minAnswers && ledger.share !== null && ledger.share > line.share
+}
+
 /** Whether `value` meets `target`; null when the target has no number (a trend, unset). Equal to the bound is met. */
 export function meetsTarget({ kind, min, max }: KpiTargetValue, value: number): boolean | null {
   if (kind === 'at_most') return max === null ? null : value <= max

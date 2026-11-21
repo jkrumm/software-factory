@@ -47,7 +47,8 @@ export async function readEdgeNeed(tx: SQL, window: { from: Date; to: Date }): P
  * back, whether both Issues' shipped paths are known (`measured`) and whether they share one (`shared`). The rows
  * `readEdgeNeed` counts and the judge ledger lists.
  */
-export function edgeFacts(tx: SQL, window: { from: Date; to: Date }) {
+export function edgeFacts(tx: SQL, window: { from: Date; to: Date }, issues?: readonly string[]) {
+  const only = issues === undefined ? tx`` : tx`AND e.issue_id IN ${tx([...issues])}`
   return tx`
     WITH e AS (
       SELECT issue_id, after_issue, inferred_by, created_at AS added_at, false AS removed
@@ -67,7 +68,7 @@ export function edgeFacts(tx: SQL, window: { from: Date; to: Date }) {
           CROSS JOIN LATERAL jsonb_array_elements_text(qb.payload->'paths') pb(path)
           WHERE qa.issue_id = e.issue_id AND qa.kind = 'commits' AND pa.path = pb.path
             AND pa.path NOT IN ${tx([...SHARED_PATHS])}) AS shared
-      FROM e WHERE e.added_at >= ${window.from} AND e.added_at < ${window.to}`
+      FROM e WHERE e.added_at >= ${window.from} AND e.added_at < ${window.to} ${only}`
 }
 
 const HeldRow = z.object({
