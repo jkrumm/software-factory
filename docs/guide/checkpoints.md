@@ -1,8 +1,8 @@
 # Checkpoints
 
-A checkpoint is where the factory stops for a person. Each kind has a contract the code enforces. A Decision goes to the Judge first. A Spec waits 24 hours and then proceeds on its defaults. An Errand is only for a person's hands. Screens (last section) decide what reaches the owner, and whatever reaches the owner and did not need to is counted as an avoidable touch.
+A checkpoint is where the factory stops for a person. Each kind has a contract the code enforces. A Decision goes to the Judge first. A lead's Spec is its plan and stops no one; only an owner gate, a filed Spec, a revision after Changes and a Replan that changes the plan wait for the owner, and all but the gate go ahead on their defaults after 24 hours. An Errand is only for a person's hands. Screens (last section) decide what reaches the owner, and whatever reaches the owner and did not need to is counted as an avoidable touch.
 
-![Checkpoint routes: a Decision passes the Judge, then the owner, and takes its default when no answer comes; a Spec reaches the owner and goes ahead on its defaults after 24 hours; an Errand is turned back unless it needs hands, and a check can close it.](./diagrams/checkpoint-routes.svg)
+![Checkpoint routes: a Decision passes the Judge, then the owner, and takes its default when no answer comes; a lead's Spec is its plan and builds at once, and only four kinds reach the owner, going ahead on their defaults after 24 hours; an Errand is turned back unless it needs hands, and a check can close it.](./diagrams/checkpoint-routes.svg)
 
 ## Decisions
 
@@ -94,14 +94,16 @@ Across the 300 newest closed Issues of this repo (2026-11-17), 24 Decisions were
 
 ## Specs and artifacts
 
-An artifact is what a lead hands to a person. A Concept and a Spec wait for a verdict, a Report never waits, and a Decision is answered, not judged.
+An artifact is what a lead hands to a person. A Concept waits for a verdict, a Report never waits, and a Decision is answered, not judged. A Spec is the lead's plan and does not wait either, with four exceptions below.
 
+- **A lead's Spec is its plan.** It opens with Build and Decided; the lead submits it and builds at once. `artifact submit` records it, pages no one, leaves the Issue working and says so in its answer (`next`), and `factory issue ship` counts it as the Spec a checkpoint owes. The owner may still comment or give a verdict at any time: each reaches the lead as a note. What in it is the owner's (product direction, an unseen look with real variants, spend, security policy, other people's data, a change that cannot be undone) the lead raises beside it as a Decision.
+- **Four Specs wait for the owner, by rule.** An owner gate's; one its filer attached (`issue new --spec`); a revision after his verdict of Changes; and a Replan whose block changes a plan row or cancels an Issue. A Replan that does neither is answered as Looks good by rule and its lead applies it.
 - **Verdicts.** Looks good (an optional note; the lead applies the note and every open comment), Changes, No longer applies. `with_notes` is still accepted and stored as `looks_good`.
 - **His delegate may give a Spec's verdict for him.** The orchestrator (the owner's planning session) calls `factory artifact verdict` with its own token on a Spec that is no owner gate; a Concept, a Report and a gate stay his alone. It is recorded as `orchestrator`, shown as "By your delegate", and left out of the verdict KPI and the retro's taste. The lead hears who gave it. The owner reopens it by giving his own verdict on the same revision: that replaces the delegate's, clears its "needed me" mark, and the lead hears one more note. Annotations and the "needed me" mark stay his alone.
 - **Annotations are anchored.** The owner comments on a quote of one revision, with the occurrence he selected and the text around it, so a sentence that stands three times is painted at the one he chose, and stays there when a later revision adds text above it. If the quote is gone from a later revision, the comment moves to "Unanchored". A comment can hang on a picture instead (a screenshot, a diagram), optionally at a spot on it: it follows the picture by its source, then its caption, so a revision that reorders the pictures keeps each comment on its own.
 - **Every annotation is answered.** The lead replies `applied`, `deferred` or `declined`. A deferral names the Issue or signal it filed, and a decline gives its reason. A deferral or decline without that detail is refused.
 - **A revision after Changes always reaches the owner.** The owner asked for it.
-- **24 hours, then the defaults.** A Spec or Concept with no verdict after 24 hours gets a verdict of Looks good from the factory, with a note. The lead goes on with the defaults it named, and the owner can still overrule them with a note. A Spec whose Issue closed or moved on is withdrawn instead. No second push is sent, because it would fall on the same hour as the default.
+- **24 hours, then the defaults.** A Concept, or a Spec that waits and is no owner gate, with no verdict after 24 hours gets a verdict of Looks good from the factory, with a note. The lead goes on with the defaults it named, and the owner can still overrule them with a note. A Spec whose Issue closed or moved on is withdrawn instead. No second push is sent, because it would fall on the same hour as the default.
 
 <!-- snippet: apps/server/src/app/checkpoints-reviews.ts lookAtReview -->
 ```ts
@@ -185,23 +187,23 @@ issue_1714 closed that gap by rule. It was filed on 2026-11-16 at 20:42 as "An E
 
 A screen is the check a checkpoint passes before it reaches the owner. Rules go first, and a workflow takes what they cannot decide.
 
-- **The Spec screen.** On 2026-11-14 the owner said most Specs reaching the owner could have been decided by their lead: 12 looks good and 16 with notes against 3 changes in 14 days. The rules decide what they can. Then the `factory-spec-screen` workflow reads the Spec with the owner's newest "needed me" marks as precedents. It passes what is the owner's: a UI screen the owner has not seen, product direction, spend, security policy, other people's data, a change that cannot be undone. It settles the rest as Looks good with its reason, so the lead builds at once.
-- **Rules first.** A revision after a verdict of Changes passes. A Spec its filer attached passes. A Replan that changes no plan row and cancels nothing is settled.
-- **Fail toward the owner.** A screen that cannot be reached passes the Spec after its last try, so a broken screen costs the owner a read and never a Spec the owner should have seen.
+- **The Spec screen is rules only.** On 2026-11-14 the owner said most Specs reaching the owner could have been decided by their lead, and the `factory-spec-screen` workflow was put in front of him. In the week to 2026-11-21 it passed 76 of the 98 Specs it judged, one call on the cheapest seat with no tools and without the Issue's facts. Since issue_2732 no workflow reads a Spec: the lead, who has read the code, decides, and a Spec is its plan (`specPathOf`).
+- **Rules.** A revision after a verdict of Changes, an owner gate's Spec, a Spec its filer attached and a Replan that changes a plan row or cancels an Issue pass to the owner. A Replan that changes no plan row and cancels nothing is answered as Looks good with its reason. Everything else is the lead's plan: recorded by rule when it is handed over, so it never waits.
+- **Fail toward the owner.** A Spec whose content cannot be read passes to the owner after its last try.
 - **The quarantined-signal screen.** The Judge looks at a quarantined signal, outside text the factory did not trust enough to turn into work, and promotes it, dismisses it with a reason, or leaves it quarantined with a recommendation. A signal is screened once, and a failed call is retried five times at most.
 - **The Errand screen.** The rules and workflow under Errands.
 
-<!-- snippet: apps/server/src/domains/checkpoints/spec-screen.ts screenSpecByRule -->
+<!-- snippet: apps/server/src/domains/checkpoints/spec-screen.ts specPathOf -->
 ```ts
-export function screenSpecByRule(input: RuleInput): RuleOutcome | null {
+export function specPathOf(input: RuleInput): SpecPath {
   if (input.revision > 1 && input.earlier.includes('changes')) {
-    return { outcome: 'passed', reason: 'a revision the owner asked for with his verdict of changes' }
+    return { path: 'owner', reason: 'a revision the owner asked for with his verdict of changes' }
   }
   if (input.origin.gate) {
-    return { outcome: 'passed', reason: 'an owner gate: only the owner gives its verdict' }
+    return { path: 'owner', reason: 'an owner gate: only the owner gives its verdict' }
   }
   if (input.origin.filedSpec) {
-    return { outcome: 'passed', reason: 'its filer attached it with the Issue for the owner to review' }
+    return { path: 'owner', reason: 'its filer attached it with the Issue for the owner to review' }
   }
 ```
 
@@ -219,9 +221,9 @@ An avoidable touch is a touch the factory should have settled. A verdict on a Co
 
 **Example files:**
 
-- [`spec-screen.ts` L13-L24](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L13-L24): why the screen exists, and its failure mode.
-- [`spec-screen.ts` L88-L120](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L88-L120): `screenSpecByRule`, the deterministic first look.
-- [`spec-screen.ts` L122-L141](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L122-L141): the checks on the workflow's answer, and the scrubbed content it reads.
+- [`spec-screen.ts` L6-L10](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L6-L10): why the screen exists, and why it is rules only.
+- [`spec-screen.ts` L93-L142](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L93-L142): `specPathOf`, where a Spec goes: the owner, a settle by rule, or the lead's plan.
+- [`checkpoints.ts` L598-L647](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints.ts#L598-L647): `planRefused` and `recordedAsPlan`, how a lead's Spec is handed over without a wait.
 
 **Read more:**
 

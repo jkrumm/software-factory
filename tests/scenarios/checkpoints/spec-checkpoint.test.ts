@@ -8,8 +8,8 @@ import { type Lab, startLab } from '../planning/lab.ts'
 
 /**
  * The Spec checkpoint, against the real server and Postgres: an Issue filed with `--checkpoint spec` cannot ship until its
- * lead has submitted a Spec, and a Spec nobody answered in 24 hours lets the lead go on with its defaults, so the queue
- * never waits on the owner. Time moves by back-dating the facts in their own tables.
+ * lead has submitted a Spec, and that Spec is the lead's plan (Issue 2732): it waits for no one and pages no one. Time moves
+ * by back-dating the facts in their own tables.
  */
 /** A repo holds one lead at a time, so each Issue gets its own. */
 const REPOS = ['example-spec-gate', 'example-spec-plain']
@@ -66,7 +66,7 @@ async function flagged(repo: string, title: string, checkpoint: string | null = 
 
 const SHIP = (call: string) => body({ attempt: 1, call, commits: ['a'.repeat(40)] })
 
-test('a flagged Issue cannot ship without a Spec; a Spec nobody answers in a day lets the lead go on; the ship is then judged on its commits', async () => {
+test("a flagged Issue cannot ship without a Spec; the lead's Spec is its plan and waits for no one; the ship is then judged on its commits", async () => {
   const issue = await flagged('example-spec-gate', 'a new public route')
   const [filed]: { checkpoint: string | null }[] = await world.db.sql`
     SELECT payload->>'checkpoint' AS checkpoint FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'filed'`
@@ -79,34 +79,34 @@ test('a flagged Issue cannot ship without a Spec; a Spec nobody answers in a day
   expect(refused.err).toContain('no Spec was submitted')
   expect(await stateOf(issue)).toBe('working')
 
-  // the lead hands over a Spec and waits for the verdict; the ship still has nothing to do while it waits
+  // the lead hands over its plan and builds at once: the Issue keeps working, and the answer says so
   const submitted = await ok(
     (json) => ArtifactReply.parse(json),
     'artifact',
     'submit',
     issue,
-    ...body({ attempt: 1, kind: 'spec', title: 'The route spec', content: '# Route\n\nThree open choices.' }),
+    ...body({ attempt: 1, kind: 'spec', title: 'The route spec', content: '# Route\n\n## Build\n\n## Decided' }),
   )
-  expect(submitted.issue).toMatchObject({ state: 'waiting', waitReason: 'review' })
-
-  // 23 hours: the owner may still answer
-  await backdate(issue, 23)
-  expect((await pass()).reviews).toEqual([])
-  expect(await stateOf(issue)).toBe('waiting')
-
-  // past the wait: the factory records the verdict for the lead, who goes on with its defaults
-  await backdate(issue, 2)
-  expect((await pass()).reviews).toEqual([{ artifact: submitted.artifact.id, outcome: 'defaulted' }])
+  expect(submitted).toMatchObject({ result: 'applied', issue: null })
+  expect(submitted.next).toContain('Recorded as your plan')
   expect(await stateOf(issue)).toBe('working')
-  const [verdict]: { verdict: string; note: string }[] = await world.db.sql`
-    SELECT verdict, note FROM factory.verdicts WHERE artifact_id = ${submitted.artifact.id}`
-  expect(verdict?.verdict).toBe('looks_good')
-  expect(verdict?.note).toContain('no verdict in 24 hours')
-  const [counted]: { n: number }[] = await world.db.sql`
-    SELECT count(*)::int AS n FROM factory.issue_effects WHERE issue_id = ${issue} AND kind = 'note_lead'`
-  expect(counted?.n).toBe(1)
 
-  // the Spec gate is behind it: the ship is now refused for the commit it names, not for a missing Spec
+  // nothing reaches the owner: no page, nothing in Needs you, and no default to take a day later
+  const first = await pass()
+  expect(first.specs).toEqual([])
+  expect(first.pages.sent.filter((page) => page.includes('page:review'))).toEqual([])
+  await backdate(issue, 25)
+  expect((await pass()).reviews).toEqual([])
+  expect(await stateOf(issue)).toBe('working')
+  expect(await world.db.sql`SELECT 1 FROM factory.verdicts WHERE artifact_id = ${submitted.artifact.id}`).toHaveLength(
+    0,
+  )
+  expect(await world.db.sql`SELECT 1 FROM factory.checkpoint_pages WHERE issue_id = ${issue}`).toHaveLength(0)
+  const kinds: { kind: string }[] = await world.db.sql`
+    SELECT kind FROM factory.issue_events WHERE issue_id = ${issue} AND result = 'applied'`
+  expect(kinds.map((row) => row.kind)).not.toContain('submitted')
+
+  // the plan is the Spec the checkpoint owes: the ship is now refused for the commit it names, not for a missing Spec
   const after = await cli('issue', 'ship', issue, ...SHIP('ship-2'))
   expect(after.err).not.toContain('no Spec was submitted')
 })

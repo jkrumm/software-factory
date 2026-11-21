@@ -8,14 +8,17 @@ export const LaneName = z
 export type LaneName = z.infer<typeof LaneName>
 
 /**
- * A checkpoint is a gate the filer puts on an Issue before its lead builds. `spec`: the lead owes a one-page Spec
- * (at most three open choices, each with its default) and the ship is refused without one; the owner's verdict ends the wait,
- * and with none the lead goes on with its defaults after `SPEC_WAIT_HOURS`. `gate`: the same Spec is owed, but only the
- * owner's own verdict ends the wait: no default, no Spec screen settle, so what is `after` the Issue is released by him alone.
+ * A checkpoint is what the filer puts on an Issue before its lead builds. `spec`: the lead writes its plan first, as a Spec
+ * (Build, then Decided), and the ship is refused without one; nobody waits on it. `gate`: the same Spec is owed, and it is
+ * the one way a filer makes the owner read: only his own verdict ends the wait, no default, no rule settles it, so what is
+ * `after` the Issue is released by him alone.
  * Only a filer sets it (never triage).
  */
 export const CheckpointName = z.enum(['spec', 'gate']).meta({ id: 'CheckpointName' })
 export type CheckpointName = z.infer<typeof CheckpointName>
 
-/** How long a Concept or Spec waits for the owner's verdict before the lead takes its own defaults. */
+/**
+ * How long a Concept, a filed Spec, a Replan or a revision after Changes waits for the owner's verdict before the lead takes
+ * its own defaults. A gate has no default; a lead's Spec does not wait at all.
+ */
 export const SPEC_WAIT_HOURS = 24

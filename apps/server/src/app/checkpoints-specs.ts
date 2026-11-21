@@ -1,18 +1,15 @@
-import { SPEC_SCREEN_PRECEDENTS, type SpecScreenPreview, type SpecScreenRequest } from '@software-factory/contract'
+import type { SpecScreenPreview } from '@software-factory/contract'
 import type { ArtifactId } from '../domains/checkpoints/artifact.ts'
 import { deepLink, reviewPage } from '../domains/checkpoints/page.ts'
 import type { SpecScreenRecord, UnscreenedSpec } from '../domains/checkpoints/ports.ts'
 import {
-  checkSpecScreen,
   type RuleOutcome,
   screenSpecByRule,
   settledNote,
   SPEC_SCREEN_BACKOFF_MS,
   SPEC_SCREEN_MAX_TRIES,
-  specScreenRequest,
   specSourceOf,
 } from '../domains/checkpoints/spec-screen.ts'
-import { WORKFLOWS } from '../kernel/workflows.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { type CheckpointError, type CheckpointStores, issueOf, verdictIn } from './checkpoints.ts'
 import { PASS_LIMIT, type CheckpointLoopDeps } from './checkpoints-loop.ts'
@@ -27,67 +24,34 @@ export interface SpecScreened {
 type Step<T> = Promise<Result<T, CheckpointError | PortError>>
 
 type Verdict =
-  | { kind: 'decided'; outcome: 'passed' | 'settled'; by: 'rule' | 'judge' | 'failed'; reason: string }
+  | { kind: 'decided'; outcome: 'passed' | 'settled'; by: 'rule' | 'failed'; reason: string }
   | { kind: 'failed'; why: string }
 
-/** What the screen reads of one Spec revision, gathered in one transaction; the content is read after it, outside. */
-interface Facts {
-  spec: UnscreenedSpec
-  issue: { id: string; repo: string; title: string; kind: string }
-  precedents: SpecScreenRequest['precedents']
-}
-
-/** The Spec revision with its Issue and the owner's newest marks, while it is still the latest, unanswered and undecided. */
-async function factsOf(deps: CheckpointLoopDeps, id: ArtifactId, revision: number): Step<Facts | 'dropped'> {
-  return deps.uow.run<Facts | 'dropped', CheckpointError>(async ({ work, checkpoints }) => {
+/** The Spec revision, while it is still the latest, unanswered and undecided, and its Issue is open. */
+async function specOf(deps: CheckpointLoopDeps, id: ArtifactId, revision: number): Step<UnscreenedSpec | 'dropped'> {
+  return deps.uow.run<UnscreenedSpec | 'dropped', CheckpointError>(async ({ work, checkpoints }) => {
     const spec = await checkpoints.lockSpecRevision(id, revision)
     if (!spec || spec.answered || spec.screen?.outcome) return ok('dropped')
     const issue = spec.artifact.issueId ? await issueOf(work, spec.artifact.issueId) : null
     if (!issue || issue.state === 'closed') return ok('dropped')
-    return ok({
-      spec,
-      issue: { id: issue.id, repo: issue.repo, title: issue.title, kind: issue.kind },
-      precedents: await checkpoints.specPrecedents(SPEC_SCREEN_PRECEDENTS),
-    })
+    return ok(spec)
   })
 }
 
-type Look = { rule: RuleOutcome; request: null } | { rule: null; request: SpecScreenRequest }
-
-/** The rules first; what they leave is the workflow's request. The blob is read here, outside any transaction. */
-async function lookOf(deps: CheckpointLoopDeps, facts: Facts): Step<Look> {
-  const { spec } = facts
+/** The rules' look at a revision. The blob is read here, outside any transaction: a Replan's rule reads its block. */
+async function lookOf(deps: CheckpointLoopDeps, spec: UnscreenedSpec): Step<RuleOutcome> {
   const content = await deps.blobs.get(spec.revision.blob)
   if (!content.ok) return content
-  const rule = screenSpecByRule({
-    revision: spec.revision.n,
-    earlier: spec.earlier,
-    origin: spec.origin,
-    content: content.value,
-  })
-  if (rule) return ok({ rule, request: null })
-  return ok({
-    rule: null,
-    request: specScreenRequest({
-      spec: {
-        id: spec.artifact.id,
-        revision: spec.revision.n,
-        title: spec.artifact.title,
-        format: spec.artifact.format,
-        content: content.value,
-        source: specSourceOf(spec.origin),
-      },
-      issue: facts.issue,
-      precedents: facts.precedents,
-    }),
-  })
+  return ok(
+    screenSpecByRule({ revision: spec.revision.n, earlier: spec.earlier, origin: spec.origin, content: content.value }),
+  )
 }
 
 /**
  * Records what the screen came to, in a new transaction that locks the revision again: a verdict the owner gave meanwhile,
  * or a newer revision, drops it. A pass reaches Needs you and pages the owner; a settle is the factory's looks_good with
- * the reason as its note, so the lead builds on its defaults at once; a failed call waits for its retry, and after the
- * last try the Spec reaches the owner unscreened.
+ * the reason as its note, so the lead builds on its defaults at once; a revision whose content cannot be read waits for
+ * its retry, and after the last try reaches the owner.
  */
 function record(
   deps: CheckpointLoopDeps,
@@ -128,7 +92,7 @@ function record(
         kind: 'decided',
         outcome: 'passed',
         by: 'failed',
-        reason: `the screen could not be reached after ${SPEC_SCREEN_MAX_TRIES} tries: ${verdict.why}`,
+        reason: `its content could not be read after ${SPEC_SCREEN_MAX_TRIES} tries: ${verdict.why}`,
       }
     } else decided = verdict
 
@@ -164,33 +128,15 @@ function record(
   })
 }
 
-/** Screens one Spec revision: the facts, the rules, then `factory-spec-screen` through its port (no transaction open). */
+/** Screens one Spec revision by rule: no workflow reads a Spec (Issue 2732). */
 async function screenSpec(deps: CheckpointLoopDeps, id: ArtifactId, revision: number): Step<SpecScreened> {
-  const facts = await factsOf(deps, id, revision)
-  if (!facts.ok) return facts
-  if (facts.value === 'dropped') return ok({ artifact: id, revision, outcome: 'dropped' })
-  const look = await lookOf(deps, facts.value)
-  let verdict: Verdict
-  if (!look.ok)
-    verdict = { kind: 'failed', why: `${look.error.kind}: ${'detail' in look.error ? look.error.detail : ''}` }
-  else if (look.value.rule) {
-    verdict = { kind: 'decided', outcome: look.value.rule.outcome, by: 'rule', reason: look.value.rule.reason }
-  } else {
-    const tries = facts.value.spec.screen?.tries ?? 0
-    const answer = await deps.agw.run(
-      'specScreen',
-      look.value.request,
-      WORKFLOWS.specScreen.key(id, revision, tries + 1),
-    )
-    if (!answer.ok) verdict = { kind: 'failed', why: `${answer.error.kind}: ${answer.error.detail}` }
-    else {
-      const checked = checkSpecScreen(answer.value)
-      if (checked.action === 'refused') verdict = { kind: 'failed', why: checked.why }
-      else if (checked.action === 'pass') {
-        verdict = { kind: 'decided', outcome: 'passed', by: 'judge', reason: checked.note || 'the screen passed it' }
-      } else verdict = { kind: 'decided', outcome: 'settled', by: 'judge', reason: checked.reason }
-    }
-  }
+  const spec = await specOf(deps, id, revision)
+  if (!spec.ok) return spec
+  if (spec.value === 'dropped') return ok({ artifact: id, revision, outcome: 'dropped' })
+  const look = await lookOf(deps, spec.value)
+  const verdict: Verdict = look.ok
+    ? { kind: 'decided', outcome: look.value.outcome, by: 'rule', reason: look.value.reason }
+    : { kind: 'failed', why: `${look.error.kind}: ${'detail' in look.error ? look.error.detail : ''}` }
   const done = await record(deps, id, revision, verdict)
   return done.ok ? ok({ artifact: id, revision, outcome: done.value }) : done
 }
@@ -225,12 +171,11 @@ export const specScreenView = (screen: SpecScreenRecord | null): SpecScreenPrevi
       }
 
 /**
- * `factory artifact screen <id>`: the screen's look at the latest revision, and what the next look would come to: the rule
- * that decides it, or the request the workflow would be sent with the owner's marks as they stand now. Nothing is written.
- * This is also the replay: the request can be piped to `agw factory-spec-screen` for a Spec decided long ago.
+ * `factory artifact screen <id>`: the screen's look at the latest revision, and the rule the next look would come to.
+ * Nothing is written. `request` stays null: no workflow reads a Spec since Issue 2732.
  */
 export async function previewSpecScreen(deps: CheckpointLoopDeps, id: ArtifactId): Step<SpecScreenPreview> {
-  const read = await deps.uow.run<Facts & { screen: SpecScreenRecord | null }, CheckpointError>(
+  const read = await deps.uow.run<{ spec: UnscreenedSpec; screen: SpecScreenRecord | null }, CheckpointError>(
     async ({ work, checkpoints }) => {
       const artifact = await checkpoints.artifact(id)
       if (!artifact) return err({ kind: 'not_found', what: 'artifact', id })
@@ -243,22 +188,17 @@ export async function previewSpecScreen(deps: CheckpointLoopDeps, id: ArtifactId
         return err({ kind: 'invalid', detail: `${id} is a standalone artifact: no Issue to screen it for` })
       const issue = await issueOf(work, artifact.issueId)
       if (!issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
-      return ok({
-        spec,
-        screen: spec.screen,
-        issue: { id: issue.id, repo: issue.repo, title: issue.title, kind: issue.kind },
-        precedents: await checkpoints.specPrecedents(SPEC_SCREEN_PRECEDENTS),
-      })
+      return ok({ spec, screen: spec.screen })
     },
   )
   if (!read.ok) return read
-  const look = await lookOf(deps, read.value)
+  const look = await lookOf(deps, read.value.spec)
   if (!look.ok) return look
   return ok({
     artifact: id,
     revision: read.value.spec.revision.n,
     screen: specScreenView(read.value.screen),
-    rule: look.value.rule,
-    request: look.value.request,
+    rule: look.value,
+    request: null,
   })
 }

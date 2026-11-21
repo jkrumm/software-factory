@@ -340,6 +340,23 @@ describe('the brief', () => {
     for (const order of orders) expect(Buffer.byteLength(order)).toBeLessThanOrEqual(1_200)
   })
 
+  test("orders 2 and 3: the lead decides, the owner is asked only what is his, and a lead's Spec is its plan that never waits", () => {
+    const orders = STANDING_ORDERS.split('\n').filter((line) => /^\d+\. /.test(line))
+    expect(orders[1]).toBe(
+      "2. Decide yourself: you have read the code, and nobody after you knows more. What the repo, its standards, the Issue's facts or an earlier answer settle is settled; for the rest take the default a revert undoes. Architecture, names, an API or schema shape, a library, a layout the design guide covers are yours. The owner is asked only for what is his: what a product does for its users where no direction is stated; a look he has not seen where real variants exist; a new step or surface for himself; spend or a platform that locks in; security policy; other people's or company data; a change that cannot be undone; a fact only he holds. And only when the answer changes what you build. Then raise a Decision (`factory issue ask`): one question he answers in ten seconds, two to four options, your recommendation and the default taken with no answer. \"Is this plan right?\" is not a question. A person's chore is an Errand (`factory errand raise`). Answers come back as notes; never wait on a question typed into this pane.",
+    )
+    expect(orders[2]).toBe(
+      "3. A Spec is your plan, not a question. Write one before the code it governs when the brief's Checkpoint section asks for it, or when the change is a new public surface (an API route, a CLI verb, a schema others read), a new data model or a migration that changes meaning, a dependency of weight, or an architecture or look-and-feel choice later Issues build on. Most Issues need none. It opens with Build (what you will build, at most eight lines) and Decided (each choice and why, a line each); detail goes into collapsed sections, a diagram or a screenshot where it says it shorter. Submit it (`factory artifact submit --kind spec`) and build at once: it does not wait. The owner may comment on it at any time; a comment reaches you as a note, and you apply it. What in it is the owner's is a Decision (order 2), raised beside it. Only an owner gate waits for his verdict.",
+    )
+    // the Checkpoint section for `spec` owes the Spec before the build and does not wait; the gate's keeps its wait
+    const spec = buildBrief({ ...input, issue: { ...input.issue, checkpoint: 'spec' } })
+    expect(spec).toContain('a Spec (order 3) is owed before you build')
+    expect(spec).toContain('It does not wait: submit it and build at once.')
+    expect(spec).not.toContain('24 hours')
+    const gate = buildBrief({ ...input, issue: { ...input.issue, checkpoint: 'gate' } })
+    expect(gate).toContain("only the owner's own verdict ends the wait")
+  })
+
   test('the standing orders name the commands a lead runs, and none that are gone', () => {
     for (const command of [
       'factory issue show <id>',

@@ -1602,7 +1602,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/artifacts/{id}/screen',
     summary:
-      "the Spec screen's look at the latest revision, and the rule or the workflow request (with the owner's newest marks) its next look would use; writes nothing",
+      "the Spec screen's look at the latest revision, and the rule its next look would come to (no workflow reads a Spec, so `request` is null); writes nothing",
     pathParams: ['id'],
     queryParams: [],
     body: false,
@@ -2176,7 +2176,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/issues/{id}/artifacts',
     summary:
-      'the lead (or the owner, for his own Issue) hands over a Concept or Spec (the Issue waits for the verdict) or a Report (it never waits); a Report no Issue owns is `artifact new`',
+      "the lead (or the owner, for his own Issue) hands over a Concept (the Issue waits for the verdict), a Spec (the lead's plan: it does not wait, and `next` says so; an owner gate or a Replan that changes a plan row waits for the owner's verdict) or a Report (it never waits); a Report no Issue owns is `artifact new`",
     pathParams: ['id'],
     queryParams: [],
     body: true,

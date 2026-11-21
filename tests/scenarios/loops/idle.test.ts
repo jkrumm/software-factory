@@ -214,7 +214,8 @@ test('a Decision answered after the lead reported it, while its turn ended unhea
 })
 
 test('a lead that just heard the owner’s verdict is not nudged: a changes verdict owes a revision, and the generic note waits for it', async () => {
-  const issue = await working(lab, 'app', 'the verdict on the queue spec')
+  // an owner gate: its Spec waits for the verdict (a lead's plan would not, Issue 2732)
+  const issue = await working(lab, 'app', 'the verdict on the queue spec', 'gate')
   const session = await open(issue)
   const submitted = await lab.cli([
     'artifact',
@@ -223,7 +224,7 @@ test('a lead that just heard the owner’s verdict is not nudged: a changes verd
     '--body',
     JSON.stringify({ attempt: 1, kind: 'spec', title: 'The queue spec', content: '# Queue\n\nPostgres.' }),
   ])
-  expect(submitted.code).toBe(0)
+  expect({ code: submitted.code, err: submitted.err }).toMatchObject({ code: 0 })
   const artifact = (submitted.json as { artifact: { id: string } }).artifact.id
   await goQuiet(session)
   expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'review' })

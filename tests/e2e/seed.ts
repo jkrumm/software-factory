@@ -64,8 +64,13 @@ export async function seed(lab: Lab): Promise<void> {
   const url = lab.server.url
   const synced = await lab.cli(['project', 'sync'])
   if (synced.code !== 0) throw new Error(`project sync exited ${synced.code}: ${synced.err}`)
+  // a lead's Spec is its plan and reaches no one (Issue 2732): the two that are to wait in Needs you are owner gates
   const lead = async (repo: string, title: string): Promise<string> => {
-    const issue = await fileIssue(lab, { repo, title })
+    const issue = await fileIssue(lab, {
+      repo,
+      title,
+      ...(/ spec$/.test(title) ? { checkpoint: 'gate' as const } : {}),
+    })
     await admitted(lab, issue)
     await tick(lab)
     return issue

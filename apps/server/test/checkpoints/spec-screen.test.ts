@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { KpiModel, type SpecScreenAnswer, type SpecScreenRequest } from '@software-factory/contract'
+import { KpiModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { fakeAgw } from '../support/agw.ts'
 import { fileBlobStore } from '../../src/adapters/blobs/filesystem.ts'
@@ -9,17 +9,20 @@ import { postgresErrandStore } from '../../src/adapters/postgres/errand-store.ts
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresUnitOfWork } from '../../src/adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
-import { giveVerdict, markNeeded, submitArtifact } from '../../src/app/checkpoints.ts'
+import { postgresQualityStore } from '../../src/adapters/quality/store.ts'
+import { annotateArtifact, giveVerdict, markNeeded, submitArtifact } from '../../src/app/checkpoints.ts'
 import type { PageDeps } from '../../src/app/checkpoints-pages.ts'
+import { recheckReviews } from '../../src/app/checkpoints-reviews.ts'
 import { previewSpecScreen, screenSpecs } from '../../src/app/checkpoints-specs.ts'
 import type { CheckpointLoopDeps } from '../../src/app/checkpoints-loop.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import type { ArtifactId } from '../../src/domains/checkpoints/artifact.ts'
 import {
   checkSpecScreen,
+  PLAN_REASON,
   replanBlockOf,
   screenSpecByRule,
-  SPEC_SCREEN_BACKOFF_MS,
+  specPathOf,
   specSourceOf,
 } from '../../src/domains/checkpoints/spec-screen.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
@@ -30,39 +33,47 @@ import { readNeeds } from '../../src/read/needs.ts'
 import { type FixedClock, fixedClock } from '../../src/kernel/clock.ts'
 import { type IssueId, sequentialIds } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
-import { err, ok, portError, type Result } from '../../src/kernel/result.ts'
+import { ok, type Result } from '../../src/kernel/result.ts'
 
 const ORIGIN = { replan: false, filedSpec: false, triaged: false, filedWithCheckpoint: false, gate: false }
 
 describe('the rules', () => {
-  test('a revision after the owner asked for changes passes; a filed Spec passes', () => {
-    expect(screenSpecByRule({ revision: 2, earlier: ['changes'], origin: ORIGIN, content: '' })).toMatchObject({
-      outcome: 'passed',
+  test("a lead's Spec is its plan; four kinds are the owner's to read", () => {
+    const path = (input: Partial<Parameters<typeof specPathOf>[0]>) =>
+      specPathOf({ revision: 1, earlier: [], origin: ORIGIN, content: '# A Spec', ...input }).path
+    // whoever made it owed, a lead's Spec does not wait: the filer's checkpoint, triage, or the lead itself
+    expect(path({})).toBe('plan')
+    expect(path({ origin: { ...ORIGIN, filedWithCheckpoint: true } })).toBe('plan')
+    expect(path({ origin: { ...ORIGIN, triaged: true } })).toBe('plan')
+    expect(path({ revision: 2, earlier: ['with_notes'] })).toBe('plan')
+    expect(specPathOf({ revision: 1, earlier: [], origin: ORIGIN, content: '' }).reason).toBe(PLAN_REASON)
+    // a revision after Changes, a filed Spec and an owner gate (whatever its origin) are his
+    expect(path({ revision: 2, earlier: ['changes'] })).toBe('owner')
+    expect(path({ revision: 3, earlier: ['changes', 'with_notes'] })).toBe('owner')
+    expect(path({ origin: { ...ORIGIN, filedSpec: true } })).toBe('owner')
+    expect(path({ origin: { ...ORIGIN, replan: true, gate: true } })).toBe('owner')
+    // the screen pass settles a plan that waits all the same, and passes what is his
+    expect(screenSpecByRule({ revision: 1, earlier: [], origin: ORIGIN, content: '' })).toEqual({
+      outcome: 'settled',
+      reason: PLAN_REASON,
     })
-    expect(
-      screenSpecByRule({ revision: 1, earlier: [], origin: { ...ORIGIN, filedSpec: true }, content: '' }),
-    ).toMatchObject({ outcome: 'passed' })
-    // an owner gate is never decided by a rule, whatever its origin
-    expect(
-      screenSpecByRule({ revision: 1, earlier: [], origin: { ...ORIGIN, replan: true, gate: true }, content: '' }),
-    ).toMatchObject({ outcome: 'passed' })
-    // a lead's Spec is the workflow's to judge
-    expect(screenSpecByRule({ revision: 1, earlier: [], origin: ORIGIN, content: '# A Spec' })).toBeNull()
-    expect(screenSpecByRule({ revision: 2, earlier: ['with_notes'], origin: ORIGIN, content: '' })).toBeNull()
+    expect(screenSpecByRule({ revision: 1, earlier: [], origin: { ...ORIGIN, gate: true }, content: '' }).outcome).toBe(
+      'passed',
+    )
   })
 
-  test('a Replan that changes no plan row and cancels nothing is settled; anything else is not decided by rule', () => {
+  test('a Replan that changes no plan row and cancels nothing is settled; one that does, or says nothing a rule reads, is his', () => {
     const replan = { ...ORIGIN, replan: true }
     const block = (body: unknown) => `# Replan\n\nFree 1043.\n\n\`\`\`replan\n${JSON.stringify(body)}\n\`\`\`\n`
     const none = { plan: [], edges: { add: [], remove: [] }, cancel: [] }
     const freeing = block({ ...none, edges: { add: [], remove: [{ issue: 'issue_1043', after: ['issue_867'] }] } })
-    expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content: freeing })).toEqual({
-      outcome: 'settled',
+    expect(specPathOf({ revision: 1, earlier: [], origin: replan, content: freeing })).toEqual({
+      path: 'settled',
       reason: 'a Replan that changes no plan row and cancels nothing: it only frees an Issue from a wait',
     })
     // the block written on one line, as the playbook shows it, reads the same
     const inline = '```replan {"plan":[],"edges":{"add":[],"remove":[]},"cancel":[]} ```'
-    expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content: inline })?.outcome).toBe('settled')
+    expect(specPathOf({ revision: 1, earlier: [], origin: replan, content: inline }).path).toBe('settled')
     for (const content of [
       block({ ...none, plan: ['v2-store'] }),
       block({ ...none, cancel: [{ issue: 'issue_9', reason: 'shipped' }] }),
@@ -73,10 +84,10 @@ describe('the rules', () => {
       '# Replan\n\nNo block at all.',
       '```replan\n{not json\n```',
     ]) {
-      expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content })).toBeNull()
+      expect(specPathOf({ revision: 1, earlier: [], origin: replan, content }).path).toBe('owner')
     }
-    // the same block on a Spec that is not a Replan decides nothing
-    expect(screenSpecByRule({ revision: 1, earlier: [], origin: ORIGIN, content: freeing })).toBeNull()
+    // the same block on a Spec that is not a Replan is the lead's plan
+    expect(specPathOf({ revision: 1, earlier: [], origin: ORIGIN, content: freeing }).path).toBe('plan')
     expect(replanBlockOf(freeing)).toMatchObject({ plan: [], free: [], cancel: [] })
   })
 
@@ -99,13 +110,13 @@ describe('the rules', () => {
     expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content: both })?.reason).toBe(
       'a Replan that changes a plan row only by a removed after and cancels nothing: it only frees an Issue and 2 plan rows from their waits',
     )
-    // a row named in `plan` changes otherwise, even when it is also freed: the screen decides, not the rule
+    // a row named in `plan` changes otherwise, even when it is also freed: it is the owner's to read
     for (const content of [
       block({ ...none, free: ['dev-host'], plan: ['analytics'] }),
       block({ ...none, free: ['dev-host'], plan: ['dev-host'] }),
       block({ ...none, free: 'dev-host' }),
     ]) {
-      expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content })).toBeNull()
+      expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content }).outcome).toBe('passed')
     }
   })
 
@@ -145,15 +156,14 @@ afterAll(async () => {
 
 const clock: FixedClock = fixedClock('2026-11-14T08:00:00Z')
 let deps: CheckpointLoopDeps & PageDeps
-let calls: { request: SpecScreenRequest; key: string }[]
-let answer: (request: SpecScreenRequest) => Result<SpecScreenAnswer>
+/** every call of the `factory-spec-screen` workflow: none since Issue 2732 */
+let calls: string[]
 
 beforeEach(async () => {
   await db.sql`DROP SCHEMA IF EXISTS factory CASCADE`
   await migrate(db.sql, await loadMigrations())
   clock.set(new Date('2026-11-14T08:00:00Z'))
   calls = []
-  answer = () => ok({ verdict: 'pass', reason: 'a screen the owner has not seen' })
   const uow = postgresUnitOfWork(db.sql, (tx) => ({
     work: postgresWorkStore(tx),
     checkpoints: postgresCheckpointStore(tx),
@@ -166,13 +176,11 @@ beforeEach(async () => {
     blobs: fileBlobStore(blobDir),
     consoleUrl: 'https://console.example.test',
     checks: { run: async () => ({ exit: 0, timedOut: false, output: '' }) },
-    // the Judge and the Errand screen are not scripted: a call of either fails
+    // the Judge and the Errand screen are not scripted: a call of either fails; the Spec screen is counted
     agw: fakeAgw({
-      specScreen: (request, callKey) => {
-        // The port is never called inside a transaction.
-        expect(deps.uow.inTransaction()).toBe(false)
-        calls.push({ request, key: callKey })
-        return Promise.resolve(answer(request))
+      specScreen: (_request, callKey) => {
+        calls.push(callKey)
+        return Promise.resolve(ok({ verdict: 'pass', reason: 'a screen the owner has not seen' }))
       },
     }),
     recheckAfterMs: 0,
@@ -188,14 +196,25 @@ const value = <T, E>(result: Result<T, E>): T => {
 const record = async (issueId: IssueId, name: string, event: AnyIssueEvent) =>
   value(await recordIssueEvent(deps, { issueId, key: key('test', issueId, name), event }))
 
-/** An Issue with a lead working: attempt 1. `triaged`: factory-triage set its checkpoint when it settled it. */
-async function workingIssue(input: { title?: string; triaged?: boolean } = {}): Promise<IssueId> {
+/**
+ * An Issue with a lead working: attempt 1. `checkpoint`: the filer set it; `triaged`: factory-triage set `spec` when it
+ * settled it; `replan`: it is a project's Replan.
+ */
+async function workingIssue(
+  input: { title?: string; triaged?: boolean; checkpoint?: 'spec' | 'gate'; replan?: boolean } = {},
+): Promise<IssueId> {
   const filed = value(
     await fileIssue(deps, {
       key: key('filed', deps.ids.next('signal')),
       event: {
         kind: 'filed',
-        payload: { repo: 'example', title: input.title ?? 'Raise the plan limit', kind: 'feature', origin: 'you' },
+        payload: {
+          repo: 'example',
+          title: input.title ?? 'Raise the plan limit',
+          kind: 'feature',
+          origin: 'you',
+          ...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
+        },
         actor: 'factory',
       },
     }),
@@ -208,11 +227,18 @@ async function workingIssue(input: { title?: string; triaged?: boolean } = {}): 
   })
   await record(id, 'admitted', { kind: 'admitted', payload: {}, actor: 'factory' })
   await record(id, 'lead_started', { kind: 'lead_started', payload: { attempt: 1, terminal: 't1' }, actor: 'factory' })
+  if (input.replan) {
+    await db.sql`INSERT INTO factory.replans (issue_id, project, trigger, created_at)
+      VALUES (${id}, 'example', 'stalled', ${clock.now()})`
+  }
   return id
 }
 
+const handOver = async (issueId: IssueId, title: string, content: string) =>
+  value(await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'spec', title, content } }))
+
 const submit = async (issueId: IssueId, title: string, content: string): Promise<ArtifactId> =>
-  value(await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'spec', title, content } })).artifact.id
+  (await handOver(issueId, title, content)).artifact.id
 
 const pages = async (): Promise<number> =>
   Number((await db.sql`SELECT count(*)::int AS n FROM factory.checkpoint_pages`)[0].n)
@@ -223,116 +249,197 @@ const reviewsAtOwner = async (): Promise<string[]> =>
 const screenOf = async (artifactId: ArtifactId) =>
   (await db.sql`SELECT outcome, by, source, note, tries FROM factory.spec_screens WHERE artifact_id = ${artifactId}`)[0]
 
-describe('the Spec screen', () => {
-  test('a Spec waits for the screen, out of Needs you and unpaged; a pass puts it before the owner and pages him', async () => {
-    const issueId = await workingIssue()
-    const spec = await submit(issueId, 'A tile screen', '# Tile\n\nA new screen.')
+const stateOf = async (issueId: IssueId) =>
+  (await db.sql`SELECT state, wait_reason FROM factory.issues WHERE id = ${issueId}`)[0]
+
+const eventsOf = async (issueId: IssueId): Promise<string[]> =>
+  (
+    await db.sql`SELECT kind FROM factory.issue_events WHERE issue_id = ${issueId} AND result = 'applied' ORDER BY version`
+  ).map((row: { kind: string }) => row.kind)
+
+const notesOf = async (issueId: IssueId): Promise<{ text: string; actor: string }[]> =>
+  await db.sql`SELECT payload->>'text' AS text, actor FROM factory.issue_events
+    WHERE issue_id = ${issueId} AND kind = 'noted' AND result = 'applied' ORDER BY version`
+
+describe("a lead's Spec is its plan", () => {
+  test('on an Issue with the checkpoint spec it leaves the Issue working, pages no one, and is the Spec ship counts', async () => {
+    const issueId = await workingIssue({ checkpoint: 'spec' })
+    const handed = await handOver(issueId, 'A tile screen', '# Tile\n\n## Build\n\nA tile.\n\n## Decided\n\nOne query.')
+    const spec = handed.artifact.id
+    expect(handed).toMatchObject({ result: 'applied', issue: null, plan: true })
+    expect(await stateOf(issueId)).toMatchObject({ state: 'working', wait_reason: null })
+    expect(await eventsOf(issueId)).toEqual(['filed', 'settled', 'admitted', 'lead_started'])
+    expect(await screenOf(spec)).toMatchObject({
+      outcome: 'settled',
+      by: 'rule',
+      source: 'filer',
+      note: PLAN_REASON,
+      tries: 0,
+    })
     expect(await reviewsAtOwner()).toEqual([])
     expect(await pages()).toBe(0)
+    // the screen pass has nothing left to look at, and gives no verdict for him
+    expect(value(await screenSpecs(deps))).toEqual([])
+    expect(await db.sql`SELECT 1 FROM factory.verdicts WHERE artifact_id = ${spec}`).toHaveLength(0)
+    // the ship check counts it as the Spec the checkpoint owes
+    expect(await postgresQualityStore(db.sql).specSubmitted(issueId)).toBe(true)
+    // handing the same Spec over again is the same plan
+    expect(
+      await handOver(issueId, 'A tile screen', '# Tile\n\n## Build\n\nA tile.\n\n## Decided\n\nOne query.'),
+    ).toMatchObject({ result: 'replayed', plan: true })
+    // a day later there is no wait to default and nothing to withdraw: the plan stays without a verdict
+    clock.set(new Date(clock.now().getTime() + 25 * 3_600_000))
+    expect(value(await recheckReviews(deps))).toEqual([])
+    expect(await db.sql`SELECT 1 FROM factory.verdicts WHERE artifact_id = ${spec}`).toHaveLength(0)
+    expect(calls).toEqual([])
+  })
 
-    expect(value(await screenSpecs(deps))).toEqual([{ artifact: spec, revision: 1, outcome: 'passed' }])
-    expect(calls).toHaveLength(1)
-    expect(calls[0]?.key).toBe(key('factory-spec-screen', spec, 1, 1))
-    expect(calls[0]?.request).toMatchObject({
-      spec: { id: spec, revision: 1, title: 'A tile screen', source: 'lead', format: 'markdown' },
-      issue: { id: issueId, repo: 'example', kind: 'feature' },
-      precedents: [],
+  test('a plan is refused like any lead verb from another attempt or a closed Issue, and nothing is stored', async () => {
+    const issueId = await workingIssue()
+    const stale = await submitArtifact(deps, {
+      issueId,
+      attempt: 2,
+      raw: { kind: 'spec', title: 'A stale plan', content: '# Stale' },
     })
-    expect(await screenOf(spec)).toMatchObject({ outcome: 'passed', by: 'judge', source: 'lead' })
-    expect(await reviewsAtOwner()).toEqual([spec])
+    expect(stale.ok ? null : stale.error).toMatchObject({
+      kind: 'machine_refused',
+      detail: expect.stringContaining('the Issue is on attempt 1'),
+    })
+    await record(issueId, 'cancelled', { kind: 'cancelled', payload: { reason: 'not needed' }, actor: 'owner' })
+    const closed = await submitArtifact(deps, {
+      issueId,
+      attempt: 1,
+      raw: { kind: 'spec', title: 'A late plan', content: '# Late' },
+    })
+    expect(closed.ok ? null : closed.error).toMatchObject({ kind: 'machine_refused' })
+    expect(await db.sql`SELECT 1 FROM factory.artifacts WHERE issue_id = ${issueId}`).toHaveLength(0)
+    expect(await db.sql`SELECT 1 FROM factory.spec_screens`).toHaveLength(0)
+  })
+
+  test("the owner's comment and his verdict reach the lead as notes, and the Issue never waits", async () => {
+    const issueId = await workingIssue({ triaged: true })
+    const spec = await submit(issueId, 'Raise the plan file limit', '# Limit\n\nOne constant.')
+    expect(await screenOf(spec)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'triage' })
+
+    value(
+      await annotateArtifact(deps, {
+        artifactId: spec,
+        revision: null,
+        author: 'owner',
+        raw: { quote: 'One constant.', comment: 'Name it in the README too.' },
+      }),
+    )
+    // the lead's own annotation is no note to itself
+    value(
+      await annotateArtifact(deps, {
+        artifactId: spec,
+        revision: null,
+        author: 'lead',
+        raw: { quote: 'One constant.', comment: 'Done.' },
+      }),
+    )
+    value(await giveVerdict(deps, { artifactId: spec, verdict: 'with_notes', note: 'Fine.', revision: null }))
+    const notes = await notesOf(issueId)
+    expect(notes).toHaveLength(2)
+    expect(notes[0]).toMatchObject({ actor: 'owner' })
+    expect(notes[0]?.text).toContain('Name it in the README too.')
+    expect(notes[0]?.text).toContain(`factory artifact annotation-reply ${spec}`)
+    // With notes is retired: stored as Looks good, its note and the open comment reach the lead
+    expect(notes[1]?.text).toContain('Looks good')
+    expect(notes[1]?.text).toContain('Fine.')
+    expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
+    expect(await eventsOf(issueId)).not.toContain('verdict_given')
+    expect(await reviewsAtOwner()).toEqual([])
+  })
+
+  test('a plan that still waits from before the change is settled by rule, with no call, and its Issue works again', async () => {
+    const issueId = await workingIssue()
+    const spec = await submit(issueId, 'A Spec', '# A Spec')
+    // as a Spec handed over before Issue 2732 stands: waiting, and not looked at
+    await db.sql`DELETE FROM factory.spec_screens WHERE artifact_id = ${spec}`
+    await record(issueId, 'submitted', {
+      kind: 'submitted',
+      payload: { attempt: 1, artifact: { id: spec, summary: 'A Spec' } },
+      actor: 'lead',
+    })
+    expect(await stateOf(issueId)).toMatchObject({ state: 'waiting', wait_reason: 'review' })
+
+    expect(value(await screenSpecs(deps))).toEqual([{ artifact: spec, revision: 1, outcome: 'settled' }])
+    expect(await screenOf(spec)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'lead' })
+    const [verdict] = await db.sql`SELECT verdict, by, note FROM factory.verdicts WHERE artifact_id = ${spec}`
+    expect(verdict).toMatchObject({ verdict: 'looks_good', by: 'factory' })
+    expect(String(verdict.note)).toContain(PLAN_REASON)
+    expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
+    expect(await pages()).toBe(0)
+    expect(calls).toEqual([])
+  })
+})
+
+describe('the Specs that wait', () => {
+  test("an owner gate's Spec waits, reaches Needs you and pages him once the screen passes it by rule", async () => {
+    const issueId = await workingIssue({ checkpoint: 'gate' })
+    const handed = await handOver(issueId, 'A product gate', '# Gate')
+    expect(handed).toMatchObject({ issue: { state: 'waiting', waitReason: 'review' }, plan: false })
+    expect(await reviewsAtOwner()).toEqual([])
+    expect(value(await screenSpecs(deps))).toEqual([{ artifact: handed.artifact.id, revision: 1, outcome: 'passed' }])
+    expect(await screenOf(handed.artifact.id)).toMatchObject({ outcome: 'passed', by: 'rule', source: 'filer' })
+    expect(await reviewsAtOwner()).toEqual([handed.artifact.id])
     expect(await pages()).toBe(1)
     // a decided revision is never looked at again
     expect(value(await screenSpecs(deps))).toEqual([])
-    expect(calls).toHaveLength(1)
+    expect(calls).toEqual([])
   })
 
-  test('a settle is the factory looks_good with its reason: the lead hears it and builds, the owner never sees it', async () => {
-    const issueId = await workingIssue({ triaged: true })
-    const spec = await submit(issueId, 'Raise the plan file limit to 256 KiB', '# Limit\n\nOne constant.')
-    answer = () => ok({ verdict: 'settle', reason: 'a one-constant change with a reversible default' })
+  test('a Replan that changes a plan row waits for the owner; one that only frees an Issue is settled by rule', async () => {
+    const rows = await workingIssue({ title: 'Replan: example', replan: true })
+    const changing = await handOver(
+      rows,
+      'Replan: drop a row',
+      '# Replan\n\n```replan\n{"plan":["v2-store"],"edges":{"add":[],"remove":[]},"cancel":[]}\n```\n',
+    )
+    expect(changing).toMatchObject({ issue: { state: 'waiting', waitReason: 'review' }, plan: false })
 
-    expect(value(await screenSpecs(deps))).toEqual([{ artifact: spec, revision: 1, outcome: 'settled' }])
-    expect(await screenOf(spec)).toMatchObject({ outcome: 'settled', by: 'judge', source: 'triage' })
-    const [verdict] = await db.sql`SELECT verdict, note FROM factory.verdicts WHERE artifact_id = ${spec}`
-    expect(verdict.verdict).toBe('looks_good')
-    expect(String(verdict.note)).toContain('The Spec screen settled it without the owner')
-    const [issue] = await db.sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
-    expect(issue.state).toBe('working')
-    const [given] = await db.sql`
-      SELECT actor FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'verdict_given'`
-    expect(given.actor).toBe('factory')
-    expect(await reviewsAtOwner()).toEqual([])
-    expect(await pages()).toBe(0)
-    // his "not needed" on a Spec the screen settled agrees with the screen: no friction, no KPI count
-    value(await markNeeded(deps, { artifactId: spec, needed: false, revision: null }))
-    clock.set(new Date(clock.now().getTime() + 60_000))
-    const friction = await readFriction(db.sql, { now: clock.now(), days: 7 })
-    expect(friction.counts.find((c) => c.key === 'spec_unneeded:triage')?.count).toBe(0)
-    const kpis = KpiModel.parse(await readKpis(db.sql, { now: clock.now(), days: 7 }))
-    expect(kpis.kpis.find((k) => k.key === 'specs_not_needed')).toMatchObject({ count: 0, n: 0 })
+    const freeing = await workingIssue({ title: 'Replan: other', replan: true })
+    const freed = await handOver(
+      freeing,
+      'Replan: free issue_7',
+      '# Replan\n\nissue_7 waits on a stalled head for nothing.\n\n```replan\n{"plan":[],"edges":{"add":[],"remove":[{"issue":"issue_7","after":["issue_5"]}]},"cancel":[]}\n```\n',
+    )
+    expect(freed).toMatchObject({ issue: { state: 'waiting', waitReason: 'review' }, plan: false })
+
+    expect(value(await screenSpecs(deps))).toEqual([
+      { artifact: changing.artifact.id, revision: 1, outcome: 'passed' },
+      { artifact: freed.artifact.id, revision: 1, outcome: 'settled' },
+    ])
+    expect(await screenOf(freed.artifact.id)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'replan' })
+    expect(await stateOf(freeing)).toMatchObject({ state: 'working' })
+    expect(await stateOf(rows)).toMatchObject({ state: 'waiting', wait_reason: 'review' })
+    expect(await reviewsAtOwner()).toEqual([changing.artifact.id])
+    expect(calls).toEqual([])
   })
 
-  test('a screen that cannot be reached holds the Spec, retries after the backoff, and passes it after the last try', async () => {
-    const issueId = await workingIssue()
-    const spec = await submit(issueId, 'A Spec', '# A Spec')
-    answer = () => err(portError('refused', 'unknown command'))
-
-    expect(value(await screenSpecs(deps))).toEqual([{ artifact: spec, revision: 1, outcome: 'held' }])
-    expect(await screenOf(spec)).toMatchObject({ outcome: null, tries: 1 })
-    // not due yet: nothing is called
-    expect(value(await screenSpecs(deps))).toEqual([])
-    clock.set(new Date(clock.now().getTime() + SPEC_SCREEN_BACKOFF_MS))
-    expect(value(await screenSpecs(deps))).toMatchObject([{ outcome: 'held' }])
-    clock.set(new Date(clock.now().getTime() + SPEC_SCREEN_BACKOFF_MS))
-    expect(value(await screenSpecs(deps))).toMatchObject([{ outcome: 'passed' }])
-    expect(calls.map((call) => call.key)).toEqual([1, 2, 3].map((n) => key('factory-spec-screen', spec, 1, n)))
-    expect(await screenOf(spec)).toMatchObject({ outcome: 'passed', by: 'failed', tries: 3 })
-    expect(await reviewsAtOwner()).toEqual([spec])
-  })
-
-  test('a Replan that only frees an Issue is settled by rule, with no call', async () => {
-    const issueId = await workingIssue({ title: 'Replan: example' })
-    await db.sql`INSERT INTO factory.replans (issue_id, project, trigger, created_at)
-      VALUES (${issueId}, 'example', 'stalled', ${clock.now()})`
-    const content =
-      '# Replan\n\nissue_7 waits on a stalled head for nothing.\n\n```replan\n{"plan":[],"edges":{"add":[],"remove":[{"issue":"issue_7","after":["issue_5"]}]},"cancel":[]}\n```\n'
-    const spec = await submit(issueId, 'Replan: free issue_7', content)
-    expect(value(await screenSpecs(deps))).toEqual([{ artifact: spec, revision: 1, outcome: 'settled' }])
-    expect(calls).toHaveLength(0)
-    expect(await screenOf(spec)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'replan' })
-  })
-
-  test("the owner's mark is his precedent: the next screen and the preview carry it, and the KPI and friction count it", async () => {
-    const first = await workingIssue({ triaged: true })
-    const limit = await submit(first, 'Raise the plan limit', '# Limit')
+  test("the owner's mark counts in the KPI and friction; the preview names the rule and sends no request", async () => {
+    const first = await workingIssue({ checkpoint: 'gate' })
+    const gate = await submit(first, 'A product gate', '# Gate')
     value(await screenSpecs(deps))
     value(
-      await giveVerdict(deps, { artifactId: limit, verdict: 'looks_good', note: 'Shouldnt reach me', revision: null }),
+      await giveVerdict(deps, { artifactId: gate, verdict: 'looks_good', note: 'Shouldnt reach me', revision: null }),
     )
-    const marked = value(await markNeeded(deps, { artifactId: limit, needed: false, revision: null }))
-    expect(marked).toMatchObject({ revision: 1, neededMe: false })
-    // the same mark again changes nothing; a Spec with no verdict cannot be marked
-    expect(value(await markNeeded(deps, { artifactId: limit, needed: false, revision: null })).neededMe).toBe(false)
-
+    expect(value(await markNeeded(deps, { artifactId: gate, needed: false, revision: null }))).toMatchObject({
+      revision: 1,
+      neededMe: false,
+    })
+    // a plan has no verdict to mark
     const second = await workingIssue({ title: 'A new tile' })
     const tile = await submit(second, 'A new tile', '# Tile')
     expect((await markNeeded(deps, { artifactId: tile, needed: true, revision: null })).ok).toBe(false)
 
-    const preview = value(await previewSpecScreen(deps, tile))
-    expect(preview).toMatchObject({ revision: 1, screen: null, rule: null })
-    expect(preview.request?.precedents).toEqual([
-      {
-        title: 'Raise the plan limit',
-        repo: 'example',
-        source: 'triage',
-        screened: 'passed',
-        needed: false,
-        verdict: 'looks_good',
-        note: 'Shouldnt reach me',
-      },
-    ])
-    value(await screenSpecs(deps))
-    expect(calls.at(-1)?.request.precedents).toEqual(preview.request?.precedents ?? [])
+    expect(value(await previewSpecScreen(deps, tile))).toMatchObject({
+      revision: 1,
+      screen: { outcome: 'settled', by: 'rule' },
+      rule: { outcome: 'settled', reason: PLAN_REASON },
+      request: null,
+    })
 
     // a window ends before its `now`: read a minute later
     clock.set(new Date(clock.now().getTime() + 60_000))
@@ -345,20 +452,13 @@ describe('the Spec screen', () => {
       measured: false,
     })
     const friction = await readFriction(db.sql, { now: clock.now(), days: 7 })
-    expect(friction.counts.find((c) => c.key === 'spec_unneeded:triage')).toMatchObject({
+    expect(friction.counts.find((c) => c.key === 'spec_unneeded:filer')).toMatchObject({
       group: 'spec_unneeded',
       count: 1,
     })
-    expect(await readFrictionEvidence(db.sql, { now: clock.now(), days: 7 }, ['spec_unneeded:triage'])).toEqual({
-      'spec_unneeded:triage': [first],
+    expect(await readFrictionEvidence(db.sql, { now: clock.now(), days: 7 }, ['spec_unneeded:filer'])).toEqual({
+      'spec_unneeded:filer': [first],
     })
-  })
-
-  test("a verdict the owner gave while the screen held it ends the screen's work", async () => {
-    const issueId = await workingIssue()
-    const spec = await submit(issueId, 'A Spec', '# A Spec')
-    value(await giveVerdict(deps, { artifactId: spec, verdict: 'with_notes', note: 'fine', revision: null }))
-    expect(value(await screenSpecs(deps))).toEqual([])
-    expect(calls).toHaveLength(0)
+    expect(calls).toEqual([])
   })
 })

@@ -43,7 +43,7 @@ export const LANGUAGE = {
   checking:
     'Shipped and deployed: the watch is on, the factory runs Verify and the probes, and the Issue closes when they pass. Its own small count, in no other word',
   checkpoint:
-    'Where the factory stops for a person: a Decision, a review of a Concept or Spec, an Errand. Never a merge',
+    'Where the factory stops for a person: a Decision, a review of a Concept or of a Spec that waits, an Errand. Never a merge',
   claim:
     "A lead's place in its repo: leads: N (64 when the project states none: the host's fit is the limit, NL32) plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over",
   class:
@@ -118,7 +118,7 @@ export const LANGUAGE = {
   'memory used':
     "The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes. What to do: nothing at normal pressure; read Memory pressure before acting on a high figure",
   'needed me':
-    'The owner\'s mark on a verdict of a Spec or Report: did it need him (set through the API or the CLI; the Console no longer offers it). The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
+    'The owner\'s mark on a verdict of a Spec or Report: did it need him (set through the API or the CLI; the Console no longer offers it). The newest marks teach triage the next time; "Specs at the owner not needed" counts the no\'s',
   needs:
     'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, quarantined signals, long waits',
   'not measured':
@@ -131,7 +131,7 @@ export const LANGUAGE = {
     "The Console's home screen (/): what needs the owner, production, what shipped in a day, the host and the queue's binding reason, then the flow's counts and trend. It was the Flow screen",
   owed: 'Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. An owed lead counts in the leads of the account it resumes on, and the account cap never refuses its resume. A note refused for a claim for 15 minutes while a claim would be granted to that lead now is a steward stall; a herd waiting its turn is not',
   'owner gate':
-    "An Issue filed with the checkpoint gate: it owes the same Spec as spec, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen pass. A gate holds what needs its answer: after two hours with work behind it a Replan frees the rest (what stands under every answer and a revert undoes), and what needs the answer is released by him alone. Only a filer sets it, never triage",
+    "An Issue filed with the checkpoint gate, the one way a filer makes the owner read: it owes the same Spec as spec, but that Spec waits, and only the owner's own verdict ends the wait. No default after 24 hours, no Spec screen pass. A gate holds what needs its answer: after two hours with work behind it a Replan frees the rest (what stands under every answer and a revert undoes), and what needs the answer is released by him alone. Only a filer sets it, never triage",
   page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is answered",
   pass: 'One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored',
   pause:
@@ -193,9 +193,9 @@ export const LANGUAGE = {
     'How many Issues closed done in the last 7 days across all projects, against the 7 days before. What to do: a fall while Issues are Ready means something holds them; open Throughput and read what keeps Issues from starting',
   signal: 'Anything that arrives and may become work. Has a kind, an origin and a trust level',
   size: "Triage's judgment of how much work an Issue is: small, medium, large. Kept on the Issue when triage settles it; none for an Issue the rules settled",
-  spec: 'A larger plan to review',
+  spec: "The lead's plan, written before the code it governs: Build, then Decided. It does not wait and pages no one; the owner may comment at any time, and the lead hears it as a note. Four wait for his verdict: an owner gate's, one its filer attached, a revision after his Changes, and a Replan that changes a plan row or cancels an Issue",
   'spec screen':
-    "The look a Spec revision passes before it reaches the owner: rules, then factory-spec-screen with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and answers the rest with the factory's looks_good and its reason (stored as the outcome settled), so the lead builds at once",
+    "The rules a Spec revision meets when it is handed over, with no workflow (issue_2732): an owner gate's Spec, a filed one, a revision after Changes and a Replan that changes a plan row or cancels an Issue pass to the owner; a Replan that does neither is answered with the factory's looks_good and its reason; every other Spec is the lead's plan and never waits. Both of the last are stored as the outcome settled",
   stale: 'A Needs you item that has waited more than 24 hours',
   stall: "A wait with a machine cause, the steward's to end",
   started: 'The Issues a lead began: Running and Paused',

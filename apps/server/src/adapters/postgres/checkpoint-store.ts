@@ -766,6 +766,9 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
           AND NOT EXISTS (SELECT 1 FROM factory.verdicts v WHERE v.artifact_id = a.id AND v.revision = r.n)
           AND NOT EXISTS (
             SELECT 1 FROM factory.checkpoint_rechecks c WHERE c.checkpoint_id = a.id AND c.through_version = r.n)
+          -- a lead's plan (settled by rule when handed over, with no verdict) waited for no one: nothing to default or withdraw
+          AND NOT EXISTS (
+            SELECT 1 FROM factory.spec_screens s WHERE s.artifact_id = a.id AND s.revision = r.n AND s.outcome = 'settled')
           -- an owner gate waits for his own verdict: no default after the hours (it is looked at only once it is closed)
           AND NOT EXISTS (
             SELECT 1 FROM factory.issues gi JOIN factory.issue_events ge ON ge.issue_id = gi.id

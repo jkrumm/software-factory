@@ -39,8 +39,8 @@ export const eventsOf = async (lab: Lab, issue: string): Promise<{ kind: string;
 }
 
 /** An Issue with its lead working on attempt 1: filed, settled, admitted and started the way the factory does it. */
-export async function working(lab: Lab, repo: string, title: string): Promise<string> {
-  const issue = await fileIssue(lab, { repo, title })
+export async function working(lab: Lab, repo: string, title: string, checkpoint?: 'spec' | 'gate'): Promise<string> {
+  const issue = await fileIssue(lab, { repo, title, ...(checkpoint ? { checkpoint } : {}) })
   await admitted(lab, issue)
   await tick(lab)
   return issue

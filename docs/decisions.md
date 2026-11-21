@@ -486,3 +486,23 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   weather again. Cost: two regressions in a week file nothing; a rise to one in twenty files both patterns. Revert: set
   `'stall:regressed'` in `THRESHOLDS.friction.keys` to `{ min: 2, rate: null, why: ... }` or delete the key (the group rule is the bare count of 2).
   Count over the next week: `stall:regressed` against `regression` in `factory read friction`; they should be equal.
+
+- **NL53 A lead's Spec is its plan and never waits; what is the owner's is a Decision (Issue 2732, 2026-11-21).** Settled with the
+  owner in the planning session of 2026-11-21 ("Unnecessary Specs to be reviewed that could have been decided on their own"). The
+  one who knows most decides: the planner, then the lead, who has read the code; the owner is asked a question, never handed a
+  document. Decision: (1) `artifact submit --kind spec` records a lead's Spec as its plan: no `submitted`, no page, the Issue keeps
+  working, the answer's `next` says so, and the ship counts it as the Spec a checkpoint owes. The owner's comment (an annotation)
+  and his verdict on it reach the lead as notes. (2) Four Specs keep their wait for his verdict, by rule (`specPathOf`): an owner
+  gate's, one its filer attached, a revision after his Changes, and a Replan whose block changes a plan row or cancels an Issue
+  (or does not parse); a Replan that does neither is settled by rule as before. The 24 hour default stays for the three that are
+  no gate. (3) `factory-spec-screen` is no longer called; its code leaves in a later change. (4) Orders 2 and 3 of the brief say
+  who decides what (the plan row's words, less four parentheticals the verb help carries, so a typical brief stays under
+  its 12,000 bytes), and `issue ask`, `artifact submit` and the checkpoint help say the same. Evidence, 2026-11-14 to 2026-11-21
+  07:20 UTC (`factory artifact list --kind spec`, `artifact show` per Spec): 113 Specs handed over, 88 reached the owner, 25 were
+  settled before him; who made them owed: the filer's checkpoint 83, triage 21, a Replan 5, the lead's own judgment 4. The screen
+  judged 98 first revisions and passed 76. His first verdict on the 88: Looks good 49, With notes 28, Changes 7, other 4; 27 had
+  no note and no comment, and he set the needed-me mark on 6. The Issues waited 215 hours in sum for his verdicts (median 1.3 h,
+  p90 8 h). Decisions in the week to 2026-11-20: 58 raised, 5 answered by him. Cost: a Spec he would have changed is built
+  first and changed after, by his comment or a Changes that makes the revision wait. Revert: make `specPathOf` return `owner`
+  instead of `plan` and restore the screen's workflow call. Count after a week: Specs in Needs you (above: 88 of 113) down to
+  the gates, filed Specs, revisions after Changes and plan-changing Replans; the hours Issues waited for his verdicts (215).

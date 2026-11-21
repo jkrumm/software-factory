@@ -140,7 +140,13 @@ export function Composer({
 export function ScreenLine({ detail }: { detail: ArtifactDetail }) {
   const { screen } = detail
   if (!screen || screen.outcome === 'passed') return null
-  const lead = screen.outcome === 'settled' ? 'Answered by the Spec screen' : 'The Spec screen holds it'
+  // a rule's look (a lead's plan, a Replan that only frees) answered nothing on the owner's behalf: it says what decided it
+  const lead =
+    screen.outcome !== 'settled'
+      ? 'The Spec screen holds it'
+      : screen.by === 'rule'
+        ? 'Decided by rule'
+        : 'Answered by the Spec screen'
   return (
     <p className="basis-full text-xs text-muted-foreground">
       {lead}
