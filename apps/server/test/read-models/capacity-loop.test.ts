@@ -309,13 +309,20 @@ describe('GET /v1/capacity-loop figures', () => {
       expect(got?.byRepo.reduce((sum, r) => sum + r.queuedHours, 0)).toBeCloseTo(w.queuedHours, 9)
     })
     // the split loses nothing: every idle allowance-hour is in one kind
-    expect(model.queueByReason.reduce((sum, r) => sum + r.idleAllowanceHours, 0)).toBeCloseTo(model.idleAllowanceHours.total, 9)
+    expect(model.queueByReason.reduce((sum, r) => sum + r.idleAllowanceHours, 0)).toBeCloseTo(
+      model.idleAllowanceHours.total,
+      9,
+    )
 
     // the drained queue's share is queueByReason's drain, in total and per day, and what is left of the idle hours is not drain
     expect(model.idleAllowanceHoursDrain.total).toBeCloseTo(hours(1), 9)
     expect(model.idleAllowanceHoursDrain.perDay.find((d) => d.day === '2026-11-02')?.value).toBeCloseTo(hours(1), 9)
-    expect(model.idleAllowanceHoursDrain.perDay.filter((d) => d.day !== '2026-11-02').every((d) => d.value === 0)).toBe(true)
-    expect(model.idleAllowanceHoursDrain.perDay.map((d) => d.day)).toEqual(model.idleAllowanceHours.perDay.map((d) => d.day))
+    expect(model.idleAllowanceHoursDrain.perDay.filter((d) => d.day !== '2026-11-02').every((d) => d.value === 0)).toBe(
+      true,
+    )
+    expect(model.idleAllowanceHoursDrain.perDay.map((d) => d.day)).toEqual(
+      model.idleAllowanceHours.perDay.map((d) => d.day),
+    )
 
     // minutes over the load ceiling
     const over = (col: string) =>

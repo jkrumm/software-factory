@@ -278,7 +278,8 @@ async function capacityOf(
   }
   const figures = [...capacityFigures(loop), apiBlocked, ...options.build]
   const heaviest = loop.leadCosts[0] ?? null
-  const memoryShare = loop.idleAllowanceHours.total > 0 ? loop.idleAllowanceHoursMemory.total / loop.idleAllowanceHours.total : 0
+  const memoryShare =
+    loop.idleAllowanceHours.total > 0 ? loop.idleAllowanceHoursMemory.total / loop.idleAllowanceHours.total : 0
   return {
     figures,
     tune: tuneConstant(figures, loop.constants, {

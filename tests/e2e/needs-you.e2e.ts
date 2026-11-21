@@ -165,7 +165,12 @@ test('the kind headings and the kind entries of the sidebar carry an InfoHint wi
   page,
 }) => {
   await page.goto('/needs-you')
-  const kinds = { review: 'Reviews', decision: 'Decisions', errand: 'Errands', held_signal: 'Quarantined signals' } as const
+  const kinds = {
+    review: 'Reviews',
+    decision: 'Decisions',
+    errand: 'Errands',
+    held_signal: 'Quarantined signals',
+  } as const
   const words = { review: 'review', decision: 'decision', errand: 'errand', held_signal: 'quarantined signal' } as const
   for (const kind of Object.keys(kinds) as (keyof typeof kinds)[]) {
     await expectHint(page.locator(`main section[aria-labelledby="needs-${kind}"]`), words[kind])
@@ -248,7 +253,10 @@ test('a quarantined signal with a markdown fence shows no fence', async ({ page,
   await expect(page.getByRole('status').filter({ hasText: 'Dismissed' })).toBeVisible()
 })
 
-test('an Errand done, a quarantined signal promoted and a verdict each move the API state', async ({ page, apiUrl }) => {
+test('an Errand done, a quarantined signal promoted and a verdict each move the API state', async ({
+  page,
+  apiUrl,
+}) => {
   // Errand
   const errand = await needNamed(apiUrl, 'Plug in the test phone')
   await open(page, 'Plug in the test phone')

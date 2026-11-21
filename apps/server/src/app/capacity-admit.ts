@@ -3,7 +3,12 @@ import type { BootSample } from '../domains/capacity/boot.ts'
 import { checkAdmission, type LeadFit, type RefusalKind, type TestLine } from '../domains/capacity/admission.ts'
 import { freeMibOf, headroomMib, SAMPLE_MAX_AGE_MS } from '../domains/capacity/costs.ts'
 import { type DoctorReader, doctorMessage } from '../domains/capacity/doctor.ts'
-import { DEFAULT_TYPICAL_LEAD_MIB, ALLOWANCE_SAMPLE_MAX_AGE_MS, ALLOWANCE_SAMPLES, allowanceBonus } from '../domains/capacity/allowance.ts'
+import {
+  DEFAULT_TYPICAL_LEAD_MIB,
+  ALLOWANCE_SAMPLE_MAX_AGE_MS,
+  ALLOWANCE_SAMPLES,
+  allowanceBonus,
+} from '../domains/capacity/allowance.ts'
 import { type LeadGrowth, leadGrowth, learnLeadCost } from '../domains/capacity/leadcost.ts'
 import { DISK_RAMP_MS, type DiskFit, diskHeadroomMib, learnedWorktreeMib } from '../domains/capacity/disk.ts'
 import {
@@ -205,7 +210,9 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     notes.push(`the learned lead costs could not be read (${facts.error.detail}): admission goes on without them`)
   const fresh = facts.ok
     ? facts.value.recent.length >= ALLOWANCE_SAMPLES &&
-      facts.value.recent.slice(0, ALLOWANCE_SAMPLES).every((s) => now.getTime() - s.at.getTime() <= ALLOWANCE_SAMPLE_MAX_AGE_MS)
+      facts.value.recent
+        .slice(0, ALLOWANCE_SAMPLES)
+        .every((s) => now.getTime() - s.at.getTime() <= ALLOWANCE_SAMPLE_MAX_AGE_MS)
     : false
   const newest = facts.ok ? facts.value.recent[0] : undefined
   const doctors = await readDoctors(deps.doctor, facts.ok ? facts.value.projects : [])
@@ -459,7 +466,12 @@ function youngDiskMib(claims: readonly Claim[], snap: Snapshot, host: HostInputs
   }, 0)
 }
 
-function allowanceBonusOf(snap: Snapshot, host: HostInputs, limits: CapacityLimits, base: readonly QueueEntry[]): number {
+function allowanceBonusOf(
+  snap: Snapshot,
+  host: HostInputs,
+  limits: CapacityLimits,
+  base: readonly QueueEntry[],
+): number {
   const capped = base.filter((entry) => entry.reason?.kind === 'cap')
   if (capped.length === 0) return 0
   const learnedOf = (entry: QueueEntry): number | null => {

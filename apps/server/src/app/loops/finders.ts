@@ -8,10 +8,7 @@ const by = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 /**
  * Every finder the friction and hygiene loops have filed for, with its verdict: muted first.
  */
-export async function finders(
-  reads: Pick<LoopReads, 'allClassIssues'>,
-  now: Date,
-): Promise<FindersModel> {
+export async function finders(reads: Pick<LoopReads, 'allClassIssues'>, now: Date): Promise<FindersModel> {
   const all = await reads.allClassIssues()
   const finders: Finder[] = all.map((entry) => {
     const verdict = verdictOf(entry.issues, now)

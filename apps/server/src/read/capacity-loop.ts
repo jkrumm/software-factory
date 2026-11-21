@@ -172,7 +172,8 @@ export async function readCapacityLoop(
         ),
       }))
       .toSorted(
-        (a, b) => b.queuedHours - a.queuedHours || b.idleAllowanceHours - a.idleAllowanceHours || a.kind.localeCompare(b.kind),
+        (a, b) =>
+          b.queuedHours - a.queuedHours || b.idleAllowanceHours - a.idleAllowanceHours || a.kind.localeCompare(b.kind),
       )
 
     const overDay: unknown[] = await tx`

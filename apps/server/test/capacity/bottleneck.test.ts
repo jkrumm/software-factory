@@ -345,9 +345,7 @@ describe('the Apple build is one exclusive group', () => {
     expect(iris.view.granted).toBe(true)
     const shutterflow = call(iris.rows, 'shutterflow-apple', '/src/shutterflow')
     expect(shutterflow.view).toMatchObject({ granted: false })
-    expect(shutterflow.view.why).toBe(
-      'an exclusive apple step holds a slot: one at a time, whichever repo runs it',
-    )
+    expect(shutterflow.view.why).toBe('an exclusive apple step holds a slot: one at a time, whichever repo runs it')
     // a slot is free: a step that asked after it passes it
     const unit = call(shutterflow.rows, 'basalt-ui unit', '/src/basalt-ui', new Date(T.getTime() + 1000))
     expect(unit.view.granted).toBe(true)

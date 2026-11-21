@@ -405,7 +405,10 @@ for (const { variant, viewport, colorScheme, shots } of SHOTS) {
   test.describe(`screenshots ${variant}`, () => {
     test.use({ viewport, colorScheme, hasTouch: viewport.width < 768 })
 
-    test('the band, an open Decision, Errand and quarantined signal, and a project filter', async ({ page, apiUrl }) => {
+    test('the band, an open Decision, Errand and quarantined signal, and a project filter', async ({
+      page,
+      apiUrl,
+    }) => {
       await arm(apiUrl)
       const { items } = await api<{ items: { id: string; kind: string; title: string; repo: string | null }[] }>(
         apiUrl,

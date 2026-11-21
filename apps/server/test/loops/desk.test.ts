@@ -567,7 +567,9 @@ describe('the desk pass', () => {
     const id = await reached(issueId, { summary: 'Reseal the cache', cmd: 'make secrets-seed', host: 'macbook' })
     value(await finishErrand(deps, { errandId: id, note: 'ran on the MacBook and failed (exit 2): vault is locked' }))
     expect(await errandRow(id)).toMatchObject({ done_at: null, run_status: 'failed', run_attempts: 1 })
-    expect(value(await deskPass({ checkpoints: deps, desk: deps.uow as never, push, force: true })).pushed).toEqual([id])
+    expect(value(await deskPass({ checkpoints: deps, desk: deps.uow as never, push, force: true })).pushed).toEqual([
+      id,
+    ])
     value(await finishErrand(deps, { errandId: id, note: 'ran on the MacBook and failed (exit 2): vault is locked' }))
     expect(await errandRow(id)).toMatchObject({ closed_kind: 'turned_back', run_attempts: 2 })
     expect(value(await deskPass({ checkpoints: deps, desk: deps.uow as never, push, force: true })).pushed).toEqual([])

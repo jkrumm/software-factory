@@ -53,7 +53,3 @@ apps/server/src/domains/improve/retro.ts idle seat  # the retro brief names the 
 apps/server/src/domains/improve/retro.ts seat-hours  # the retro brief names the stored figure keys `idle_seat_hours_*`
 apps/server/test/read-models/retro-capacity.test.ts idle seat  # reads the stored figure keys `idle_seat_hours_*`
 apps/server/test/read-models/retro-capacity.test.ts seat-hours  # reads the stored figure keys `idle_seat_hours_*`
-apps/server/src/app/planning-settings.ts seat bonus  # the setting `FACTORY_SEATS_MAX_BONUS`, a name the deployed env file carries
-apps/server/src/app/capacity-admit.ts seat bonus  # names the setting `FACTORY_SEATS_MAX_BONUS`, a deployed env name
-scripts/env-file.sh seat bonus  # allow-lists the setting `FACTORY_SEATS_MAX_BONUS`, a deployed env name
-tests/scenarios/capacity/account-caps.test.ts seat bonus  # sets `FACTORY_SEATS_MAX_BONUS`, a deployed env name

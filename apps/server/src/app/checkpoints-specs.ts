@@ -89,7 +89,12 @@ async function lookOf(deps: CheckpointLoopDeps, facts: Facts): Step<Look> {
  * the reason as its note, so the lead builds on its defaults at once; a failed call waits for its retry, and after the
  * last try the Spec reaches the owner unscreened.
  */
-function record(deps: CheckpointLoopDeps, id: ArtifactId, revision: number, verdict: Verdict): Step<SpecScreened['outcome']> {
+function record(
+  deps: CheckpointLoopDeps,
+  id: ArtifactId,
+  revision: number,
+  verdict: Verdict,
+): Step<SpecScreened['outcome']> {
   return deps.uow.run<SpecScreened['outcome'], CheckpointError | PortError>(async (stores: CheckpointStores) => {
     const { work, checkpoints } = stores
     const spec = await checkpoints.lockSpecRevision(id, revision)

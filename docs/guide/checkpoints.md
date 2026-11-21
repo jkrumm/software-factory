@@ -188,7 +188,7 @@ A screen is the check a checkpoint passes before it reaches the owner. Rules go 
 - **The Spec screen.** On 2026-11-14 the owner said most Specs reaching the owner could have been decided by their lead: 12 looks good and 16 with notes against 3 changes in 14 days. The rules decide what they can. Then the `factory-spec-screen` workflow reads the Spec with the owner's newest "needed me" marks as precedents. It passes what is the owner's: a UI screen the owner has not seen, product direction, spend, security policy, other people's data, a change that cannot be undone. It settles the rest as Looks good with its reason, so the lead builds at once.
 - **Rules first.** A revision after a verdict of Changes passes. A Spec its filer attached passes. A Replan that changes no plan row and cancels nothing is settled.
 - **Fail toward the owner.** A screen that cannot be reached passes the Spec after its last try, so a broken screen costs the owner a read and never a Spec the owner should have seen.
-- **The held-signal screen.** The Judge looks at a quarantined signal, outside text the factory did not trust enough to turn into work, and promotes it, dismisses it with a reason, or leaves it held with a recommendation. A signal is screened once, and a failed call is retried five times at most.
+- **The quarantined-signal screen.** The Judge looks at a quarantined signal, outside text the factory did not trust enough to turn into work, and promotes it, dismisses it with a reason, or leaves it quarantined with a recommendation. A signal is screened once, and a failed call is retried five times at most.
 - **The Errand screen.** The rules and workflow under Errands.
 
 <!-- snippet: apps/server/src/domains/checkpoints/spec-screen.ts screenSpecByRule -->

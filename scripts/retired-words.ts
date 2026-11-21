@@ -51,7 +51,7 @@ export const RETIRED: Retired[] = [
   },
   { term: 'dedup', pattern: 'dedup(e|es|ed|ing|licate|licated|lication)?', use: 'triage (amend or incident)' },
   // seat is the tier, effort and role a lead runs on; how many leads may run is the allowance
-  { term: 'seat bonus', pattern: 'seats?\\s+(max\\s+)?bonus', use: 'allowance bonus' },
+  { term: 'seat bonus', pattern: 'seats?\\s+bonus', use: 'allowance bonus' },
   { term: 'idle seat', pattern: 'idle\\s+seats?', use: 'idle allowance' },
   { term: 'seat-hours', pattern: 'seat\\s+(hours?|time|minutes?)', use: 'allowance-hours' },
   { term: 'free seat', pattern: 'free\\s+seats?', use: 'room in the allowance' },

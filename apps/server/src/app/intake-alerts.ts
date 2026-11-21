@@ -114,7 +114,7 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
   /** The workflow found the ask already covered by a recently closed Issue: stored dismissed by the judge, nothing filed. */
   async function coveredBy(s: Stores, r: Received, decision: Decision, stateKey: Key | null): Out<Triaged> {
     const id = decision.settled as IssueId
-    const head = `already covered by `
+    const head = `already covered by ${id}`
     const reason = (decision.reason ? `${head} — ${decision.reason}` : head).slice(0, MAX_DISMISS_REASON)
     const stored = await store(s, r, stateKey, 'dismissed', null, { reason, by: 'judge', at: clock.now() })
     return ok(triaged('dropped', 'settled', null, stored, head))

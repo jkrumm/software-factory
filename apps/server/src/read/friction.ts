@@ -240,7 +240,12 @@ async function countsOf(
     SELECT settled_by AS key, NULL::text AS detail, count(*) AS n FROM factory.decisions
     WHERE answered_at >= ${w.from} AND answered_at < ${w.to} GROUP BY settled_by`)
   for (const [answerer, label] of Object.entries(ANSWERERS)) {
-    add('decision_answered', `decision_answered:${answerer}`, label, settled.find((row) => row.key === answerer)?.n ?? 0)
+    add(
+      'decision_answered',
+      `decision_answered:${answerer}`,
+      label,
+      settled.find((row) => row.key === answerer)?.n ?? 0,
+    )
   }
 
   const held = await grouped(sql`

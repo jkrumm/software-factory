@@ -34,7 +34,13 @@ export interface BenchState {
   eased: boolean
 }
 
-export const NO_BENCH: BenchState = { benchMs: 0, lastDisagreementAt: null, until: null, disagreements: 0, eased: false }
+export const NO_BENCH: BenchState = {
+  benchMs: 0,
+  lastDisagreementAt: null,
+  until: null,
+  disagreements: 0,
+  eased: false,
+}
 
 /** The bench a step is under at the end of `events`. A bench that has ended still stands for the next doubling. */
 export function benchOf(events: readonly BenchEvent[]): BenchState {

@@ -370,7 +370,10 @@ const CAPACITY_TITLE = {
 const notDrainPerDay = (model: CapacityLoopModel) =>
   model.idleAllowanceHours.perDay.map((d) => ({
     day: d.day,
-    value: Math.max(0, (d.value ?? 0) - (model.idleAllowanceHoursDrain.perDay.find((x) => x.day === d.day)?.value ?? 0)),
+    value: Math.max(
+      0,
+      (d.value ?? 0) - (model.idleAllowanceHoursDrain.perDay.find((x) => x.day === d.day)?.value ?? 0),
+    ),
   }))
 
 /** What the capacity loop did over the window: Issues closed, idle allowance, minutes over the load ceiling, test slot wait. */

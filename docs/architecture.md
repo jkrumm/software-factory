@@ -248,7 +248,7 @@ Ubuntu 24.04. The step host is the owner's setting ([settings](settings.md)). On
 - **Placement** (`app/capacity-slots.ts` `touchSlot`, `domains/capacity/remote.ts`): the VPS takes a step when
   `decideRemote` finds room and `finishesSooner` holds. A caller may run off the mini when the mini makes it wait, or
   when a slot is free but the VPS is learned to run the step in less time (issue 2668). A step that needs what only
-  the mini has (`mac`, `apple`, `secrets`, `services`), or the host-wide class `apple`, never leaves the mini. Sooner:
+  the mini has (`mac`, `apple`, `secrets`, `services`), or the exclusive step `apple`, never leaves the mini. Sooner:
   the learned VPS run against the expected mini wait (zero when a slot is free now) plus the mini run.
 - **Pressure line** (`kernel/remote-pressure.ts`): the VPS's own memory and io stall against a p99 baseline.
 - **Why** (`step_placements`): `free`, `no_room`, `not_sooner` or `held`.
