@@ -28,7 +28,7 @@ page's Hygiene tab and `factory read project-hygiene <name>` render that one lis
   by its key, so each key still heals, reopens and is judged by itself (`loop_findings` keeps a row per key). The Issue is
   closed as healed only when every key in it is green; while one is still red it is told which keys are.
 - **Budget.** At most 3 probe findings and 5 sections in all per pass, probes ranked in the catalogue's order; the rest are
-  named in the pass record, never dropped. A finding class that mostly ends dropped or cancelled stops filing for 14 days.
+  named in the pass record, never dropped. A finder that mostly ends dropped or cancelled stops filing for 14 days.
 - **Settings.** `FACTORY_HYGIENE_EVERY_MS` (the week) and `FACTORY_HYGIENE_RETRY_MS` (`apps/server/src/app/loops/settings.ts`, set in the env file); the daily pass is once a day.
 - **The seat.** Every signal carries a `Seat:` line. A finding's Issue starts on the light seat whatever its size: the probe that
   found it turning green proves the fix, and a light lead that struggles is moved up once.

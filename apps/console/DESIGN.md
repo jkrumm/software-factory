@@ -209,7 +209,7 @@ Each screen of the navigation answers one question, shown under its title (`purp
   heading, off target first, then those with no target yet (the sub line says why), on target and not measured, all on one
   4-column lattice of equal StatCards (a shared subgrid keeps header, figure and chart level); Fix commits (the
   stacked-bar card, its weeks and classes in the chart's table); Friction, a ranked list (the top five with a bar, the count and the change
-  against the window before, the rest folded); what the loops yielded; the held finding classes; the seats and the reviewers.
+  against the window before, the rest folded); what the loops yielded; the muted finders; the seats and the reviewers.
   Capacity is not here: its cards and tables live on Throughput, and no table appears on both screens. Every KPI card carries one plain sentence of
   what it means and which way is good, with no click; a KPI with no figure says "Not measured" and why, never a zero. Each
   KPI card has its target as a dashed line and the distance to it, the last window against the one before.

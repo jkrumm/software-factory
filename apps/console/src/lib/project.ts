@@ -57,7 +57,7 @@ export const FINDING_WHY: Record<HygieneFindingRow['status'], string> = {
   reopened: 'Its Issue had closed done and the probe is red again: the Issue was opened again, no second one filed.',
   kept: 'It is red again after its Issue was reopened twice. A person decides; no Issue is filed.',
   left_out:
-    "The pass's cap, or a finding class held for mostly dropped Issues, kept it out. The next pass finds it again.",
+    "The pass's cap, or a finder muted for mostly dropped Issues, kept it out. The next pass finds it again.",
   refused: 'Intake refused the signal.',
   not_filed: 'The pass raised it and filed nothing.',
 }

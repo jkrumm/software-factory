@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { ClassIssue, FindingLoop } from '../domains/improve/classes.ts'
+import type { FinderIssue, FindingLoop } from '../domains/improve/finders.ts'
 import type { ClosedFinding } from '../domains/improve/ledger.ts'
 import type { DigestIssue } from '../kernel/digest-scope.ts'
 import type { IssueId } from '../kernel/ids.ts'
@@ -110,7 +110,7 @@ const ClosedRow = z.object({
 const classRows = (rows: unknown[]) =>
   rows.map((raw) => {
     const row = ClassRow.parse(raw)
-    const issue: ClassIssue = {
+    const issue: FinderIssue = {
       issue: row.issue,
       filedAt: row.filed_at,
       closedAt: row.closed_at,
@@ -338,13 +338,13 @@ export function improveReads(tx: SQL): ImproveReads {
     },
 
     async classIssues(loop) {
-      const out: Record<string, ClassIssue[]> = {}
+      const out: Record<string, FinderIssue[]> = {}
       for (const row of await classes({ loop })) (out[row.class] ??= []).push(row.issue)
       return out
     },
 
     async allClassIssues() {
-      const groups = new Map<string, { loop: FindingLoop; class: string; issues: ClassIssue[] }>()
+      const groups = new Map<string, { loop: FindingLoop; class: string; issues: FinderIssue[] }>()
       for (const row of await classes(null)) {
         const id = `${row.loop}\u0000${row.class}`
         const group = groups.get(id) ?? { loop: row.loop, class: row.class, issues: [] }

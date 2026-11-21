@@ -76,6 +76,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Judge** | The agw workflow that tries to answer a Decision before the owner sees it | Ask judge |
 | **Backoff** | The Judge's answer to a stall the steward asked about that says "wait for it": a timed wait instead of a wake, one hour, doubling per backoff of the attempt, at most twelve (`kernel/backoff.ts`) | Hold, for this answer (judge hold) |
 | **Loop** | A named recurring job with a trigger, a budget and one way to act. Its judgment is an agw workflow with its own prompt, tools and skills | Scorer, babysitter |
+| **Finder** | A kind of finding a loop files Issues for: the loop plus the finding's first key segment (a probe, a kind of judgment, a friction pattern group; stored as `loop_findings.class`). Mostly dropped or cancelled Issues **mute** it for 14 days, then it is on probation, one Issue at a time (`GET /v1/finders`, Improve) | Finding class, held class |
 | **Pass** | One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored | |
 | **Round** | The *n*th ask of a workflow about one subject. A subject has a limited number of rounds | |
 | **Review** | The lead's own check of its change, once per ship range, standard or deep. Part of the lead's work, never a factory step | Light review, per-commit coverage |

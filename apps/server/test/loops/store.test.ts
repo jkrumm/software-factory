@@ -63,7 +63,7 @@ test('recordPass keeps the newest time of each loop and never moves it backwards
   expect((await loops.passes()).get('fix-classes')).toEqual(later)
 })
 
-// ---- finding classes ------------------------------------------------------------------------------------------------------
+// ---- finders ------------------------------------------------------------------------------------------------------
 
 test('recordFinding stores a row per key of an Issue and a repeat of a key once; classIssues reads filed time, closure and outcome, an Issue once per class', async () => {
   const loops = postgresLoopStore(db.sql)

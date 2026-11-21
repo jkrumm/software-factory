@@ -1,5 +1,5 @@
 import type {
-  FindingClassesModel,
+  FindersModel,
   FixCommitsModel,
   FrictionModel,
   Kpi,
@@ -28,8 +28,8 @@ import { TONE_MARK, TONE_TEXT } from '@/components/kit/tone'
 import { buttonVariants } from '@/components/ui/button'
 import {
   chartTarget,
-  classIsQuiet,
-  classWords,
+  finderIsQuiet,
+  finderWords,
   closeWords,
   yieldWords,
   comparisonWords,
@@ -71,7 +71,7 @@ import {
 } from '@/lib/improve'
 import { ImproveSkeleton } from '@/components/skeletons'
 import { useScreen, useScreenNote } from '@/lib/screen'
-import { useFindingClasses, useFixCommits, useFriction, useKpis, useLoopYield, useSeats } from '@/lib/queries'
+import { useFinders, useFixCommits, useFriction, useKpis, useLoopYield, useSeats } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/improve')({
@@ -446,22 +446,22 @@ function LoopYieldSection({ model }: { model: LoopYieldModel | undefined }) {
   )
 }
 
-function FindingClassesSection({ model }: { model: FindingClassesModel | undefined }) {
-  const quiet = (model?.classes ?? []).filter(classIsQuiet)
+function FindersSection({ model }: { model: FindersModel | undefined }) {
+  const quiet = (model?.finders ?? []).filter(finderIsQuiet)
   return (
-    <div data-shot="improve-held">
-      <Section title="Held finding classes">
+    <div data-shot="improve-muted">
+      <Section title="Muted finders">
         {quiet.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{model ? 'No finding class is held.' : 'Loading'}</p>
+          <p className="text-sm text-muted-foreground">{model ? 'No finder is muted.' : 'Loading'}</p>
         ) : (
-          <ul aria-label="Held finding classes" className={cn(PANEL, 'divide-y px-4 text-sm')} style={PANEL_SHADOW}>
+          <ul aria-label="Muted finders" className={cn(PANEL, 'divide-y px-4 text-sm')} style={PANEL_SHADOW}>
             {quiet.map((c) => (
-              <li key={`${c.loop}/${c.class}`} className="flex flex-col gap-0.5 py-2">
+              <li key={`${c.loop}/${c.finder}`} className="flex flex-col gap-0.5 py-2">
                 <span>
-                  {c.loop} · {c.class}{' '}
-                  <span className="text-muted-foreground">{c.status === 'held' ? 'held' : 'on probation'}</span>
+                  {c.loop} · {c.finder}{' '}
+                  <span className="text-muted-foreground">{c.status === 'muted' ? 'muted' : 'on probation'}</span>
                 </span>
-                <span className="text-muted-foreground">{classWords(c)}</span>
+                <span className="text-muted-foreground">{finderWords(c)}</span>
               </li>
             ))}
           </ul>
@@ -645,7 +645,7 @@ function Improve() {
   const screen = useScreen(kpis)
   const note = useScreenNote(screen, kpis.error)
   const friction = useFriction(days)
-  const classes = useFindingClasses()
+  const finders = useFinders()
   const yields = useLoopYield()
   const fixes = useFixCommits()
   const seats = useSeats(days)
@@ -678,7 +678,7 @@ function Improve() {
           <FixBand model={fixes.data} pending={fixes.isPending} />
           <FrictionSection model={friction.data} pending={friction.isPending} />
           <LoopYieldSection model={yields.data} />
-          <FindingClassesSection model={classes.data} />
+          <FindersSection model={finders.data} />
         </div>
       </div>
     </Page>

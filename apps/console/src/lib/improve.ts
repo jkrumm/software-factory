@@ -1,5 +1,5 @@
 import {
-  type FindingClass,
+  type Finder,
   type FixCommitsModel,
   type FrictionCount,
   type Kpi,
@@ -210,14 +210,14 @@ export function frictionRanking(
 export const windowWords = (window: { from: string; to: string }): string =>
   `${window.from.slice(0, 10)} to ${window.to.slice(0, 10)}`
 
-/** Whether a finding class is held or on probation: the classes the Improve page lists. */
-export const classIsQuiet = (cls: FindingClass): boolean => cls.status !== 'open'
+/** Whether a finder is muted or on probation: the finders the Improve page lists. */
+export const finderIsQuiet = (finder: Finder): boolean => finder.status !== 'open'
 
-/** What a held or probation class says about itself, in the owner's words. */
-export function classWords(cls: FindingClass): string {
-  const outcomes = `${cls.noise} of ${cls.decided} dropped or cancelled`
-  if (cls.status === 'held')
-    return `${outcomes}, asked again ${cls.heldUntil === null ? 'later' : cls.heldUntil.slice(0, 10)}`
+/** What a muted or probation finder says about itself, in the owner's words. */
+export function finderWords(finder: Finder): string {
+  const outcomes = `${finder.noise} of ${finder.decided} dropped or cancelled`
+  if (finder.status === 'muted')
+    return `${outcomes}, asked again ${finder.mutedUntil === null ? 'later' : finder.mutedUntil.slice(0, 10)}`
   return `${outcomes}, one Issue at a time until one closes done`
 }
 

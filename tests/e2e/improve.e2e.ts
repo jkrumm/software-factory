@@ -143,7 +143,7 @@ test('one card per KPI in the order the Console shows, each the figures the API 
     'Fix commits',
     'Friction',
     'What the loops yielded',
-    'Held finding classes',
+    'Muted finders',
   ])
   await expectCards(page, kpis)
 
@@ -267,28 +267,28 @@ test('what the loops yielded reads the API: a row per loop and window with its s
     }
 })
 
-test('held finding classes read what the API says: a line when none is held, else each class with its counts', async ({
+test('muted finders read what the API says: a line when none is muted, else each finder with its counts', async ({
   page,
   apiUrl,
 }) => {
   const model = await api<{
-    classes: {
+    finders: {
       loop: string
-      class: string
+      finder: string
       status: string
       decided: number
       noise: number
     }[]
-  }>(apiUrl, '/v1/finding-classes')
+  }>(apiUrl, '/v1/finders')
   await page.goto('/improve')
-  const quiet = model.classes.filter((c) => c.status !== 'open')
+  const quiet = model.finders.filter((c) => c.status !== 'open')
   if (quiet.length === 0) {
-    await expect(page.getByText('No finding class is held.', { exact: true })).toBeVisible()
+    await expect(page.getByText('No finder is muted.', { exact: true })).toBeVisible()
     return
   }
-  const list = page.getByRole('list', { name: 'Held finding classes' })
+  const list = page.getByRole('list', { name: 'Muted finders' })
   for (const c of quiet) {
-    const row = list.getByRole('listitem').filter({ hasText: `${c.loop} · ${c.class}` })
+    const row = list.getByRole('listitem').filter({ hasText: `${c.loop} · ${c.finder}` })
     await expect(row).toContainText(`${c.noise} of ${c.decided} dropped or cancelled`)
   }
 })

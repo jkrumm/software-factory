@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { FindingClassesModel } from '@software-factory/contract'
+import { FindersModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { createApp } from '../../src/api/app.ts'
-import { findingClasses } from '../../src/app/loops/finding-classes.ts'
+import { finders } from '../../src/app/loops/finders.ts'
 import { loopReads } from '../../src/read/loops.ts'
 
-/** The finding classes over a real Postgres: held, probation and open in order, with their counts. */
+/** The finders over a real Postgres: muted, probation and open in order, with their counts. */
 let db: TestCluster
 const NOW = new Date('2026-11-07T12:00:00Z')
 const day = (month: number, d: number) => new Date(Date.UTC(2026, month - 1, d))
@@ -18,7 +18,7 @@ const TOKENS = {
 }
 
 let n = 0
-/** An Issue a class filed, closed (with an outcome) or still open. */
+/** An Issue a finder filed, closed (with an outcome) or still open. */
 async function finding(loop: string, repo: string, cls: string, filed: Date, closed: Date | null, outcome?: string) {
   const id = `issue_${++n}`
   await db.sql`INSERT INTO factory.issues (id, repo, state, outcome, version)
@@ -39,7 +39,7 @@ beforeAll(async () => {
   await finding('hygiene', 'app', 'links', day(10, 3), day(10, 4), 'done')
   await finding('hygiene', 'app', 'links', day(10, 5), day(10, 6), 'dropped')
   await finding('hygiene', 'app', 'links', day(11, 5), null)
-  // held: three dropped or cancelled, the last closed 6 days ago
+  // muted: three dropped or cancelled, the last closed 6 days ago
   await finding('hygiene', 'app', 'cochange', day(10, 25), day(10, 28), 'dropped')
   await finding('hygiene', 'web', 'cochange', day(10, 26), day(10, 30), 'cancelled')
   await finding('hygiene', 'app', 'cochange', day(10, 27), day(11, 1), 'dropped')
@@ -50,47 +50,47 @@ beforeAll(async () => {
 })
 afterAll(() => db.stop())
 
-test('held first, then probation, then open, with the counts the verdict stands on', async () => {
-  const model = FindingClassesModel.parse(await findingClasses(loopReads(db.sql), NOW))
+test('muted first, then probation, then open, with the counts the verdict stands on', async () => {
+  const model = FindersModel.parse(await finders(loopReads(db.sql), NOW))
   expect(model.at).toBe(NOW.toISOString())
-  expect(model.classes).toEqual([
+  expect(model.finders).toEqual([
     {
       loop: 'hygiene',
-      class: 'cochange',
-      status: 'held',
+      finder: 'cochange',
+      status: 'muted',
       issues: 3,
       decided: 3,
       noise: 3,
       share: 1,
       open: 0,
-      heldUntil: day(11, 15).toISOString(),
+      mutedUntil: day(11, 15).toISOString(),
     },
     {
       loop: 'friction',
-      class: 'touch',
+      finder: 'touch',
       status: 'probation',
       issues: 3,
       decided: 3,
       noise: 3,
       share: 1,
       open: 0,
-      heldUntil: day(10, 11).toISOString(),
+      mutedUntil: day(10, 11).toISOString(),
     },
     {
       loop: 'hygiene',
-      class: 'links',
+      finder: 'links',
       status: 'open',
       issues: 4,
       decided: 3,
       noise: 1,
       share: 1 / 3,
       open: 1,
-      heldUntil: null,
+      mutedUntil: null,
     },
   ])
 })
 
-test('GET /v1/finding-classes answers the owner, the agent and the read token, and nobody without a token', async () => {
+test('GET /v1/finders answers the owner, the agent and the read token, and nobody without a token', async () => {
   const app = createApp({
     tokens: TOKENS,
     health: { read: () => Promise.reject(new Error('unused')) },
@@ -99,7 +99,7 @@ test('GET /v1/finding-classes answers the owner, the agent and the read token, a
   })
   const get = (token?: string) =>
     app.handle(
-      new Request('http://localhost/v1/finding-classes', {
+      new Request('http://localhost/v1/finders', {
         headers: token ? { authorization: `Bearer ${token}` } : {},
       }),
     )
@@ -108,8 +108,8 @@ test('GET /v1/finding-classes answers the owner, the agent and the read token, a
   for (const token of [TOKENS.owner, TOKENS.agent, TOKENS.read]) {
     const response = await get(token)
     expect(response.status).toBe(200)
-    expect(FindingClassesModel.parse(await response.json()).classes.map((c) => c.status)).toEqual([
-      'held',
+    expect(FindersModel.parse(await response.json()).finders.map((c) => c.status)).toEqual([
+      'muted',
       'probation',
       'open',
     ])

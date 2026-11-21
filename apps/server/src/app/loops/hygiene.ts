@@ -54,7 +54,7 @@ import { err, ok, portError, type PortError, type Result } from '../../kernel/re
 import { recordIn } from '../issues.ts'
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
-import { readGate, type ClassGate } from './gate.ts'
+import { readGate, type FinderGate } from './gate.ts'
 import { settleClosed } from './ledger.ts'
 import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
@@ -178,7 +178,7 @@ async function applyStep(
  */
 async function fileBatch(
   deps: HygieneDeps,
-  gate: ClassGate,
+  gate: FinderGate,
   input: { repoText: string; name: string; ref: string; sections: readonly Section[] },
   added: Added,
 ): Promise<void> {
@@ -216,7 +216,7 @@ async function fileBatch(
       signal: filed.value.signal,
       at: deps.clock.now(),
     })
-    if (lost) added.failed.push({ key: section.key, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
+    if (lost) added.failed.push({ key: section.key, reason: `finder not recorded: ${lost}`.slice(0, 300) })
   }
 }
 
@@ -246,7 +246,7 @@ interface Target {
  */
 async function judge(
   deps: HygieneDeps,
-  gate: ClassGate,
+  gate: FinderGate,
   target: Target,
   checkout: Checkout,
   report: SweepReport,

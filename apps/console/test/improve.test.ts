@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test'
-import { KPI_CATALOG, KPI_KEYS, type FindingClass, type FixCommitsModel, type Kpi } from '@software-factory/contract'
+import { KPI_CATALOG, KPI_KEYS, type Finder, type FixCommitsModel, type Kpi } from '@software-factory/contract'
 import {
   changeTone,
   changeWords,
   chartTarget,
   drawsHistory,
-  classWords,
+  finderWords,
   closeWords,
   yieldWords,
   comparisonWords,
@@ -121,20 +121,20 @@ test('sampleWords and windowWords', () => {
   expect(windowWords({ from: '2026-11-01T00:00:00Z', to: '2026-11-08T10:00:00Z' })).toBe('2026-11-01 to 2026-11-08')
 })
 
-test('classWords: a held class says when it is asked again, a probation class how it files', () => {
-  const cls: FindingClass = {
+test('finderWords: a muted finder says when it is asked again, a probation finder how it files', () => {
+  const finder: Finder = {
     loop: 'hygiene',
-    class: 'cochange',
-    status: 'held',
+    finder: 'cochange',
+    status: 'muted',
     issues: 5,
     decided: 4,
     noise: 3,
     share: 0.75,
     open: 0,
-    heldUntil: '2026-11-15T10:00:00.000Z',
+    mutedUntil: '2026-11-15T10:00:00.000Z',
   }
-  expect(classWords(cls)).toBe('3 of 4 dropped or cancelled, asked again 2026-11-15')
-  expect(classWords({ ...cls, status: 'probation' })).toBe(
+  expect(finderWords(finder)).toBe('3 of 4 dropped or cancelled, asked again 2026-11-15')
+  expect(finderWords({ ...finder, status: 'probation' })).toBe(
     '3 of 4 dropped or cancelled, one Issue at a time until one closes done',
   )
 })

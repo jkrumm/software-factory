@@ -76,6 +76,8 @@ export const LANGUAGE = {
     'A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way',
   filed:
     "An Issue that came into being: the owner's request, an agent's, or a signal triage turned into one. The band's New Issues counts them once each and names where they came from",
+  finder:
+    "A kind of finding a loop files Issues for: the loop plus the finding's first key segment (a probe, a kind of judgment, a friction pattern group; stored as loop_findings.class). Mostly dropped or cancelled Issues mute it for 14 days, then it is on probation, one Issue at a time (GET /v1/finders, Improve)",
   'first verification pass':
     "A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI",
   'fix commit':

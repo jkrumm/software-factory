@@ -243,7 +243,7 @@ A loop's yield is what its signals became: the passes it ran, the signals it fil
 **Example files:**
 
 - [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#loops-and-agw): the loops and what each does deterministically and what it asks agw.
-- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#loops-and-agw): the ledger, finding classes and `GET /v1/loop-yield`, the read model of what each loop yielded.
+- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#loops-and-agw): the ledger, finders and `GET /v1/loop-yield`, the read model of what each loop yielded.
 - [`loop-yield.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/read-models/loop-yield.test.ts): every figure restated in plain rows.
 
 **Read more:**

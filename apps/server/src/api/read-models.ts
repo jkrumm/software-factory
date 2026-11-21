@@ -4,7 +4,7 @@ import {
   DEFAULT_DAYS,
   DEFAULT_HOURS,
   ErrorBody,
-  FindingClassesModel,
+  FindersModel,
   LoopYieldModel,
   FixCommitsModel,
   FlowModel,
@@ -40,7 +40,7 @@ import type { UnitOfWork } from '../app/unit-of-work.ts'
 import { PROJECT_SCHEMA } from '../app/project-schema.ts'
 import { registerVisit, type VisitStore } from '../app/visit.ts'
 import type { CiTimes } from '../domains/improve/ports.ts'
-import { findingClasses } from '../app/loops/finding-classes.ts'
+import { finders } from '../app/loops/finders.ts'
 import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.ts'
 import { readChain } from '../read/chain.ts'
 import { readProjectDigests } from '../read/digests.ts'
@@ -569,16 +569,16 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       },
     )
     .get(
-      '/finding-classes',
+      '/finders',
       async () => {
         if (!deps) return unavailable
         const at = now()
-        return Response.json(FindingClassesModel.parse(await findingClasses(loopReads(deps.sql), at)))
+        return Response.json(FindersModel.parse(await finders(loopReads(deps.sql), at)))
       },
       {
-        response: { 200: FindingClassesModel, ...errorResponses(503) },
+        response: { 200: FindersModel, ...errorResponses(503) },
         detail: {
-          operationId: 'read.finding-classes',
+          operationId: 'read.finders',
           summary:
             'the kinds of finding the friction and hygiene loops file, each open, on probation or held for mostly dropped or cancelled Issues, with its counts and when a held class is asked again',
         },

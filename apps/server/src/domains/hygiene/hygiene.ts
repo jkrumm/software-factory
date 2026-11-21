@@ -1,5 +1,5 @@
 import {
-  hygieneClass,
+  hygieneFinder,
   MAX_TEXT_CHARS,
   type HygieneAnswer,
   type HygieneCandidate,
@@ -204,7 +204,7 @@ export function batchSignalText(sections: readonly Section[], swept: Swept): str
 export function batchTitle(sections: readonly Section[], swept: Swept): string {
   const [only] = sections
   if (sections.length === 1 && only) return only.title
-  const kinds = [...new Set(sections.map((section) => hygieneClass(section.key)))]
+  const kinds = [...new Set(sections.map((section) => hygieneFinder(section.key)))]
   return `Hygiene: ${kinds.join(', ')} (${swept.repo})`.slice(0, 512)
 }
 

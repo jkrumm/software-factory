@@ -127,7 +127,7 @@ async function countsOf(
   for (const row of byClass(ships)) add('refusal', `ship_refused:${row.id}`, `A ship was refused: ${row.words}`, row.n)
 
   // A stall the next event of the Issue moved up (the light seat's own rule, `moveUpIfDue`: the attempt ends and the Issue
-  // queues on the lead row) is the seat's cost, which `read finding-classes` and the seat KPIs already count: no loop.
+  // queues on the lead row) is the seat's cost, which `read finders` and the seat KPIs already count: no loop.
   const stalls = await grouped(sql`
     SELECT wait->>'reason' AS key, NULL::text AS detail, count(*) AS n FROM factory.issue_events e
     WHERE result = 'applied' AND to_state = 'waiting' AND from_state IS DISTINCT FROM 'waiting'

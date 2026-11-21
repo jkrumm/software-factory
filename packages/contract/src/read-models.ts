@@ -803,14 +803,15 @@ export const RetroTaste = z
   .meta({ id: 'RetroTaste' })
 export type RetroTaste = z.infer<typeof RetroTaste>
 
-// -- finding classes -----------------------------------------------------------------------------------------------------
+// -- finders ---------------------------------------------------------------------------------------------------------------
 
-export const FindingClass = z
+export const Finder = z
   .strictObject({
     loop: z.enum(['friction', 'hygiene', 'selfwatch']),
-    class: z.string(),
-    status: z.enum(['open', 'probation', 'held']),
-    /** every Issue the class filed */
+    /** the kind of finding (stored as `loop_findings.class`) */
+    finder: z.string(),
+    status: z.enum(['open', 'probation', 'muted']),
+    /** every Issue the finder filed */
     issues: z.number().int(),
     /** decided Issues in the judged window */
     decided: z.number().int(),
@@ -818,22 +819,22 @@ export const FindingClass = z
     noise: z.number().int(),
     /** noise / decided; null with nothing decided */
     share: z.number().nullable(),
-    /** Issues of the class not closed yet */
+    /** Issues of the finder not closed yet */
     open: z.number().int(),
-    /** when a held class is asked again; null unless the window is over the share */
-    heldUntil: at.nullable(),
+    /** when a muted finder is asked again; null unless the window is over the share */
+    mutedUntil: at.nullable(),
   })
-  .meta({ id: 'FindingClass' })
-export type FindingClass = z.infer<typeof FindingClass>
+  .meta({ id: 'Finder' })
+export type Finder = z.infer<typeof Finder>
 
-export const FindingClassesModel = z
+export const FindersModel = z
   .strictObject({
     at,
-    /** held first, then probation, then open; then by loop and class */
-    classes: z.array(FindingClass),
+    /** muted first, then probation, then open; then by loop and finder */
+    finders: z.array(Finder),
   })
-  .meta({ id: 'FindingClassesModel' })
-export type FindingClassesModel = z.infer<typeof FindingClassesModel>
+  .meta({ id: 'FindersModel' })
+export type FindersModel = z.infer<typeof FindersModel>
 
 // -- what the loops yield ----------------------------------------------------------------------------------------------
 

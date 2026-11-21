@@ -472,7 +472,7 @@ Every loop obeys the same rules: it claims a row and commits before it acts, its
 
 Friction is counted waste: a refusal, a stall, a lost lead, a ship with no review, a touch of the owner the factory should have settled. A loop counts it over a window and files the pattern that repeats, as a signal, through the same triage as everything else.
 
-- A finding class that is mostly dropped or cancelled **stops filing** until it is asked again.
+- A finder that is mostly dropped or cancelled **stops filing** until it is asked again.
 - The counted waste is the backlog of the factory's own improvement.
 
 **Why.** A factory that closes 200 Issues a day drifts faster than a person can notice. The only reviewer with enough attention for it is the factory.

@@ -49,7 +49,7 @@ import {
   ErrandTurnBackBody,
   ErrorBody,
   FeedbackRequest,
-  FindingClassesModel,
+  FindersModel,
   FixCommitsModel,
   FlowModel,
   FlowTrendSeries,
@@ -2006,10 +2006,10 @@ export const OPERATIONS: readonly Operation[] = [
     },
   },
   {
-    operationId: 'read.finding-classes',
-    command: ['read', 'finding-classes'],
+    operationId: 'read.finders',
+    command: ['read', 'finders'],
     method: 'GET',
-    path: '/v1/finding-classes',
+    path: '/v1/finders',
     summary:
       'the kinds of finding the friction and hygiene loops file, each open, on probation or held for mostly dropped or cancelled Issues, with its counts and when a held class is asked again',
     pathParams: [],
@@ -2019,7 +2019,7 @@ export const OPERATIONS: readonly Operation[] = [
     bodyFields: [],
     args: [],
     agent: true,
-    responses: { 200: FindingClassesModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
+    responses: { 200: FindersModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
     operationId: 'read.fix-commits',

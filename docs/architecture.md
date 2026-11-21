@@ -521,12 +521,12 @@ never touched. An edge with `ready_since` held idle capacity until `satisfied_at
 while something else would have refused it (needed). Readiness is judged per Issue: two Issues behind one free lead
 each read ready.
 
-**Finding classes** (`domains/improve/classes.ts`). `friction`, `hygiene` and `selfwatch` hold a noisy kind back. A
-class is the loop plus the finding's first key segment (`judgment:<kind>` for a judgment), across all repos, and its
+**Finders** (`domains/improve/finders.ts`). `friction`, `hygiene` and `selfwatch` mute a noisy kind. A
+finder is the loop plus the finding's first key segment (`judgment:<kind>` for a judgment), across all repos, and its
 state is derived from Issue outcomes, never stored: of its ten newest decided Issues (at least 3), a share of dropped
-or cancelled above one half **holds** it for 14 days after its last Issue closed (it files nothing; the held findings
-are named in the pass record's `overBudget`). After the hold it is on **probation**: one Issue at a time across repos
-until one closes done. Both show on Improve and in `GET /v1/finding-classes`.
+or cancelled above one half **mutes** it for 14 days after its last Issue closed (it files nothing; the findings it kept
+are named in the pass record's `overBudget`). After the mute it is on **probation**: one Issue at a time across repos
+until one closes done. Both show on Improve and in `GET /v1/finders`.
 
 **The ledger** (`factory.loop_findings`; `domains/improve/ledger.ts`, `app/loops/ledger.ts`) is the one table of which
 Issue a loop's finding opened: loop, repo, class, key, signal, and the figure it was filed against (null when it has
@@ -566,7 +566,7 @@ Issues, how they ended, the median time to close and how many done Issues moved 
   actor `orchestrator`; `ownerTouch` (`read/kpis.ts`) counts the owner alone, and its steering is the friction group
   `orchestrator_steer`.
 - **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction,
-  finding classes, fix commits, kpis, retro, host, since and the change stream (`read/stream.ts`: it resumes from an
+  finders, fix commits, kpis, retro, host, since and the change stream (`read/stream.ts`: it resumes from an
   opaque cursor without losing or doubling a change). `GET /v1/since` (`read/since.ts`) is the Console's "since you
   were here" band; only the owner's read moves the `console_visit` marker (`app/visit.ts`). Health lines
   (`read/lines.ts`) are kinds `door`, `account`, `loop`, `checkout`, `lead-no-agent` and `main-checkout`.

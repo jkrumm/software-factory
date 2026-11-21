@@ -62,7 +62,7 @@ const POLLED_ONLY = new Set(['accounts', 'machine', 'since', 'project-setup'])
 const AGGREGATES = new Set([
   'kpis',
   'friction',
-  'finding-classes',
+  'finders',
   'loop-yield',
   'fix-commits',
   'flow-trend',

@@ -18,7 +18,7 @@ import {
   ErrorBody,
   FlowModel,
   FlowTrendSeries,
-  FindingClassesModel,
+  FindersModel,
   LoopYieldModel,
   FixCommitsModel,
   FrictionModel,
@@ -167,7 +167,7 @@ export const fetchThroughput = (hours: number, signal?: AbortSignal) =>
   getJson(`/v1/throughput?hours=${hours}`, ThroughputModel, signal)
 export const fetchFriction = (days: number, signal?: AbortSignal) =>
   getJson(`/v1/friction?days=${days}`, FrictionModel, signal)
-export const fetchFindingClasses = (signal?: AbortSignal) => getJson('/v1/finding-classes', FindingClassesModel, signal)
+export const fetchFinders = (signal?: AbortSignal) => getJson('/v1/finders', FindersModel, signal)
 export const fetchLoopYield = (signal?: AbortSignal) => getJson('/v1/loop-yield', LoopYieldModel, signal)
 export const fetchFixCommits = (signal?: AbortSignal) => getJson('/v1/fix-commits', FixCommitsModel, signal)
 /** Every account as the picker judges it, with its allowance and leads. One the registry switches off is in the list (`enabled: false`): the strip leaves it out, the Accounts screen names it. */
