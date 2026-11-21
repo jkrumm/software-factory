@@ -7,7 +7,7 @@ import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { fileIn, type IssueWriteError, recordIn } from './issues.ts'
-import { attachSpec, type FiledSpecDeps, type StoredSpec, storeSpecBlob } from './filed-spec.ts'
+import { attachSpec, type FiledSpecDeps, type SpecRefused, type StoredSpec, storeSpecBlob } from './filed-spec.ts'
 import { addEdges } from './planning-chain.ts'
 import type { PlanningDeps, PlanningError, PlanningStores } from './planning-deps.ts'
 import { resolveSeat, type SeatRefused, type SeatRoles } from './seat.ts'
@@ -41,7 +41,7 @@ export interface NewIssueInput {
 
 export type NewIssueError =
   /** the repo is not a directory inside the allowed roots (`realpath` on both sides): nothing is stored */
-  { kind: 'repo_outside_roots'; detail: string } | SeatRefused | PlanningError | IssueWriteError
+  { kind: 'repo_outside_roots'; detail: string } | SeatRefused | SpecRefused | PlanningError | IssueWriteError
 
 export interface NewIssued {
   issue: Issue

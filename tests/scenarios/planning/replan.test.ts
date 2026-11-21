@@ -106,7 +106,12 @@ test("the Replan's lead raises a Decision and submits a Spec: both reach Needs y
         'submit',
         id,
         '--body',
-        JSON.stringify({ attempt: 1, kind: 'spec', title: 'Replan: app', content: '# Replan\n\nDrop row export.' }),
+        JSON.stringify({
+          attempt: 1,
+          kind: 'spec',
+          title: 'Replan: app',
+          content: '# Replan\n\n## Build\n\nDrop row export.\n\n## Decided\n\nDrop it: unused.',
+        }),
       ])
     ).json,
   )

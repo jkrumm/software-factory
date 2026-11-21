@@ -158,7 +158,7 @@ test("a lead's Spec is its plan: no wait, no page; the owner's comment and verdi
       attempt: 1,
       kind: 'spec',
       title: 'The queue spec',
-      content: '# Queue\n\nWe keep the queue in Postgres.',
+      content: '# Queue\n\n## Build\n\nWe keep the queue in Postgres.\n\n## Decided\n\nPostgres: it is there.',
     }),
   )
   expect(submitted).toMatchObject({ result: 'applied', issue: null })
@@ -626,7 +626,12 @@ test('a long note and many open comments still reach the lead as one line: the p
     'artifact',
     'submit',
     issueId,
-    ...body({ attempt: 1, kind: 'spec', title: 'The long spec', content: '# Long\n\nWe keep the queue in Postgres.' }),
+    ...body({
+      attempt: 1,
+      kind: 'spec',
+      title: 'The long spec',
+      content: '# Long\n\n## Build\n\nWe keep the queue in Postgres.\n\n## Decided\n\nPostgres: it is there.',
+    }),
   )
   for (let n = 0; n < 8; n++) {
     await ok(

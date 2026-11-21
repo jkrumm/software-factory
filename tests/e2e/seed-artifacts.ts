@@ -15,6 +15,14 @@ export const TARGET = '__TARGET__'
 
 export const SPEC_MD = `# Queue storage
 
+## Build
+
+The queue lives in Postgres.
+
+## Decided
+
+Postgres: it is already running.
+
 ## Options
 
 ### Cost
@@ -42,6 +50,15 @@ ${KEPT} A failed row is retried at once.
 
 export const SHOT_SPEC_MD = `# Queue storage
 
+## Build
+
+The queue stays in Postgres, with one advisory lock guarding the pass.
+
+## Decided
+
+- Postgres over Redis: it is already running and costs one table.
+- A failed row is retried by the worker that took it.
+
 > **TLDR.** Keep the queue in Postgres: it is already running, it costs one table, and it can move later.
 
 ## Decision
@@ -65,21 +82,46 @@ ${SPEC_QUOTE} The cost is one more table, and a failed row is retried by the sam
 ## Proof
 
 The queue ran 2,000 rows through one worker in 11 seconds on the staging copy, with no row taken twice.
+
+<details>
+<summary>Why not Redis</summary>
+
+Redis is a second service to run, watch and back up, and the queue would lose its transactions with the rows it works on.
+
+</details>
+
+<details>
+<summary>What a move would cost</summary>
+
+A move later is one table copied and one reader swapped; the lock moves with it.
+
+</details>
 `
 
 const FILLER = (topic: string) =>
   [1, 2, 3, 4]
     .map(
       (n) =>
-        `Paragraph ${n} on ${topic}: the weather service answers in under a second, the cache holds the last forecast for ten minutes, and a stale answer is shown with its age rather than hidden. The queue behind it retries a failed fetch twice before the lead is told.`,
+        `Paragraph ${n} on ${topic}: the weather service answers in under a second and the cache keeps the last forecast for ten minutes.`,
     )
     .join('\n\n')
+
+/** A fenced log leaves the page room to scroll (a Spec's text is capped at a page; fenced code is not counted). */
+const TRACE = `\`\`\`text\n${Array.from({ length: 50 }, (_, n) => `step ${n + 1}: the forecast is fetched, cached and shown`).join('\n')}\n\`\`\``
 
 export const REVIEW_QUOTE = 'The cache holds the last forecast for ten minutes.'
 export const EXTERNAL_URL = 'https://example.com/weatherorb-v2'
 
 /** A long Spec with headings to scroll through and one link of each kind: web, anchor, a Console page, and one with no destination. */
 export const reviewMd = (specId: string) => `# Weather rollout
+
+## Build
+
+The weather tile, rolled out behind a flag.
+
+## Decided
+
+The cache decides how stale a forecast may be: ten minutes.
 
 ## Context
 
@@ -107,6 +149,8 @@ ${FILLER('the rollout')}
 ## Open questions
 
 ${FILLER('the open questions')}
+
+${TRACE}
 `
 
 export const LINKS_HTML = `<!doctype html>

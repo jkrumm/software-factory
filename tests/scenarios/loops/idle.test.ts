@@ -222,7 +222,12 @@ test('a lead that just heard the owner’s verdict is not nudged: a changes verd
     'submit',
     issue,
     '--body',
-    JSON.stringify({ attempt: 1, kind: 'spec', title: 'The queue spec', content: '# Queue\n\nPostgres.' }),
+    JSON.stringify({
+      attempt: 1,
+      kind: 'spec',
+      title: 'The queue spec',
+      content: '# Queue\n\n## Build\n\nPostgres.\n\n## Decided\n\nPostgres: it is there.',
+    }),
   ])
   expect({ code: submitted.code, err: submitted.err }).toMatchObject({ code: 0 })
   const artifact = (submitted.json as { artifact: { id: string } }).artifact.id
@@ -244,7 +249,10 @@ test('a lead that just heard the owner’s verdict is not nudged: a changes verd
     'revise',
     artifact,
     '--body',
-    JSON.stringify({ attempt: 1, content: '# Queue\n\nPostgres, shorter.' }),
+    JSON.stringify({
+      attempt: 1,
+      content: '# Queue\n\n## Build\n\nPostgres, shorter.\n\n## Decided\n\nPostgres: it is there.',
+    }),
   ])
   expect(revised.code).toBe(0)
   expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'review' })

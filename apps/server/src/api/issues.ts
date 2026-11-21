@@ -140,6 +140,8 @@ function fileFailure(error: NewIssueError | PortError): Response {
       return Response.json(failure(error.detail, 'repo_outside_roots'), { status: 422 })
     case 'seat_refused':
       return Response.json(failure(`${error.field}: ${error.detail}`, 'seat_refused'), { status: 422 })
+    case 'spec_refused':
+      return Response.json(failure(`spec: ${error.detail}`, 'spec_refused'), { status: 422 })
     case 'unknown_issue': {
       const named = 'issue' in error ? error.issue : error.issueId
       return Response.json(failure(`after: no Issue ${named}`, 'unknown_after'), { status: 422 })

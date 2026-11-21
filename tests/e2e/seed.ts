@@ -96,7 +96,7 @@ export async function seed(lab: Lab): Promise<void> {
   await submit(
     queue,
     'The queue spec',
-    '# Queue\n\nWe keep the queue in Postgres.\n\nOne advisory lock guards the pass.',
+    '# Queue\n\n## Build\n\nWe keep the queue in Postgres.\n\n## Decided\n\nOne advisory lock guards the pass.',
   )
   // an HTML Spec: the opened card shows its TLDR, never the source
   await submit(
