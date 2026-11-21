@@ -5,6 +5,7 @@ import {
   DEFAULT_HOURS,
   ErrorBody,
   FindersModel,
+  JudgmentsModel,
   LoopYieldModel,
   FixCommitsModel,
   FlowModel,
@@ -59,6 +60,7 @@ import { readRetro } from '../read/retro.ts'
 import { readThroughput } from '../read/throughput.ts'
 import { redactCapacityLoop, redactThroughput } from '../read/throughput-redact.ts'
 import { loadOpenProjects } from '../read/work.ts'
+import { readJudgments } from '../read/judgments.ts'
 import { readLoopYield } from '../read/loop-yield.ts'
 import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
@@ -509,6 +511,31 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.friction',
           summary:
             'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who answered Decisions, quarantined signals',
+        },
+      },
+    )
+    .get(
+      '/judgments',
+      async ({ query, request }) => {
+        if (!deps) return unavailable
+        return Response.json(
+          JudgmentsModel.parse(
+            await readJudgments(deps.sql, {
+              now: now(),
+              days: days(query),
+              epoch: deps.epoch ?? null,
+              redact: caller(request) === 'read',
+            }),
+          ),
+        )
+      },
+      {
+        query: DaysQuery,
+        response: { 200: JudgmentsModel, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'read.judgments',
+          summary:
+            "what became of each judge's answers over the last days (1 to 90, default 7): the Judge, the steward, triage, the queue loop, the screen and the two Errand checks, each with its answers, how many stood, were overruled or came back, the share that did not stand and the three newest that did not",
         },
       },
     )

@@ -64,6 +64,7 @@ const AGGREGATES = new Set([
   'friction',
   'finders',
   'loop-yield',
+  'judgments',
   'fix-commits',
   'flow-trend',
   'project-hygiene',

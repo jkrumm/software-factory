@@ -22,26 +22,7 @@ const NeedRow = z.object({
  */
 export async function readEdgeNeed(tx: SQL, window: { from: Date; to: Date }): Promise<EdgeNeed[]> {
   const rows: unknown[] = await tx`
-    WITH e AS (
-      SELECT issue_id, after_issue, inferred_by, created_at AS added_at, false AS removed
-      FROM factory.planning_edges WHERE inferred_by IS NOT NULL
-      UNION ALL
-      SELECT issue_id, after_issue, inferred_by, added_at, true AS removed FROM factory.queue_edge_removals
-    ), c AS (
-      SELECT split_part(e.inferred_by, ':', 1) AS source, e.removed,
-        (EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id = e.issue_id AND q.kind = 'commits')
-          AND EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id = e.after_issue AND q.kind = 'commits')
-          AND NOT EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id IN (e.issue_id, e.after_issue)
-            AND q.kind = 'commits' AND jsonb_array_length(q.payload->'paths') >= ${EVIDENCE_SAMPLE_CAP})) AS measured,
-        EXISTS (
-          SELECT 1 FROM factory.quality_evidence qa
-          CROSS JOIN LATERAL jsonb_array_elements_text(qa.payload->'paths') pa(path)
-          JOIN factory.quality_evidence qb ON qb.issue_id = e.after_issue AND qb.kind = 'commits'
-          CROSS JOIN LATERAL jsonb_array_elements_text(qb.payload->'paths') pb(path)
-          WHERE qa.issue_id = e.issue_id AND qa.kind = 'commits' AND pa.path = pb.path
-            AND pa.path NOT IN ${tx([...SHARED_PATHS])}) AS shared
-      FROM e WHERE e.added_at >= ${window.from} AND e.added_at < ${window.to}
-    )
+    WITH c AS (${edgeFacts(tx, window)})
     SELECT source, count(*) AS added,
       count(*) FILTER (WHERE measured AND shared) AS needed,
       count(*) FILTER (WHERE measured AND NOT shared) AS not_needed,
@@ -59,6 +40,34 @@ export async function readEdgeNeed(tx: SQL, window: { from: Date; to: Date }): P
       removed: row.removed,
     }
   })
+}
+
+/**
+ * One row per edge the factory added in `[from, to)`: its source, the two Issues, when it was added, whether it was taken
+ * back, whether both Issues' shipped paths are known (`measured`) and whether they share one (`shared`). The rows
+ * `readEdgeNeed` counts and the judge ledger lists.
+ */
+export function edgeFacts(tx: SQL, window: { from: Date; to: Date }) {
+  return tx`
+    WITH e AS (
+      SELECT issue_id, after_issue, inferred_by, created_at AS added_at, false AS removed
+      FROM factory.planning_edges WHERE inferred_by IS NOT NULL
+      UNION ALL
+      SELECT issue_id, after_issue, inferred_by, added_at, true AS removed FROM factory.queue_edge_removals
+    )
+    SELECT split_part(e.inferred_by, ':', 1) AS source, e.removed, e.issue_id, e.after_issue, e.added_at,
+        (EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id = e.issue_id AND q.kind = 'commits')
+          AND EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id = e.after_issue AND q.kind = 'commits')
+          AND NOT EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id IN (e.issue_id, e.after_issue)
+            AND q.kind = 'commits' AND jsonb_array_length(q.payload->'paths') >= ${EVIDENCE_SAMPLE_CAP})) AS measured,
+        EXISTS (
+          SELECT 1 FROM factory.quality_evidence qa
+          CROSS JOIN LATERAL jsonb_array_elements_text(qa.payload->'paths') pa(path)
+          JOIN factory.quality_evidence qb ON qb.issue_id = e.after_issue AND qb.kind = 'commits'
+          CROSS JOIN LATERAL jsonb_array_elements_text(qb.payload->'paths') pb(path)
+          WHERE qa.issue_id = e.issue_id AND qa.kind = 'commits' AND pa.path = pb.path
+            AND pa.path NOT IN ${tx([...SHARED_PATHS])}) AS shared
+      FROM e WHERE e.added_at >= ${window.from} AND e.added_at < ${window.to}`
 }
 
 const HeldRow = z.object({

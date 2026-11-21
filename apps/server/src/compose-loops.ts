@@ -65,6 +65,7 @@ import type { composeIntake } from './compose-intake.ts'
 import type { composeLeads } from './compose-leads.ts'
 import type { composePlanning } from './compose-planning.ts'
 import type { ServerUow } from './compose-store.ts'
+import { THRESHOLDS } from '@software-factory/contract'
 import { FRICTION_WINDOW_DAYS } from './domains/improve/friction.ts'
 import { confirmedHeartbeat, DEFAULT_PROCESS_CAP } from './domains/improve/selfwatch.ts'
 import type { Clock } from './kernel/clock.ts'
@@ -72,6 +73,7 @@ import type { IdSource } from './kernel/ids.ts'
 import { err, ok, portError } from './kernel/result.ts'
 import { readCapFacts } from './read/cap-facts.ts'
 import { readFriction } from './read/friction.ts'
+import { readJudgments } from './read/judgments.ts'
 import { kpisOfWindow } from './read/kpis.ts'
 import { readFrictionEvidence } from './read/friction-evidence.ts'
 import { postgresOpenIssues } from './read/open-issues.ts'
@@ -278,6 +280,7 @@ export function composeLoops(ctx: LoopContext) {
       friction: (now) => readFriction(sql, { now, days: FRICTION_WINDOW_DAYS, epoch: ctx.epoch }),
       // the seven KPIs over the pass's window, judged against their targets; the accounts' reset ledger gives quota_at_reset
       kpis: (window) => kpisOfWindow(sql, window, { now: window.to, quotaAtReset }),
+      judgments: (now) => readJudgments(sql, { now, days: THRESHOLDS.judges.windowDays, epoch: ctx.epoch }),
       evidence: (now, keys) => readFrictionEvidence(sql, { now, days: FRICTION_WINDOW_DAYS, epoch: ctx.epoch }, keys),
       closedSince: (since, now) => readClosedSince(sql, { since, now }),
       retroFiledAt: () => readLastFiled(sql, RETRO_SUBJECT),

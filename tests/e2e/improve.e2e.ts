@@ -143,6 +143,7 @@ test('one card per KPI in the order the Console shows, each the figures the API 
     'Fix commits',
     'Friction',
     'What the loops yielded',
+    'Judges checked against what happened',
     'Muted finders',
   ])
   await expectCards(page, kpis)
@@ -265,6 +266,35 @@ test('what the loops yielded reads the API: a row per loop and window with its s
       await expect(cells.nth(2)).toHaveText(String(window.signals))
       await expect(cells.nth(3)).toHaveText(String(window.issues))
     }
+})
+
+test('the judge ledger reads the API: a row per judge with its answers, what stood and the share that did not', async ({
+  page,
+  apiUrl,
+}) => {
+  const model = await api<{
+    judges: {
+      judge: string
+      label: string
+      answers: number
+      stood: number
+      didNotStand: number
+      share: number | null
+    }[]
+  }>(apiUrl, '/v1/judgments?days=7')
+  await page.goto('/improve')
+  const table = page.getByRole('table', { name: "What became of each judge's answers" })
+  const rows = table.locator('tr[data-judge]')
+  await expect(rows).toHaveCount(model.judges.length)
+  for (const [i, judge] of model.judges.entries()) {
+    const row = rows.nth(i)
+    await expect(row.getByRole('rowheader')).toHaveText(judge.label)
+    const cells = row.getByRole('cell')
+    await expect(cells.nth(0)).toHaveText(String(judge.answers))
+    await expect(cells.nth(1)).toHaveText(String(judge.stood))
+    await expect(cells.nth(3)).toHaveText(String(judge.didNotStand))
+    await expect(cells.nth(4)).toHaveText(judge.share === null ? '–' : `${Math.round(judge.share * 100)}%`)
+  }
 })
 
 test('muted finders read what the API says: a line when none is muted, else each finder with its counts', async ({

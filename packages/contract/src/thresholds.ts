@@ -127,6 +127,8 @@ export const THRESHOLDS = {
       },
     } satisfies Record<string, FrictionRule>,
   },
+  /** The judge ledger (`read/judgments.ts`): a judge whose decided answers did not stand over this share, from at least this many, is a finding. */
+  judges: { share: 0.2, minAnswers: 10, windowDays: 30 },
 } as const
 
 /** Whether `value` meets `target`; null when the target has no number (a trend, unset). Equal to the bound is met. */

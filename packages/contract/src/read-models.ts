@@ -901,6 +901,65 @@ export type LoopYield = z.infer<typeof LoopYield>
 export const LoopYieldModel = z.strictObject({ at, loops: z.array(LoopYield) }).meta({ id: 'LoopYieldModel' })
 export type LoopYieldModel = z.infer<typeof LoopYieldModel>
 
+// -- the judge ledger ----------------------------------------------------------------------------------------------------
+
+/** The judges of the factory whose answers are checked afterwards against what happened (`read/judgments.ts`). */
+export const LEDGER_JUDGES = ['judge', 'steward', 'triage', 'queue', 'screen', 'errand', 'errandNeeded'] as const
+export type LedgerJudge = (typeof LEDGER_JUDGES)[number]
+
+/** How an answer fared: it stood, the owner or the Issue's own course replaced it, the same thing came back, or it is too early to say. */
+export const ANSWER_OUTCOMES = ['stood', 'overruled', 'raised_again', 'unknown'] as const
+export type AnswerOutcome = (typeof ANSWER_OUTCOMES)[number]
+
+export const JudgmentAnswer = z
+  .strictObject({
+    at,
+    /** the Issue the answer was about, when it had one */
+    issue: z.string().nullable(),
+    subject: z.string(),
+    answer: z.string(),
+    outcome: z.enum(ANSWER_OUTCOMES),
+  })
+  .meta({ id: 'JudgmentAnswer' })
+export type JudgmentAnswer = z.infer<typeof JudgmentAnswer>
+
+/** One judge over the window: its answers by what became of them. */
+export const JudgmentLedger = z
+  .strictObject({
+    judge: z.enum(LEDGER_JUDGES),
+    label: z.string(),
+    /** the rule that says an answer did not stand, in one line */
+    rule: z.string(),
+    /** every answer the judge gave in the window */
+    answers: z.number().int(),
+    stood: z.number().int(),
+    /** overruled or raised again */
+    didNotStand: z.number().int(),
+    /** too early to say: its horizon has not passed and nothing has contradicted it */
+    unknown: z.number().int(),
+    /** didNotStand / (stood + didNotStand); null when none was decided */
+    share: z.number().nullable(),
+    /** the three newest answers that did not stand */
+    newest: z.array(JudgmentAnswer),
+  })
+  .meta({ id: 'JudgmentLedger' })
+export type JudgmentLedger = z.infer<typeof JudgmentLedger>
+
+export const JudgmentsModel = z
+  .strictObject({
+    at,
+    days: z.number().int(),
+    /** the window the answers were given in; `from` is the later of `days` ago and the counting epoch */
+    window: z.strictObject({ from: at, to: at }),
+    since: at.nullable(),
+    /** the share of did-not-stand answers over this many decided ones is a finding */
+    findingShare: z.number(),
+    findingMinAnswers: z.number().int(),
+    judges: z.array(JudgmentLedger),
+  })
+  .meta({ id: 'JudgmentsModel' })
+export type JudgmentsModel = z.infer<typeof JudgmentsModel>
+
 // -- fix commits ---------------------------------------------------------------------------------------------------------
 
 export const FixWeek = z

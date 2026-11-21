@@ -580,6 +580,25 @@ again says `Last time: Issue N at figure X, now Y (moved).` in its signal.
 `GET /v1/loop-yield` (`read/loop-yield.ts`) answers per signal-filing loop over 7 and 30 days: passes, signals,
 Issues, how they ended, the median time to close and how many done Issues moved their figure.
 
+**The judge ledger.** `GET /v1/judgments` (`factory read judgments`, `read/judgments.ts`) checks each judge's answers
+against what followed, from `issue_events` and the tables the judges already write: no column of its own. Each answer is
+`stood`, `overruled`, `raised_again` or `unknown` (its horizon has not passed and nothing contradicted it; left out of the
+share). One SQL expression per judge says it, and the case file's precedents use the same one (`outcomeOf`):
+
+| Judge | Did not stand |
+|-|-|
+| The Judge | the owner or his delegate answered the Decision or noted the Issue within 7 days |
+| The steward (wake, requeue) | the Issue did not move within 30 minutes, or stalled again on the same cause within a day |
+| Triage | an amend whose words came back as an Issue of their own within 14 days; an edge whose Issues touched no common file (`read/edge-need.ts`) |
+| The queue loop | an edge needed or not, as above, or one the loop took back |
+| The screen | a dismissed fingerprint came back as work within 14 days |
+| The Errand screen and check | the same need (match key or one-line ask, same repo) was raised again within 14 days |
+
+The Improve screen shows per judge the answers of the window, the share that did not stand and the three newest that did not.
+The friction loop reads 30 days of it (`THRESHOLDS.judges`) and files `judge:<judge>` when more than 0.2 of at least ten
+decided answers did not stand; the finding's figure is the share, judged by the loop ledger like a KPI's. A work repo's
+words are blanked for the read token.
+
 ## API, client, CLI
 
 - **Elysia** with zod through Standard Schema and `@elysiajs/openapi`. Who may call a route is the one table in

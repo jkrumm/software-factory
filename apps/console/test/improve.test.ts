@@ -7,6 +7,10 @@ import {
   drawsHistory,
   finderWords,
   closeWords,
+  judgmentsLineWords,
+  missWords,
+  overTheLine,
+  shareWords,
   yieldWords,
   comparisonWords,
   besideWords,
@@ -453,4 +457,21 @@ test('yieldWords: what a loop’s Issues came to, healed counted as done', () =>
   }
   expect(yieldWords(base)).toBe('3 done, 1 dropped or cancelled, 1 open')
   expect(yieldWords({ ...base, issues: 0 })).toBe('no Issue')
+})
+
+test('the judge ledger reads as a share, a line and the misses', () => {
+  const line = { findingShare: 0.2, findingMinAnswers: 10 }
+  expect(shareWords(null)).toBe('–')
+  expect(shareWords(0.304)).toBe('30%')
+  expect(overTheLine({ stood: 7, didNotStand: 3, share: 0.3 }, line)).toBe(true)
+  // 0.2 is not over the line, and seven decided answers are too few
+  expect(overTheLine({ stood: 8, didNotStand: 2, share: 0.2 }, line)).toBe(false)
+  expect(overTheLine({ stood: 4, didNotStand: 3, share: 3 / 7 }, line)).toBe(false)
+  expect(judgmentsLineWords(line)).toBe(
+    'A judge whose answers did not stand over 20% of at least 10 decided ones is filed as a finding.',
+  )
+  expect(missWords({ subject: 'Which logger?', answer: 'Use pino', outcome: 'overruled' })).toBe(
+    'Which logger?: Use pino (overruled)',
+  )
+  expect(missWords({ subject: 'Sign in', answer: '', outcome: 'raised_again' })).toBe('Sign in: answered (came back)')
 })
