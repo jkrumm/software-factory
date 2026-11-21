@@ -242,8 +242,6 @@ waits after is of this project, since removing the edge only frees it). The whol
 a repeated `call` changes nothing more. The owner-only edge and cancel routes stay shut to a lead: the verb is what an
 approved Spec buys. It acts as the orchestrator, so the owner-touch counts stay the owner's alone. Code: `app/planning-replan.ts` (`applyReplan`, `withdrawIssue`), `factory.replans`. The only cancel is `factory issue withdraw`.
 
-Code: `app/planning-replan.ts` (`applyReplan`, `withdrawIssue`), `factory.replans`. The only cancel is `factory issue withdraw`.
-
 **Test slots** (`domains/capacity/slots.ts`). `factory slot run` takes a host-wide slot around each heavy command; a
 wait past 45 minutes exits 75. A server that is down grants host-local slots (`~/.local/state/factory/local-slots`),
 so repair still runs.

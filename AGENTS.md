@@ -45,7 +45,8 @@ is in `docs/operations.md` "Rules behind AGENTS.md".
 - **Work repos hear only the owner** (NL18: no `project.yaml`, or `work: true`). The read token never sees their words
   (`read/surface.ts`). Their text may go to agw (NL22).
 - **The door** (`apps/door`) holds only `FACTORY_DOOR_TOKEN` and takes the repo from `factory.door_routes`, never the payload.
-- **Hooks: spool first, then post.** `factory hook` exits 0 whatever happens and keeps stdout empty, because Claude Code
+- **Hooks: spool first, then post.** `factory hook` exits 0 whatever happens (one exception: the Stop send-back exits 2) and keeps
+  stdout empty (one exception: a lead's post-compaction `session-start` prints one re-read line), because Claude Code
   injects a hook's stdout into the session. Its import rule: `scripts/boundaries.ts`.
 - **One contract.** Request, response and event shapes are zod schemas in `packages/contract`; the server and the CLI parse
   with the same one (a body that does not parse is exit 9).
