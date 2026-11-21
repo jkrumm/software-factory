@@ -153,6 +153,8 @@ export async function convertAttempt(
   const info = await stat(dir)
   const sum = { files: 0, from: 0, to: 0 }
   for (const file of await filesUnder(dir)) {
+    // the untracked files a finalize kept from the worktree stay as they were, whatever they are called: a person reads them
+    if (file.split(sep)[0] === UNTRACKED_DIR) continue
     if (file.endsWith(PARTIAL)) {
       // one an archive is writing right now is not a leftover: only a day-old one is
       const written = await stat(join(dir, file)).catch(() => null)
@@ -160,8 +162,6 @@ export async function convertAttempt(
       continue
     }
     if (file.endsWith(ARCHIVE_SUFFIX)) continue
-    // the untracked files a finalize kept from the worktree stay as they were: a person reads them
-    if (file.split(sep)[0] === UNTRACKED_DIR) continue
     const done = await compressFile(join(dir, file), `${join(dir, file)}${ARCHIVE_SUFFIX}`)
     await rm(join(dir, file))
     sum.files++

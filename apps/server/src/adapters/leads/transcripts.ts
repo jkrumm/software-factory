@@ -52,10 +52,15 @@ export function fileTranscripts(options: {
     })
     report.expired = expired
     for (const [issue, attempt] of kept) {
-      const done = await convertAttempt(options.archiveDir, issue, attempt)
-      report.converted.files += done.files
-      report.converted.from += done.from
-      report.converted.to += done.to
+      // one attempt that cannot be converted does not hold back the rest, nor the removal of finished projects
+      try {
+        const done = await convertAttempt(options.archiveDir, issue, attempt)
+        report.converted.files += done.files
+        report.converted.from += done.from
+        report.converted.to += done.to
+      } catch (cause) {
+        console.error(`transcript archive: attempt ${issue}/${attempt} not converted: ${String(cause)}`)
+      }
     }
     report.projectsRemoved = await removeFinishedProjects({
       projectRoots: await rootsOf(),

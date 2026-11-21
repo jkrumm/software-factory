@@ -196,6 +196,34 @@ describe('tidy', () => {
     expect(existsSync(join(dir, 's1.jsonl.zst'))).toBe(true)
   })
 
+  test('a day-old .partial among the kept untracked files stays; one beside the transcripts goes', async () => {
+    const dir = plainArchive(5, 1, 30)
+    mkdirSync(join(dir, 'worktree'), { recursive: true })
+    writeFileSync(join(dir, 'worktree', 'download.partial'), 'half')
+    writeFileSync(join(dir, 's9.jsonl.zst.partial'), 'torn')
+    const old = new Date(NOW.getTime() - 3 * DAY)
+    utimesSync(join(dir, 'worktree', 'download.partial'), old, old)
+    utimesSync(join(dir, 's9.jsonl.zst.partial'), old, old)
+    await store().tidy()
+    expect(existsSync(join(dir, 'worktree', 'download.partial'))).toBe(true)
+    expect(existsSync(join(dir, 's9.jsonl.zst.partial'))).toBe(false)
+  })
+
+  test('an attempt that cannot be converted does not stop the ones after it', async () => {
+    const stuck = plainArchive(5, 1, 30)
+    plainArchive(6, 1, 30)
+    // a plain file that cannot be read makes its attempt throw
+    chmodSync(join(stuck, 's1.jsonl'), 0o000)
+    try {
+      const done = await store().tidy()
+      if (process.getuid?.() === 0) return
+      expect(done.ok).toBe(true)
+      expect(existsSync(join(archive, '6', '1', 's1.jsonl.zst'))).toBe(true)
+    } finally {
+      chmodSync(join(stuck, 's1.jsonl'), 0o644)
+    }
+  })
+
   test('the project directory of a finished worktree goes once its transcripts are archived; others stay', async () => {
     const archivedAttempt = project(5, 1)
     const unarchived = project(6, 1)
