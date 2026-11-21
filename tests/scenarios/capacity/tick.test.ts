@@ -20,8 +20,9 @@ rows:
 beforeAll(async () => {
   lab = await startLab({
     repos: { app: { project: 'apiVersion: factory/v2\nname: app\n', plan: PLAN } },
-    // the host loop is off: a minute sample the loaded host could not read (no pressure level) would hold every admission
-    env: { FACTORY_TICK_MS: '200', FACTORY_HEALTH_PROBE_MS: '100', FACTORY_LOOP_HOST_MS: '3600000' },
+    // the host loop is off (0, not a long interval: its first pass starts after the server listens, and a sample it stores
+    // after the seed below, with no pressure level, would be the newest and hold every admission)
+    env: { FACTORY_TICK_MS: '200', FACTORY_HEALTH_PROBE_MS: '100', FACTORY_LOOP_HOST_MS: '0' },
   })
   // nothing calls a verb here, so nothing else reads a pressure level for the lead aim
   await calmHost(lab.world)
