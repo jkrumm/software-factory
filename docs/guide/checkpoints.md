@@ -46,7 +46,7 @@ The wait was 24 hours. The default is not the recommendation: the lead recommend
 **Example files:**
 
 - [`decision.ts` L233-L350](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L233-L350): `readDecisionForm`, every required field and the reversible default.
-- [`decision.ts` L153-L172](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L153-L172): the labels that are no choice, and the refusal that points to an Errand.
+- [`decision.ts` L368-L387](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L368-L387): the labels that are no choice, and the refusal that points to an Errand.
 - [`decision.ts` L395-L400](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L395-L400): `defaultDue`, when the default is due.
 
 ## The Judge
@@ -91,7 +91,7 @@ Across the 300 newest closed Issues of this repo (2026-11-17), 24 Decisions were
 
 **Example files:**
 
-- [`decision.ts` L9-L17](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L9-L17): the steps (`policy` is history) and who may settle.
+- [`decision.ts` L19-L28](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L19-L28): the steps (`policy` is history) and who may settle.
 - [`decision.ts` L426-L440](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L426-L440): `guardVerdict`, the factory's checks on an answer.
 - [`decision.ts` L450-L521](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L450-L521): `JudgeInput`, what the workflow is given.
 
@@ -149,8 +149,8 @@ The other two were the address, applied, and Markdown that renders the same on G
 
 **Example files:**
 
-- [`artifact.ts` L28-L33](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L28-L33): the verdicts, and which kinds wait for review.
-- [`artifact.ts` L102-L125](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L102-L125): the three dispositions and the note a deferral or a decline cannot go without.
+- [`artifact.ts` L30-L36](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L30-L36): the verdicts, and which kinds wait for review.
+- [`artifact.ts` L104-L128](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L104-L128): the three dispositions and the note a deferral or a decline cannot go without.
 - [`checkpoints-reviews.ts` L23-L41](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints-reviews.ts#L23-L41): what a Spec that waited its 24 hours becomes.
 
 ## Errands
