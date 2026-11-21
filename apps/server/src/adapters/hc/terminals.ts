@@ -244,7 +244,9 @@ export class HcTerminals implements Terminals {
       const errored =
         (status === 'blocked' || status === 'error') && (await this.apiErrorPrompt(input.terminal, budget)) === 'empty'
       // The lead's hooks say its turn is over, the core's status says otherwise: only a screen at an empty input box (no dialog,
-      // no running turn) is believed over the status, and the text is then typed with the core's own override.
+      // no running turn) is believed over the status, and the text is then typed with the core's own override. A draft left in
+      // the box (the core reads that terminal as `silent`, never `idle`) does not hold the note back for good: the note is sent
+      // after it and submitted with it, so the lead reads the draft and the note in one message (issue 2751).
       const atEmptyPrompt =
         input.idle === true &&
         status !== 'idle' &&
@@ -252,7 +254,7 @@ export class HcTerminals implements Terminals {
         !forced &&
         !unreported &&
         !errored &&
-        (await this.showsPrompt(input.terminal, budget))
+        (await this.showsPrompt(input.terminal, budget, { pressOnly: true }))
       if (status !== 'idle' && status !== 'done' && !forced && !unreported && !errored && !atEmptyPrompt) {
         return ok('busy')
       }
@@ -471,9 +473,9 @@ export class HcTerminals implements Terminals {
     }
   }
 
-  private async showsPrompt(terminal: string, budget: Budget): Promise<boolean> {
+  private async showsPrompt(terminal: string, budget: Budget, options: { pressOnly?: boolean } = {}): Promise<boolean> {
     try {
-      return atPrompt((await this.rpc('terminal.read', { terminal }, Screen, budget)).text)
+      return atPrompt((await this.rpc('terminal.read', { terminal }, Screen, budget)).text, options)
     } catch (error) {
       if (error instanceof HcError) return false
       throw error
