@@ -53,7 +53,7 @@ export interface BodyProps {
 }
 
 const SENT = 'Sent to the lead'
-const SETTLED = 'Already settled elsewhere'
+const ANSWERED = 'Already answered elsewhere'
 
 function Labelled({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -157,7 +157,7 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
     send: (answer) => answerDecision(item.id, answer),
     keys: [['needs'], ['decision', item.id]],
     onSent: () => onSent(SENT),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   if (!data) return <CardBodySkeleton />
   const open = data.status === 'open'
@@ -297,7 +297,7 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
           </div>
         </form>
       ) : (
-        <p className="text-sm text-muted-foreground">{SETTLED}</p>
+        <p className="text-sm text-muted-foreground">{ANSWERED}</p>
       )}
       <Problem words={settle.error} />
     </div>
@@ -315,7 +315,7 @@ function ReviewBody({ item, onSent }: BodyProps) {
     send: (value) => giveVerdict(item.id, value, note.trim()),
     keys,
     onSent: () => onSent(SENT),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const annotate = useSettle<void>({
     send: () => annotateArtifact(item.id, quote.trim(), comment.trim()),
@@ -432,19 +432,19 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
     send: () => finishErrand(item.id, note.trim()),
     keys: [['needs'], ['errands']],
     onSent: (reply) => onSent(reply.errand.doneAt === null ? doneWords(reply) : SENT),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const turnBack = useSettle<void, ErrandReply>({
     send: () => turnBackErrand(item.id, note.trim()),
     keys: [['needs'], ['errands']],
     onSent: () => onSent('Turned back: the lead hears your note'),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const approve = useSettle<void>({
     send: () => approveErrand(item.id),
     keys: [['needs'], ['errands']],
     onSent: () => onSent(approveWords),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const approval = isApproval(item)
   const errand = data?.errands.find((entry) => entry.id === item.id)
@@ -528,14 +528,14 @@ function QuarantinedSignalBody({ item, issueTitle, onSent }: BodyProps) {
     send: () => promoteSignal(item.id, item.repo ?? repo.trim()),
     keys: [['needs']],
     onSent: () => onSent(unrouted ? `Routed to ${repo.trim()}: the alert is filed there` : 'Promoted: it is work now'),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const [reason, setReason] = useState('')
   const dismissal = useSettle<void>({
     send: () => dismissSignal(item.id, reason.trim()),
     keys: [['needs']],
     onSent: () => onSent('Dismissed: it stays on record'),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const needsRepo = item.repo === null
   const link = httpLink(item.sourceLink)

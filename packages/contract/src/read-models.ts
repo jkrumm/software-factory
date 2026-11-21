@@ -676,7 +676,7 @@ export const FrictionCount = z
       'unstated_acceptance',
       'unproven_ci',
       'regression',
-      'decision_settled',
+      'decision_answered',
       'signal',
       'api_transient',
       'spec_unneeded',

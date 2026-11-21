@@ -86,7 +86,7 @@ leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSp
 ## Needs you
 
 `/needs-you` opens with the **Since you were here** band, then the checkpoints. The band is `GET /v1/since`: one figure and
-label per category (Shipped and verified, Regressed, Dropped, Settled by the Judge, Turned away, New Issues
+label per category (Shipped and verified, Regressed, Dropped, Answered by the Judge, Turned away, New Issues
 with its by-origin words, Incidents), a quiet figure when a category is empty, the newest three items of each as compact `SinceRow`s (an
 icon for what happened, the number, the title clamped to one line, the project, the age; no card) and a Fold for the rest
 the server sent. A row is a button: hovering it, focusing it with the keyboard or tapping it opens a popover to its side

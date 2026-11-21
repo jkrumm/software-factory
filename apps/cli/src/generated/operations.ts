@@ -1695,7 +1695,7 @@ export const OPERATIONS: readonly Operation[] = [
     command: ['checkpoint', 'pass'],
     method: 'POST',
     path: '/v1/checkpoints/pass',
-    summary: 'one pass now: settle the open Decisions (Judge, default, owner), then send the pages that planned',
+    summary: 'one pass now: answer the open Decisions (Judge, default, owner), then send the pages that planned',
     pathParams: [],
     queryParams: [],
     body: false,
@@ -1777,7 +1777,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/decisions/{id}/take-default',
     summary:
-      'the lead settles its own open Decision with the default it named, once it built on it: that Decision no longer holds the Issue (it works again unless a review or another Decision still holds it), so ship is taken',
+      'the lead answers its own open Decision with the default it named, once it built on it: that Decision no longer holds the Issue (it works again unless a review or another Decision still holds it), so ship is taken',
     pathParams: ['id'],
     queryParams: [],
     body: true,
@@ -2491,7 +2491,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/loops/{name}/run',
     summary:
-      'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch, ci-ledger, host, reaper, digest, errands, reviews, desk, throughput); a pass already running is waited for, not started again',
+      'one pass of one loop now (leads, planning, watch, checkpoints, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch, ci-ledger, host, reaper, digest, errands, reviews, desk, throughput); a pass already running is waited for, not started again',
     pathParams: ['name'],
     queryParams: [],
     body: false,

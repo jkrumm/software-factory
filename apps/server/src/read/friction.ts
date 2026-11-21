@@ -36,11 +36,11 @@ const SPEC_SOURCES_SAID: Record<SpecSource, string> = {
   lead: 'Specs a lead judged due that did not need the owner',
 }
 
-const SETTLERS: Record<string, string> = {
-  owner: 'Decisions settled by the owner',
-  orchestrator: 'Decisions settled by the orchestrator',
-  judge: 'Decisions settled by the Judge',
-  default: 'Decisions settled by their default',
+const ANSWERERS: Record<string, string> = {
+  owner: 'Decisions answered by the owner',
+  orchestrator: 'Decisions answered by the orchestrator',
+  judge: 'Decisions answered by the Judge',
+  default: 'Decisions answered by their default',
 }
 
 const Count = z.object({ n: z.coerce.number().int() })
@@ -239,8 +239,8 @@ async function countsOf(
   const settled = await grouped(sql`
     SELECT settled_by AS key, NULL::text AS detail, count(*) AS n FROM factory.decisions
     WHERE answered_at >= ${w.from} AND answered_at < ${w.to} GROUP BY settled_by`)
-  for (const [settler, label] of Object.entries(SETTLERS)) {
-    add('decision_settled', `decision_settled:${settler}`, label, settled.find((row) => row.key === settler)?.n ?? 0)
+  for (const [answerer, label] of Object.entries(ANSWERERS)) {
+    add('decision_answered', `decision_answered:${answerer}`, label, settled.find((row) => row.key === answerer)?.n ?? 0)
   }
 
   const held = await grouped(sql`

@@ -155,7 +155,7 @@ One word per thing, in code, CLI, events, screens and docs. This is the ubiquito
 | **Watch / Verify** | The window after a ship, and the check that ends it |
 | **Wait / Stall** | A pause with a named exit, and a wait whose cause is a machine's to end |
 | **Checkpoint** | Where the factory stops for a person: a Decision, a Concept or Spec, an Errand. Never a merge |
-| **Judge** | The workflow that tries to settle a Decision before the owner sees it |
+| **Judge** | The workflow that tries to answer a Decision before the owner sees it |
 | **Steward** | The loop over stalled Issues: wake, re-check, requeue, deliver; it asks a workflow only when the rules run out |
 | **Touch / Friction** | The owner acting on an Issue, and any counted waste, such as a touch the factory should have settled |
 
@@ -456,7 +456,7 @@ A checkpoint is where the factory stops for a person. There are three, and a mer
 A loop is a named recurring pass with one way to act. The main path (triage, admission, leads, watch) is loops; so is everything that keeps it honest.
 
 - **The steward** ends stalls: it wakes, re-checks, requeues and delivers, and asks a workflow only when its rules run out.
-- **The Judge** tries to settle a Decision before the owner sees it.
+- **The Judge** tries to answer a Decision before the owner sees it.
 - **Hygiene** runs probes over every project (the repo's own check, advisories, dead code, stale documents) and files what is red.
 - **Selfwatch and throughput** watch the host and the queue: a loop that stopped, a process that grows, a step that outgrew its budget.
 

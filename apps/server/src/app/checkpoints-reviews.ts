@@ -3,7 +3,7 @@ import type { ArtifactId } from '../domains/checkpoints/artifact.ts'
 import { type Recheck, type ReviewWait, STALE_REVIEW_MS } from '../domains/checkpoints/recheck.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import { type CheckpointError, giveVerdict, holdsFiledSpec, issueOf, waitingOn } from './checkpoints.ts'
-import type { SettleDeps } from './checkpoints-settle.ts'
+import type { CheckpointLoopDeps } from './checkpoints-loop.ts'
 
 /** What the look at a Concept or Spec that waited a day for the owner came to. */
 export interface ReviewLooked {
@@ -40,7 +40,7 @@ export function lookAtReview(input: { wait: ReviewWait; closed: boolean; waiting
   }
 }
 
-async function apply(deps: SettleDeps, wait: ReviewWait, look: Look): Step<null> {
+async function apply(deps: CheckpointLoopDeps, wait: ReviewWait, look: Look): Step<null> {
   const artifactId = wait.artifact as ArtifactId
   const given = await giveVerdict(deps, {
     artifactId,
@@ -74,7 +74,7 @@ async function apply(deps: SettleDeps, wait: ReviewWait, look: Look): Step<null>
  * once per revision (`lookAtReview`). A decision here is deterministic and calls no model; the verdict and the recheck row
  * are keyed by the artifact and its revision, so a repeated pass changes nothing.
  */
-export async function recheckReviews(deps: SettleDeps): Step<ReviewLooked[]> {
+export async function recheckReviews(deps: CheckpointLoopDeps): Step<ReviewLooked[]> {
   const now = deps.clock.now()
   const before = new Date(now.getTime() - Math.max(STALE_REVIEW_MS, SPEC_WAIT_MS))
   const waits = await deps.uow.run(async ({ checkpoints }) =>

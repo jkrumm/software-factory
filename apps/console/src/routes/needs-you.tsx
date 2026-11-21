@@ -107,7 +107,7 @@ function NeedsYou() {
   const unknown = openId !== undefined && dataUpdatedAt >= openedAt.current && !data.items.some((i) => i.id === openId)
   const notice = unknown ? (
     <p role="status" className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
-      That one is already settled.{' '}
+      That one is already answered.{' '}
       <Link to="/needs-you" search={{}} className="underline underline-offset-4">
         Back to the list
       </Link>

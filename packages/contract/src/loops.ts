@@ -273,7 +273,7 @@ export const LOOP_NAMES = [
   'leads',
   'planning',
   'watch',
-  'settle',
+  'checkpoints',
   'send',
   'steward',
   'triage',

@@ -67,7 +67,7 @@ export interface WatchDeps extends OpenDeps {
   proof: Proof
   timing: Timing
   /** no check before this: a restart is a deploy, and a check that ran in it would read the deploy as a regression */
-  settledAt: Date
+  checksFrom: Date
   /** the server stopping: a check that is killed says nothing */
   signal: AbortSignal
   /** how long a check holds its watch; a server that dies lets it go after this */
@@ -95,7 +95,7 @@ export interface WatchPass {
 export async function checkWatches(deps: WatchDeps): Promise<Result<WatchPass, PortError>> {
   const pass: WatchPass = { checked: 0, passed: 0, regressed: 0 }
   const now = deps.clock.now()
-  if (now < deps.settledAt || deps.signal.aborted) return ok(pass)
+  if (now < deps.checksFrom || deps.signal.aborted) return ok(pass)
   const open = await deps.uow.run(async ({ quality }) => ok(await quality.openWatches(now)))
   if (!open.ok) return open
   for (const watch of open.value) {

@@ -206,10 +206,10 @@ test('a deep link opens the item expanded and focused; the ntfy link lands on th
   await expect(expanded()).toHaveAttribute('aria-current', 'page')
 
   await page.goto('/needs-you?item=errand_gone')
-  await expect(page.getByText('That one is already settled.')).toBeVisible()
+  await expect(page.getByText('That one is already answered.')).toBeVisible()
   await page.getByRole('link', { name: 'Back to the list' }).click()
   await expect(page).toHaveURL(/\/needs-you$/)
-  await expect(page.getByText('That one is already settled.')).toHaveCount(0)
+  await expect(page.getByText('That one is already answered.')).toHaveCount(0)
 })
 
 test('a quarantined signal dismissed with a reason leaves Needs you and stays on record', async ({ page, apiUrl }) => {
@@ -321,7 +321,7 @@ test('an answer someone else gave first says so and the card leaves', async ({ p
     await route.continue()
   })
   await card(page, 'Which cache store').getByRole('button', { name: 'Take the recommendation' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Already settled elsewhere' })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Already answered elsewhere' })).toBeVisible()
   await expect(card(page, 'Which cache store')).toHaveCount(0)
   expect(await api<{ answer: string }>(apiUrl, `/v1/decisions/${decision.id}`)).toMatchObject({ answer: 'redis' })
 })

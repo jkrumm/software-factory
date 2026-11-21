@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Lozenge } from '@/components/kit/lozenge'
 import { Section } from '@/components/kit/section'
 import type { Tone } from '@/components/kit/tone'
-import { askStatusWords, deliveryWords, settledByWords, verdictWords } from '@/lib/issue'
+import { askStatusWords, deliveryWords, answeredByWords, verdictWords } from '@/lib/issue'
 import { ASK_TONES, type OptionChip, optionChips } from '@/lib/issue-page'
 import { ARTIFACT_KIND_LABEL } from '@/lib/needs'
 import { Ago } from './ago'
@@ -36,7 +36,7 @@ function AskBlock({ ask, now }: { ask: Ask; now: number }) {
         </span>
         {ask.answeredAt ? (
           <span>
-            Settled <Ago iso={ask.answeredAt} now={now} className="font-mono" /> {settledByWords(ask.settledBy)}
+            Answered <Ago iso={ask.answeredAt} now={now} className="font-mono" /> {answeredByWords(ask.settledBy)}
           </span>
         ) : null}
       </div>

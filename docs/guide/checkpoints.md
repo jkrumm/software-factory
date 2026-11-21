@@ -48,7 +48,7 @@ The wait was 24 hours. The default is not the recommendation: the lead recommend
 
 ## The Judge
 
-The Judge is the agw workflow `factory-ask` that tries to settle a Decision before the owner sees it.
+The Judge is the agw workflow `factory-ask` that tries to answer a Decision before the owner sees it.
 
 - **Every Decision, first.** The Judge sees a Decision before the owner does. A failed call is retried after 5 minutes, three tries in all. After the third the Decision goes to the owner unjudged.
 - **It reads what a lead would.** The plan, the docs and the precedents: Decisions the owner answered before. An answer the Judge, a default or the orchestrator gave is never one.

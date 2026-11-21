@@ -4,7 +4,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { ArtifactId, ArtifactKind, CollectionId, Disposition, Format, Verdict } from './artifact.ts'
-import type { DecisionForm, DecisionId, Precedent, Settler, StepName } from './decision.ts'
+import type { DecisionForm, DecisionId, Precedent, Answerer, StepName } from './decision.ts'
 import type { Page } from './page.ts'
 import type { Recheck, RecheckCandidate, ReviewWait } from './recheck.ts'
 
@@ -42,7 +42,7 @@ export interface DecisionRecord {
   /** the artifact under review when the lead raised it during that review; null otherwise */
   artifactId: ArtifactId | null
   answer: string | null
-  settledBy: Settler | null
+  settledBy: Answerer | null
   /** what backs the answer: the Judge's source, the default, "the owner" */
   source: string | null
   answeredAt: Date | null
@@ -206,14 +206,14 @@ export interface CheckpointStore {
       'steps' | 'answer' | 'settledBy' | 'source' | 'answeredAt' | 'withdrawnAt' | 'withdrawnReason' | 'worthAsking'
     >,
   ): Promise<boolean>
-  /** a new form for an open Decision (id, key and askedAt stay): its step rows are cleared so it is settled afresh, and its artifact's title follows. False when it is answered or withdrawn. */
+  /** a new form for an open Decision (id, key and askedAt stay): its step rows are cleared so it is answered afresh, and its artifact's title follows. False when it is answered or withdrawn. */
   amendDecision(id: DecisionId, form: DecisionForm): Promise<boolean>
   decision(id: DecisionId): Promise<DecisionRecord | null>
-  /** the Decision with its row locked until the transaction ends: whoever settles it or plans its page reads it this way, so the two cannot pass each other */
+  /** the Decision with its row locked until the transaction ends: whoever answers it or plans its page reads it this way, so the two cannot pass each other */
   lockDecision(id: DecisionId): Promise<DecisionRecord | null>
   decisionByKey(key: Key): Promise<DecisionRecord | null>
   /** false when it is answered or withdrawn already */
-  answerDecision(id: DecisionId, answer: { text: string; by: Settler; source: string; at: Date }): Promise<boolean>
+  answerDecision(id: DecisionId, answer: { text: string; by: Answerer; source: string; at: Date }): Promise<boolean>
   withdrawDecision(id: DecisionId, reason: string, at: Date): Promise<boolean>
   /** the flag on an answered Decision: `unchanged` when it already had that value, `unanswered` when it is not answered yet */
   setWorthAsking(id: DecisionId, worth: boolean): Promise<'set' | 'unchanged' | 'unanswered' | 'unknown'>

@@ -7,7 +7,7 @@ const RUNBOOK_TIMEOUT_MS = 120_000
 const PROBE_TIMEOUT_MS = 10_000
 
 /**
- * A heal rule's runbook: `make restart` in the project's repo, run by the settle pass outside any transaction. A repo
+ * A heal rule's runbook: `make restart` in the project's repo, run by the heal pass outside any transaction. A repo
  * whose Makefile has no `restart` target is skipped with that reason (the Makefile contract: a target a repo lacks is
  * not an error to run, it is a rule that cannot help).
  */

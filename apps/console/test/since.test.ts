@@ -72,7 +72,7 @@ describe('sinceRows', () => {
       'Dropped',
       'Shipped and verified',
       'New Issues',
-      'Settled by the Judge',
+      'Answered by the Judge',
       'Turned away',
       'Errands closed without you',
     ])

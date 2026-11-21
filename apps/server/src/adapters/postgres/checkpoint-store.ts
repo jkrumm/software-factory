@@ -12,7 +12,7 @@ import {
   type DecisionId,
   JUDGE_BACKOFF_MS,
   JUDGE_MAX_TRIES,
-  SETTLERS,
+  ANSWERERS,
   STEPS,
 } from '../../domains/checkpoints/decision.ts'
 import type { Page } from '../../domains/checkpoints/page.ts'
@@ -56,7 +56,7 @@ const DecisionRow = z.object({
   asked_by: z.enum(['lead', 'steward']),
   artifact_id: z.string().nullable(),
   answer: z.string().nullable(),
-  settled_by: z.enum(SETTLERS).nullable(),
+  settled_by: z.enum(ANSWERERS).nullable(),
   source: z.string().nullable(),
   answered_at: z.date().nullable(),
   withdrawn_at: z.date().nullable(),

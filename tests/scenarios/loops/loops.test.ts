@@ -59,7 +59,7 @@ test('every timer of packages 3 to 6 runs through the loop runner: twenty-one na
     'leads',
     'planning',
     'watch',
-    'settle',
+    'checkpoints',
     'send',
     'steward',
     'triage',

@@ -36,14 +36,14 @@ const count = (key: string, group: FrictionCount['group'], n: number, label = ke
 
 const over = (counts: FrictionCount[], closed = CLOSED) => patternsOver(counts, closed)
 
-test('aggregate keys and the decision_settled group are never findings', () => {
+test('aggregate keys and the decision_answered group are never findings', () => {
   expect(
     over([
       count('refusal:total', 'refusal', 50),
       count('ship_refused:total', 'refusal', 50),
       count('signal_held:total', 'signal', 50),
-      count('decision_settled:owner', 'decision_settled', 50),
-      count('decision_settled:judge', 'decision_settled', 50),
+      count('decision_answered:owner', 'decision_answered', 50),
+      count('decision_answered:judge', 'decision_answered', 50),
     ]),
   ).toEqual([])
 })

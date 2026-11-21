@@ -21,8 +21,8 @@ export interface FrictionRule {
   why: string
 }
 
-/** The friction groups whose counts are judged; `decision_settled` and `api_transient` are informational and have no rule. */
-export type JudgedFrictionGroup = Exclude<FrictionCount['group'], 'decision_settled' | 'api_transient'>
+/** The friction groups whose counts are judged; `decision_answered` and `api_transient` are informational and have no rule. */
+export type JudgedFrictionGroup = Exclude<FrictionCount['group'], 'decision_answered' | 'api_transient'>
 
 /**
  * A full window and a lead's own report that it is blocked are the factory working: the steward moves the lead to an open

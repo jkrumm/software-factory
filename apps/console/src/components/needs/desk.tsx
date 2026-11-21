@@ -18,7 +18,7 @@ import {
 import { plainExcerpt } from '@/lib/plain'
 import { useSettle } from '@/lib/settle'
 
-const SETTLED = 'Already settled elsewhere'
+const ANSWERED = 'Already answered elsewhere'
 
 /** The command to copy: one block, and a button that puts it on the clipboard and says so. */
 export function Command({ command }: { command: string }) {
@@ -73,19 +73,19 @@ function DeskItem({ item, onSent }: { item: NeedItem; onSent: (message: string) 
     send: () => finishErrand(item.id, ''),
     keys,
     onSent: (reply) => onSent(doneWords(reply)),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const needless = useSettle<void>({
     send: () => finishErrand(item.id, '', 'not_needed'),
     keys,
     onSent: () => onSent('Marked not needed'),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const approve = useSettle<void>({
     send: () => approveErrand(item.id),
     keys,
     onSent: () => onSent(approveWords),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const approval = isApproval(item)
   const busy = done.disabled || needless.disabled || approve.disabled

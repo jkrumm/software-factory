@@ -36,7 +36,7 @@ export interface StallFacts {
   windowOpen: boolean | null
 }
 
-/** The earlier stall of an Issue that the steward's Decision settled, and the version of that Decision's answer. */
+/** The earlier stall of an Issue that the steward's Decision answered, and the version of that Decision's answer. */
 export interface RepeatedStall {
   answeredAt: number
   /** the answer was a backoff ("wait for it"): the repeat waits until a time, not left stalled */
@@ -107,7 +107,7 @@ export function decideStall(facts: StallFacts, now: Date, rules: StewardRules): 
   if (facts.cause === 'unreported' && facts.stewardWakes < rules.maxWakes) {
     return { kind: 'wake', detail: `${STEWARD_DETAIL}it stopped without reporting: it is asked to report` }
   }
-  // The same cause, the same words, no news from a person since a Decision settled it: a second Decision would be the same
+  // The same cause, the same words, no news from a person since a Decision answered it: a second Decision would be the same
   // question with the same answer. The Issue stays stalled, which the Console shows; a changed cause or a note ends it.
   if (facts.repeatOf) {
     if (facts.repeatOf.backedOff && facts.cause === 'blocked') {

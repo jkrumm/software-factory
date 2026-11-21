@@ -4,7 +4,7 @@ import type { ErrandRecord } from '../domains/errands/ports.ts'
 import { err, ok } from '../kernel/result.ts'
 import type { CheckpointResult } from './checkpoints.ts'
 import { resolveErrand, tellCheckBroken } from './checkpoints-errands.ts'
-import type { SettleDeps } from './checkpoints-settle.ts'
+import type { CheckpointLoopDeps } from './checkpoints-loop.ts'
 import { runCheck } from './loops/errands.ts'
 import { CHECK_BROKEN_NOTE } from '../domains/errands/request.ts'
 
@@ -21,7 +21,7 @@ export interface ErrandChecked {
  * The lead's way to settle an Errand its check already answers, without waiting for the owner's return or the next pass.
  */
 export async function checkErrandNow(
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   input: { errandId: ErrandId },
 ): Promise<CheckpointResult<ErrandChecked>> {
   const read = await deps.uow.run(async ({ errands }) => ok(await errands.errand(input.errandId)))

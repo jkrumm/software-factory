@@ -32,7 +32,7 @@ import {
   waitingOn,
 } from './checkpoints.ts'
 import { turnAway } from './checkpoints-errands.ts'
-import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
+import { PASS_LIMIT, type CheckpointLoopDeps } from './checkpoints-loop.ts'
 
 export interface Rechecked {
   checkpoint: string
@@ -69,7 +69,7 @@ const reasonOf = (text: string): string => text.trim().slice(0, REASON_MAX) || '
 
 async function record(
   stores: CheckpointStores,
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   recheck: Omit<Recheck, 'at' | 'reason'> & { reason: string },
 ) {
   await stores.checkpoints.insertRecheck({ ...recheck, reason: reasonOf(recheck.reason), at: deps.clock.now() })
@@ -92,7 +92,7 @@ interface Seen {
   base: Omit<Recheck, 'outcome' | 'by' | 'reason' | 'at'>
 }
 
-async function lookDecision(deps: SettleDeps, seen: Seen, decision: DecisionRecord): Promise<Looked> {
+async function lookDecision(deps: CheckpointLoopDeps, seen: Seen, decision: DecisionRecord): Promise<Looked> {
   const { stores, at, issue, waiting, closed, events, base } = seen
   const { checkpoints } = stores
   const others = waiting ? [] : await checkpoints.decisions({ issueId: decision.issueId, limit: 100 })
@@ -119,7 +119,7 @@ async function lookDecision(deps: SettleDeps, seen: Seen, decision: DecisionReco
   }
 }
 
-async function lookErrand(deps: SettleDeps, seen: Seen, errand: ErrandRecord): Promise<Looked> {
+async function lookErrand(deps: CheckpointLoopDeps, seen: Seen, errand: ErrandRecord): Promise<Looked> {
   const { stores, at, issue, waiting, closed, events, base } = seen
   const reason = withdrawalReason({ waiting, closed, replacedBy: null })
   if (reason) {
@@ -161,7 +161,7 @@ async function lockedAtOwner(
  * deterministic verdict. An Issue that moved past it withdraws it with the reason. Anything else gets the events since it
  * was raised, for the call.
  */
-async function look(deps: SettleDeps, candidate: RecheckCandidate): Step<Looked> {
+async function look(deps: CheckpointLoopDeps, candidate: RecheckCandidate): Step<Looked> {
   return deps.uow.run<Looked, CheckpointError>(async (stores) => {
     const at = deps.clock.now()
     const locked = await lockedAtOwner(stores, candidate)
@@ -206,7 +206,7 @@ async function look(deps: SettleDeps, candidate: RecheckCandidate): Step<Looked>
 const unmoved = (issue: Issue | undefined, seen: number): boolean => issue?.version === seen
 
 async function recordDecision(
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   candidate: RecheckCandidate,
   looked: Extract<Looked, { action: 'decide' }>,
   verdict: AgwResult<'judge'>,
@@ -253,7 +253,7 @@ async function recordDecision(
 }
 
 async function recordErrand(
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   candidate: RecheckCandidate,
   looked: Extract<Looked, { action: 'screen' }>,
   answer: AgwResult<'errandScreen'>,
@@ -293,7 +293,7 @@ async function recordErrand(
  * called with no transaction open; the result is recorded in a new one that re-reads the checkpoint and the Issue, and a
  * checkpoint that changed under the call records nothing.
  */
-async function recheckOne(deps: SettleDeps, candidate: RecheckCandidate): Step<Rechecked | null | 'skipped'> {
+async function recheckOne(deps: CheckpointLoopDeps, candidate: RecheckCandidate): Step<Rechecked | null | 'skipped'> {
   const first = await look(deps, candidate)
   if (!first.ok) return first
   const looked = first.value
@@ -322,7 +322,7 @@ async function recheckOne(deps: SettleDeps, candidate: RecheckCandidate): Step<R
  * Judge with the Issue's events since, which may settle it. Every look is a `checkpoint_rechecks` row; the next one needs a
  * new Issue event.
  */
-export async function recheckOpen(deps: SettleDeps, limit = PASS_LIMIT): Step<Rechecked[]> {
+export async function recheckOpen(deps: CheckpointLoopDeps, limit = PASS_LIMIT): Step<Rechecked[]> {
   if (deps.recheckAfterMs <= 0) return ok([])
   const reachedBefore = new Date(deps.clock.now().getTime() - deps.recheckAfterMs)
   const waiting = await deps.uow.run(async ({ checkpoints }) =>

@@ -9,15 +9,15 @@ export { scrub }
 export type DecisionId = Id<'decision'>
 
 /**
- * The steps of settling a Decision, in the order they are tried (`docs/architecture.md` §Loops and agw). `policy` is
+ * The steps of answering a Decision, in the order they are tried (`docs/architecture.md` §Loops and agw). `policy` is
  * history: no step of that name runs any more, but stored rows (and the database constraints) still hold it.
  */
 export const STEPS = ['policy', 'judge', 'default', 'owner'] as const
 export type StepName = (typeof STEPS)[number]
 
-/** Who settled a Decision: a step, or the orchestrator answering for the owner (never a step of its own). */
-export const SETTLERS = [...STEPS, 'orchestrator'] as const
-export type Settler = (typeof SETTLERS)[number]
+/** Who answered a Decision: a step, or the orchestrator answering for the owner (never a step of its own). */
+export const ANSWERERS = [...STEPS, 'orchestrator'] as const
+export type Answerer = (typeof ANSWERERS)[number]
 
 /** What one option costs and whether it can be taken back. A default is only ever a reversible option. */
 export interface DecisionOption {
@@ -185,7 +185,7 @@ export function defaultAt(form: Pick<DecisionForm, 'noAnswer'>, askedAt: Date): 
   return label === null || waitMinutes === null ? null : new Date(askedAt.getTime() + waitMinutes * 60_000)
 }
 
-/** The Judge's verdict, already parsed: it settles (`answer`) or hands the Decision on (`owner`). */
+/** The Judge's verdict, already parsed: it answers (`answer`) or hands the Decision on (`owner`). */
 export interface JudgeVerdict {
   verdict: 'answer' | 'owner'
   answer: string

@@ -743,15 +743,15 @@ describe('the fixture', () => {
     expect(count('unreviewed_ship')?.count).toBe(1)
     expect(count('unstated_acceptance')?.count).toBe(1)
     expect(count('regression')?.count).toBe(1)
-    expect(count('decision_settled:owner')?.count).toBe(2)
-    expect(count('decision_settled:judge')?.count).toBe(1)
+    expect(count('decision_answered:owner')?.count).toBe(2)
+    expect(count('decision_answered:judge')?.count).toBe(1)
     expect(count('signal_held:total')?.count).toBe(2)
     expect(count('signal_held:github')?.count).toBe(1)
     for (const c of model.counts) expect(c.label).not.toMatch(/(issue|decision|errand|signal)_\w+/)
 
     const later = new Date(NOW.getTime() + 10 * 24 * 3_600_000)
     const day = FrictionModel.parse(await readFriction(sql, { now: later, days: 1 }))
-    expect(day.counts.find((c) => c.key === 'decision_settled:owner')?.count).toBe(0)
+    expect(day.counts.find((c) => c.key === 'decision_answered:owner')?.count).toBe(0)
   })
 
   test('friction counts nothing older than the counting epoch, and the evidence agrees', async () => {
@@ -774,7 +774,7 @@ describe('the fixture', () => {
   test('friction evidence: Issue refs exist exactly when the count is above zero, newest first, at most five', async () => {
     const model = await readFriction(sql, { now: NOW, days: 7 })
     const mapped = model.counts.filter(
-      (c) => !c.key.endsWith(':total') && !['decision_settled', 'undelivered_note', 'signal'].includes(c.group),
+      (c) => !c.key.endsWith(':total') && !['decision_answered', 'undelivered_note', 'signal'].includes(c.group),
     )
     expect(mapped.length).toBeGreaterThan(10)
     const evidence = await readFrictionEvidence(

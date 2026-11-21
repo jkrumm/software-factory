@@ -3,7 +3,7 @@ import * as z from 'zod'
 import { parseEnv, type Environment } from '../../kernel/env.ts'
 import { GITHUB_API } from '../github/reader.ts'
 
-/** `30s`, `5m`, `2h`, `off`: how often a poller or the settle pass runs; null is off. */
+/** `30s`, `5m`, `2h`, `off`: how often a poller or the heal pass runs; null is off. */
 export function everyMs(text: string): number | null | undefined {
   if (text === 'off') return null
   const found = /^(\d{1,6})(ms|s|m|h)$/.exec(text)
@@ -44,7 +44,7 @@ const Env = z.object({
   FACTORY_GITHUB_BACKLOG: z.enum(['0', '1']).default('0'),
   /** how often the launchd jobs are read; off disables it */
   FACTORY_LAUNCHD_POLL: Every('5m'),
-  /** how often the intake's settle pass runs; off disables it */
+  /** how often the intake's heal pass runs; off disables it */
   FACTORY_SETTLE_POLL: Every('10s'),
 })
 
@@ -60,7 +60,7 @@ export interface IntakeEnv {
   fingerprintWindowMs: number
   github: { token: string | null; apiUrl: string; everyMs: number | null; backlog: boolean }
   launchd: { everyMs: number | null }
-  settleEveryMs: number | null
+  healEveryMs: number | null
 }
 
 /** A signal that repeats within this long is one finding. */
@@ -85,6 +85,6 @@ export function loadIntakeEnv(env: Environment, options: { home: string }): Inta
       backlog: e.FACTORY_GITHUB_BACKLOG === '1',
     },
     launchd: { everyMs: e.FACTORY_LAUNCHD_POLL },
-    settleEveryMs: e.FACTORY_SETTLE_POLL,
+    healEveryMs: e.FACTORY_SETTLE_POLL,
   }
 }

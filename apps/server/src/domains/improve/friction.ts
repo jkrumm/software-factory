@@ -38,7 +38,7 @@ export const volumeDue = (closedSince: number): boolean => closedSince >= FRICTI
 /** Evidence Issue refs shown in one signal. */
 const MAX_EVIDENCE = 5
 
-/** The groups whose counts are findings: `decision_settled` and `api_transient` are informational and have no rule. */
+/** The groups whose counts are findings: `decision_answered` and `api_transient` are informational and have no rule. */
 type Judged = JudgedFrictionGroup
 
 /** What makes a count a finding (`THRESHOLDS.friction` in the contract holds every one). */
@@ -88,7 +88,7 @@ const isAggregate = (key: string): boolean => key.endsWith(':total')
 export function patternsOver(counts: readonly FrictionCount[], closed: number): Pattern[] {
   const over: Pattern[] = []
   for (const c of counts) {
-    if (c.group === 'decision_settled' || c.group === 'api_transient' || isAggregate(c.key) || isRetired(c.key))
+    if (c.group === 'decision_answered' || c.group === 'api_transient' || isAggregate(c.key) || isRetired(c.key))
       continue
     const rule = ruleOf(c.key, c.group)
     if (c.count < rule.min) continue

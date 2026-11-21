@@ -148,7 +148,7 @@ const watchDeps = (extra: Partial<WatchDeps> = {}): WatchDeps => ({
   checkout,
   proof,
   timing: { retryMs: 60_000, recheckMs: 300_000 },
-  settledAt: new Date(0),
+  checksFrom: new Date(0),
   signal: new AbortController().signal,
   ...extra,
 })
@@ -735,11 +735,11 @@ describe('the watch', () => {
   test('no check before the server has settled: a restart is a deploy', async () => {
     await watching()
     clock.advance(30 * 60_000)
-    const settledAt = new Date(clock.now().getTime() + 120_000)
-    expect(value(await checkWatches(watchDeps({ settledAt }))).checked).toBe(0)
+    const checksFrom = new Date(clock.now().getTime() + 120_000)
+    expect(value(await checkWatches(watchDeps({ checksFrom }))).checked).toBe(0)
     expect(proofRuns).toBe(0)
     clock.advance(120_000)
-    expect(value(await checkWatches(watchDeps({ settledAt }))).checked).toBe(1)
+    expect(value(await checkWatches(watchDeps({ checksFrom }))).checked).toBe(1)
   })
 
   test('a red check is retried 1, 2 and 4 minutes later; the red after the last retry regresses to the lead', async () => {

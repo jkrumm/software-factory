@@ -89,7 +89,7 @@ cell fails `tsc`. The diagram and the wait table in `docs/language.md` are gener
   --wake`) or once `until` has passed (the planning pass); the steward's wake is refused.
 - **A review wait takes Decisions.** While an Issue waits for the verdict on a Concept or Spec, the lead may raise and
   amend Decisions about it (`wait.decisions`, each linked by `decisions.artifact_id`). The wait keeps its `since` and
-  `told` and ends when the verdict is given and every such Decision is settled, in either order (`verdictGiven`): one
+  `told` and ends when the verdict is given and every such Decision is answered, in either order (`verdictGiven`): one
   `note_lead` covers both.
 - **Model test** (`apps/server/test/work/model.test.ts`): a seeded generator plays random event sequences and checks
   invariants: a machine wait always has an exit that needs no person; a wait on the owner always states what it holds;
@@ -111,7 +111,7 @@ Every input is one envelope (`source`, `kind`, `origin`, `trust`, `repo`, `finge
 - **App feedback** is a door source: `POST /feedback/<app>` with the app's token becomes `POST /signals/feedback`
   (`FeedbackRequest`), from `feedback:<app>`, trust `outside`; the fingerprint is the repo (or app) and the title,
   never version or route.
-- **A monitor with no route** is placed by the settle pass without the owner (`domains/intake/place.ts`: its name
+- **A monitor with no route** is placed by the heal pass without the owner (`domains/intake/place.ts`: its name
   holds a project's name, or a `<name> - Push|Door` sibling is routed; `set_by` `factory:name`). One down past 10 min
   with no place is filed in `FACTORY_HOME_REPO` when set, else held after 6 h (`unroutedHeldMs`) as a signal with no
   repo.
@@ -392,7 +392,7 @@ docs-check` fails when it is stale):
 | `leads` | 10 s | none |
 | `planning` | 10 s | none |
 | `watch` | 10 s | none |
-| `settle` | 10 s | `factory-ask`, `factory-errand`, `factory-spec-screen` |
+| `checkpoints` | 10 s | `factory-ask`, `factory-errand`, `factory-spec-screen` |
 | `send` | 10 s | none |
 | `steward` | 10 s | `factory-steward` |
 | `triage` | 10 s | `factory-triage` |
@@ -419,7 +419,7 @@ What each decides in code and what it files:
   (`app/planning-pass.ts`): reads projects, files plan rows (`docs/plan.md`) whose `after` rows closed, marks the
   chain, wakes dependency and timer waits whose time has come, files a Replan for a project whose chain head sits in a
   long wait. `watch`: verify and probes (Quality).
-- `settle`, `send` (`app/checkpoints-settle.ts`, `app/checkpoints-pages.ts`): rechecks of checkpoints at the owner
+- `checkpoints`, `send` (`app/checkpoints-loop.ts`, `app/checkpoints-pages.ts`): rechecks of checkpoints at the owner
   past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps (the Judge, `factory-ask`), unscreened Errands
   (`factory-errand`) and Spec revisions (`factory-spec-screen`), and the owner's pages.
 - `steward` (`app/loops/steward.ts`, `domains/planning/stall.ts`): wake, re-check, requeue, deliver, nudge a quiet

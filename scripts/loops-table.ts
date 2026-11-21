@@ -20,7 +20,7 @@ const SRC = 'apps/server/src/'
 
 /** Loops whose workflow calls sit outside `app/loops/<name>.ts`: the files they go through. */
 export const LOOP_FILES: Partial<Record<LoopName, string[]>> = {
-  settle: ['app/checkpoints-*.ts'],
+  checkpoints: ['app/checkpoints-*.ts'],
   triage: ['adapters/agw/amend.ts'],
   desk: ['app/checkpoints-errands.ts'],
 }

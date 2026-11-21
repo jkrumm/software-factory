@@ -355,12 +355,12 @@ test.describe('the deep link, with the band above it', () => {
     await expect(page.locator('article').filter({ hasText: 'Which logging library' })).toHaveCount(0)
   })
 
-  test('a settled id says it is settled, with the band still above', async ({ page, apiUrl }) => {
+  test('an answered id says it is answered, with the band still above', async ({ page, apiUrl }) => {
     await arm(apiUrl)
-    expect((await needsOf(apiUrl)).map((item) => item.id)).not.toContain(seed.settledDecision)
-    for (const path of [`/needs-you?item=${seed.settledDecision}`, `/checkpoints/${seed.settledDecision}`]) {
+    expect((await needsOf(apiUrl)).map((item) => item.id)).not.toContain(seed.answeredDecision)
+    for (const path of [`/needs-you?item=${seed.answeredDecision}`, `/checkpoints/${seed.answeredDecision}`]) {
       await page.goto(path)
-      const notice = page.getByRole('status').filter({ hasText: 'That one is already settled.' })
+      const notice = page.getByRole('status').filter({ hasText: 'That one is already answered.' })
       await expect(notice).toBeVisible()
       await expect(band(page)).toBeVisible()
       const above = await band(page).boundingBox()

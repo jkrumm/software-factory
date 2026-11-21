@@ -10,22 +10,22 @@ import { type Quarantine } from './intake-quarantine.ts'
 
 /** A runbook claimed and not recorded (a crash) is looked at again after this: its timeout and a margin. */
 const RUNBOOK_LEASE_MS = 150_000
-const SETTLE_BATCH = 20
+const HEAL_BATCH = 20
 const UNROUTED_BATCH = 20
 const TAIL = 500
 
 /** The suffix Kuma monitors carry for a push or door check of a service. */
 const SUFFIX = /\s+[-–—]\s+(push|door)$/i
 
-/** The settle pass: a due `down` runs its runbook or files, an unrouted monitor that stayed down is placed or filed once. */
-export function createSettle(d: { deps: IntakeDeps; alerts: Alerts; routes: Routes; quarantine: Quarantine }) {
+/** The heal pass: a due `down` runs its runbook or files, an unrouted monitor that stayed down is placed or filed once. */
+export function createHeal(d: { deps: IntakeDeps; alerts: Alerts; routes: Routes; quarantine: Quarantine }) {
   const { deps } = d
   const { uow, clock, settings } = d.deps
   const { downIn } = d.alerts
   const { routeIn, unroutedSignal } = d.routes
   const { hold } = d.quarantine
 
-  async function settleOne(source: string, subject: string, topology: Topology): Promise<Result<void, IntakeError>> {
+  async function healOne(source: string, subject: string, topology: Topology): Promise<Result<void, IntakeError>> {
     const waiting = await uow.run(async (s) => ok(await s.intake.pendingOf(source, subject)))
     if (!waiting.ok) return waiting
     if (!waiting.value) return ok(undefined)
@@ -55,7 +55,7 @@ export function createSettle(d: { deps: IntakeDeps; alerts: Alerts; routes: Rout
       const filed = await downIn(s, row.received, row.received.alert as Alert & { status: 'down' }, {
         info,
         topology,
-        settle: { graceMs: row.rule.graceMs, attempts: row.attempts, results },
+        heal: { graceMs: row.rule.graceMs, attempts: row.attempts, results },
       })
       return filed.ok ? ok(null) : filed
     })
@@ -171,18 +171,18 @@ export function createSettle(d: { deps: IntakeDeps; alerts: Alerts; routes: Rout
     return ok(undefined)
   }
 
-  /** The settle pass: due `down`s run their runbook or file; an unrouted monitor that stayed down is filed once. */
-  async function settle(): Promise<Result<void, IntakeError>> {
+  /** The heal pass: due `down`s run their runbook or file; an unrouted monitor that stayed down is filed once. */
+  async function heal(): Promise<Result<void, IntakeError>> {
     const topology = await deps.topology.load()
     if (!topology.ok) return topology
-    const due = await uow.run(async (s) => ok(await s.intake.duePending(clock.now(), SETTLE_BATCH)))
+    const due = await uow.run(async (s) => ok(await s.intake.duePending(clock.now(), HEAL_BATCH)))
     if (!due.ok) return due
     for (const { source, subject } of due.value) {
-      const settled = await settleOne(source, subject, topology.value)
-      if (!settled.ok) return settled
+      const healed = await healOne(source, subject, topology.value)
+      if (!healed.ok) return healed
     }
     return fileUnrouted(topology.value)
   }
 
-  return { settle }
+  return { heal }
 }

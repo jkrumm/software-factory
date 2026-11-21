@@ -187,7 +187,7 @@ test('issue note: the lead hears it once; a wake ends a timer wait; a person wai
   expect((await v.events(first, 'noted')).map((e) => e.payload.text)).toContain('hurry up')
 })
 
-test('issue answer: the positional answer settles the open Decision; Iris sends {id, answer}; several open need a name', async () => {
+test('issue answer: the positional answer answers the open Decision; Iris sends {id, answer}; several open need a name', async () => {
   const answered = await v.run(['issue', 'answer', '1', 'staging'])
   expect(answered.code).toBe(0)
   expect(answered.json).toMatchObject({

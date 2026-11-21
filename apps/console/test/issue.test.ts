@@ -4,7 +4,7 @@ import {
   askStatusWords,
   countWords,
   deliveryWords,
-  settledByWords,
+  answeredByWords,
   verdictWords,
   watchWords,
 } from '../src/lib/issue.ts'
@@ -27,7 +27,7 @@ test('a watch says running, or its answer with the window', () => {
   ).toBe('Passed 30 min ago, window of 2 minutes')
 })
 
-test('verdicts, statuses and settlers have plain words, and an unknown one is not lost', () => {
+test('verdicts, statuses and answerers have plain words, and an unknown one is not lost', () => {
   expect(verdictWords('looks_good')).toBe('Looks good')
   expect(verdictWords(null)).toBe('No verdict yet')
   expect(verdictWords('something_new')).toBe('something new')
@@ -35,8 +35,8 @@ test('verdicts, statuses and settlers have plain words, and an unknown one is no
   expect(verdictWords('looks_good', 'factory')).toBe('Looks good, by the factory')
   expect(verdictWords('looks_good', 'owner')).toBe('Looks good')
   expect(askStatusWords('withdrawn')).toBe('Withdrawn')
-  expect(settledByWords('owner')).toBe('by you')
-  expect(settledByWords(null)).toBe('')
+  expect(answeredByWords('owner')).toBe('by you')
+  expect(answeredByWords(null)).toBe('')
 })
 
 test('an attempt is counted from the session list, and a key outside it has none', () => {

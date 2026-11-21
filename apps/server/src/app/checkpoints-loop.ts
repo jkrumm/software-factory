@@ -6,7 +6,7 @@ import {
   JUDGE_MAX_TRIES,
   judgeInputOf,
   precedentTerms,
-  type Settler,
+  type Answerer,
 } from '../domains/checkpoints/decision.ts'
 import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
@@ -25,7 +25,7 @@ import {
   waitingOn,
 } from './checkpoints.ts'
 
-export interface SettleDeps extends CheckpointDeps {
+export interface CheckpointLoopDeps extends CheckpointDeps {
   /** the Judge, the Errand screen and the Spec screen are workflows of this one port */
   agw: AgwPort
   /** the MacBook's fixed verbs, which run a report or a pull for an Errand with no dialog; absent: every such Errand reaches the owner as before */
@@ -43,13 +43,13 @@ const STEP_LEASE_MS = 35 * 60_000
 /** The Decisions one pass looks at. */
 export const PASS_LIMIT = 20
 
-export interface Settled {
+export interface DecisionOutcome {
   decision: DecisionId
   status: DecisionStatus
-  settledBy: Settler | null
+  settledBy: Answerer | null
 }
 
-const settledOf = (decision: DecisionRecord): Settled => ({
+const outcomeOf = (decision: DecisionRecord): DecisionOutcome => ({
   decision: decision.id,
   status: statusOf(decision),
   settledBy: decision.settledBy,
@@ -61,14 +61,14 @@ type Step<T> = Promise<Result<T, CheckpointError | PortError>>
 const lostRace = (error: CheckpointError | PortError): boolean => error.kind === 'already_answered'
 
 /**
- * Settles one Decision as far as it can go now, in turn: the Judge, then the default when its wait
- * has run out and its option is reversible, then the owner. Each step records who settled it. A step with a call
+ * Answers one Decision as far as it can go now, in turn: the Judge, then the default when its wait
+ * has run out and its option is reversible, then the owner. Each step records who answered it. A step with a call
  * claims and commits, calls its port with no transaction open, and records the result in a new transaction; every call
  * has a deterministic key, so a replayed pass answers nothing twice. A Decision with a default that is not due yet is
  * left for the owner to see in the Console and for a later pass to default; one without a default reaches the owner now,
  * and only then is he paged.
  */
-export async function settleDecision(deps: SettleDeps, id: DecisionId): Step<Settled> {
+export async function tryAnswer(deps: CheckpointLoopDeps, id: DecisionId): Step<DecisionOutcome> {
   const first = await deps.uow.run(async ({ work, checkpoints }) => {
     const decision = await checkpoints.decision(id)
     if (!decision) return err({ kind: 'not_found', what: 'Decision', id } as const)
@@ -84,7 +84,7 @@ export async function settleDecision(deps: SettleDeps, id: DecisionId): Step<Set
     return ok({ decision, title: issue.title, waiting: true })
   })
   if (!first.ok) return first
-  if (!first.value.waiting) return ok(settledOf(first.value.decision))
+  if (!first.value.waiting) return ok(outcomeOf(first.value.decision))
   const { title } = first.value
 
   let judging = false
@@ -92,14 +92,14 @@ export async function settleDecision(deps: SettleDeps, id: DecisionId): Step<Set
     const stepped = await step(deps, first.value.decision, title)
     if (!stepped.ok) return lostRace(stepped.error) ? current(deps, id) : stepped
     // A call of another pass is in flight: leave the Decision as it is. Going on to the owner now would page him for work
-    // the factory is about to settle.
+    // the factory is about to answer.
     if (stepped.value === BUSY) return current(deps, id)
     // The Judge has not seen it yet (its call failed and tries are left): the default may still come due, the owner waits.
     if (stepped.value === RETRY) {
       judging = true
       continue
     }
-    if (stepped.value) return ok(settledOf(stepped.value))
+    if (stepped.value) return ok(outcomeOf(stepped.value))
   }
   if (judging) return current(deps, id)
   const owner = await ownerStep(deps, first.value.decision)
@@ -107,15 +107,15 @@ export async function settleDecision(deps: SettleDeps, id: DecisionId): Step<Set
   return current(deps, id)
 }
 
-async function current(deps: CheckpointDeps, id: DecisionId): Step<Settled> {
+async function current(deps: CheckpointDeps, id: DecisionId): Step<DecisionOutcome> {
   return deps.uow.run(async ({ checkpoints }) => {
     const decision = await checkpoints.decision(id)
-    return decision ? ok(settledOf(decision)) : err({ kind: 'not_found', what: 'Decision', id } as const)
+    return decision ? ok(outcomeOf(decision)) : err({ kind: 'not_found', what: 'Decision', id } as const)
   })
 }
 
 /**
- * What a step came to: it settled the Decision, it passed it on (null), another pass's call is running or the Decision
+ * What a step came to: it answered the Decision, it passed it on (null), another pass's call is running or the Decision
  * changed under the call (`busy`: the next pass takes it up), or the Judge failed with tries left (`retry`).
  */
 const BUSY = 'busy' as const
@@ -141,7 +141,7 @@ const answered = (outcome: Awaited<ReturnType<typeof answerIn>>): Result<Decisio
   outcome.ok ? ok(outcome.value.decision) : outcome
 
 /** The Judge: precedent from the ledger, then the `factory-ask` workflow through its port. */
-async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: string): StepResult {
+async function judgeStep(deps: CheckpointLoopDeps, decision: DecisionRecord, title: string): StepResult {
   const now = deps.clock.now()
   const claimed = await deps.uow.run<{ precedents: Precedent[]; tries: number } | Exclude<StepClaim, 'claimed'>, never>(
     async ({ checkpoints }) => {
@@ -216,7 +216,7 @@ async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: stri
  * to the next step. A lost race needs none of it: the Decision is answered.
  */
 async function releaseOnError(
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   decision: DecisionRecord,
   step: 'judge',
   recorded: Awaited<StepResult>,
@@ -231,7 +231,7 @@ async function releaseOnError(
 }
 
 /** The default: a reversible option the lead named, taken once its wait has run out with no answer. */
-async function defaultStep(deps: SettleDeps, decision: DecisionRecord): StepResult {
+async function defaultStep(deps: CheckpointLoopDeps, decision: DecisionRecord): StepResult {
   return deps.uow.run<Stepped, CheckpointError>(async (stores) => {
     const at = deps.clock.now()
     const label = defaultDue(decision.form, decision.askedAt, at)
@@ -253,18 +253,18 @@ async function defaultStep(deps: SettleDeps, decision: DecisionRecord): StepResu
 }
 
 /**
- * The owner: reached when nothing before him settled it and no default is still running down its wait. Recorded once
+ * The owner: reached when nothing before him answered it and no default is still running down its wait. Recorded once
  * (the step), and he is paged once (the page's key), in the same transaction.
  */
-async function ownerStep(deps: SettleDeps, decision: DecisionRecord): Step<null> {
+async function ownerStep(deps: CheckpointLoopDeps, decision: DecisionRecord): Step<null> {
   if (decision.form.noAnswer.default !== null) return ok(null)
   return deps.uow.run(async ({ work, checkpoints }: CheckpointStores) => {
     const at = deps.clock.now()
     // The Decision was read before the Judge ran, which can take minutes: the owner may have answered it since, or the
-    // Issue stopped waiting. Read it again under its lock, so no page is planned for a Decision that is settled.
+    // Issue stopped waiting. Read it again under its lock, so no page is planned for a Decision that is answered.
     const fresh = await checkpoints.lockDecision(decision.id)
     if (!fresh || statusOf(fresh) !== 'open') return ok(null)
-    // Amended since it was read: its steps are cleared and the Judge has not seen this form. The next pass settles it afresh.
+    // Amended since it was read: its steps are cleared and the Judge has not seen this form. The next pass answers it afresh.
     if (formDigest(fresh.form) !== formDigest(decision.form)) return ok(null)
     const issue = await issueOf(work, fresh.issueId)
     if (!issue || !waitingOn(issue, 'decision', fresh.id)) {
@@ -289,14 +289,14 @@ async function ownerStep(deps: SettleDeps, decision: DecisionRecord): Step<null>
 }
 
 /** One pass over the open Decisions, oldest first. The loops' tick (package 7) calls it; so does `checkpoint pass`. */
-export async function settleOpen(deps: SettleDeps, limit = PASS_LIMIT): Step<Settled[]> {
+export async function tryAnswerOpen(deps: CheckpointLoopDeps, limit = PASS_LIMIT): Step<DecisionOutcome[]> {
   const open = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.openDecisions(limit)))
   if (!open.ok) return open
-  const settled: Settled[] = []
+  const outcomes: DecisionOutcome[] = []
   for (const decision of open.value) {
-    const result = await settleDecision(deps, decision.id)
-    if (result.ok) settled.push(result.value)
-    else console.error(`checkpoints: ${decision.id} could not be settled: ${JSON.stringify(result.error)}`)
+    const result = await tryAnswer(deps, decision.id)
+    if (result.ok) outcomes.push(result.value)
+    else console.error(`checkpoints: ${decision.id} could not be answered: ${JSON.stringify(result.error)}`)
   }
-  return ok(settled)
+  return ok(outcomes)
 }

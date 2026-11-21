@@ -448,7 +448,7 @@ test('a lead waiting on background work is nudged only past the longer threshold
   })
 })
 
-test('a repeated stall that a Decision settled is not asked again; a note from a person still ends it', () => {
+test('a repeated stall that a Decision answered is not asked again; a note from a person still ends it', () => {
   const repeat = stall({ repeatOf: { answeredAt: 14, backedOff: false } })
   expect(decideStall(repeat, NOW, rules)).toMatchObject({ kind: 'wait' })
   expect(decideStall(stall(), NOW, rules)).toEqual({ kind: 'ask' })

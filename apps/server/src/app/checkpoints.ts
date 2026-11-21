@@ -19,7 +19,7 @@ import {
   type DecisionId,
   readDecisionForm,
   refuseNoOpDefault,
-  type Settler,
+  type Answerer,
 } from '../domains/checkpoints/decision.ts'
 import {
   type ErrandId,
@@ -108,7 +108,7 @@ export type CheckpointError =
   | { kind: 'machine_refused'; detail: string }
   | { kind: 'invalid'; detail: string }
   | { kind: 'not_found'; what: string; id: string }
-  | { kind: 'already_answered'; by: Settler; answer: string }
+  | { kind: 'already_answered'; by: Answerer; answer: string }
 
 export type CheckpointResult<T> = Result<T, CheckpointError | PortError>
 
@@ -228,7 +228,7 @@ export interface Asked {
  * then one transaction records `asked`, which makes the Issue wait, and the Decision. The same ask again is the same
  * Decision. A different form from the same asker while the Issue still waits on its open Decision amends that one
  * instead of raising another: the form is replaced, the new rendering is the artifact's next revision, and the steps and
- * unsent pages are cleared so the amended form is settled afresh. Settling it (the Judge, the default, the owner)
+ * unsent pages are cleared so the amended form is answered afresh. Answering it (the Judge, the default, the owner)
  * is the pass's, not this call's.
  */
 export async function askDecision(
@@ -352,7 +352,7 @@ export async function askDecision(
 export interface Answering {
   decision: DecisionRecord
   text: string
-  by: Settler
+  by: Answerer
   /** what backs the answer */
   source: string
   /** what the lead is told beside the answer (the factory's own sentence); null for the owner's */
@@ -364,9 +364,9 @@ export type AnswerOutcome =
   | { status: 'withdrawn'; decision: DecisionRecord }
 
 /**
- * Settles a Decision inside a transaction the caller holds: the Issue must still wait for it, else the Decision is
+ * Answers a Decision inside a transaction the caller holds: the Issue must still wait for it, else the Decision is
  * withdrawn (the Issue closed or was cancelled) and nothing reaches a lead. Otherwise the answer is recorded as an
- * `answered` event by its settler, with the factory's own note before it when there is one, so the one `note_lead` that
+ * `answered` event by its answerer, with the factory's own note before it when there is one, so the one `note_lead` that
  * ends the wait carries both. One answer per Decision: the first to commit wins, the others see `already_answered`.
  */
 export async function answerIn(
@@ -447,7 +447,7 @@ export interface Answered {
 }
 
 /**
- * The owner answers a Decision (the last step of settling, or an early answer to one still open); the orchestrator may
+ * The owner answers a Decision (the last step of answering, or an early answer to one still open); the orchestrator may
  * answer for him, recorded as its own (`settled_by` and the event's actor).
  */
 export function answerDecision(
@@ -471,8 +471,8 @@ export function answerDecision(
 }
 
 /**
- * `factory decision take-default`: the lead settles its own open Decision with the default it named, because it went on
- * with that option and a ship is refused while the Issue waits. Recorded as the `default` settler, the source saying the lead
+ * `factory decision take-default`: the lead answers its own open Decision with the default it named, because it went on
+ * with that option and a ship is refused while the Issue waits. Recorded as the `default` answerer, the source saying the lead
  * took it. Only the lead's own Decision of the attempt there is, and only one that names a default (a reversible option,
  * which the form guarantees); an answered one is `already_answered`, a Decision the Issue no longer waits for is withdrawn.
  */

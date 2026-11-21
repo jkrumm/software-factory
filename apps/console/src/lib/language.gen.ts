@@ -9,6 +9,8 @@ export const LANGUAGE = {
   amend: "Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note",
   annotation:
     'A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored"',
+  answerer:
+    'Who answered a Decision, in the order tried: judge, default, owner; or orchestrator, answering for the owner. Stored as settled_by, a column name kept',
   artifact:
     'What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report. An Issue owns it, or none does (a standalone Report, artifact new); links name the other Issues it concerns; it may belong to one collection (a named set with one lead page, pinned or not)',
   ask: "The lead's verb that raises a Decision (factory issue ask)",
@@ -18,7 +20,7 @@ export const LANGUAGE = {
   'avoidable cost':
     "The open improvement that costs the factory most, in minutes of queue wait or MiB over the memory budget; without one, the standing tenants' memory against its budget. What to do: it is the next thing worth fixing; open the improvement's Issue",
   'avoidable touch':
-    'A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand',
+    'A touch the factory should have handled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand',
   'back at desk':
     'The Needs-you view (?mode=desk) of the open Errands by where the hands must be, each with its command to copy and Done and Not needed buttons',
   backoff:
@@ -94,7 +96,7 @@ export const LANGUAGE = {
     'How many Issues closed in the window, whatever the outcome, as the cycle KPI counts them, with the mean per UTC day. What to do: a fall while Issues are Ready means something holds them; read Idle allowance-hours and Binding reason next.',
   'issues per hour':
     'How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each',
-  judge: 'The agw workflow that tries to settle a Decision before the owner sees it',
+  judge: 'The agw workflow that tries to answer a Decision before the owner sees it',
   kind: "What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue. A failing check of a project's default branch is an incident, never a bug",
   lane: 'A resource class inside a repo (apple) that an Issue or plan row names; lanes: {apple: 1} in the repo\'s project.yaml caps how many leads of the lane run at once, within leads. An undeclared lane is unlimited (docs/plan.md "Lanes")',
   lead: 'The Claude Code session that owns one attempt of one Issue: understand, build, review, ship, verify',
@@ -125,8 +127,8 @@ export const LANGUAGE = {
     "The Console's home screen (/): what needs the owner, production, what shipped in a day, the host and the queue's binding reason, then the flow's counts and trend. It was the Flow screen",
   owed: 'Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. An owed lead counts in the leads of the account it resumes on, and the account cap never refuses its resume. A note refused for a claim for 15 minutes while a claim would be granted to that lead now is a steward stall; a herd waiting its turn is not',
   'owner gate':
-    "An Issue filed with the checkpoint gate: it owes the same Spec as spec, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen settle, so what is after it is released by him alone. Only a filer sets it, never triage",
-  page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is settled",
+    "An Issue filed with the checkpoint gate: it owes the same Spec as spec, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen pass, so what is after it is released by him alone. Only a filer sets it, never triage",
+  page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is answered",
   pass: 'One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored',
   pause:
     'The owner\'s verb for a started Issue that is to wait: the paused wait, which only his word (factory issue note <id> --wake) or the time he gave (factory issue pause <id> --reason "..." [--until <iso>]) ends. The steward, the Judge and the lead leave it alone; the lead hears it once. A stall or a timer is replaced by it; a dependency, a review of its pull request or a person\'s wait is not, and an Issue no lead has started cannot be paused. Shown as Paused, on you, and not as a need. The event is paused',
@@ -177,8 +179,8 @@ export const LANGUAGE = {
   seat: "The tier, effort and role a lead runs on: the role table's row, or the one a filer or the owner set (factory issue seat, the event seated)",
   'session state':
     "What a lead's session is, derived from its hook events: starting (no hook yet), working (a turn is running), idle (its last turn ended), compacted (its context was just compacted, no turn since), walled (its account hit a limit), gone (its session ended or its terminal is gone)",
-  settler:
-    'Who settled a Decision, in the order tried: judge, default, owner; or orchestrator, answering for the owner',
+  settle:
+    "Triage and the chain finishing for an Issue: it leaves settling (the event settled, factory planning settle). The word's one sense",
   settling: 'State: triage is not done; shown as Held',
   ship: 'Land and deploy',
   'ship refused':
@@ -189,7 +191,7 @@ export const LANGUAGE = {
   size: "Triage's judgment of how much work an Issue is: small, medium, large. Kept on the Issue when triage settles it; none for an Issue the rules settled",
   spec: 'A larger plan to review',
   'spec screen':
-    "The look a Spec revision passes before it reaches the owner: rules, then factory-spec-screen with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and settles the rest with the factory's looks_good and its reason, so the lead builds at once",
+    "The look a Spec revision passes before it reaches the owner: rules, then factory-spec-screen with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and answers the rest with the factory's looks_good and its reason (stored as the outcome settled), so the lead builds at once",
   stale: 'A Needs you item that has waited more than 24 hours',
   stall: "A wait with a machine cause, the steward's to end",
   started: 'The Issues a lead began: Running and Paused',
@@ -204,7 +206,7 @@ export const LANGUAGE = {
   'swap used':
     "The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts. What to do: if it keeps growing, read Memory by class on Throughput to find what writes memory out; a full but steady swap needs nothing",
   'take the default':
-    "The lead's verb that settles its own open Decision with the default it named, once it went on with that option (factory decision take-default <id> --attempt <n>). Recorded as settled by default, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it)",
+    "The lead's verb that answers its own open Decision with the default it named, once it went on with that option (factory decision take-default <id> --attempt <n>). Recorded as answered by default, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it)",
   'taste pass':
     "The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
   'test slot':
@@ -217,7 +219,7 @@ export const LANGUAGE = {
   triage:
     'Deciding what a signal becomes: a new Issue, an amendment to an open one, part of an incident, held, or dropped',
   'triage outcome':
-    'What triage did with a signal: filed, amended, incident, held (quarantined, or a down waiting out its heal grace), dropped. Its detail says why: new, matched, replayed, repeat, joined, regression, healed, quiet, unrouted, quarantined, promoted; for a drop work_repo, no_project, not_listened, loop_guard, no_repo, probe, settled (the workflow found an Issue closed in the last day already settles it)',
+    'What triage did with a signal: filed, amended, incident, held (quarantined, or a down waiting out its heal grace), dropped. Its detail says why: new, matched, replayed, repeat, joined, regression, healed, quiet, unrouted, quarantined, promoted; for a drop work_repo, no_project, not_listened, loop_guard, no_repo, probe, settled (the workflow found an Issue closed in the last day already covers it)',
   'turn away':
     "An Errand the screen refuses because a token or CLI could do it: the Issue's errand wait ends and the lead hears the reason",
   'turn back':
@@ -225,7 +227,7 @@ export const LANGUAGE = {
   turns:
     'How many times a lead was prompted and worked until it stopped: the brief, each note, each wake. What to do: many turns on a small Issue means the lead was steered a lot; read the notes in Activity',
   verdict:
-    'The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (by): the owner; the factory for him (the default after 24 hours, a Spec screen settle, a withdrawal); or the orchestrator, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his',
+    'The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (by): the owner; the factory for him (the default after 24 hours, a Spec screen pass, a withdrawal); or the orchestrator, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his',
   verified:
     'A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue',
   verify: 'The check that ends the watch: make verify, probes',
