@@ -170,7 +170,7 @@ const SignalRow = z.object({
 })
 
 /**
- * Everything that waits on the owner, newest first within a kind: Decisions that reached him (the owner's step is open, or the Judge passed it on while a default still runs down its wait),
+ * Everything that waits on the owner; within a kind, the item that holds the most first (`holds`), then newest: Decisions that reached him (the owner's step is open, or the Judge passed it on while a default still runs down its wait),
  * Concepts and Specs under review, open Errands (a lead's, whose Issue is still open, and requests no Issue raised), held
  * signals, and the long timed waits other Issues wait behind (`longWaitMs` and up) whose time has passed. Read-only SQL.
  */
