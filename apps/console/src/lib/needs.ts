@@ -87,6 +87,28 @@ export function alsoWaiting(item: Pick<NeedItem, 'joined' | 'joinedIssues'>): st
   return `Issue${numbers.length === 1 ? '' : 's'} ${list}`
 }
 
+const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
+
+const both = (issues: number, rows: number): string =>
+  [
+    ...(issues > 0 ? [count(issues, 'Issue', 'Issues')] : []),
+    ...(rows > 0 ? [count(rows, 'plan row', 'plan rows')] : []),
+  ].join(' and ')
+
+/**
+ * What an item holds, for its card: "Holds 3 Issues and 5 plan rows", and what went ahead without the answer: "2 Issues
+ * went ahead without your answer". Null for a part with nothing in it.
+ */
+export function holdsWords(item: Pick<NeedItem, 'holds'>): { holds: string | null; wentAhead: string | null } {
+  const { issues, rows, wentAhead } = item.holds
+  const held = both(issues.length, rows)
+  const ahead = both(wentAhead.issues.length, wentAhead.rows)
+  return {
+    holds: held === '' ? null : `Holds ${held}`,
+    wentAhead: ahead === '' ? null : `${ahead} went ahead without your answer`,
+  }
+}
+
 /** What a Decision is, in one line for the card that opens it. */
 export function decisionParts(
   project: string,

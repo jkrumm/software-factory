@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { DependencyWait, IssueReads, OpenIssueRow, TimerWait } from '../domains/planning/ports.ts'
 import { type IssueId, issueId } from '../kernel/ids.ts'
 import { readLongWaits } from './long-waits.ts'
+import { readOwnerWaits } from './owner-waits.ts'
 
 const idOf = (text: string): IssueId => issueId(Number(text.slice('issue_'.length)))
 
@@ -156,5 +157,6 @@ export function readIssues(tx: SQL): IssueReads {
     },
 
     longWaits: (thresholdMs) => readLongWaits(tx, thresholdMs),
+    ownerWaits: (thresholdMs, now) => readOwnerWaits(tx, thresholdMs, now),
   }
 }

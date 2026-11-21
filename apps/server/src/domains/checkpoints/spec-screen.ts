@@ -48,12 +48,14 @@ export function specSourceOf(origin: SpecOrigin): SpecSource {
 
 /**
  * The changes a Replan's Spec proposes, as its fenced `replan` block states them (the Replan playbook, step 4). Strict and
- * with every key required: a block that leaves one out or misnames one says nothing a rule may settle on, so it goes to the
- * workflow instead.
+ * with every key required bar `free` (added later; a block without it frees no row): a block that leaves one out or
+ * misnames one says nothing a rule may settle on, so it goes to the workflow instead.
  */
 const ReplanBlock = z.strictObject({
-  /** the plan rows the proposal adds, changes or drops, by key */
+  /** the plan rows the proposal adds, changes or drops, by key: every change to a row but a removed `after` */
   plan: z.array(z.string()),
+  /** the plan rows whose only change is an `after` entry taken out: freed, like a removed edge */
+  free: z.array(z.string()).default([]),
   edges: z.strictObject({ add: z.array(z.unknown()), remove: z.array(z.unknown()) }),
   cancel: z.array(z.unknown()),
 })
@@ -90,8 +92,9 @@ export type RuleOutcome = { outcome: 'passed' | 'settled'; reason: string }
  * - A revision after the owner asked for changes is his to read again: he asked for it.
  * - A Spec of an owner gate (`checkpoint: gate`) is always his to read: no rule and no workflow settles it.
  * - A Spec its filer attached is handed over for the owner's review on purpose.
- * - A Replan whose block changes no plan row and cancels nothing only reorders open Issues (it frees one from a stalled
- *   head, or adds an edge): the lead applies it on its defaults. Edges are reversible with one call.
+ * - A Replan whose block changes no plan row and cancels nothing only reorders (it frees Issues or rows from a stalled
+ *   head, or adds an edge): the lead applies it on its defaults. An edge is reversible with one call, a freed row's `after`
+ *   with one plan edit.
  */
 export function screenSpecByRule(input: RuleInput): RuleOutcome | null {
   if (input.revision > 1 && input.earlier.includes('changes')) {
@@ -106,13 +109,22 @@ export function screenSpecByRule(input: RuleInput): RuleOutcome | null {
   if (input.origin.replan) {
     const block = replanBlockOf(input.content)
     if (block?.plan.length === 0 && block.cancel.length === 0) {
-      const freed = block.edges.remove.length
+      const issues = block.edges.remove.length
+      const rows = new Set(block.free).size
+      const freed = [
+        ...(issues > 0 ? [issues === 1 ? 'an Issue' : `${issues} Issues`] : []),
+        ...(rows > 0 ? [rows === 1 ? 'a plan row' : `${rows} plan rows`] : []),
+      ]
+      const what =
+        rows > 0
+          ? 'a Replan that changes a plan row only by a removed after and cancels nothing'
+          : 'a Replan that changes no plan row and cancels nothing'
       return {
         outcome: 'settled',
         reason:
-          freed > 0
-            ? `a Replan that changes no plan row and cancels nothing: it only frees ${freed === 1 ? 'an Issue' : `${freed} Issues`} from ${freed === 1 ? 'a wait' : 'their waits'}`
-            : 'a Replan that changes no plan row and cancels nothing',
+          freed.length > 0
+            ? `${what}: it only frees ${freed.join(' and ')} from ${issues + rows === 1 ? 'a wait' : 'their waits'}`
+            : what,
       }
     }
   }

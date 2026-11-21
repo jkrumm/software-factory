@@ -77,7 +77,36 @@ describe('the rules', () => {
     }
     // the same block on a Spec that is not a Replan decides nothing
     expect(screenSpecByRule({ revision: 1, earlier: [], origin: ORIGIN, content: freeing })).toBeNull()
-    expect(replanBlockOf(freeing)).toMatchObject({ plan: [], cancel: [] })
+    expect(replanBlockOf(freeing)).toMatchObject({ plan: [], free: [], cancel: [] })
+  })
+
+  test('a Replan that only frees plan rows (a removed after) is settled; a row changed otherwise still waits', () => {
+    const replan = { ...ORIGIN, replan: true }
+    const block = (body: unknown) => `# Replan\n\n\`\`\`replan\n${JSON.stringify(body)}\n\`\`\`\n`
+    const none = { plan: [], free: [], edges: { add: [], remove: [] }, cancel: [] }
+    expect(
+      screenSpecByRule({ revision: 1, earlier: [], origin: replan, content: block({ ...none, free: ['dev-host'] }) }),
+    ).toEqual({
+      outcome: 'settled',
+      reason:
+        'a Replan that changes a plan row only by a removed after and cancels nothing: it only frees a plan row from a wait',
+    })
+    const both = block({
+      ...none,
+      free: ['dev-host', 'db-server'],
+      edges: { add: [], remove: [{ issue: 'issue_7', after: ['issue_5'] }] },
+    })
+    expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content: both })?.reason).toBe(
+      'a Replan that changes a plan row only by a removed after and cancels nothing: it only frees an Issue and 2 plan rows from their waits',
+    )
+    // a row named in `plan` changes otherwise, even when it is also freed: the screen decides, not the rule
+    for (const content of [
+      block({ ...none, free: ['dev-host'], plan: ['analytics'] }),
+      block({ ...none, free: ['dev-host'], plan: ['dev-host'] }),
+      block({ ...none, free: 'dev-host' }),
+    ]) {
+      expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content })).toBeNull()
+    }
   })
 
   test('the source names who made the Spec owed', () => {

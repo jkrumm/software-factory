@@ -9,6 +9,7 @@ import { type OpenIssue, orderQueue } from '../../src/domains/planning/queue.ts'
 import { type IssueId, issueId, issueNumber } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
 import { ok } from '../../src/kernel/result.ts'
+import { readNeeds } from '../../src/read/needs.ts'
 import { startWorld, value, type World } from './support.ts'
 
 let world: World
@@ -354,6 +355,74 @@ describe('what intake hears', () => {
     expect(value(await port.find('work'))).toMatchObject({ work: true, sources: [] })
     expect(value(await port.find('unknown'))).toBeNull()
     expect(value(await port.polled()).map((v) => v.repo)).toEqual(['app'])
+  })
+})
+
+describe('a head held on the owner', () => {
+  const replans = () =>
+    world.db.sql`SELECT issue_id, trigger, head_issue, held FROM factory.replans ORDER BY created_at, issue_id`
+  const errand = async (issue: IssueId) => {
+    const now = world.clock.now()
+    await world.db.sql`
+      INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, reached_owner_at)
+      VALUES ('errand_1', 'ek1', ${issue}, 1, 'Sign in to the portal', ${now}, ${now})`
+  }
+  const later = (ms: number) => world.clock.set(new Date(world.clock.now().getTime() + ms))
+
+  test('after two hours with a plan row and an Issue behind it, one stalled Replan lists them; a replayed wait files no second', async () => {
+    world.source.add('app', {
+      project: PROJECT('app'),
+      plan: plan('p1', [row('gate'), row('next', { after: ['gate'] })]),
+    })
+    value(await planningPass(world.deps))
+    const head = issueId(1)
+    const [filed] = await world.db.sql`SELECT repo FROM factory.issues WHERE id = ${head}`
+    const behind = await world.queued({ repo: (filed as { repo: string }).repo })
+    value(await addAfter(world.deps, { issue: behind, after: [head] }))
+    await errand(head)
+
+    later(3_600_000)
+    expect(value(await planningPass(world.deps)).errors).toEqual([])
+    expect(await replans()).toEqual([])
+
+    later(3_600_000)
+    expect(value(await planningPass(world.deps)).errors).toEqual([])
+    const [replan] = await replans()
+    expect(replan).toMatchObject({
+      trigger: 'stalled',
+      head_issue: head,
+      held: { issues: [behind], rows: ['app:next'] },
+    })
+    const id = (replan as { issue_id: IssueId }).issue_id
+    const [note] = await world.db.sql`
+      SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${id} AND kind = 'noted' ORDER BY version LIMIT 1`
+    const text = (note as { text: string }).text
+    expect(text).toContain(`stalled head: ${head}`)
+    expect(text).toContain('waits on the owner: the Errand errand_1, "Sign in to the portal"')
+    expect(text).toContain('waiting behind it: 1')
+    expect(text).toContain(`waiting issue: ${behind}, waits directly on ${head}`)
+    expect(text).toContain(`waiting row: app:next, after ${head}`)
+    expect(text).toContain('The head waits on the owner. A gate holds what needs its answer; free the rest.')
+
+    // Needs you: the head's card holds both; once the Replan frees the Issue, it went ahead without the answer
+    const card = async () => (await readNeeds(world.db.sql, world.clock.now())).items.find((i) => i.id === 'errand_1')
+    expect((await card())?.holds).toEqual({ issues: [behind], rows: 1, wentAhead: { issues: [], rows: 0 } })
+    value(await removeAfter(world.deps, { issue: behind, after: [head], actor: 'orchestrator' }))
+    expect((await card())?.holds).toEqual({ issues: [], rows: 1, wentAhead: { issues: [behind], rows: 0 } })
+
+    // once per head and wait: an open Replan files nothing, and a closed one does not file the same wait again
+    value(await planningPass(world.deps))
+    await world.send(id, 'cancelled', 'cancelled', { reason: 'no change needed' }, 'owner')
+    value(await planningPass(world.deps))
+    expect(await replans()).toHaveLength(1)
+  })
+
+  test('a head held on the owner with nothing behind it files no Replan', async () => {
+    const head = await world.queued({ repo: 'x' })
+    await errand(head)
+    later(3 * 3_600_000)
+    value(await planningPass(world.deps))
+    expect(await replans()).toEqual([])
   })
 })
 

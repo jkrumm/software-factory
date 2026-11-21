@@ -2,7 +2,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Result } from '../../kernel/result.ts'
 import type { Edge } from './chain.ts'
 import type { OpenIssue } from './queue.ts'
-import type { ReplanTrigger } from './replan.ts'
+import type { OwnerWaitKind, ReplanTrigger } from './replan.ts'
 import type { RepoRead, StoredProject } from './sync.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { QueueApplied, QueueIssue } from './queue-edges.ts'
@@ -85,6 +85,8 @@ export interface PlanningStore {
     trigger: ReplanTrigger
     ask: string | null
     at: Date
+    /** a stalled Replan: the head it was filed for and what waited behind it then */
+    head?: { issue: string; issues: readonly string[]; rows: readonly string[] } | undefined
   }): Promise<void>
   /** the project an Issue is the Replan of, or null when it is not a Replan */
   replanOf(issue: IssueId): Promise<{ project: string } | null>
@@ -131,6 +133,21 @@ export interface LongWaitRow {
 }
 
 /**
+ * A chain head that waits on the owner (a Decision, a Spec under his review, an Errand) with work behind it, as the
+ * owner-wait read lists it: its oldest owner wait, and the open Issues and plan rows behind it with what each waits on.
+ */
+export interface OwnerWaitRow {
+  issue: string
+  repo: string
+  title: string
+  since: Date
+  owner: { kind: OwnerWaitKind; id: string; title: string }
+  heldIssues: { issue: string; after: string[] }[]
+  /** `project:key` of a plan row not yet filed */
+  heldRows: { row: string; after: string[] }[]
+}
+
+/**
  * What planning reads of the Issues, which another domain owns: read-only, implemented under `read/` on the same
  * transaction.
  */
@@ -151,6 +168,8 @@ export interface IssueReads {
   timerWaits(): Promise<TimerWait[]>
   /** the timed waits of at least `thresholdMs` that other open Issues wait behind */
   longWaits(thresholdMs: number): Promise<LongWaitRow[]>
+  /** the Issues that have waited on the owner for at least `thresholdMs` with open Issues or plan rows behind them */
+  ownerWaits(thresholdMs: number, now: Date): Promise<OwnerWaitRow[]>
 }
 
 /** An Issue that is still `settling`, with what triage needs to know of it. */

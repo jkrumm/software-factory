@@ -418,7 +418,7 @@ What each decides in code and what it files:
 - `leads` (`app/leads-tick.ts`): spool replay, start, notes, finalize, the outbox. `planning`
   (`app/planning-pass.ts`): reads projects, files plan rows (`docs/plan.md`) whose `after` rows closed, marks the
   chain, wakes dependency and timer waits whose time has come, files a Replan for a project whose chain head sits in a
-  long wait. `watch`: verify and probes (Quality).
+  long wait or has waited on the owner for two hours with work behind it (`read/owner-waits.ts`). `watch`: verify and probes (Quality).
 - `checkpoints`, `send` (`app/checkpoints-loop.ts`, `app/checkpoints-pages.ts`): rechecks of checkpoints at the owner
   past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps (the Judge, `factory-ask`), unscreened Errands
   (`factory-errand`) and Spec revisions (`factory-spec-screen`), and the owner's pages.
