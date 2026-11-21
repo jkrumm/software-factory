@@ -74,7 +74,7 @@ export const PAYLOADS = {
   answered: z.object({
     decision: text,
     answer: text,
-    /** the answer to a stall was a hold: the Issue waits until this time instead of going back to its lead (`kernel/hold.ts`) */
+    /** the answer to a stall was a hold: the Issue waits until this time instead of going back to its lead (`kernel/backoff.ts`) */
     hold: z.iso.datetime({ offset: true }).optional(),
   }),
   /** the lead handed a Concept or Spec over for review and waits for the verdict */

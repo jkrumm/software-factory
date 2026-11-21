@@ -44,6 +44,7 @@ check, `docs/architecture.md`).
 | **Allowance** | How many leads the accounts may run at once: `leads` per account, plus the bonus the host's idle minutes earn (`domains/capacity/allowance.ts`). It is idle while work is queued and fewer leads run than it allows | Seat, for this sense (seat bonus, idle seat, seat-hours, a free seat) |
 | **Seat** | The tier, effort and role a lead runs on: the role table's row, or the one a filer or the owner set (`factory issue seat`, the event `seated`) | |
 | **Test slot** | A lease on the host's test capacity that `factory slot run` takes for a `make check`, test or e2e step; it waits while the host is busy and records what the step cost | |
+| **Bench** | A step kept on the mini after a run off it was red where the mini was green: an hour, doubling with each repeat within a week up to seven days, halved by a green run off the mini (`kernel/remote-bench.ts`) | Hold, for this place (remote hold) |
 | **Reaper** | The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind | |
 
 ## Where work stands
@@ -72,6 +73,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Defer** | The lead's verb for a wait it can name: until a time, until other Issues close, or on the review of its pull request (`--review`, which is the `external` wait) (`factory issue defer`). The event is `deferred` | The old verb `wait` |
 | **Steward** | The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment | "Never a model" |
 | **Judge** | The agw workflow that tries to settle a Decision before the owner sees it | Ask judge |
+| **Backoff** | The Judge's answer to a stall the steward asked about that says "wait for it": a timed wait instead of a wake, one hour, doubling per backoff of the attempt, at most twelve (`kernel/backoff.ts`) | Hold, for this answer (judge hold) |
 | **Loop** | A named recurring job with a trigger, a budget and one way to act. Its judgment is an agw workflow with its own prompt, tools and skills | Scorer, babysitter |
 | **Pass** | One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored | |
 | **Round** | The *n*th ask of a workflow about one subject. A subject has a limited number of rounds | |
@@ -119,7 +121,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Gate** | A machine check a lead cannot talk past. **Evidence** is what a gate reads | |
 | **Ship** | Land and deploy | |
 | **Ship refused** | The gate's answer to a ship that does not hold; recorded, and counted as friction. A review never refuses a ship: it is recorded as evidence | |
-| **Watch** | The window after a ship | Hold, in all three meanings |
+| **Watch** | The window after a ship (its length is the `project.yaml` key `deploy.hold`, a name kept) | Hold, for the watch |
 | **Review status** | Of a ship's review: `covered`, `not_required`, `uncovered`, `unknown`. Recorded with its reason, never a refusal | |
 | **Verify** | The check that ends the watch: `make verify`, probes | |
 | **Wait** | A pause with a named exit | |
@@ -196,13 +198,13 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `seated` | The owner set the seat (tier and effort, or a role of the table, resolved now) the next lead starts on; taken while the Issue is `settling` or `queued`, refused once a lead has started | owner, orchestrator |
 | `noted` | An amend or a note reaches the lead | owner, factory, steward, judge |
 | `asked` | A Decision is raised and the Issue waits for its answer; during a review wait the lead's ask is added to that wait (same `since`, same `told`) | lead, steward (from a stall only) |
-| `answered` | A Decision got its answer; one raised during a review wait leaves the wait's list, and the wait ends with the last item. The Judge's answer to a steward's Decision that reads as a hold carries `hold`, a time: the Issue then waits for it (a `timer` wait) instead of going back to its lead | owner, judge, factory |
+| `answered` | A Decision got its answer; one raised during a review wait leaves the wait's list, and the wait ends with the last item. The Judge's answer to a steward's Decision that reads as a backoff carries the time it ends (stored under the key `hold`): the Issue then waits for it (a `timer` wait) instead of going back to its lead | owner, judge, factory |
 | `submitted` | A Concept or Spec is handed over for review | lead |
 | `verdict_given` | The owner's Verdict on it; with Decisions still open the wait goes on until the last answer, and the lead hears verdict and answers in one note. The factory sends it for a Concept or Spec nobody answered in 24 hours, flagged Issue or not (the lead goes on with its defaults) and to withdraw a review its Issue moved past; his delegate sends it for a Spec that is no owner gate | owner, orchestrator, factory |
 | `errand_raised` | The lead needs the owner's hands | lead |
 | `errand_done` | The owner did the Errand (or his delegate, the orchestrator, closed it on its operator's confirmation: `confirmedBy`, never an approval Errand), or something ended its wait without his hands: the screen turned it away (`turnedAway`: the reason; with `awaits` the Issue then waits on that pull request's review), or the desk pass found its check no longer needed (`resolved`) | owner, orchestrator, judge, factory |
 | `errand_turned_back` | The owner or the orchestrator turned the Errand back: not done, and `note` says what to do instead; the lead hears it as its next turn | owner, orchestrator |
-| `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only; until a time only for a repeated `blocked` stall after a hold) |
+| `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only; until a time only for a repeated `blocked` stall after a backoff) |
 | `stalled` | A machine cause stopped the work: `wall`, `unreported`, `blocked`; a lead's block may say it is out of its depth (`depth`) | factory, lead (`blocked`) |
 | `moved_up` | A light lead struggled (a second stall, a block out of its depth, a second refused ship, a regression of its first watch): its attempt ends and the Issue queues again for a lead on the `lead` row; never twice | factory |
 | `woken` | A wait that needs no person ended; it names the wait | factory, steward, owner |
@@ -266,7 +268,7 @@ stateDiagram-v2
 
 | Wait | Exit | Stall | Ends |
 |-|-|-|-|
-| `timer` | no person | no | woken by the clock at the time the lead deferred to, or the factory held it to |
+| `timer` | no person | no | woken by the clock at the time the lead deferred to, or the end of a backoff the factory gave it |
 | `dependency` | no person | no | woken by the chain once every Issue it is after has closed |
 | `wall` | no person | yes | woken when the account's window opens again |
 | `unreported` | no person | yes | woken by the lead's next turn or the steward |

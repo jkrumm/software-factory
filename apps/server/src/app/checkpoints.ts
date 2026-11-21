@@ -74,7 +74,7 @@ import type {
 } from '../domains/checkpoints/ports.ts'
 import type { CheckRunner, ErrandJoin, ErrandRecord, ErrandStore } from '../domains/errands/ports.ts'
 import type { IssueEvent } from '../domains/work/events.ts'
-import { holdsIn, holdUntil, isHold } from '../kernel/hold.ts'
+import { backoffsIn, backoffUntil, isBackoff } from '../kernel/backoff.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
@@ -238,7 +238,7 @@ export async function askDecision(
   const read = readDecisionForm(input.form)
   if (!read.ok) return read
   const form = read.value
-  // The steward's ask is about a stall, where a hold ("wait for it") is a real answer; a lead's is a choice for the owner.
+  // The steward's ask is about a stall, where a backoff ("wait for it") is a real answer; a lead's is a choice for the owner.
   const noChoice = (input.by ?? 'lead') === 'lead' ? refuseNoOpDefault(form) : null
   if (noChoice) return err({ kind: 'invalid', detail: noChoice })
   const blob = await deps.blobs.put(renderDecisionForm(form))
@@ -395,14 +395,14 @@ export async function answerIn(
       : answering.by === 'judge'
         ? 'judge'
         : 'factory'
-  // The Judge's hold on a stall the steward asked about: the Issue waits until a time instead of waking its lead to block again.
-  let hold: string | undefined
+  // The Judge's backoff on a stall the steward asked about (stored as the payload key `hold`): the Issue waits until a time instead of waking its lead to block again.
+  let backoff: string | undefined
   let note = answering.note
-  if (answering.by === 'judge' && fresh.askedBy === 'steward' && isHold(answering.text)) {
+  if (answering.by === 'judge' && fresh.askedBy === 'steward' && isBackoff(answering.text)) {
     const history = await work.history(fresh.issueId)
-    hold = holdUntil(at, history ? holdsIn(history) : 0)
+    backoff = backoffUntil(at, history ? backoffsIn(history) : 0)
     note =
-      `${note ?? ''} The Issue waits until ${hold} and you hear this then; if the cause is unchanged by then, report it again with what you checked, and the next wait is longer.`.trim()
+      `${note ?? ''} The Issue waits until ${backoff} and you hear this then; if the cause is unchanged by then, report it again with what you checked, and the next wait is longer.`.trim()
   }
   if (note) {
     const noted = applied(
@@ -421,7 +421,7 @@ export async function answerIn(
       key: key('answered', fresh.id),
       event: {
         kind: 'answered',
-        payload: { decision: fresh.id, answer: answering.text, ...(hold ? { hold } : {}) },
+        payload: { decision: fresh.id, answer: answering.text, ...(backoff ? { hold: backoff } : {}) },
         actor,
       },
     }),

@@ -30,7 +30,7 @@ import {
   REMOTE_REFUSAL_WORDS,
 } from '../domains/capacity/remote.ts'
 import { type PressureBaseline, pressureThreshold } from '../kernel/remote-pressure.ts'
-import { activeHold, HOLD_LOOKBACK_MS, holdOf, holdWords } from '../kernel/remote-hold.ts'
+import { activeBench, BENCH_LOOKBACK_MS, benchOf, benchWords } from '../kernel/remote-bench.ts'
 import { SWAP_WINDOW, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import {
   DEFAULT_PASS_AFTER_MS,
@@ -328,16 +328,16 @@ export async function touchSlot(
     const owner = ownerIn(projects, input.cwd)
     const stated = remote ? declaredRemoteStep({ owner, key: mine.key, remote, input }) : null
     const eligible = stated !== null && typeof stated !== 'string'
-    // red off the mini and green on it: the step stays home for a hold that doubles with each repeat within a week and
-    // halves after a green run off the mini (`holdOf`)
-    const held =
+    // red off the mini and green on it: the step stays home on a bench that doubles with each repeat within a week and
+    // halves after a green run off the mini (`benchOf`)
+    const benched =
       eligible && input.holding !== true
-        ? activeHold(holdOf(await capacity.holdEvents(mine.key, new Date(now.getTime() - HOLD_LOOKBACK_MS))), now)
+        ? activeBench(benchOf(await capacity.benchEvents(mine.key, new Date(now.getTime() - BENCH_LOOKBACK_MS))), now)
         : null
     const declared =
-      held === null
+      benched === null
         ? stated
-        : `it was red on the VPS and green on the mini; it stays on the mini for ${holdWords(held.holdMs)}, until ${held.until.toISOString()}`
+        : `it was red on the VPS and green on the mini; it stays on the mini for ${benchWords(benched.benchMs)}, until ${benched.until.toISOString()}`
     for (const [id, refusal] of refusedOnVps) if (now.getTime() - refusal.at > REFUSAL_KEPT_MS) refusedOnVps.delete(id)
     if (remote && probed) {
       // production's pressure at each reading, with how many step containers ran: the samples with none are the baseline
@@ -474,7 +474,7 @@ export async function touchSlot(
           name: mine.key,
           host: 'mini',
           reason:
-            held !== null
+            benched !== null
               ? 'held'
               : (refusedOnVps.get(input.id)?.reason ??
                 (beatsFreeSlot?.sooner && !beatsFreeSlot.room.grant ? 'no_room' : 'free')),
@@ -497,7 +497,7 @@ export async function touchSlot(
         : 'the VPS would not finish it sooner than the mini'
       if (eligible)
         refusedOnVps.set(input.id, {
-          reason: held !== null ? 'held' : !room.grant ? 'no_room' : 'not_sooner',
+          reason: benched !== null ? 'held' : !room.grant ? 'no_room' : 'not_sooner',
           at: now.getTime(),
         })
       if (touched) {

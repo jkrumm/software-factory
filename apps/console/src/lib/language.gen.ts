@@ -21,6 +21,10 @@ export const LANGUAGE = {
     'A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand',
   'back at desk':
     'The Needs-you view (?mode=desk) of the open Errands by where the hands must be, each with its command to copy and Done and Not needed buttons',
+  backoff:
+    'The Judge\'s answer to a stall the steward asked about that says "wait for it": a timed wait instead of a wake, one hour, doubling per backoff of the attempt, at most twelve (kernel/backoff.ts)',
+  bench:
+    'A step kept on the mini after a run off it was red where the mini was green: an hour, doubling with each repeat within a week up to seven days, halved by a green run off the mini (kernel/remote-bench.ts)',
   'binding reason':
     'The queue reason that kept Issues waiting for the most hours in the window, with how many Issues it held. What to do: it is the limit worth lifting; open the Issues it names and read their reason',
   'cache read share':
@@ -230,7 +234,7 @@ export const LANGUAGE = {
   wait: 'A pause with a named exit',
   waiting: 'State: a lead started and the Issue is paused on a named wait; shown as Paused',
   walled: 'Session state: its account hit a limit',
-  watch: 'The window after a ship',
+  watch: 'The window after a ship (its length is the project.yaml key deploy.hold, a name kept)',
   watching:
     'State: shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass; shown as Checking',
   window: "An account's 5-hour or weekly reset",

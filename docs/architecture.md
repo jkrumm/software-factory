@@ -212,7 +212,7 @@ Errand.
   removed when clean and on the base. On close, every `factory/<issue>-*` branch goes once its work is on origin's
   default (`adapters/git/branches.ts`).
 
-**Holds** (`kernel/hold.ts`). An answer that reads as a hold makes the wait a timer: one hour, doubling per hold, at
+**Backoffs** (`kernel/backoff.ts`). A Judge's answer that reads as a backoff makes the wait a timer: one hour, doubling per backoff, at
 most twelve.
 
 **Replans** (`app/planning-replan.ts`, `factory.replans`). One open Replan per project. The lead applies an approved
@@ -258,7 +258,7 @@ Ubuntu 24.04. The step host is the owner's setting ([settings](settings.md)). On
 - **Results**: the exit code is the step's own. ssh's 255 and docker's 125 to 127 are the host's failure: the step
   goes back to the mini's line. A red on the VPS runs again on the mini, and only that result counts; a green there is
   `disagreed`.
-- **Hold** (`kernel/remote-hold.ts`, derived from the ledger): a disagreement holds the step on the mini for an hour,
+- **Bench** (`kernel/remote-bench.ts`, derived from the ledger): a disagreement benches the step on the mini for an hour,
   doubling up to seven days; the first green VPS run halves it.
 
 ## Quality

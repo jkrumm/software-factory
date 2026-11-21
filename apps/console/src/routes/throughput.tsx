@@ -965,7 +965,7 @@ function Scorecard({ model }: { model: Model }) {
 
 const utc = (iso: string): string => `${iso.slice(0, 16).replace('T', ' ')} UTC`
 
-/** The steps their project declared remote: where they ran, why the mini kept them, the hold, and the pressure line. */
+/** The steps their project declared remote: where they ran, why the mini kept them, the bench, and the pressure line. */
 function RemoteSteps({ model }: { model: Model }) {
   const { pressure, steps } = model.tests.remote
   const baseline = pressure.baseline
@@ -993,8 +993,8 @@ function RemoteSteps({ model }: { model: Model }) {
               <th className={cn(TH, NUM)}>Mini, slot free</th>
               <th className={cn(TH, NUM)}>Mini, no room</th>
               <th className={cn(TH, NUM)}>Mini, not sooner</th>
-              <th className={cn(TH, NUM)}>Mini, held</th>
-              <th className={TH}>Hold</th>
+              <th className={cn(TH, NUM)}>Mini, benched</th>
+              <th className={TH}>Bench</th>
             </>
           }
         >
@@ -1009,11 +1009,11 @@ function RemoteSteps({ model }: { model: Model }) {
               <td className={cn(TD, NUM)}>{r.placed.free}</td>
               <td className={cn(TD, NUM)}>{r.placed.noRoom}</td>
               <td className={cn(TD, NUM)}>{r.placed.notSooner}</td>
-              <td className={cn(TD, NUM)}>{r.placed.held}</td>
+              <td className={cn(TD, NUM)}>{r.placed.benched}</td>
               <td className={TD}>
-                {r.hold === null
+                {r.bench === null
                   ? '–'
-                  : `${r.hold.active ? 'Held' : 'Held until'} ${utc(r.hold.until)}${r.hold.active ? ' ' : ' (ended) '}for ${msWords(r.hold.holdMs)}, disagreement ${r.hold.disagreements}`}
+                  : `${r.bench.active ? 'Benched' : 'Benched until'} ${utc(r.bench.until)}${r.bench.active ? ' ' : ' (ended) '}for ${msWords(r.bench.benchMs)}, disagreement ${r.bench.disagreements}`}
                 {r.lastDisagreement === null ? null : (
                   <div className="text-muted-foreground">
                     {`Red on the VPS ${utc(r.lastDisagreement.at)}: `}

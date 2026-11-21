@@ -1639,19 +1639,19 @@ export const ThroughputModel = z
             /** runs of the window per host */
             miniRuns: z.number().int(),
             vpsRuns: z.number().int(),
-            /** placements of the window: on the step host, or on the mini because a slot was free, the VPS had no room, would not finish sooner, or the step was held */
+            /** placements of the window: on the step host, or on the mini because a slot was free, the VPS had no room, would not finish sooner, or the step was benched (stored as the placement reason `held`) */
             placed: z.strictObject({
               vps: z.number().int(),
               free: z.number().int(),
               noRoom: z.number().int(),
               notSooner: z.number().int(),
-              held: z.number().int(),
+              benched: z.number().int(),
             }),
-            /** the hold now (or the last one, ended): its length, when it ends, the disagreements in its chain; null: none in the ledger */
-            hold: z
+            /** the bench now (or the last one, ended): its length, when it ends, the disagreements in its chain; null: none in the ledger */
+            bench: z
               .strictObject({
                 active: z.boolean(),
-                holdMs: z.number().int(),
+                benchMs: z.number().int(),
                 until: at,
                 disagreements: z.number().int(),
               })
