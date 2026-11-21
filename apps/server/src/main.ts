@@ -200,6 +200,7 @@ async function main(env: Environment): Promise<void> {
     ...writes,
     blobs: fileBlobStore(checkpointSettings.blobDir),
     consoleUrl: checkpointSettings.line.consoleUrl,
+    imageHosts: loadConsoleSettings(env).imageHosts,
     checks: shellCheckRunner(),
     // an approved Errand's command runs here, on the mini: a hang guard, never a budget (a release takes minutes)
     commands: shellCheckRunner(undefined, APPROVED_RUN_HANG_GUARD_MS),

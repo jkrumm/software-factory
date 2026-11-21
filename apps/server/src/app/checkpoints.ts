@@ -21,6 +21,7 @@ import {
   refuseNoOpDefault,
   type Answerer,
 } from '../domains/checkpoints/decision.ts'
+import { picturesRefusal } from '../domains/checkpoints/pictures.ts'
 import {
   type ErrandId,
   type ErrandRaised,
@@ -93,6 +94,11 @@ export interface CheckpointDeps extends WriteDeps {
   blobs: BlobStore
   /** the base of a checkpoint's deep link; a placeholder setting until the Console exists */
   consoleUrl: string
+  /**
+   * the hosts the Console loads Markdown pictures from (`FACTORY_CONSOLE_IMAGE_HOSTS`); a hand-over whose pictures
+   * would show as alt text is refused. Absent, pictures are not checked.
+   */
+  imageHosts?: readonly string[]
   /** runs an Errand's `check` when the owner marks it done (outside any transaction) */
   checks: CheckRunner
   /** runs the command of an Errand the owner approved, on this host (outside any transaction); absent, Approve is refused */
@@ -594,6 +600,10 @@ export async function submitArtifact(
   const read = readSubmission(input.raw)
   if (!read.ok) return read
   const submission = read.value
+  const unloaded = deps.imageHosts
+    ? picturesRefusal(submission.content, submission.format, deps.imageHosts, deps.clock.now())
+    : null
+  if (unloaded) return err({ kind: 'invalid', detail: unloaded })
   const blob = await deps.blobs.put(submission.content)
   if (!blob.ok) return blob
   const submitKey = key(
@@ -695,6 +705,10 @@ export async function reviseArtifact(
     const issue = artifact.issueId ? await issueOf(work, artifact.issueId) : null
     if (artifact.issueId && !issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
     if (artifact.kind === 'decision') return err({ kind: 'invalid', detail: 'a Decision is not revised: ask again' })
+    const unloaded = deps.imageHosts
+      ? picturesRefusal(content, artifact.format, deps.imageHosts, deps.clock.now())
+      : null
+    if (unloaded) return err({ kind: 'invalid', detail: unloaded })
     const revisions = await checkpoints.revisions(artifact.id)
     // The same content as the latest revision is the lead sending it again; going back to an older one is a new revision.
     if (revisions.at(-1)?.sha256 === blob.value.sha256) {

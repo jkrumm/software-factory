@@ -1026,6 +1026,25 @@ describe('artifacts', () => {
     expect(verdict).toMatchObject({ issue: null, verdict: { verdict: 'looks_good' } })
   })
 
+  test('a picture the Console would not show refuses the submit and the revision, and stores nothing', async () => {
+    const issueId = await workingIssue()
+    const hosts = { ...deps, imageHosts: ['images.example.com'] }
+    const bad = '# Spec\n\n![shot](https://raw.githubusercontent.com/x/y.jpg)'
+    expect(
+      errorOf(await submitArtifact(hosts, { issueId, attempt: 1, raw: { kind: 'spec', title: 'S', content: bad } })),
+    ).toMatchObject({ kind: 'invalid', detail: expect.stringContaining('raw.githubusercontent.com') })
+    expect(await rows('artifacts')).toBe(0)
+    const good = '# Spec\n\n![shot](https://images.example.com/y.jpg)'
+    const { artifact } = value(
+      await submitArtifact(hosts, { issueId, attempt: 1, raw: { kind: 'spec', title: 'S', content: good } }),
+    )
+    value(await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: null, revision: null }))
+    expect(
+      errorOf(await reviseArtifact(hosts, { artifactId: artifact.id, attempt: 1, content: bad, note: null })),
+    ).toMatchObject({ kind: 'invalid' })
+    expect(await rows('artifact_revisions')).toBe(1)
+  })
+
   test('a verdict on a Decision is invalid: it is answered', async () => {
     const issueId = await workingIssue()
     const { decision } = await ask(issueId)

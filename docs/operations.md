@@ -33,7 +33,7 @@ whenever the Console is built.
 - `/frame.html` and `/frame/*`, the artifact's sandboxed frame, are served under their own CSP (scripts, no network);
   the page keeps `script-src 'self'`.
 - The page's CSP is `img-src 'self' data:` plus the https hosts of `FACTORY_CONSOLE_IMAGE_HOSTS` (empty by default; the
-  frame stays `data:` only), so a Markdown artifact can show screenshots from the owner's own bucket and nothing else.
+  frame stays `data:` only), so a Markdown artifact can show screenshots from the owner's own bucket and nothing else; a submit or revision whose picture would not load (other host, http, expired presigned link, a non-`data:` HTML `<img>`) is refused with the reason.
 - A new write goes through the Issue, not this list.
 
 Residual, accepted (`docs/architecture.md` "Perimeter", NL25): there is no per-request identity and the ACL tag grant is

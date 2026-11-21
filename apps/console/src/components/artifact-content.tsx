@@ -142,8 +142,14 @@ function ImageAlt({ alt, src }: { alt?: string; src?: string }) {
     ? 'only https images load'
     : `${host} is not in FACTORY_CONSOLE_IMAGE_HOSTS, or the link has expired`
   return (
-    <span className="italic text-muted-foreground" title={host ? `Not loaded from ${host}: ${reason}` : undefined}>
-      {alt ? `[image: ${alt}]` : '[image]'}
+    <span
+      role="img"
+      aria-label={alt ? `Picture not shown: ${alt}` : 'Picture not shown'}
+      className="my-3 block rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted-foreground"
+      title={host ? `Not loaded from ${host}: ${reason}` : undefined}
+    >
+      <span className="italic">{alt ? `[picture not shown: ${alt}]` : '[picture not shown]'}</span>
+      <span className="block text-xs">{reason}</span>
     </span>
   )
 }

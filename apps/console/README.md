@@ -287,7 +287,7 @@ the same rules for the author):
 Markdown is rendered with react-markdown: raw HTML is dropped and `javascript:`/`data:` links are refused. An image loads
 only over `https` from a host the owner lists in `FACTORY_CONSOLE_IMAGE_HOSTS` (comma-separated `host` or `*.domain`, in
 `~/.config/factory/env`, none by default, a restart applies it): the page's CSP is `img-src 'self' data:` plus those
-hosts. Any other image, or one that fails (an expired presigned link), shows its alt text. A lead links shots from a listed
+hosts. Any other image, or one that fails (an expired presigned link), shows a dashed "picture not shown" block with the alt text and the reason; `factory artifact submit` and `revise` refuse such a picture up front (an HTML artifact's `<img>` must be a `data:` URL). A lead links shots from a listed
 host (for a private bucket a presigned URL, `imgcli private <file> --json`; `raw.githubusercontent.com` is not listed) or inlines
 them in an HTML artifact. A blocked image's alt text names the host in its tooltip, and `factory artifact submit --help` says so to the lead. HTML runs in
 `<iframe sandbox="allow-scripts" src="/frame.html">`, a separate document: the listener serves `/frame.html` and `/frame/*`
