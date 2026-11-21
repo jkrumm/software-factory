@@ -6,8 +6,7 @@ Every name a settings loader reads from the environment: its default in the code
 |-|-|-|-|
 | `DATABASE_URL` | required | the Postgres database the server stores into (secrets-run supplies it) | `apps/server/src/settings.ts` |
 | `FACTORY_ACCOUNT_LEADS` | unset | an account's own cap: `iu=20,me=10,me2=10` | `apps/server/src/app/planning-settings.ts` |
-| `FACTORY_AGENT_TOKEN` | unset | the token a lead's `factory` calls the API with (`settings.ts`) | `apps/server/src/adapters/leads/settings.ts` |
-| `FACTORY_AGENT_TOKEN` | unset | the token a lead's terminal calls the API with, never the owner's | `apps/server/src/settings.ts` |
+| `FACTORY_AGENT_TOKEN` | unset | the token a lead's terminal calls the API with, never the owner's; the one reader of it: the leads' settings take it from here | `apps/server/src/settings.ts` |
 | `FACTORY_AGW_BIN` | `'agw'` | the agw binary the server calls for agent work | `apps/server/src/settings.ts` |
 | `FACTORY_API_DETECT_MS` | `45_000` | a turn open and silent this long has its transcript read for an API error | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_API_PROBE_MS` | `20_000` | how often a session's transcript is read for an API error, at most | `apps/server/src/adapters/leads/settings.ts` |
@@ -21,7 +20,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_CONSOLE_IMAGE_HOSTS` | `''` | Hosts the Console page may load images from (the page's `img-src`), comma-separated: `images.example.com` or `*.example.com`, no scheme, port or path. | `apps/server/src/console-settings.ts` |
 | `FACTORY_CONSOLE_PORT` | `7795` | the port the Console listens on | `apps/server/src/console-settings.ts` |
 | `FACTORY_CONSOLE_URL` | `loopbackUrl(loadConsoleSettings(env).port)` | the Console's base URL, where a checkpoint is answered; unset, it is the Console listener on loopback (FACTORY_CONSOLE_PORT) | `apps/server/src/adapters/ntfy/ntfy.ts` |
-| `FACTORY_DATA_DIR` | `join(e.HOME ?? '/tmp', '.software-factory', 'data')` | the factory's data directory; artifact revisions are blobs under `<dir>/blobs`, never in git | `apps/server/src/checkpoint-settings.ts` |
+| `FACTORY_DATA_DIR` | `join($HOME, '.software-factory', 'data')` | the factory's data directory; artifact revisions are blobs under `<dir>/blobs`, never in git | `apps/server/src/checkpoint-settings.ts` |
 | `FACTORY_DOOR_TOKEN` | unset | the token a door (a machine) calls the API with | `apps/server/src/settings.ts` |
 | `FACTORY_FORCE_NOTE_MS` | `5 * 60_000` | how long a lead's turn may read as ended before a note is typed into it anyway | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_GH_CONFIG_DIR_WORK` | `null` | the `gh` config directory the review poll uses in a work repo, whose account is not the owner's | `apps/server/src/app/loops/settings.ts` |
@@ -68,10 +67,8 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_QUEUE_GAP_MS` | `30 * 60_000` | a repo is asked about a new queue shape at most once in this long | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_QUIESCE_AFTER_MS` | `QUIESCE_AFTER_MS` | a waiting lead is dormant (its `claude` ended) after this long | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_READ_TOKEN` | unset | a read-only token for the read API | `apps/server/src/settings.ts` |
-| `FACTORY_REPO_ALLOW` | `''` | colon-separated single repos a lead may work in, outside the roots | `apps/server/src/adapters/leads/settings.ts` |
-| `FACTORY_REPO_ALLOW` | unset | `FACTORY_REPO_ALLOW`: single repos outside the roots the factory may read as projects (absolute paths) | `apps/server/src/app/planning-settings.ts` |
-| `FACTORY_REPO_ROOTS` | `$HOME/SourceRoot` | colon-separated directories a lead repo must be inside | `apps/server/src/adapters/leads/settings.ts` |
-| `FACTORY_REPO_ROOTS` | unset | `FACTORY_REPO_ROOTS`: directories whose direct children are the repos the factory may read as projects | `apps/server/src/app/planning-settings.ts` |
+| `FACTORY_REPO_ALLOW` | `''` | colon-separated single repos a lead may work in, outside the roots; the one reader of it: planning takes `repoAllow` from these settings | `apps/server/src/adapters/leads/settings.ts` |
+| `FACTORY_REPO_ROOTS` | `$HOME/SourceRoot` | colon-separated directories a lead repo must be inside; the one reader of it: planning takes `repoRoots` from these settings | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_ROLES_FILE` | `DEFAULT_ROLES_FILE` | the role table; config/roles.json of this checkout when unset | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_SEATS_MAX_BONUS` | `2` | the most extra leads per account while the host idles with work queued; 0 turns it off | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_SELFWATCH_GRACE_MS` | `DEFAULT_WAIT_GRACE_MS` | a timer or dependency wait is overdue this long after its exit | `apps/server/src/app/loops/settings.ts` |
@@ -82,7 +79,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_SLOTS` | `2` | the base count of test slots the host runs at once | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_SLOTS_MAX` | `6` | the most test steps at once when memory and load allow; below FACTORY_SLOTS it is FACTORY_SLOTS | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_SOCKET` | `$HOME/.local/share/factory/hook.sock` | the unix socket factory hook posts events to | `apps/server/src/adapters/leads/settings.ts` |
-| `FACTORY_SOURCE_ROOT` | `join(env.HOME ?? '/', 'SourceRoot')` | the directory a repo name is under; SourceRoot in the home directory when unset | `apps/server/src/adapters/intake/settings.ts` |
+| `FACTORY_SOURCE_ROOT` | `join($HOME, 'SourceRoot')` | the directory a repo name is under; SourceRoot in the home directory when unset | `apps/server/src/adapters/intake/settings.ts` |
 | `FACTORY_SPOOL_DIR` | `$HOME/.local/share/factory/spool` | where factory hook spools events until the server reads them | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_STEP_REMOTE_PROJECTS` | `''` | the projects whose declared steps may run off the mini, space- or comma-separated (the owner's admission) | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_STEP_REMOTE_TARGET` | unset | the ssh target of the VPS that runs steps off the mini (an alias of the owner's ssh config); unset: every step runs on the mini | `apps/server/src/app/planning-settings.ts` |
@@ -110,8 +107,6 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_WATCH_WINDOW_MS` | `0` | how long a shipped change is watched for a regression; 0 is off | `apps/server/src/settings.ts` |
 | `HC_BIN` | `'hc'` | the herdr-core client (hc) that a lead terminal runs through | `apps/server/src/adapters/leads/settings.ts` |
 | `HC_SESSION` | unset | another herdr-core session than the default one (tests) | `apps/server/src/adapters/leads/settings.ts` |
-| `HOME` | required | the home directory the defaults are built from | `apps/server/src/adapters/leads/settings.ts` |
-| `HOME` | `'/tmp'` | the home directory the defaults are built from | `apps/server/src/checkpoint-settings.ts` |
+| `HOME` | required | the home directory the defaults are built from; the one reader of it: the checkpoints, the intake and the ask queue take `home` from these settings | `apps/server/src/adapters/leads/settings.ts` |
 | `NTFY_TOKEN` | unset | the bearer token for the ntfy server, when it needs one | `apps/server/src/adapters/ntfy/ntfy.ts` |
-| `PORT` | unset | the port the API listens on, on loopback | `apps/server/src/adapters/leads/settings.ts` |
-| `PORT` | required | the port the API listens on, on loopback | `apps/server/src/settings.ts` |
+| `PORT` | required | the port the API listens on, on loopback; the one reader of it: the leads' settings take it from here | `apps/server/src/settings.ts` |

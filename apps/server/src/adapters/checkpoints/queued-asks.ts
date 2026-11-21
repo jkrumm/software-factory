@@ -11,8 +11,8 @@ const Req = z.object({
 })
 
 /** `ask-human.sh`'s queue root: `${XDG_STATE_HOME:-$HOME/.local/state}/human-queue` (the script owns the layout). */
-export function askQueueDir(env: Record<string, string | undefined>): string {
-  return join(env.XDG_STATE_HOME || join(env.HOME ?? '/tmp', '.local', 'state'), 'human-queue')
+export function askQueueDir(env: Record<string, string | undefined>, options: { home: string }): string {
+  return join(env.XDG_STATE_HOME || join(options.home, '.local', 'state'), 'human-queue')
 }
 
 /**

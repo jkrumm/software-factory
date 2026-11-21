@@ -27,7 +27,7 @@ describe('settings', () => {
   })
 
   test('the defaults, and one message naming every bad key', () => {
-    const env = loadIntakeEnv({ HOME: '/home/x' })
+    const env = loadIntakeEnv({}, { home: '/home/x' })
     expect(env).toMatchObject({
       sourceRoot: '/home/x/SourceRoot',
       incidentWindowMs: 30 * 60_000,
@@ -35,9 +35,9 @@ describe('settings', () => {
       github: { token: null, everyMs: 300_000, backlog: false },
       settleEveryMs: 10_000,
     })
-    expect(() => loadIntakeEnv({ FACTORY_GITHUB_POLL: 'often', FACTORY_INCIDENT_WINDOW_MIN: '0' })).toThrow(
-      /FACTORY_GITHUB_POLL.*FACTORY_INCIDENT_WINDOW_MIN|FACTORY_INCIDENT_WINDOW_MIN.*FACTORY_GITHUB_POLL/,
-    )
+    expect(() =>
+      loadIntakeEnv({ FACTORY_GITHUB_POLL: 'often', FACTORY_INCIDENT_WINDOW_MIN: '0' }, { home: '/home/x' }),
+    ).toThrow(/FACTORY_GITHUB_POLL.*FACTORY_INCIDENT_WINDOW_MIN|FACTORY_INCIDENT_WINDOW_MIN.*FACTORY_GITHUB_POLL/)
   })
 })
 

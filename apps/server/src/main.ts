@@ -129,7 +129,7 @@ async function main(env: Environment): Promise<void> {
   const startedAt = new Date()
   /** Times the server's own routes: the heartbeat's `routeP95Ms` reads the figure. */
   const routes = routeTimer()
-  const leadSettings = loadLeadSettings(env)
+  const leadSettings = loadLeadSettings(env, { agentToken: settings.tokens.agent, port: settings.port })
   const loopSettings = loadLoopSettings(env)
   // The one way to ask agw for a judgment: every workflow in `WORKFLOWS` goes through it.
   const agw = agwPort({ bin: settings.agwBin })
@@ -166,12 +166,12 @@ async function main(env: Environment): Promise<void> {
   const repos = rootedRepos(leadSettings.repoRoots, leadSettings.repoAllow)
   const mainCheckoutLines = new MainCheckoutLines()
   // the checkouts a killed pass left: no pass of this process exists yet, so they go (in the background)
-  void reapHygieneDir(factoryDataDir(env))
+  void reapHygieneDir(factoryDataDir(env, { home: leadSettings.home }))
   const projects = projectFileProjects({
     uow,
     fallback: makefileProjects({ windowMs: settings.quality.windowMs }),
   })
-  const intakeEnv = loadIntakeEnv(env)
+  const intakeEnv = loadIntakeEnv(env, { home: leadSettings.home })
   const uptimeEnv = loadUptimeEnv(env)
   const uptime = uptimePoller({ clock, url: uptimeEnv.url, token: uptimeEnv.token })
   // The capacity figures to ClickStack, beside the host and CI series; off without FACTORY_OTEL_ENDPOINT. Its own pass: a push
@@ -195,7 +195,7 @@ async function main(env: Environment): Promise<void> {
     triage: agwAmend(agw),
   })
   disagreementSignals.file = (body) => intake.api.file(body, 'agent')
-  const checkpointSettings = loadCheckpointSettings(env)
+  const checkpointSettings = loadCheckpointSettings(env, { home: leadSettings.home })
   const checkpointDeps = {
     ...writes,
     blobs: fileBlobStore(checkpointSettings.blobDir),
@@ -203,7 +203,7 @@ async function main(env: Environment): Promise<void> {
     checks: shellCheckRunner(),
     // an approved Errand's command runs here, on the mini: a hang guard, never a budget (a release takes minutes)
     commands: shellCheckRunner(undefined, APPROVED_RUN_HANG_GUARD_MS),
-    queuedAsks: queuedAsksIn(askQueueDir(env)),
+    queuedAsks: queuedAsksIn(askQueueDir(env, { home: leadSettings.home })),
     notifier: makeNotifier(checkpointSettings.line),
     // The Judge, the Errand screen and the Spec screen are workflows of the one agw port.
     agw,
@@ -262,7 +262,7 @@ async function main(env: Environment): Promise<void> {
     },
   }
 
-  const dataDir = factoryDataDir(env)
+  const dataDir = factoryDataDir(env, { home: leadSettings.home })
   const { runner, pushDesk, deskOnReturn, hostTop } = composeLoops({
     sql,
     uow,

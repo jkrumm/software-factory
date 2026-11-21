@@ -13,7 +13,7 @@ const token = z.string().min(MIN_TOKEN_CHARS, `must be at least ${MIN_TOKEN_CHAR
 const Env = z.object({
   /** the owner's API token; the server refuses to start with fewer than 16 characters */
   FACTORY_TOKEN: token,
-  /** the token a lead's terminal calls the API with, never the owner's */
+  /** the token a lead's terminal calls the API with, never the owner's; the one reader of it: the leads' settings take it from here */
   FACTORY_AGENT_TOKEN: token.optional(),
   /** the token a door (a machine) calls the API with */
   FACTORY_DOOR_TOKEN: token.optional(),
@@ -25,7 +25,7 @@ const Env = z.object({
   FACTORY_READ_TOKEN: token.optional(),
   /** the Postgres database the server stores into (secrets-run supplies it) */
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required (from secrets-run)'),
-  /** the port the API listens on, on loopback */
+  /** the port the API listens on, on loopback; the one reader of it: the leads' settings take it from here */
   PORT: z.coerce.number().int().min(1).max(65_535),
   /** the version the server reports; dev when unset */
   FACTORY_VERSION: z.string().min(1).optional(),

@@ -447,6 +447,15 @@ describe('names and settings', () => {
       startBudgetMs: 1_800_000,
     })
     expect(() => loadLeadSettings({ HOME: '/home/x', FACTORY_REPO_ROOTS: 'relative' })).toThrow(/absolute/)
+    // the token and the port are the server's settings, handed in: the environment's own PORT and FACTORY_AGENT_TOKEN are not read
+    expect(loadLeadSettings({ HOME: '/home/x', PORT: '1', FACTORY_AGENT_TOKEN: 'x'.repeat(16) })).toMatchObject({
+      agentToken: undefined,
+      apiUrl: undefined,
+    })
+    expect(loadLeadSettings({ HOME: '/home/x' }, { agentToken: 'agent-token-0123456789', port: 7793 })).toMatchObject({
+      agentToken: 'agent-token-0123456789',
+      apiUrl: 'http://127.0.0.1:7793',
+    })
     expect(() => loadLeadSettings({ HOME: '/home/x', FACTORY_QUIESCE_AFTER_MS: 'soon' })).toThrow(
       /FACTORY_QUIESCE_AFTER_MS/,
     )
