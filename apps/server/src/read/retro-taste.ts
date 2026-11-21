@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { RetroTaste } from '@software-factory/contract'
-import { ownerVerdict, type Window } from './kpis.ts'
+import { decisionChangedNothing, ownerDecision, ownerVerdict, type Window } from './kpis.ts'
 
 /** The verdicts and annotations one retro lists; the newest are kept. */
 const TASTE_LIMIT = 200
@@ -16,6 +16,16 @@ const Verdict = z.object({
   issue: z.string(),
   verdict: z.enum(['looks_good', 'with_notes', 'changes']),
   note: z.string().nullable(),
+  at: z.coerce.date(),
+})
+
+const DecisionAnswer = z.object({
+  decision: z.string(),
+  repo: z.string(),
+  issue: z.string(),
+  question: z.string(),
+  recommendation: z.string(),
+  answer: z.string(),
   at: z.coerce.date(),
 })
 
@@ -36,7 +46,9 @@ const Annotation = z.object({
 /**
  * What the owner said in the window, in his words: the notes of his own verdicts (never the factory's defaults, see
  * `ownerVerdict`) that say something or ask for more, and every annotation he wrote, each with its artifact, repo and Issue and, for an annotation, how the lead handled it (`disposition`, `dispositionNote`).
- * A `looks_good` without a note is a count in `verdict_changes_share`, not a preference, so it is not listed.
+ * A `looks_good` without a note is a count in `verdict_changes_share`, not a preference, so it is not listed. The Decisions he
+ * answered with something other than the recommendation are listed with the question and what was recommended: his own words
+ * on what to choose, and on what was worth asking.
  */
 export async function readTaste(sql: SQL, w: Window): Promise<RetroTaste> {
   const verdicts: unknown[] = await sql`
@@ -46,6 +58,11 @@ export async function readTaste(sql: SQL, w: Window): Promise<RetroTaste> {
     JOIN factory.issues i ON i.id = a.issue_id
     WHERE ${ownerVerdict(sql, w)} AND (v.note IS NOT NULL OR v.verdict <> 'looks_good')
     ORDER BY v.at DESC, a.id LIMIT ${TASTE_LIMIT}`
+  const decisions: unknown[] = await sql`
+    SELECT d.id AS decision, d.repo, d.issue_id AS issue, d.question, d.recommendation, d.answer, d.answered_at AS at
+    FROM factory.decisions d
+    WHERE ${ownerDecision(sql, w)} AND NOT (${decisionChangedNothing(sql)})
+    ORDER BY d.answered_at DESC, d.id LIMIT ${TASTE_LIMIT}`
   const annotations: unknown[] = await sql`
     SELECT a.id AS artifact, a.kind, a.title, i.repo, a.issue_id AS issue, n.revision, n.quote, n.comment, n.disposition,
            n.disposition_note, n.at
@@ -57,6 +74,10 @@ export async function readTaste(sql: SQL, w: Window): Promise<RetroTaste> {
   return {
     verdicts: verdicts.map((raw) => {
       const row = Verdict.parse(raw)
+      return { ...row, at: row.at.toISOString() }
+    }),
+    decisions: decisions.map((raw) => {
+      const row = DecisionAnswer.parse(raw)
       return { ...row, at: row.at.toISOString() }
     }),
     annotations: annotations.map((raw) => {

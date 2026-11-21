@@ -14,6 +14,8 @@ export const LANGUAGE = {
   artifact:
     'What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report. An Issue owns it, or none does (a standalone Report, artifact new); links name the other Issues it concerns; it may belong to one collection (a named set with one lead page, pinned or not)',
   ask: "The lead's verb that raises a Decision (factory issue ask)",
+  'asks not needed':
+    "The KPI of the owner's own answers that changed nothing: a verdict of Looks good with no note and no comment of his on that revision, or a Decision answered with the lead's recommendation. The factory's defaults and his delegate's answers are not his. It reads the answer, never a mark set afterwards; its parts are by kind of ask and, for Specs, by who made the Spec owed. What to do: off target, the friction loop names the source that made the most of them, and a preference about how much to ask goes to order 2 of the lead brief",
   attempt: 'Lead number n of an Issue',
   'auto-run':
     "The MacBook gate's verb that runs a command with no dialog when it is exactly a catalogue class the owner granted once (dotfiles config/macbook-auto-classes.tsv, his local consent file; first class secrets-seed). ask-human.sh push tries it before the dialog, so an Issue's Errand and an ask-human request take the same path; a command no granted class covers keeps its dialog. It closes the Errand through the orchestrator's done with the evidence ask-human: auto-run class <class>, which the factory reads as \"ran by itself\" (errands_auto_run_share, beside the KPI errands_reached_per_100)",
@@ -118,7 +120,7 @@ export const LANGUAGE = {
   'memory used':
     "The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes. What to do: nothing at normal pressure; read Memory pressure before acting on a high figure",
   'needed me':
-    'The owner\'s mark on a verdict of a Spec or Report: did it need him (set through the API or the CLI; the Console no longer offers it). The newest marks teach triage the next time; "Specs at the owner not needed" counts the no\'s',
+    "The owner's mark on a verdict of a Spec or Report: did it need him (set through the API or the CLI; the Console no longer offers it). The newest marks teach triage the next time; no KPI reads it any more (the answer itself does, see Asks not needed)",
   needs:
     'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, quarantined signals, long waits',
   'not measured':

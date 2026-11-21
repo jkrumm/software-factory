@@ -369,6 +369,7 @@ export async function readRetro(
     ledger: model.ledger.map((e) => ({ ...e, title: '' })),
     taste: {
       verdicts: model.taste.verdicts.map((v) => ({ ...v, title: '', note: null })),
+      decisions: model.taste.decisions.map((d) => ({ ...d, question: '', recommendation: '', answer: '' })),
       annotations: model.taste.annotations.map((a) => ({
         ...a,
         title: '',

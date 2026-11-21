@@ -36,7 +36,7 @@ interface FrictionModel {
 const CARD_ORDER = [
   'avoidable_touches',
   'first_verification_passes',
-  'specs_not_needed',
+  'asks_not_needed',
   'errands_reached_per_100',
   'cycle_p50',
   'queue_wait_p90',

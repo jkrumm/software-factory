@@ -20,7 +20,7 @@ From 2026-11-15 11:03 UTC (the counting epoch) to 2026-11-21 11:41 UTC, all proj
 | First verifications that passed | 97.4 % of 1,205 (the target is at least 90 %) |
 | Decisions answered | 48: the Judge 36, a default 6, the owner 5, his delegate 1 |
 | Times the owner stepped in where the factory should have settled it | 6 (0.005 per Issue filed by a person, an agent or an alert; the target is at most 0.07) |
-| Specs the owner marked not needed | 5.1 % of 78 verdicts (the target is at most 20 %) |
+| Answers of the owner that changed nothing | 31.8 % of 85 answers to Specs, Concepts and Decisions (the target is at most 20 %) |
 | Errands that reached the owner | 3.4 per 100 Issues (47; no target yet) |
 | Quota used at the weekly reset | 97.0 % over 4 resets (the target is at least 90 %) |
 <!-- results:end -->

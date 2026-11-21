@@ -38,6 +38,11 @@ export const RETIRED: Retired[] = [
   { term: 'ask judge', pattern: 'ask\\s+judges?', use: 'Judge' },
   { term: 'light review', pattern: 'light\\s+reviews?', use: 'review (standard or deep)' },
   { term: 'per-commit coverage', pattern: 'per\\s+commit\\s+coverage', use: 'review, once per ship range' },
+  {
+    term: 'specs not needed',
+    pattern: 'specs?\\s+(at\\s+the\\s+owner\\s+)?(not\\s+needed|unneeded)',
+    use: 'asks not needed (the KPI asks_not_needed)',
+  },
   { term: 'taste gate', pattern: 'taste\\s+gates?', use: 'checkpoint' },
   { term: 'decision card', pattern: 'decision\\s+cards?', use: 'Decision' },
   { term: 'hands-only', pattern: 'hands\\s+only', use: 'errand' },

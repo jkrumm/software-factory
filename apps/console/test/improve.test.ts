@@ -320,7 +320,7 @@ test('the footer hints the watches of the first verification passes, and no othe
   const footer = (key: Kpi['key']) =>
     kpiFooter({ key, n: 3, count: 2, measured: true, target: { kind: 'trend', min: null, max: null }, unit: 'share' })
   expect(footer('first_verification_passes')[1]).toMatchObject({ value: '3 watches', hint: 'watch' })
-  expect(footer('specs_not_needed')[1].hint).toBeUndefined()
+  expect(footer('asks_not_needed')[1].hint).toBeUndefined()
 })
 
 test('a KPI with no target yet says why on its card, one with a target how far it is', () => {
@@ -373,14 +373,14 @@ test('every KPI has one plain sentence that says which way is good, and the card
 test('groupKpis puts what is off target first, then what has no figure, what is met, and what no target judges', () => {
   const none = { kind: 'unset', min: null, max: null } as const
   const groups = groupKpis([
-    kpi({ key: 'specs_not_needed', value: 0.06 }),
+    kpi({ key: 'asks_not_needed', value: 0.06 }),
     kpi({ key: 'avoidable_touches', value: 0.9 }),
     kpi({ key: 'quota_at_reset', value: null, measured: false, target: none }),
     kpi({ key: 'cycle_p50', value: 5, target: none }),
     kpi({ key: 'queue_wait_p90', value: null, measured: true, target: { kind: 'at_most', min: null, max: 0.25 } }),
   ])
   expect(groups.off.map((k) => k.key)).toEqual(['avoidable_touches'])
-  expect(groups.met.map((k) => k.key)).toEqual(['specs_not_needed'])
+  expect(groups.met.map((k) => k.key)).toEqual(['asks_not_needed'])
   expect(groups.unmeasured.map((k) => k.key)).toEqual(['queue_wait_p90', 'quota_at_reset'])
   expect(groups.trend.map((k) => k.key)).toEqual(['cycle_p50'])
 })

@@ -54,16 +54,17 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     decision:
       'Whether shipped changes hold in production; the parts name why each regression failed (CI, verify, deploy, probe), so the fix goes at the cause. Read beside the first watch dwell',
   },
-  specs_not_needed: {
-    label: 'Specs at the owner not needed',
+  asks_not_needed: {
+    label: 'Asks that did not need the owner',
     direction: 'lower',
-    target: THRESHOLDS.kpis.specs_not_needed,
+    target: THRESHOLDS.kpis.asks_not_needed,
     targetSource:
-      'Set with the Spec screen (#306, 2026-11-10), no measured basis: one Spec in five wasted on him is the line the screen is judged by',
-    numerator: 'The owner’s own verdicts on a Spec marked "needed me: no"',
-    denominator: 'The owner’s own verdicts on a Spec in the window',
+      'Carried over from the Spec screen’s line (#306, 2026-11-10: one ask in five wasted on him), now read from his answers: of 85 verdicts in the eight days to 2026-11-21, 27 carried no word from him while the mark said 6',
+    numerator:
+      'The owner’s own answers that changed nothing: a verdict of Looks good with no note and no comment, a Decision answered with the recommendation',
+    denominator: 'The owner’s own verdicts on a Concept or Spec and Decisions he answered in the window',
     decision:
-      'Which source made the unneeded Spec owed (triage, the filer, a Replan, the lead) and so which rule to change',
+      'Which kind of ask and, for a Spec, which source made it owed (triage, the filer, a Replan, the lead) and so which rule to change; a preference about how much to ask goes to order 2 of the lead brief',
   },
   errands_reached_per_100: {
     label: 'Errands that reached the owner per 100 Issues',
@@ -139,7 +140,7 @@ export function targetPhrase(target: KpiTargetValue, unit: 'share' | 'ms' | 'raw
 const TARGET_UNIT: Record<KpiKey, 'share' | 'ms' | 'raw'> = {
   avoidable_touches: 'raw',
   first_verification_passes: 'share',
-  specs_not_needed: 'share',
+  asks_not_needed: 'share',
   errands_reached_per_100: 'raw',
   cycle_p50: 'ms',
   queue_wait_p90: 'ms',

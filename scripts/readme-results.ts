@@ -60,7 +60,7 @@ export function renderResults(r: Results): string {
   const total = answered.judge + answered.default + answered.owner + answered.orchestrator
   const touches = k('avoidable_touches')
   const passes = k('first_verification_passes')
-  const specs = k('specs_not_needed')
+  const asks = k('asks_not_needed')
   const errands = k('errands_reached_per_100')
   const cycle = k('cycle_p50')
   const queue = k('queue_wait_p90')
@@ -83,8 +83,8 @@ export function renderResults(r: Results): string {
       `${touches.count ?? 0} (${touches.value.toFixed(3)} per Issue filed by a person, an agent or an alert; ${targetOf(touches, (v) => String(v))})`,
     ],
     [
-      'Specs the owner marked not needed',
-      `${percent(specs.value)} of ${specs.n ?? 0} verdicts (${targetOf(specs, (v) => `${v * 100} %`)})`,
+      'Answers of the owner that changed nothing',
+      `${percent(asks.value)} of ${asks.n ?? 0} answers to Specs, Concepts and Decisions (${targetOf(asks, (v) => `${v * 100} %`)})`,
     ],
     [
       'Errands that reached the owner',

@@ -54,7 +54,7 @@ export const THRESHOLDS = {
   kpis: {
     avoidable_touches: atMost(0.07),
     first_verification_passes: atLeast(0.9),
-    specs_not_needed: atMost(0.2),
+    asks_not_needed: atMost(0.2),
     errands_reached_per_100: NONE_YET,
     cycle_p50: atMost(3 * HOUR_MS),
     queue_wait_p90: atMost(8 * HOUR_MS),
@@ -104,10 +104,10 @@ export const THRESHOLDS = {
         rate: 0.2,
         why: 'quarantined signals from one source on one in five closed Issues is a route or a trust rule to settle',
       },
-      spec_unneeded: {
+      ask_unneeded: {
         min: 2,
         rate: null,
-        why: 'two Specs in a week from one source that the owner marked not needed is a rule that sends him what its lead could decide',
+        why: 'two asks in a week from one source that changed nothing when he answered (Looks good with no word, the recommendation taken) is a rule that sends him what its lead could decide',
       },
     } satisfies Record<JudgedFrictionGroup, FrictionRule>,
     /** Rules of one key, over the rule of its group: the touches the owner uses to steer and to triage file only at a higher rate than a touch that is a failure; the stalls the factory ends itself file by rate. */

@@ -1,6 +1,15 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { orchestratorSteer, ownerTouch, ownerVerdict, TOUCH_EVENTS, type Window } from './kpis.ts'
+import {
+  askVerdict,
+  decisionChangedNothing,
+  orchestratorSteer,
+  ownerDecision,
+  ownerTouch,
+  TOUCH_EVENTS,
+  verdictChangedNothing,
+  type Window,
+} from './kpis.ts'
 import { frictionWindow } from './friction.ts'
 import { specSourceSql } from './spec-screen.ts'
 import { refusalKind } from './refusal-kind.ts'
@@ -102,12 +111,23 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
       SELECT issue_id FROM factory.quality_watches
       WHERE answer = 'regressed' AND answered_at >= ${w.from} AND answered_at < ${w.to} ORDER BY answered_at DESC`)
   }
-  if (head === 'spec_unneeded') {
+  if (key === 'ask_unneeded:decision') {
+    return issueIds(sql`
+      SELECT d.issue_id FROM factory.decisions d
+      WHERE ${ownerDecision(sql, w)} AND ${decisionChangedNothing(sql)} ORDER BY d.answered_at DESC`)
+  }
+  if (key === 'ask_unneeded:concept') {
+    return issueIds(sql`
+      SELECT a.issue_id FROM factory.verdicts v
+      JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'concept'
+      WHERE ${askVerdict(sql, w)} AND ${verdictChangedNothing(sql)} ORDER BY v.at DESC`)
+  }
+  if (head === 'ask_unneeded') {
     return issueIds(sql`
       SELECT a.issue_id FROM factory.verdicts v
       JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
       LEFT JOIN factory.spec_screens s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
-      WHERE ${ownerVerdict(sql, w)} AND v.needed_me IS FALSE AND ${specSourceSql(sql)} = ${tail}
+      WHERE ${askVerdict(sql, w)} AND ${verdictChangedNothing(sql)} AND ${specSourceSql(sql)} = ${tail}
       ORDER BY v.at DESC`)
   }
   if (key === 'touch:decision_answered') {

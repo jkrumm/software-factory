@@ -59,7 +59,7 @@ export const THRESHOLDS = {
   kpis: {
     avoidable_touches: atMost(0.07),
     first_verification_passes: atLeast(0.9),
-    specs_not_needed: atMost(0.2),
+    asks_not_needed: atMost(0.2),
     errands_reached_per_100: NONE_YET,
     cycle_p50: atMost(3 * HOUR_MS),
     queue_wait_p90: atMost(8 * HOUR_MS),

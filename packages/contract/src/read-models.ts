@@ -301,7 +301,7 @@ export type ChainModel = z.infer<typeof ChainModel>
 export const KPI_KEYS = [
   'avoidable_touches',
   'first_verification_passes',
-  'specs_not_needed',
+  'asks_not_needed',
   'errands_reached_per_100',
   'cycle_p50',
   'queue_wait_p90',
@@ -676,7 +676,7 @@ export const FrictionCount = z
       'decision_answered',
       'signal',
       'api_transient',
-      'spec_unneeded',
+      'ask_unneeded',
     ]),
     label: z.string(),
     count: z.number().int(),
@@ -777,6 +777,18 @@ export const RetroTaste = z
         issue: z.string(),
         verdict: z.enum(['looks_good', 'with_notes', 'changes']),
         note: z.string().nullable(),
+        at,
+      }),
+    ),
+    /** Decisions he answered with something other than the recommendation: the answer is his word on what to choose, and so on how much to ask */
+    decisions: z.array(
+      z.strictObject({
+        decision: z.string(),
+        repo: z.string(),
+        issue: z.string(),
+        question: z.string(),
+        recommendation: z.string(),
+        answer: z.string(),
         at,
       }),
     ),
