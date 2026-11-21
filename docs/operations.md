@@ -83,7 +83,7 @@ without running. A server that does not answer is waited for like a restart (90 
 `FACTORY_SLOTS` (2) host-local slots (lock files in `~/.local/state/factory/local-slots`, `FACTORY_LOCAL_SLOT_DIR`): an
 outage never starts every waiting step at once.
 
-**Tiers** (`project.yaml` `checks:`, `docs/plan.md` "Check tiers"). A lead runs `make check-fast`: everything of `make
+**Tiers** (`project.yaml` `checks:`, `docs/project.md` "Check tiers"). A lead runs `make check-fast`: everything of `make
 check` that is not a test run, then the unit tests of the files the branch changed (`bun test --changed` against the merge
 base with `origin/master`; `CHECK_FAST_ALL=1` runs all of them; the run stops at the first failing test, `UNIT_BAIL=` lists every failure, and a Playwright run in a slot stops at its first failure, `--max-failures=0` runs all: failed-run slot minutes, Issue 2375). Outside CI it first applies `oxfmt --write` to the tree,
 outside the slot, so a format-only red never costs a slot wait: commit what it reformats. The rest (`check-fast-steps`) edits
@@ -168,3 +168,79 @@ proves a branch live before it is merged.
 - The health wait is `HEALTH_WAIT_SECS` (180). Before it stops anything, a deploy or rollback waits up to `LOAD_WAIT_SECS`
   (600) for the one-minute load to fall to `LOAD_MAX` (8 per core, 0 = off) and otherwise refuses with the live service
   untouched (issue 885: at load 200+ the new release and its rollback both missed 60 s).
+
+
+## Rules behind AGENTS.md
+
+The detail behind the short rules of `AGENTS.md`, for a change that touches one of them. A rule a script holds is named
+there with the script; its failure message says what to do.
+
+- **Public repo.** `scripts/public-scan.ts` fails on an address, tailnet name, e-mail, secret, home path, ssh alias, account
+  or work-repo name; an exception is a line in `scripts/public-scan.allow` with its reason.
+- **Dependencies point one way.** Factory → agw, herdr-core, GitHub, the intake sources. Nothing here is imported by agent-workflows.
+- **Facts are stored, state is derived.** The transition table `domains/work/table.ts` is total: a new state or event fills
+  every cell, and `docs/language.md`'s diagram is regenerated (`make check` fails when it is stale).
+- **A repo is stored as its project name.** Every write that takes a repo (`signal file`, `signal promote`, `door route-set`,
+  `issue new`) resolves a name, a path or a linked worktree to the directory name of the main checkout (`repoNameOf`,
+  `projectOf`); only a second directory of a taken name (`<name>~<hash>`) is stored as its path.
+- **Every effect has a deterministic key** (`kernel/keys.ts`: terminal labels, prompt ids, comment markers, signal
+  fingerprints). The Runner looks before it acts. Admission is decided again at every claim.
+- **Deploy locks.** `factory deploy-lock --project <name> -- <cmd>` and the factory's own deploy hold a host-local pid
+  symlink; an unreadable or uncreatable lock refuses the deploy (exit 75 / 1); only a dead holder is reclaimed.
+- **CLI contract.** Commands are generated from the OpenAPI document (`apps/cli/src/generated/operations.ts`); `make check`
+  fails when it is stale. The hand-written verbs and the credential rules: "The CLI" above.
+- **Tooling.** `bunfig.toml` sets `exact` and a 3-day release-age cooldown; never exclude a package from it.
+- **Who may call what.** The orchestrator has the owner's rights bar the eight owner-only routes of `policy.ts`'s header.
+- **Trust boundary.** `FACTORY_REPO_ALLOW` takes colon-separated absolute paths, each one repo and its worktrees, never its
+  siblings (`adapters/git/repos.ts`). A linked worktree is never a project. The API is loopback only.
+- **The Console listener.** `FACTORY_CONSOLE_PORT`, default 7795 (7794 is the agw gateway's). It forwards only `/health` and
+  `/v1/*`, holds the owner token in its closure, and answers 405 to anything but `GET`/`HEAD` bar its fifteen `WRITES` verbs
+  (`api/console.ts`). Its verbs, guards and the accepted residual: "The Console listener" above.
+- **The door** holds only `FACTORY_DOOR_TOKEN` (caller `machine`: `POST /signals/alerts`, `POST /signals/feedback`,
+  `POST /door/reports`) and no database credential; it takes the repo from `factory.door_routes`.
+- **Hooks.** `factory hook` does nothing without `FACTORY_SESSION`, appends to the spool, posts to the unix socket and exits 0
+  whatever happens (the Stop send-back exits 2). `apps/cli/src/hook.ts` imports only `node:fs` and `@software-factory/contract/spool`.
+  Its stdout is empty for every event but `compactedLead`, a lead's post-compaction `session-start`, which prints one re-read line.
+- **One process.** The session-level advisory lock is taken first; a second copy waits 45 s, then exits 1. Advisory keys
+  live in `adapters/postgres/locks.ts` and stay distinct.
+- **One contract.** A body that does not parse is exit 9. The server builds every body through its schema.
+- **Migrations** are advisory-locked, qualify every name, are expand then contract, and are never edited once applied (a
+  checksum refuses it). Only `0993` is a shared number. `DATABASE_URL` comes from `secrets-run`, never a tracked file.
+- **Settings.** Secrets in `.env.tpl` (server-only optional refs in `.env.server.tpl`, the door's in `.env.door.tpl`);
+  non-secret settings in `~/.config/factory/env`, which `scripts/env-file.sh` allow-lists (a key not on its list refuses the
+  start). An edit takes a restart.
+- **A request's `check`** is a shell command the server runs (`adapters/shell/check-runner.ts`); only owner, orchestrator or
+  agent may set one, never `machine`, `signal` or `read`.
+- **The throughput epoch** (`config/throughput.json`): no throughput read counts a sample before it; a bad or missing file
+  stops the start. `docs/architecture.md` "The counting epoch and the three answers".
+- **Heartbeat names** on `GET /health` (`ok`, `reason`, `tickAt`, `queueMovedAt`) are read by a pusher outside this repo.
+  `ok` is false only for a stopped factory; `/health` never queries the database in the request.
+- **State words.** The Console, the Herdr bar and `read/describe.ts` show Running, Paused, Ready, Held, Checking and Planned,
+  never `queued`, `working`, `waiting`, `watching` or `settling`. `scripts/vocabulary.ts` and `scripts/retired-words.ts` fail
+  the same way; an exception is a line with its reason in the script's `.allow` file.
+- **The README** states counts and lists (event kinds, callers, tokens, screens, domains, states, the Console's port and
+  writes); `make docs-check` fails on a mismatch.
+- **Hygiene probes** are one catalogue (`packages/contract/src/hygiene-catalogue.ts`): add a probe there, with its default,
+  cadence and silence; `docs/hygiene.md` is generated from it.
+
+## Rebasing a plan file
+
+Leads append rows to `docs/plan.yaml` faster than a check and a CI run take, so a plain rebase conflicts on the last
+lines every time. The repo declares the file an append-only aggregator in `.gitattributes`:
+
+```
+docs/plan.yaml merge=plan
+```
+
+and the rebase names the driver on its command line (git keeps no driver in a tracked file):
+
+```
+git -c merge.plan.driver='factory plan merge %O %A %B' rebase origin/master && factory plan check
+```
+
+`factory plan merge <base> <ours> <theirs>` keeps master's file and appends what the branch added at the end of it. A
+side that also changed existing lines is no append: the driver leaves git's line merge with its conflict markers and
+exits 1, so two edits of one row stay a conflict to read. The resolution ends no merge window and owes no local
+`make check`; `factory plan check` after it refuses a duplicate row key. Git's own `merge=union` is not used: it drops
+the lines two appended rows share and leaves a row corrupt.
+

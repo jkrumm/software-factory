@@ -123,20 +123,20 @@ const cell = (text: string): string => text.replaceAll('|', '\\|').replaceAll('\
 /** The key reference: one table row per key, retired keys last. */
 export function referenceText(rows: readonly KeyRow[] = keyRows()): string {
   const line = (row: KeyRow) =>
-    `| \`${row.path}\` | ${cell(row.type)} | ${cell(row.default)} | ${cell(row.consumer)} | ${cell(row.description)} |`
+    `| \`${row.path}\` | ${cell(row.type)} | ${cell(row.default)} | ${cell(row.description)} |`
   const live = rows.filter((row) => !row.deprecated)
   const retired = rows.filter((row) => row.deprecated)
   return [
     START,
     '',
-    '| Key | Type | Default | Read by | What it means |',
-    '|-|-|-|-|-|',
+    '| Key | Type | Default | What it means |',
+    '|-|-|-|-|',
     ...live.map(line),
     '',
     'Retired keys: accepted and dropped so an older file still parses, read by nothing; `factory project check` warns on each.',
     '',
-    '| Key | Type | Default | Read by | What it means |',
-    '|-|-|-|-|-|',
+    '| Key | Type | Default | What it means |',
+    '|-|-|-|-|',
     ...retired.map(line),
     '',
     END,

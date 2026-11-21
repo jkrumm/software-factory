@@ -1,4 +1,4 @@
 # docs/plan.yaml is an append-only aggregator: leads add rows at the end, so two branches always touch the same last lines.
-# The driver (`git -c merge.plan.driver='factory plan merge %O %A %B' rebase …`, docs/plan.md) keeps master's file and appends the
+# The driver (`git -c merge.plan.driver='factory plan merge %O %A %B' rebase …`, docs/operations.md "Rebasing a plan file") keeps master's file and appends the
 # branch's rows; git's own `union` drops the lines two rows share. Without the -c, git merges by line as for any file.
 docs/plan.yaml merge=plan

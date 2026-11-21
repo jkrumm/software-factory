@@ -215,8 +215,32 @@ Errand.
 **Backoffs** (`kernel/backoff.ts`). A Judge's answer that reads as a backoff makes the wait a timer: one hour, doubling per backoff, at
 most twelve.
 
-**Replans** (`app/planning-replan.ts`, `factory.replans`). One open Replan per project. The lead applies an approved
-Spec with `factory issue replan` (`applyReplan`); its only cancel is `factory issue withdraw` (`withdrawIssue`).
+### Replan
+
+A Replan is an Issue (`Replan: <project>`) whose lead rereads the plan against the open and recently closed Issues and
+proposes changes as a Spec: new, changed or dropped rows, `after` edges to add or remove, Issues to cancel or re-file.
+Every non-obvious choice is a Decision raised before the Spec is submitted. The owner files it with
+`factory planning replan <project> [--ask "..."]`; the planning pass files one when a timed wait of
+`FACTORY_LONG_WAIT_MS` or more has Issues behind it, and when a row with `after_needs: shipped` is held behind a
+dropped or cancelled row (trigger `held`: its note names each held row and the Issue holding it; one Replan covers
+every held row of the project, and a hold that was answered with "no plan change needed" files no second one). It also
+files one when a head has waited on the owner for two hours (an open Decision, a Spec under his review such as an owner
+gate's, an Errand) with open Issues or unfiled rows behind it: trigger `stalled`, once per head and wait, its note naming
+what the owner is asked and every Issue and row behind the head. A gate holds what needs its answer, and that Replan frees
+the rest: per direct dependent its Spec says in one line whether it needs the answer or the head's output, and a
+dependent is freed only when its work stands under every answer the owner can give and a revert undoes it. A freed Issue
+is an edge removal; a freed row is the head taken out of its `after`, named in the block's `free` list (`plan` lists every
+other change to a row). A proposal whose `plan` is empty and that cancels nothing is settled by rule and applied at once,
+the plan edit through the ship path; any other change is screened for the owner. Needs you shows on each item what it
+holds, and on the head's card what went ahead without the answer. One is open per project at a time; asking again while it is open
+adds the words to it as a note. On a verdict of Looks good or With notes the lead edits `docs/plan.yaml` through the
+project's ship path and applies edge changes and cancellations with `factory issue replan <id> --attempt <n> --body '<json>'`. The server gates
+that verb: the Issue must be a Replan its lead works on (current attempt), its latest Spec revision must carry a Looks
+good or With notes verdict, and every Issue it re-edges or cancels must be an Issue of the Replan's own project (a
+blocker may be any open Issue; one exception: a removed edge's dependent may be another project's open Issue when every Issue it
+waits after is of this project, since removing the edge only frees it). The whole call is refused otherwise, nothing applied; each op then answers for itself, and
+a repeated `call` changes nothing more. The owner-only edge and cancel routes stay shut to a lead: the verb is what an
+approved Spec buys. It acts as the orchestrator, so the owner-touch counts stay the owner's alone. Code: `app/planning-replan.ts` (`applyReplan`, `withdrawIssue`), `factory.replans`. The only cancel is `factory issue withdraw`.
 
 **Test slots** (`domains/capacity/slots.ts`). `factory slot run` takes a host-wide slot around each heavy command; a
 wait past 45 minutes exits 75. A server that is down grants host-local slots (`~/.local/state/factory/local-slots`),
