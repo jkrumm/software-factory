@@ -172,8 +172,11 @@ export async function convertAttempt(
   return sum
 }
 
-/** A factory lead's worktree is `<repo>/.claude/worktrees/factory-<issue>-<attempt>`; Claude names its project directory after the path. */
-const WORKTREE_PROJECT = /--claude-worktrees-factory-(\d+)-(\d+)$/
+/**
+ * A factory lead's worktree is `<repo>/.claude/worktrees/factory-<issue>-<attempt>`, or, where the repo's wtp config puts
+ * it elsewhere, `<root>/worktrees/<repo>-factory-<issue>-<attempt>`; Claude names its project directory after the path.
+ */
+const WORKTREE_PROJECT = /-worktrees-(?:.*-)?factory-(\d+)-(\d+)$/
 
 /**
  * Whether everything a session left in a Claude project directory has its archived copy: each top-level transcript, and
