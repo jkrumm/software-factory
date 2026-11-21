@@ -240,9 +240,7 @@ good or With notes verdict, and every Issue it re-edges or cancels must be an Is
 blocker may be any open Issue; one exception: a removed edge's dependent may be another project's open Issue when every Issue it
 waits after is of this project, since removing the edge only frees it). The whole call is refused otherwise, nothing applied; each op then answers for itself, and
 a repeated `call` changes nothing more. The owner-only edge and cancel routes stay shut to a lead: the verb is what an
-approved Spec buys. It acts as the orchestrator, so the owner-touch counts stay the owner's alone. Code: `app/planning-replan.ts`,
-`factory.replans`; one open Replan per project. The lead applies an approved Spec with `factory issue replan` (`applyReplan`); its
-only cancel is `factory issue withdraw` (`withdrawIssue`).
+approved Spec buys. It acts as the orchestrator, so the owner-touch counts stay the owner's alone. Code: `app/planning-replan.ts` (`applyReplan`, `withdrawIssue`), `factory.replans`. The only cancel is `factory issue withdraw`.
 
 Code: `app/planning-replan.ts` (`applyReplan`, `withdrawIssue`), `factory.replans`. The only cancel is `factory issue withdraw`.
 
