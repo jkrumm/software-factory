@@ -75,10 +75,12 @@ export function outcomeOf(sql: SQL, judge: LedgerJudge, now: Date) {
     case 'queue':
       return sql`'unknown'`
     case 'screen':
+      // came back as work: its own Issue or the owner's promotion. A repeat that only noted an open Issue (`amended`, `incident`) is
+      // the alert firing again, which a dismissal does not say is wrong (on the first live read every repeat of one dismissed alert counted)
       return sql`CASE
         WHEN s.dismissed_by IS DISTINCT FROM 'judge' THEN 'unknown'
         WHEN EXISTS (SELECT 1 FROM factory.intake_signals t
-          WHERE t.source = s.source AND t.fingerprint = s.fingerprint AND t.state IN ('filed', 'amended', 'incident', 'promoted')
+          WHERE t.source = s.source AND t.fingerprint = s.fingerprint AND t.state IN ('filed', 'promoted')
             AND t.received_at > s.dismissed_at AND t.received_at <= s.dismissed_at + make_interval(secs => ${secs(HORIZON_MS.raisedAgain)}::float8)) THEN 'raised_again'
         WHEN s.dismissed_at + make_interval(secs => ${secs(HORIZON_MS.raisedAgain)}::float8) <= ${now} THEN 'stood'
         ELSE 'unknown' END`
