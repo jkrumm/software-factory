@@ -1,4 +1,4 @@
-import type { QueueAnswer, QueueRequest } from '@software-factory/contract'
+import type { IssueSize, QueueAnswer, QueueRequest } from '@software-factory/contract'
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 import type { CallRow } from './calls.ts'
 
@@ -12,7 +12,7 @@ export interface QueueIssue {
   /** the owner's priority; 0 when never set */
   prio: number
   /** triage's size; null when it judged none */
-  size: 'small' | 'medium' | 'large' | null
+  size: IssueSize | null
   filedAt: Date
   /** the first words of the signal behind it, '' when none */
   summary: string

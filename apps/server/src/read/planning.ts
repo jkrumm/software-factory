@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { ISSUE_SIZES, OPEN_ISSUE_STATES } from '@software-factory/contract'
 import type { DependencyWait, IssueReads, OpenIssueRow, TimerWait } from '../domains/planning/ports.ts'
 import { type IssueId, issueId } from '../kernel/ids.ts'
 import { readLongWaits } from './long-waits.ts'
@@ -10,14 +11,14 @@ const idOf = (text: string): IssueId => issueId(Number(text.slice('issue_'.lengt
 const OpenRow = z.object({
   id: z.string(),
   repo: z.string(),
-  state: z.enum(['settling', 'queued', 'working', 'waiting', 'watching']),
+  state: z.enum(OPEN_ISSUE_STATES),
   wait_reason: z.string().nullable(),
   kind: z.string(),
   finalizing: z.boolean(),
   spec_pending: z.boolean(),
   lane: z.string().nullable(),
   since: z.coerce.date().nullable(),
-  size: z.enum(['small', 'medium', 'large']).nullable(),
+  size: z.enum(ISSUE_SIZES).nullable(),
 })
 
 const WaitRow = z.object({

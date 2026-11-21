@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { LeadSeat } from './roles.ts'
+import { ISSUE_STATES } from './vocab.ts'
 import { WORK_WORDS, WorkCounts } from './work-words.ts'
 
 /**
@@ -16,7 +17,6 @@ export const READ_API_VERSION = 'v1'
 
 const iso = z.string()
 
-export const READ_ISSUE_STATES = ['settling', 'queued', 'working', 'waiting', 'watching', 'closed'] as const
 /** Legacy session words; `dead` is a lead that is gone, `walled` one stopped at its account's limit. */
 export const READ_SESSION_STATES = [
   'starting',
@@ -103,7 +103,7 @@ export const ReadIssueCard = z
     summary: z.string().nullable(),
     /** one plain sentence on what the Issue is for */
     about: z.string().nullable(),
-    state: z.enum(READ_ISSUE_STATES),
+    state: z.enum(ISSUE_STATES),
     /** the word the Issue stands under (`workOf`): running, paused, ready, held or checking; null once closed */
     work: z.strictObject({ word: z.enum(WORK_WORDS), split: z.string().nullable() }).nullable(),
     /** the wait's name while `waiting` (timer, dependency, decision, review ...) */

@@ -1,17 +1,18 @@
+import type { IssueOutcome, IssueState } from '@software-factory/contract'
 import type { Actor } from '../../kernel/events.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Effect } from './effects.ts'
 import { type AnyIssueEvent, type EventKind, type IssueEvent, PAYLOADS, SENDERS } from './events.ts'
-import type { Issue, Outcome, State, Wait } from './issue.ts'
+import type { Issue, Wait } from './issue.ts'
 import { type Cell, type Ctx, TABLE } from './table.ts'
 
 /** What an applied event did to the Issue, stored with the event so a load replays it without deciding again. */
 export interface Transition {
   /** null for `filed`, which makes the Issue */
-  from: State | null
-  to: State
+  from: IssueState | null
+  to: IssueState
   wait: Wait | null
-  outcome: Outcome | null
+  outcome: IssueOutcome | null
 }
 
 export type Applied = { result: 'applied'; issue: Issue; transition: Transition; effects: Effect[] }

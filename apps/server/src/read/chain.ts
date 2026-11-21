@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto'
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { FLOW_KINDS, workOf } from '@software-factory/contract'
+import { ISSUE_KINDS, workOf } from '@software-factory/contract'
 import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
 import type { QueueReasons } from './flow.ts'
 import { type SeatTable, readLeadSeats } from './seats.ts'
@@ -24,7 +24,7 @@ const IssueRow = z.object({
 const SHIPPED = new Set(['done', 'healed'])
 
 const kindOf = (kind: string | null | undefined): ChainNode['issueKind'] =>
-  FLOW_KINDS.find((known) => known === kind) ?? 'chore'
+  ISSUE_KINDS.find((known) => known === kind) ?? 'chore'
 
 /** The instant of a `not_before` value, in UTC where it names no offset. Same rule as `notBeforeMs` in the planning domain; read/ may import only types from a domain (scripts/boundaries.ts), so the rule is repeated here. */
 function notBeforeMs(value: string): number {

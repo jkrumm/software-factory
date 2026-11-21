@@ -1,3 +1,4 @@
+import type { IssueOutcome, IssueState } from '@software-factory/contract'
 import type { Actor } from '../../kernel/events.ts'
 import { type Effect, finalize, finalizeClosed, noteLead, startLead, startWatch } from './effects.ts'
 import type { EventKind, IssueEvent } from './events.ts'
@@ -6,10 +7,8 @@ import {
   MAX_REGRESSIONS,
   MAX_RESTARTS,
   movable,
-  type Outcome,
   outstandingDecisions,
   REOPEN_WINDOW_MS,
-  type State,
   WAITS,
   type Wait,
   type WaitReason,
@@ -31,13 +30,13 @@ export interface Ctx<K extends EventKind = EventKind> {
  */
 export type Cell =
   | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; heard?: true; effects: Effect[] }
-  | { to: 'closed'; outcome: Outcome; effects: Effect[] }
+  | { to: 'closed'; outcome: IssueOutcome; effects: Effect[] }
   | { to: 'settling' | 'queued' | 'working' | 'watching'; effects: Effect[] }
   | { refuse: string }
   | { ignore: string }
 
 /** The total table: every state takes every event. A missing cell fails `tsc`. */
-export type Table = { [S in State]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } }
+export type Table = { [S in IssueState]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } }
 
 const refuse = (why: string): Cell => ({ refuse: why })
 /** The read that tells a refused caller where the Issue stands; every refusal names a command (`table-refusals.test.ts` walks the table and fails on one that names none). */

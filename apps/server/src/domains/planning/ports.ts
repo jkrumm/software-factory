@@ -6,7 +6,7 @@ import type { OwnerWaitKind, ReplanTrigger } from './replan.ts'
 import type { RepoRead, StoredProject } from './sync.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { QueueApplied, QueueIssue } from './queue-edges.ts'
-import type { SpecPrecedent, TriageCandidate } from '@software-factory/contract'
+import type { IssueKind, SpecPrecedent, TriageCandidate } from '@software-factory/contract'
 import type { HeldEdge } from './edge-need.ts'
 import type { EdgeNeed } from '../../kernel/edge-need.ts'
 
@@ -177,7 +177,7 @@ export interface SettlingRow {
   issue: IssueId
   repo: string
   title: string
-  kind: 'feature' | 'bug' | 'chore' | 'docs' | 'incident'
+  kind: IssueKind
   origin: string
   filedAt: Date
   fromAlert: boolean

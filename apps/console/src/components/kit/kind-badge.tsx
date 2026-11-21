@@ -1,11 +1,7 @@
 import { BugIcon, FileTextIcon, type Icon, SirenIcon, SparkleIcon, WrenchIcon } from '@phosphor-icons/react'
+import type { IssueKind } from '@software-factory/contract'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-
-export const ISSUE_KINDS = ['feature', 'bug', 'incident', 'chore', 'docs'] as const
-
-/** What an Issue is (`docs/language.md` Kind). */
-export type IssueKind = (typeof ISSUE_KINDS)[number]
 
 export const KIND_ICON: Record<IssueKind, Icon> = {
   feature: SparkleIcon,

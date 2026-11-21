@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { SPEC_SCREEN_PRECEDENTS, SpecPrecedent } from './checkpoints.ts'
+import { ISSUE_KINDS, ISSUE_SIZES } from './vocab.ts'
 
 /**
  * The shapes the factory sends the agw workflows and parses back, and the routes that show the loops. The workflow
@@ -55,7 +56,7 @@ export const StewardStall = z.object({
   issue: IssueId,
   repo: z.string().min(1),
   title: z.string().min(1).max(500),
-  kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']),
+  kind: z.enum(ISSUE_KINDS),
   cause: z.enum(STALL_CAUSES),
   detail: z.string().max(4_000),
   stalledMinutes: z.number().int().min(0),
@@ -133,7 +134,7 @@ export const TriageSettleRequest = z.object({
     id: IssueId,
     title: z.string().min(1).max(500),
     text: z.string().max(8_000),
-    kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']),
+    kind: z.enum(ISSUE_KINDS),
     origin: z.string().min(1).max(40),
   }),
   /** the owner's newest needed-me marks on Specs (data): what made a Spec owed that did not need him, and what did */
@@ -147,8 +148,8 @@ export const TriageAnswer = z.object({
   amend: IssueId.nullable(),
   settled: IssueId.nullable().optional(),
   after: z.array(IssueId).max(10),
-  kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']).nullable(),
-  size: z.enum(['small', 'medium', 'large']).nullable(),
+  kind: z.enum(ISSUE_KINDS).nullable(),
+  size: z.enum(ISSUE_SIZES).nullable(),
   /** settle mode: `spec` when the change is a new public surface, a data model, a dependency of weight or an unseen screen */
   checkpoint: z.literal('spec').nullable().optional(),
   reason: Line,
@@ -172,7 +173,7 @@ export const QueueIssue = z.object({
   state: z.string().min(1).max(40),
   prio: z.number().int().min(-1000).max(1000),
   ageMinutes: z.number().int().min(0),
-  size: z.enum(['small', 'medium', 'large']).nullable(),
+  size: z.enum(ISSUE_SIZES).nullable(),
   summary: z.string().max(600),
   /** the Issue's open blockers; may name an Issue that is not shown */
   after: z.array(IssueId).max(20),

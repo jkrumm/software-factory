@@ -1,10 +1,13 @@
 import {
   addWork,
   emptyWorkCounts,
-  FLOW_STATES,
+  ISSUE_ORIGINS,
+  type IssueKind,
+  type IssueOrigin,
+  OPEN_ISSUE_STATES,
+  type OpenIssueState,
   type FlowIssue,
   type FlowModel,
-  type FlowState,
   type FlowTrendSeries,
   type HeldSplit,
   type PausedSplit,
@@ -16,7 +19,6 @@ import {
   type WorkWord,
   workOf,
 } from '@software-factory/contract'
-import type { IssueKind } from '@/components/kit/kind-badge'
 import type { LozengeState } from '@/components/kit/lozenge'
 import { ageWords } from '@/lib/age'
 import { pausedReason } from '@/lib/paused-reason'
@@ -78,31 +80,32 @@ export function workSplitWords(work: WorkCounts, word: WorkWord): string {
   return ''
 }
 
-const LEGACY_STATE = new Map<string, ListState>([
-  ['working', 'running'],
-  ['waiting', 'paused'],
-  ['queued', 'ready'],
-  ['settling', 'held'],
-  ['watching', 'checking'],
-])
+const LEGACY_STATE: Readonly<Record<OpenIssueState, ListState>> = {
+  working: 'running',
+  waiting: 'paused',
+  queued: 'ready',
+  settling: 'held',
+  watching: 'checking',
+}
 
 /** A `state` search value that names a list, or undefined; the stored names of an old link read as the word that replaced them. */
 export const listStateOf = (value: unknown): ListState | undefined =>
-  LIST_STATES.find((key) => key === value) ?? (typeof value === 'string' ? LEGACY_STATE.get(value) : undefined)
+  LIST_STATES.find((key) => key === value) ??
+  (typeof value === 'string' && Object.hasOwn(LEGACY_STATE, value) ? LEGACY_STATE[value as OpenIssueState] : undefined)
 
 /** An Issue's origin as the word the owner reads. */
-const ORIGIN_LABEL = {
+const ORIGIN_LABEL: Readonly<Record<IssueOrigin, string>> = {
   you: 'You',
   application: 'Application',
   infrastructure: 'Infrastructure',
   github: 'GitHub',
   feedback: 'Feedback',
   factory: 'Factory',
-} as const
-export type Origin = keyof typeof ORIGIN_LABEL
-const ORIGIN_ORDER = Object.keys(ORIGIN_LABEL) as Origin[]
+}
+export type Origin = IssueOrigin
+const ORIGIN_ORDER = ISSUE_ORIGINS
 
-export const originWord = (origin: string): string => ORIGIN_LABEL[origin as Origin] ?? origin
+export const originWord = (origin: string): string => ORIGIN_LABEL[origin as IssueOrigin] ?? origin
 
 /** One Issue as the list and the project page show it: the same shape for an open and a closed Issue. `since` is when it entered its state (closed: when it closed). */
 export interface FlowCard {
@@ -131,9 +134,9 @@ export interface FlowFilters {
   state?: ListState
 }
 
-type OpenIssue = FlowModel['states'][FlowState]['issues'][number]
+type OpenIssue = FlowModel['states'][OpenIssueState]['issues'][number]
 
-const workOfIssue = (issue: OpenIssue, state: FlowState) =>
+const workOfIssue = (issue: OpenIssue, state: OpenIssueState) =>
   workOf({ state, waitReason: issue.waitReason, queueKind: issue.queue?.kind ?? null })
 
 /**
@@ -142,7 +145,7 @@ const workOfIssue = (issue: OpenIssue, state: FlowState) =>
  */
 export function openSplits(data: FlowModel, field: 'repo' | 'origin'): Record<string, WorkCounts> {
   const splits: Record<string, WorkCounts> = {}
-  for (const state of FLOW_STATES) {
+  for (const state of OPEN_ISSUE_STATES) {
     for (const issue of data.states[state].issues) {
       addWork((splits[issue[field]] ??= emptyWorkCounts()), workOfIssue(issue, state))
     }
@@ -158,7 +161,7 @@ const keep = (filters: FlowFilters, card: { repo: string; origin: string }): boo
 /** The cards of every state under the project and origin filters, in the order the server sent them. */
 export function cardsOf(data: FlowModel, filters: FlowFilters = {}): Cards {
   const cards: Cards = { running: [], paused: [], ready: [], held: [], checking: [], closed: [] }
-  for (const state of FLOW_STATES) {
+  for (const state of OPEN_ISSUE_STATES) {
     for (const issue of data.states[state].issues) {
       if (!keep(filters, issue)) continue
       const work = workOfIssue(issue, state)
@@ -213,7 +216,7 @@ export function projectsOf(data: FlowModel): string[] {
 /** The origins present in the data, in the fixed order of the words. */
 export function originsOf(data: FlowModel): Origin[] {
   const present = new Set<string>([
-    ...FLOW_STATES.flatMap((state) => data.states[state].issues.map((i) => i.origin)),
+    ...OPEN_ISSUE_STATES.flatMap((state) => data.states[state].issues.map((i) => i.origin)),
     ...data.closedRecently.map((c) => c.origin),
   ])
   return ORIGIN_ORDER.filter((origin) => present.has(origin))

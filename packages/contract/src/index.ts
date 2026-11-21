@@ -7,6 +7,7 @@ export * from './thresholds.ts'
 export * from './project-page.ts'
 export * from './hygiene-catalogue.ts'
 export * from './work-words.ts'
+export * from './vocab.ts'
 export {
   CancelBody,
   PauseBody,
@@ -173,7 +174,6 @@ export {
   ScreenAnswer,
   ScreenRequest,
   SIGNAL_KINDS,
-  SIGNAL_ORIGINS,
   SIGNAL_STATES,
   SIGNAL_TRUSTS,
   Signal,

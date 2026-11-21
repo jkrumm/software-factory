@@ -121,7 +121,7 @@ Issue 82 held Issues 83 to 85 for 6 hours on the evening of 2026-11-05, because 
 
 **Example files:**
 
-- [`issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L38): the `WAITS` table, with each wait's exit kind.
+- [`issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L23): the `WAITS` table, with each wait's exit kind.
 - [`model.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/work/model.test.ts#L144-L184): the invariants checked over random event sequences.
 
 ## A green Issue without its proof

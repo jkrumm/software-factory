@@ -1,4 +1,4 @@
-import { addWork, emptyWorkCounts, workOf, type WorkCounts } from '@software-factory/contract'
+import { addWork, emptyWorkCounts, type IssueState, workOf, type WorkCounts } from '@software-factory/contract'
 import type { IssueId } from './ids.ts'
 import { projectOf } from './project-of.ts'
 
@@ -16,14 +16,12 @@ export interface DigestProject {
   repo: string
 }
 
-export type DigestState = 'settling' | 'queued' | 'working' | 'waiting' | 'watching' | 'closed'
-
 /** One Issue as the digest sees it: every open one, and the ones closed inside the window. */
 export interface DigestIssue {
   id: IssueId
   /** the Issue's `repo` as stored: a project name, or an absolute path */
   repo: string
-  state: DigestState
+  state: IssueState
   title: string
   kind: string
   /** why a waiting Issue waits */

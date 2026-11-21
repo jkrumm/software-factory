@@ -1,28 +1,13 @@
-import type { Effort, Tier } from '@software-factory/contract'
+import type {
+  Effort,
+  IssueKind,
+  IssueOrigin,
+  IssueOutcome,
+  IssueSize,
+  IssueState,
+  Tier,
+} from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
-
-/** The Issue's states, and no others (`docs/architecture.md` §The Issue state machine). */
-export const STATES = ['settling', 'queued', 'working', 'waiting', 'watching', 'closed'] as const
-export type State = (typeof STATES)[number]
-
-/** What an Issue is (`docs/language.md`, Kind). */
-export const KINDS = ['feature', 'bug', 'chore', 'docs', 'incident'] as const
-export type Kind = (typeof KINDS)[number]
-
-/** Where it came from, in the words a person uses (`docs/language.md`, Origin). */
-export const ORIGINS = ['you', 'application', 'infrastructure', 'github', 'feedback', 'factory'] as const
-export type Origin = (typeof ORIGINS)[number]
-
-/** Triage's judgment of how much work an Issue is (`docs/language.md`, Size). */
-export const SIZES = ['small', 'medium', 'large'] as const
-export type Size = (typeof SIZES)[number]
-
-/**
- * How a closed Issue ended: `done` (shipped and verified, or closed by its lead with the work done), `dropped` (its lead
- * gave it up with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop).
- */
-export const OUTCOMES = ['done', 'dropped', 'healed', 'cancelled'] as const
-export type Outcome = (typeof OUTCOMES)[number]
 
 /** What a person must act on to end a wait: a Decision, an artifact under review, an Errand. */
 export interface Checkpoint {
@@ -108,21 +93,21 @@ export interface Issue {
   id: IssueId
   /** rises by one with every applied event; the write path's guard */
   version: number
-  state: State
+  state: IssueState
   /** set exactly when `waiting` */
   wait: Wait | null
   /** set exactly when `closed` */
-  outcome: Outcome | null
+  outcome: IssueOutcome | null
   repo: string
   title: string
-  kind: Kind
-  origin: Origin
+  kind: IssueKind
+  origin: IssueOrigin
   /** the seat asked for at filing, resolved; absent: the lead row of the role table */
   seat?: { tier: Tier; effort: Effort; role?: string; moveUp?: true }
   /** `spec`: the lead owes a one-page Spec before it builds, and cannot ship without one; `gate`: the same, and only the owner's own verdict ends the wait */
   checkpoint?: 'spec' | 'gate'
   /** triage's size, when it judged one */
-  size?: Size
+  size?: IssueSize
   /** the seat the current attempt's lead started on; absent before its `lead_started` (and on old events) */
   ranOn?: { tier: Tier; effort: Effort; role?: string; rule?: string; moveUp?: true }
   /** times a light lead was moved up: the next lead starts on the lead row, a filed seat that asked for the move-up included */

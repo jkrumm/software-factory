@@ -1,3 +1,4 @@
+import type { IssueOutcome, IssueState } from '@software-factory/contract'
 import type { ProbeFinding, ProbeRun } from './hygiene-model.ts'
 
 /**
@@ -29,8 +30,8 @@ const BUSY_MIN_AGE_MS = 2 * DAY_MS
 export interface FindingIssue {
   key: string
   issue: string
-  state: 'settling' | 'queued' | 'working' | 'waiting' | 'watching' | 'closed'
-  outcome: 'done' | 'healed' | 'dropped' | 'cancelled' | null
+  state: IssueState
+  outcome: IssueOutcome | null
   /** when the Issue was filed */
   filedAt: Date
   closedAt: Date | null

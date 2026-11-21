@@ -1,4 +1,13 @@
-import type { SpecPrecedent, TriageAnswer, TriageCandidate, TriageRequest } from '@software-factory/contract'
+import {
+  type IssueKind,
+  type IssueSize,
+  REFINED_KINDS,
+  type RefinedKind,
+  type SpecPrecedent,
+  type TriageAnswer,
+  type TriageCandidate,
+  type TriageRequest,
+} from '@software-factory/contract'
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 
 /** What triage knows of one Issue that is still `settling`. */
@@ -6,7 +15,7 @@ export interface SettlingFacts {
   issue: IssueId
   repo: string
   title: string
-  kind: 'feature' | 'bug' | 'chore' | 'docs' | 'incident'
+  kind: IssueKind
   origin: string
   filedAt: Date
   /** a check, a job or a monitor filed it: the edges are known (none) */
@@ -22,15 +31,13 @@ export interface SettlingFacts {
 /** An Issue the owner ranked at this prio or above is never chained by inference: his rank is the order. */
 const RANKED_PRIO = 400
 
-export type Refined = 'feature' | 'bug' | 'chore' | 'docs'
-
 /** What triage corrected or flagged on the Issue when it settled it. */
 export interface Refinement {
-  kind?: Refined | undefined
+  kind?: RefinedKind | undefined
   /** `spec`: a new public surface, a data model, a dependency of weight or an unseen screen: the lead owes a Spec first */
   checkpoint?: 'spec' | undefined
   /** triage's size of the work, kept on the Issue: the light seat's rule reads it */
-  size?: 'small' | 'medium' | 'large' | undefined
+  size?: IssueSize | undefined
 }
 
 /** The open Issues of the repo, other than this one, that an edge may name. */
@@ -56,8 +63,6 @@ export function settleRule(facts: SettlingFacts, candidates: readonly TriageCand
 function refinable(facts: Pick<SettlingFacts, 'kind' | 'origin' | 'fromAlert'>): boolean {
   return facts.kind !== 'incident' && !facts.fromAlert && (facts.origin === 'you' || facts.origin === 'factory')
 }
-
-const REFINED_KINDS: readonly string[] = ['feature', 'bug', 'chore', 'docs']
 
 /**
  * Triage's `spec` flag stands only on work of a session or more. An hour's change (or one triage could not size) is its
@@ -154,8 +159,11 @@ export function checkSettle(
     else after.push(id)
   }
   const refined =
-    refinable(facts) && answer.kind && REFINED_KINDS.includes(answer.kind) && answer.kind !== facts.kind
-      ? (answer.kind as Refined)
+    refinable(facts) &&
+    answer.kind &&
+    (REFINED_KINDS as readonly string[]).includes(answer.kind) &&
+    answer.kind !== facts.kind
+      ? (answer.kind as RefinedKind)
       : undefined
   const checkpoint =
     !stated && facts.kind !== 'incident' && answer.checkpoint === 'spec' && SPEC_SIZES.includes(answer.size ?? '')

@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { LEAD_ACTIVE_ISSUE_STATES } from '@software-factory/contract'
 import type { IssueId } from '../kernel/ids.ts'
 import type { LeadLoopReads } from '../domains/leads/ports.ts'
 
@@ -19,7 +20,7 @@ export function leadLoopReads(tx: SQL): LeadLoopReads {
       const rows: { repo: string; issues: string[] }[] = await tx`
         SELECT repo, array_agg(id ORDER BY id) AS issues
         FROM factory.issues
-        WHERE state IN ('working', 'watching')
+        WHERE state = ANY(${tx.array([...LEAD_ACTIVE_ISSUE_STATES], 'TEXT')})
         GROUP BY repo
         ORDER BY repo LIMIT ${limit}`
       return rows.map((row) => ({ repo: row.repo, issues: row.issues as IssueId[] }))

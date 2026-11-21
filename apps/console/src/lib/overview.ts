@@ -1,5 +1,5 @@
 import {
-  FLOW_STATES,
+  OPEN_ISSUE_STATES,
   type FlowModel,
   type NeedItem,
   type NeedsModel,
@@ -37,7 +37,7 @@ const tally = (repos: readonly string[]): ProjectCount[] => {
  * Checking window while its Issue is in Watch. Regressions come from the project index (`regressedOf`).
  */
 export function productionOf(data: Pick<FlowModel, 'states'>): { red: ProjectCount[]; checking: ProjectCount[] } {
-  const open = FLOW_STATES.flatMap((state) => data.states[state].issues)
+  const open = OPEN_ISSUE_STATES.flatMap((state) => data.states[state].issues)
   return {
     red: tally(open.filter((issue) => issue.kind === 'incident').map((issue) => issue.repo)),
     checking: tally(data.states.watching.issues.map((issue) => issue.repo)),

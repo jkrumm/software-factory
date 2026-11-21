@@ -1,11 +1,10 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { ISSUE_KINDS, ISSUE_SIZES, LEAD_ACTIVE_ISSUE_STATES, OPEN_ISSUE_STATES } from '@software-factory/contract'
 import { readEdgeNeed, readHeldEdges, readRemovedEdges } from './edge-need.ts'
 import { readSpecPrecedents } from './spec-screen.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import type { PlanningLoopReads } from '../domains/planning/ports.ts'
-
-const KINDS = ['feature', 'bug', 'chore', 'docs', 'incident'] as const
 
 /** `waiting` for these reasons is a stall (`WAITS` in the work domain: `stall: true`). */
 const STALL_REASONS = ['wall', 'unreported', 'blocked', 'lead_gone', 'regressed']
@@ -14,7 +13,7 @@ const Settling = z.object({
   id: z.string(),
   repo: z.string(),
   title: z.string(),
-  kind: z.enum(KINDS),
+  kind: z.enum(ISSUE_KINDS),
   origin: z.string(),
   filed_at: z.date(),
   from_alert: z.boolean(),
@@ -35,10 +34,10 @@ const QueueRowSchema = z.object({
   summary: z.string(),
   prio: z.number().int(),
   blockers: z.string(),
-  size: z.enum(['small', 'medium', 'large']).nullable(),
+  size: z.enum(ISSUE_SIZES).nullable(),
 })
 
-const Holder = z.object({ id: z.string(), state: z.enum(['working', 'watching']), blockers: z.array(z.string()) })
+const Holder = z.object({ id: z.string(), state: z.enum(LEAD_ACTIVE_ISSUE_STATES), blockers: z.array(z.string()) })
 
 const Refusal = z.object({ id: z.string(), repo: z.string(), since: z.date(), refusals: z.number().int() })
 
@@ -114,7 +113,10 @@ export function planningLoopReads(tx: SQL): PlanningLoopReads {
           COALESCE((SELECT string_agg(e.after_issue, ',' ORDER BY e.after_issue) FROM factory.planning_edges e JOIN factory.issues b ON b.id = e.after_issue WHERE e.issue_id = i.id AND e.satisfied_at IS NULL AND b.state <> 'closed'), '') AS blockers
         FROM factory.issues i
         JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
-        WHERE i.state IN ('queued', 'working', 'waiting', 'watching')
+        WHERE i.state = ANY(${tx.array(
+          OPEN_ISSUE_STATES.filter((state) => state !== 'settling'),
+          'TEXT',
+        )})
         ORDER BY i.repo, i.id`
       return rows.map((raw) => {
         const row = QueueRowSchema.parse(raw)
@@ -163,7 +165,7 @@ export function planningLoopReads(tx: SQL): PlanningLoopReads {
       const rows: unknown[] = await tx`
         SELECT h.id, h.state, array_agg(b.id ORDER BY b.id) AS blockers
         FROM factory.planning_edges e
-        JOIN factory.issues h ON h.id = e.issue_id AND h.state IN ('working', 'watching')
+        JOIN factory.issues h ON h.id = e.issue_id AND h.state = ANY(${tx.array([...LEAD_ACTIVE_ISSUE_STATES], 'TEXT')})
         JOIN factory.issues b ON b.id = e.after_issue AND b.state = 'queued' AND b.repo = h.repo
         WHERE e.satisfied_at IS NULL AND b.id IN ${tx([...queued])}
         GROUP BY h.id, h.state

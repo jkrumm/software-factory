@@ -1,6 +1,12 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { type FlowTrendSeries, WORK_TREND_KEYS, type WorkTrendKey, workTrendOfState } from '@software-factory/contract'
+import {
+  type FlowTrendSeries,
+  OPEN_ISSUE_STATES,
+  WORK_TREND_KEYS,
+  type WorkTrendKey,
+  workTrendOfState,
+} from '@software-factory/contract'
 
 const HOUR_MS = 3_600_000
 const BUCKET_MS = { hour: HOUR_MS, day: 24 * HOUR_MS } as const
@@ -120,7 +126,7 @@ export async function readFlowTrend(
       FROM factory.issue_events x
       WHERE x.result = 'applied' AND x.at <= ${now}::timestamptz
     ) e
-    WHERE e.to_state IN ('settling', 'queued', 'working', 'waiting', 'watching')
+    WHERE e.to_state = ANY(${sql.array([...OPEN_ISSUE_STATES], 'TEXT')})
       AND (e.next_at IS NULL OR e.next_at > ${origin}::timestamptz)`
   return trendOf(
     rows.map((raw) => Row.parse(raw)),

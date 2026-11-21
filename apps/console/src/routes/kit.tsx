@@ -8,6 +8,7 @@ import {
   TrayIcon,
   WarningCircleIcon,
 } from '@phosphor-icons/react'
+import { ISSUE_KINDS } from '@software-factory/contract'
 import { useState } from 'react'
 import {
   EmptyState,
@@ -16,7 +17,6 @@ import {
   type InfoHintProps,
   IssueCard,
   IssueRow,
-  ISSUE_KINDS,
   KindBadge,
   KindIcon,
   LOZENGE_STATES,

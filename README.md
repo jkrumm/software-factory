@@ -208,7 +208,7 @@ Issues:
 
 **Example files:**
 
-- [`domains/work/issue.ts`](apps/server/src/domains/work/issue.ts): the states, kinds, outcomes and waits
+- [`contract/vocab.ts`](packages/contract/src/vocab.ts) holds the states, kinds, outcomes, sizes and origins, and [`domains/work/issue.ts`](apps/server/src/domains/work/issue.ts) the waits
 
 **Read more:** [Issues](docs/guide/issues.md)
 

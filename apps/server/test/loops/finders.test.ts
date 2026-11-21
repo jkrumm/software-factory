@@ -1,3 +1,4 @@
+import type { IssueOutcome } from '@software-factory/contract'
 import { expect, test } from 'bun:test'
 import {
   FINDER_WINDOW,
@@ -7,7 +8,6 @@ import {
   MIN_DECIDED,
   verdictOf,
   type FinderIssue,
-  type FinderOutcome,
 } from '../../src/domains/improve/finders.ts'
 
 const DAY = 86_400_000
@@ -17,7 +17,7 @@ const at = (days: number) => new Date(t0 + days * DAY)
 /** an Issue filed `filed` days in and closed `closed` days in (null: open) */
 const issue = (
   n: number,
-  outcome: FinderOutcome | null,
+  outcome: IssueOutcome | null,
   closed: number | null,
   filed = closed === null ? 0 : closed - 1,
 ): FinderIssue => ({
@@ -30,7 +30,7 @@ const issue = (
 /** `pattern` is one letter per Issue closed a day apart: d done, h healed, x dropped, c cancelled */
 const history = (pattern: string): FinderIssue[] =>
   [...pattern].map((ch, i) =>
-    issue(i + 1, { d: 'done', h: 'healed', x: 'dropped', c: 'cancelled' }[ch] as FinderOutcome, i + 1),
+    issue(i + 1, { d: 'done', h: 'healed', x: 'dropped', c: 'cancelled' }[ch] as IssueOutcome, i + 1),
   )
 
 const lastClose = (pattern: string) => at(pattern.length)
@@ -91,7 +91,7 @@ test('a probation Issue that closes done restarts the window; one that is droppe
   const base = history('xxxx')
   const filedAfterMute = lastClose('xxxx').getTime() + MUTE_MS + DAY
   const closeAt = filedAfterMute + 3 * DAY
-  const probation = (outcome: FinderOutcome): FinderIssue => ({
+  const probation = (outcome: IssueOutcome): FinderIssue => ({
     issue: 'issue_50',
     filedAt: new Date(filedAfterMute),
     closedAt: new Date(closeAt),

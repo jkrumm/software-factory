@@ -3,14 +3,15 @@ import * as z from 'zod'
 import {
   addWork,
   emptyWorkCounts,
-  FLOW_KINDS,
-  FLOW_STATES,
+  ISSUE_KINDS,
+  ISSUE_ORIGINS,
+  ISSUE_OUTCOMES,
+  OPEN_ISSUE_STATES,
   workOf,
   type WorkCounts,
   type FlowIssue,
   type FlowModel,
   type QueueReason as QueueReasonSchema,
-  SIGNAL_ORIGINS,
 } from '@software-factory/contract'
 import { type SeatTable, readLeadSeats } from './seats.ts'
 import { plain } from './words.ts'
@@ -28,10 +29,10 @@ export const queueKindOf =
 const Open = z.object({
   id: z.string(),
   repo: z.string(),
-  state: z.enum(FLOW_STATES),
+  state: z.enum(OPEN_ISSUE_STATES),
   wait_reason: z.string().nullable(),
   title: z.string(),
-  origin: z.enum(SIGNAL_ORIGINS),
+  origin: z.enum(ISSUE_ORIGINS),
   kind: z.string().nullable(),
   since: z.date(),
 })
@@ -39,20 +40,20 @@ const Open = z.object({
 const Closed = z.object({
   id: z.string(),
   repo: z.string(),
-  outcome: z.enum(['done', 'dropped', 'healed', 'cancelled']),
+  outcome: z.enum(ISSUE_OUTCOMES),
   title: z.string(),
-  origin: z.enum(SIGNAL_ORIGINS),
+  origin: z.enum(ISSUE_ORIGINS),
   kind: z.string().nullable(),
   closed_at: z.date(),
 })
 
-const TrendState = z.object({ n: z.number().int(), state: z.enum(FLOW_STATES), count: z.number().int() })
+const TrendState = z.object({ n: z.number().int(), state: z.enum(OPEN_ISSUE_STATES), count: z.number().int() })
 const TrendShipped = z.object({ bucket: z.number().int(), count: z.number().int() })
 
 const DAY_MS = 24 * 3_600_000
 
 /** the settled kind, else the filed one, as `open-issues.ts` reads it; an absent or unknown kind reads as a chore */
-const kindOf = (kind: string | null): FlowIssue['kind'] => FLOW_KINDS.find((known) => known === kind) ?? 'chore'
+const kindOf = (kind: string | null): FlowIssue['kind'] => ISSUE_KINDS.find((known) => known === kind) ?? 'chore'
 
 const QueueRow = z.object({ project: z.string(), state: z.enum(['run', 'pace', 'drain']) })
 
@@ -111,7 +112,7 @@ export async function readFlow(
       WHERE x.issue_id = i.id AND x.result = 'applied' AND x.at <= ${now}::timestamptz - (7 - g.n) * interval '1 day'
       ORDER BY x.version DESC LIMIT 1
     ) s
-    WHERE s.to_state IN ('settling', 'queued', 'working', 'waiting', 'watching')
+    WHERE s.to_state = ANY(${sql.array([...OPEN_ISSUE_STATES], 'TEXT')})
     GROUP BY g.n, s.to_state`
   // daily windows (before, before + 1 d], ...: 0-6 the week before the samples, 7-13 the week they cover
   const trendShipped: unknown[] = await sql`

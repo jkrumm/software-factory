@@ -1,8 +1,6 @@
+import type { IssueSize, OpenIssueState } from '@software-factory/contract'
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 import { type Edge, openBlockers } from './chain.ts'
-
-/** triage's size of an Issue (`SIZES` in the work domain) */
-type Size = 'small' | 'medium' | 'large'
 
 /** The Issue kind that stops the line: an incident is a fix and is urgent. */
 const FIX_KIND = 'incident'
@@ -13,7 +11,7 @@ export interface OpenIssue {
   /** the project it belongs to; null while its repo names no project the factory knows */
   project: string | null
   kind: string
-  state: 'settling' | 'queued' | 'working' | 'waiting' | 'watching'
+  state: OpenIssueState
   /** why it waits, when it does */
   waitReason: string | null
   /** a lead of an earlier attempt is still being finalized */
@@ -21,7 +19,7 @@ export interface OpenIssue {
   /** the Spec its filer attached has no verdict yet: the owner has not seen it, and the 24 hours have not run out */
   specPending: boolean
   /** triage's size; absent or null when it judged none (read as medium) */
-  size?: Size | null | undefined
+  size?: IssueSize | null | undefined
   /** since when it has been in this state: a queued Issue's age in the queue; absent or null counts no ageing */
   since?: Date | null | undefined
 }
@@ -62,7 +60,7 @@ export function stoppedProjects(open: readonly OpenIssue[], edges: readonly Edge
 }
 
 /** What finishes sooner starts first: the rank of a size, an unsized Issue read as medium. */
-const SIZE_RANK: Record<Size, number> = { small: 0, medium: 1, large: 2 }
+const SIZE_RANK: Record<IssueSize, number> = { small: 0, medium: 1, large: 2 }
 const UNSIZED_RANK = SIZE_RANK.medium
 
 /** A queued Issue moves up one size rank for every this long it has waited, so a large one is not starved (12 hours at most). */

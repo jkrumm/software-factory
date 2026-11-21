@@ -1,6 +1,13 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { YIELD_LOOPS, type LoopYield, type LoopYieldModel, type LoopYieldWindow } from '@software-factory/contract'
+import {
+  ISSUE_OUTCOMES,
+  type IssueOutcome,
+  YIELD_LOOPS,
+  type LoopYield,
+  type LoopYieldModel,
+  type LoopYieldWindow,
+} from '@software-factory/contract'
 import { percentile, windowOf } from './stats.ts'
 
 /** The two windows every loop is read over, in days. */
@@ -15,7 +22,7 @@ interface YieldIssue {
   issue: string
   filedAt: Date
   closedAt: Date | null
-  outcome: 'done' | 'healed' | 'dropped' | 'cancelled' | null
+  outcome: IssueOutcome | null
   verdict: 'moved' | 'flat' | 'worse' | 'unmeasured' | null
 }
 
@@ -79,7 +86,7 @@ const Row = z.object({
   issue: z.string(),
   filed_at: z.date(),
   closed_at: z.date().nullable(),
-  outcome: z.enum(['done', 'healed', 'dropped', 'cancelled']).nullable(),
+  outcome: z.enum(ISSUE_OUTCOMES).nullable(),
   verdict: z.enum(['moved', 'flat', 'worse', 'unmeasured']).nullable(),
 })
 

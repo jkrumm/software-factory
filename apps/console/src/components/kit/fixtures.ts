@@ -1,7 +1,7 @@
 /** Data for the `/kit` route: real-shaped Issues, projects and series, pure data with no I/O. */
 import type { LeadSeat } from '@software-factory/contract'
 import type { StatCardProps } from './stat-card'
-import type { IssueKind } from './kind-badge'
+import type { IssueKind } from '@software-factory/contract'
 import type { LozengeState } from './lozenge'
 import type { Step } from './step-rail'
 

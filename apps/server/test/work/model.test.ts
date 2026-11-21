@@ -1,17 +1,10 @@
 import { expect, test } from 'bun:test'
+import { ISSUE_STATES, type IssueState } from '@software-factory/contract'
 import { ACTORS } from '../../src/kernel/events.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
 import { type AnyIssueEvent, PAYLOADS } from '../../src/domains/work/events.ts'
 import { candidates, filedIssue } from '../../src/domains/work/explore.ts'
-import {
-  type Issue,
-  type State,
-  STATES,
-  WAIT_REASONS,
-  WAITS,
-  type Wait,
-  type WaitReason,
-} from '../../src/domains/work/issue.ts'
+import { type Issue, WAIT_REASONS, WAITS, type Wait, type WaitReason } from '../../src/domains/work/issue.ts'
 import { type AppliedRecord, apply, replay } from '../../src/domains/work/machine.ts'
 import { TABLE } from '../../src/domains/work/table.ts'
 
@@ -45,7 +38,7 @@ const pick = <T>(random: () => number, list: readonly T[]): T => {
 const describeEvent = (event: AnyIssueEvent) => `${event.kind} by ${event.actor} ${JSON.stringify(event.payload)}`
 
 interface Seen {
-  states: Set<State>
+  states: Set<IssueState>
   waits: Set<WaitReason>
   applied: Set<string>
 }
@@ -192,7 +185,7 @@ test(`the Issue machine holds its invariants over ${SEQUENCES} random sequences`
   }
   for (let seed = 1; seed <= SEQUENCES; seed++) play(seed, seen)
   // The walk reached everything, so the invariants were tested where they matter.
-  expect([...seen.states].sort()).toEqual([...STATES].sort())
+  expect([...seen.states].sort()).toEqual([...ISSUE_STATES].sort())
   expect([...seen.waits].sort()).toEqual([...WAIT_REASONS].sort())
   expect(seen.applied.has('closed:reopened')).toBe(true)
   // 34 s on a step host at the lowest CPU priority (3.8 times the mini's run of the suite): the walk is CPU-bound, so the limit is generous

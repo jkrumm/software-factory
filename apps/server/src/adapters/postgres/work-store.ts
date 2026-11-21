@@ -2,7 +2,8 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import { EFFECT_KINDS, type Effect } from '../../domains/work/effects.ts'
 import { EVENT_KINDS } from '../../domains/work/events.ts'
-import { OUTCOMES, STATES, type Wait } from '../../domains/work/issue.ts'
+import { ISSUE_OUTCOMES, ISSUE_STATES } from '@software-factory/contract'
+import type { Wait } from '../../domains/work/issue.ts'
 import type { AppliedRecord, Transition } from '../../domains/work/machine.ts'
 import type { ClaimedEffect, EffectRun, StoredEvent, WorkStore } from '../../domains/work/ports.ts'
 import { ACTORS } from '../../kernel/events.ts'
@@ -26,10 +27,10 @@ const EventRow = z.object({
   result: z.enum(['applied', 'refused', 'ignored']),
   detail: z.string().nullable(),
   version: z.number().int().nullable(),
-  from_state: z.enum(STATES).nullable(),
-  to_state: z.enum(STATES).nullable(),
+  from_state: z.enum(ISSUE_STATES).nullable(),
+  to_state: z.enum(ISSUE_STATES).nullable(),
   wait: WaitColumn.nullable(),
-  outcome: z.enum(OUTCOMES).nullable(),
+  outcome: z.enum(ISSUE_OUTCOMES).nullable(),
   causation: z.string().nullable(),
 })
 type EventRow = z.infer<typeof EventRow>

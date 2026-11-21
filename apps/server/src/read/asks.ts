@@ -1,4 +1,4 @@
-import type { ReadAsk } from '@software-factory/contract'
+import { type ReadAsk, UNSTARTED_ISSUE_STATES } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { cut, fallbackWords } from './plain.ts'
 import { screenPassed } from './spec-screen.ts'
@@ -31,7 +31,7 @@ export async function readAsks(sql: SQL, now: Date): Promise<{ asks: ReadAsk[]; 
     SELECT a.id, a.issue_id, a.title, a.created_at FROM factory.artifacts a
     JOIN factory.issues i ON i.id = a.issue_id
       AND ((i.state = 'waiting' AND i.wait_reason = 'review')
-        OR (a.key LIKE 'filed-spec:%' AND i.state IN ('settling', 'queued')))
+        OR (a.key LIKE 'filed-spec:%' AND i.state = ANY(${sql.array([...UNSTARTED_ISSUE_STATES], 'TEXT')})))
     WHERE a.kind IN ('concept', 'spec')
       AND NOT EXISTS (
         SELECT 1 FROM factory.verdicts v

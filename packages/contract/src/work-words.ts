@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { UNSTARTED_ISSUE_STATES } from './vocab.ts'
 
 /**
  * Where work stands, in the five words every surface shares (`docs/language.md` "Where work stands"). A word is a view
@@ -169,7 +170,7 @@ export const openOfWork = (counts: Pick<WorkCounts, WorkWord>): number =>
 export const WORK_TREND_STATES = {
   running: ['working'],
   paused: ['waiting'],
-  notStarted: ['settling', 'queued'],
+  notStarted: UNSTARTED_ISSUE_STATES,
   checking: ['watching'],
 } as const
 export const WORK_TREND_KEYS = ['running', 'paused', 'notStarted', 'checking'] as const

@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import {
-  SIGNAL_ORIGINS,
+  ISSUE_ORIGINS,
   type SinceCategory,
   type SinceFiled,
   type SinceItem,
@@ -116,7 +116,7 @@ export async function readSince(sql: SQL, options: { now: Date; since: Date; red
   )
   const filed: SinceFiled = {
     ...category(filedRows),
-    byOrigin: SIGNAL_ORIGINS.flatMap((origin) => {
+    byOrigin: ISSUE_ORIGINS.flatMap((origin) => {
       const count = byOrigin.find((row) => row.origin === origin)?.n ?? 0
       return count > 0 ? [{ origin, count }] : []
     }),
