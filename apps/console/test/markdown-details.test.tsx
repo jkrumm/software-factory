@@ -30,6 +30,12 @@ describe('details in a Markdown artifact', () => {
     expect(out).toContain('<details><summary>A</summary><details><summary>B</summary><p>Deep.</p></details></details>')
   })
 
+  test('words in the same html block as the summary stay in the block', () => {
+    expect(html('<details>\n<summary>Why</summary>\nThe reason\n</details>\n\nAfter.')).toContain(
+      '<details><summary>Why</summary><p>The reason</p></details>\n<p>After.</p>',
+    )
+  })
+
   test('open is kept, a block left open closes at the end, and other raw HTML is still dropped', () => {
     expect(html('<details open><summary>S</summary>\n\nBody.')).toContain(
       '<details open=""><summary>S</summary><p>Body.</p></details>',

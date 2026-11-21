@@ -50,8 +50,17 @@ function fold(parent: MdNode): void {
       into(kid)
       continue
     }
-    for (const tag of (kid.value ?? '').matchAll(TAG)) {
+    const source = kid.value ?? ''
+    let from = 0
+    // the words between the tags of one html node (no blank line after the summary) belong to the block they sit in
+    const words = (to: number) => {
+      const text = source.slice(from, to).trim()
+      if (text !== '' && stack.length > 0) into({ type: 'paragraph', children: [{ type: 'text', value: text }] })
+    }
+    for (const tag of source.matchAll(TAG)) {
       const [whole, attributes, summary] = tag
+      words(tag.index)
+      from = tag.index + whole.length
       if (summary !== undefined) {
         const top = stack.at(-1)
         if (top && !top.children?.some((child) => child.type === 'summary')) top.children?.unshift(summaryOf(summary))
@@ -62,6 +71,7 @@ function fold(parent: MdNode): void {
         stack.push(block(/\bopen\b/i.test(attributes ?? '')))
       }
     }
+    words(source.length)
   }
   // a block left open at the end of its parent closes there
   while (stack.length > 0) {
