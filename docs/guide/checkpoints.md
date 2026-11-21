@@ -42,9 +42,9 @@ The wait was 24 hours. The default is not the recommendation: the lead recommend
 
 **Example files:**
 
-- [`decision.ts` L63-L151](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L63-L151): `readDecisionForm`, every required field and the reversible default.
+- [`decision.ts` L62-L146](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L62-L146): `readDecisionForm`, every required field and the reversible default.
 - [`decision.ts` L153-L172](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L153-L172): the labels that are no choice, and the refusal that points to an Errand.
-- [`decision.ts` L180-L191](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L180-L191): when the default is due.
+- [`decision.ts` L176-L180](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L176-L180): `defaultDue`, when the default is due.
 
 ## The Judge
 
@@ -223,7 +223,7 @@ An avoidable touch is a touch the factory should have settled. A verdict on a Co
 
 - [`spec-screen.ts` L6-L10](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L6-L10): why the screen exists, and why it is rules only.
 - [`spec-screen.ts` L93-L142](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L93-L142): `specPathOf`, where a Spec goes: the owner, a settle by rule, or the lead's plan.
-- [`checkpoints.ts` L598-L647](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints.ts#L598-L647): `planRefused` and `recordedAsPlan`, how a lead's Spec is handed over without a wait.
+- [`checkpoints.ts` L694-L739](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints.ts#L694-L739): `planRefused` and `recordedAsPlan`, how a lead's Spec is handed over without a wait.
 
 **Read more:**
 
