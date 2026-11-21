@@ -72,14 +72,15 @@ export const issueHead = (issue: { id: string; repo: string }): string => {
 
 type About = { issue: { id: string; repo: string }; link: string }
 
-export function decisionPage(about: About & { decision: string; question: string; recommendation: string }): Page {
+/** The page is the question itself: one sentence, with the Issue it comes from. The card holds the rest. */
+export function decisionPage(about: About & { decision: string; question: string }): Page {
   return {
     key: decisionPageKey(about.decision),
     kind: 'decision',
     checkpoint: about.decision,
     issueId: about.issue.id,
     title: 'Decision',
-    body: `${issueHead(about.issue)} asks: ${quote(about.question)} Recommended: ${quote(about.recommendation, 60)}`,
+    body: `${issueHead(about.issue)} asks: ${quote(about.question)}`,
     link: about.link,
   }
 }

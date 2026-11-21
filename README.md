@@ -441,7 +441,7 @@ A checkpoint is where the factory stops for a person. There are three, and a mer
 
 | Checkpoint | What the lead hands over | Answered before the owner by |
 |-|-|-|
-| **Decision** | a question, its options and the lead's own recommendation | the Judge workflow (which reads the owner's earlier answers), then the lead's declared default |
+| **Decision** | one question with its class, an optional exhibit, two to four options and the lead's own recommendation | the Judge workflow (which reads the owner's earlier answers), then the lead's declared default |
 | **Concept or Spec** | a Concept before a product's direction; a Spec is the lead's plan before it builds a new surface or data model | a Spec is no stop: the lead's plan builds at once, and rules send only an owner gate, a filed Spec, a revision after Changes and a Replan that changes the plan to the owner |
 | **Errand** | something only the owner's hands can do: a secret, a device, a portal | rules that turn away what a command or a token could do |
 

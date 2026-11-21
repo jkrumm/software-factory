@@ -17,10 +17,14 @@ const H = 3_600_000
 const at = (hours: number): Date => new Date(Date.UTC(2026, 0, 1) + hours * H)
 
 const FORM: DecisionForm = {
+  class: 'direction',
+  whyYours: 'What the server logs is what support reads.',
   question: 'Which logging library?',
   recommendation: 'pino',
   checked: 'ab '.repeat(500),
-  options: [{ label: 'pino', reversible: true, cost: 'fast' }],
+  options: [{ label: 'pino', leadsTo: 'JSON lines', reversible: true, cost: 'fast' }],
+  exhibit: null,
+  artifact: null,
   noAnswer: { consequence: 'console', default: null, waitMinutes: null },
 }
 

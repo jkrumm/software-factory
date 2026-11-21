@@ -28,13 +28,23 @@ import {
   type Step,
   type VerdictRecord,
 } from '../../domains/checkpoints/ports.ts'
-import { ImageAnchor, SPEC_SOURCES } from '@software-factory/contract'
+import { DECISION_CLASSES, Exhibit, ImageAnchor, SPEC_SOURCES } from '@software-factory/contract'
 import { readSpecPrecedents } from '../../read/spec-screen.ts'
 import type { RecheckCandidate } from '../../domains/checkpoints/recheck.ts'
 import { type IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 
-const Option = z.object({ label: z.string(), reversible: z.boolean(), cost: z.string() })
+const Option = z.object({
+  label: z.string(),
+  /** absent on a Decision asked before the form had it */
+  leadsTo: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((value) => value ?? null),
+  reversible: z.boolean(),
+  cost: z.string(),
+})
 const NoAnswer = z.object({
   consequence: z.string(),
   default: z.string().nullable(),
@@ -55,6 +65,10 @@ const DecisionRow = z.object({
   asked_at: z.date(),
   asked_by: z.enum(['lead', 'steward']),
   artifact_id: z.string().nullable(),
+  class: z.enum(DECISION_CLASSES).nullable(),
+  why_yours: z.string().nullable(),
+  exhibit: Exhibit.nullable(),
+  spec_id: z.string().nullable(),
   answer: z.string().nullable(),
   settled_by: z.enum(ANSWERERS).nullable(),
   source: z.string().nullable(),
@@ -159,10 +173,14 @@ const decisionOf = (raw: unknown, steps: Step[]): DecisionRecord => {
     repo: row.repo,
     attempt: row.attempt,
     form: {
+      class: row.class,
+      whyYours: row.why_yours,
       question: row.question,
       recommendation: row.recommendation,
       checked: row.checked,
       options: row.options,
+      exhibit: row.exhibit,
+      artifact: row.spec_id,
       noAnswer: row.no_answer,
     },
     askedAt: row.asked_at,
@@ -324,9 +342,11 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async insertDecision(d) {
       const rows: unknown[] = await tx`
         INSERT INTO factory.decisions
-          (id, key, issue_id, repo, attempt, question, recommendation, checked, options, no_answer, asked_at, asked_by, artifact_id)
+          (id, key, issue_id, repo, attempt, question, recommendation, checked, options, no_answer, asked_at, asked_by, artifact_id,
+           class, why_yours, exhibit, spec_id)
         VALUES (${d.id}, ${d.key}, ${d.issueId}, ${d.repo}, ${d.attempt}, ${d.form.question}, ${d.form.recommendation},
-                ${d.form.checked}, ${d.form.options}, ${d.form.noAnswer}, ${d.askedAt}, ${d.askedBy}, ${d.artifactId})
+                ${d.form.checked}, ${d.form.options}, ${d.form.noAnswer}, ${d.askedAt}, ${d.askedBy}, ${d.artifactId},
+                ${d.form.class}, ${d.form.whyYours}, ${d.form.exhibit}, ${d.form.artifact})
         ON CONFLICT (key) DO NOTHING
         RETURNING id`
       return rows.length === 1
@@ -336,7 +356,8 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       const rows: unknown[] = await tx`
         UPDATE factory.decisions
         SET question = ${form.question}, recommendation = ${form.recommendation}, checked = ${form.checked},
-            options = ${form.options}, no_answer = ${form.noAnswer}
+            options = ${form.options}, no_answer = ${form.noAnswer}, class = ${form.class}, why_yours = ${form.whyYours},
+            exhibit = ${form.exhibit}, spec_id = ${form.artifact}
         WHERE id = ${id} AND answered_at IS NULL AND withdrawn_at IS NULL
         RETURNING id`
       if (rows.length !== 1) return false

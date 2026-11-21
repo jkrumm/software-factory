@@ -1,4 +1,5 @@
 import {
+  type Exhibit,
   type ImageAnchor,
   type ImageRef,
   imageQuote,
@@ -429,12 +430,39 @@ export function imageAnchorOf(content: string, format: Format, image: ImageAncho
   return resolveImage(imageRefs(content, format), image) >= 0 ? 'anchored' : 'unanchored'
 }
 
+/** The exhibit as Markdown, for the Decision's artifact: a diagram as its source, the rest as lists. */
+function renderExhibit(exhibit: Exhibit): string[] {
+  switch (exhibit.kind) {
+    case 'before_after':
+      return [
+        '**Today**',
+        ...exhibit.today.map((line) => `- ${line}`),
+        '',
+        '**After**',
+        ...exhibit.after.map((line) => `- ${line}`),
+      ]
+    case 'pictures':
+      return exhibit.pictures.map((picture) => `![${picture.option}](${picture.image})`)
+    case 'diagram':
+      return ['```mermaid', exhibit.mermaid, '```', '', exhibit.caption]
+    case 'table':
+      return [
+        `| Option | ${exhibit.criteria.join(' | ')} |`,
+        `|-|${exhibit.criteria.map(() => '-').join('|')}|`,
+        ...exhibit.rows.map((row) => `| ${row.option} | ${row.cells.join(' | ')} |`),
+      ]
+    case 'numbers':
+      return exhibit.figures.map((figure) => `- ${figure.label}: **${figure.value} ${figure.unit}**`)
+  }
+}
+
 /** What a Decision looks like as an artifact: its form, as Markdown. Revision 1, and the only one. */
 export function renderDecisionForm(form: DecisionForm): string {
   const options = form.options
-    .map(
-      (option) => `- **${option.label}**${option.reversible ? ' (reversible)' : ' (not reversible)'}: ${option.cost}`,
-    )
+    .map((option) => {
+      const leads = option.leadsTo ? ` Leads to: ${option.leadsTo}.` : ''
+      return `- **${option.label}**${option.reversible ? ' (reversible)' : ' (not reversible)'}:${leads} Changing it later: ${option.cost}`
+    })
     .join('\n')
   const fallback = form.noAnswer.default
     ? `After ${form.noAnswer.waitMinutes} minutes the default is taken: **${form.noAnswer.default}**.`
@@ -442,8 +470,11 @@ export function renderDecisionForm(form: DecisionForm): string {
   return [
     `# ${form.question}`,
     '',
+    form.class ? `**His because:** ${form.class.replace('_', ' ')}${form.whyYours ? `, ${form.whyYours}` : ''}` : null,
+    form.class ? '' : null,
     `**Recommendation:** ${form.recommendation}`,
     '',
+    ...(form.exhibit ? [...renderExhibit(form.exhibit), ''] : []),
     '## What was checked',
     '',
     form.checked,
@@ -458,5 +489,7 @@ export function renderDecisionForm(form: DecisionForm): string {
     '',
     fallback,
     '',
-  ].join('\n')
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n')
 }

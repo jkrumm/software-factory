@@ -1,3 +1,10 @@
+import {
+  DECISION_CLASSES,
+  DECISION_LIMITS,
+  EXHIBIT_KINDS,
+  type DecisionClass,
+  type Exhibit,
+} from '@software-factory/contract'
 import type { Id } from '../../kernel/ids.ts'
 import type { MissingFields } from '../../kernel/missing-fields.ts'
 import { err, ok, type Result } from '../../kernel/result.ts'
@@ -19,10 +26,13 @@ export type StepName = (typeof STEPS)[number]
 export const ANSWERERS = [...STEPS, 'orchestrator'] as const
 export type Answerer = (typeof ANSWERERS)[number]
 
-/** What one option costs and whether it can be taken back. A default is only ever a reversible option. */
+/** What one option leads to and costs, and whether it can be taken back. A default is only ever a reversible option. */
 export interface DecisionOption {
   label: string
+  /** what gets built if it is chosen; null on a Decision asked before the form had it */
+  leadsTo: string | null
   reversible: boolean
+  /** what changing it later costs */
   cost: string
 }
 
@@ -33,12 +43,20 @@ export interface NoAnswer {
   waitMinutes: number | null
 }
 
-/** The Decision as the lead writes it: a form, and every field is required (`docs/language.md`, Decision). */
+/**
+ * The Decision as the lead writes it: a class, one question, two to four options, one optional exhibit, and the Spec behind it
+ * (`docs/language.md`, Decision). `class` and `whyYours` are null only on a Decision asked before they existed.
+ */
 export interface DecisionForm {
+  class: DecisionClass | null
+  whyYours: string | null
   question: string
   recommendation: string
   checked: string
   options: DecisionOption[]
+  exhibit: Exhibit | null
+  /** the Spec the question belongs to */
+  artifact: string | null
   noAnswer: NoAnswer
 }
 
@@ -46,46 +64,225 @@ export { JUDGE_MAX_TRIES } from '../../kernel/judge-tries.ts'
 /** The wait after a failed Judge call before the next try. */
 export const JUDGE_BACKOFF_MS = WORKFLOWS.judge.retry.backoffMs
 
-const MAX_OPTIONS = 10
-const MAX_TEXT = 4000
+const L = DECISION_LIMITS
+const MAX_STEWARD_OPTIONS = 10
 const MAX_WAIT_MINUTES = 7 * 24 * 60
+
+/** A steward's Decision is about a stall, not a choice for the owner: the class and the line stand in for what it cannot say. */
+const STEWARD_WHY = 'The lead cannot go on and no rule of the steward decides it.'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
 
+const classList = DECISION_CLASSES.join(' | ')
+
+/** The distinct node ids of a Mermaid figure: what `diagramNodes` limits. Header, style and comment lines name none. */
+export function mermaidNodes(source: string): number {
+  const ids = new Set<string>()
+  const edge = /\s*(?:<?-->?|<?==+>?|-\.+->?|--[^\s>|-][^>|]*?-+>?)\s*(?:\|[^|]*\|)?\s*/
+  for (const raw of source.split(/\r?\n|;/)) {
+    const line = raw.trim()
+    if (
+      line === '' ||
+      /^(%%|flowchart\b|graph\b|stateDiagram|sequenceDiagram|classDiagram|erDiagram|subgraph\b|end$|direction\b|style\b|classDef\b|class\b|linkStyle\b|title\b)/i.test(
+        line,
+      )
+    ) {
+      const participant = /^(?:participant|actor)\s+([A-Za-z_][\w-]*)/i.exec(line)
+      if (participant?.[1]) ids.add(participant[1])
+      continue
+    }
+    for (const segment of line.split(edge)) {
+      for (const part of segment.split('&')) {
+        const id = /^\s*([A-Za-z_][\w-]*)/.exec(part)?.[1]
+        if (id) ids.add(id)
+      }
+    }
+  }
+  return ids.size
+}
+
+type Problems = (problem: string) => void
+
+/** A text of at most `max` characters on one line, or null (the problem is reported by name). */
+function bounded(
+  problem: Problems,
+  name: string,
+  value: unknown,
+  max: number,
+  opts: { oneLine?: boolean } = {},
+): string {
+  const found = text(value)
+  if (found === null) {
+    problem(name)
+    return ''
+  }
+  if (found.length > max) problem(`${name} (${found.length} characters: at most ${max})`)
+  else if (opts.oneLine && /\r|\n/.test(found)) problem(`${name} (one line, not several)`)
+  return found
+}
+
 /**
- * Reads a Decision form. A form with a missing field is refused with every such field named, so the lead fixes it in one
- * go: `recommendation`, `options[1].cost`, `noAnswer.consequence`.
+ * The exhibit of a form: absent, or one object whose kind says how the change is shown, held to the limits of its kind. Every
+ * violation is named at once, by its path (`exhibit.today[1]`).
  */
-export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFields> {
-  const problems: string[] = []
-  const body = isRecord(raw) ? raw : {}
-  const need = (name: string, value: unknown): string => {
-    const found = text(value)
-    if (found === null) problems.push(name)
-    else if (found.length > MAX_TEXT) problems.push(`${name} (longer than ${MAX_TEXT} characters)`)
-    return found ?? ''
+function readExhibit(
+  problem: Problems,
+  raw: unknown,
+  context: { labels: readonly string[]; artifact: string | null },
+): Exhibit | null {
+  if (raw === undefined || raw === null) return null
+  if (!isRecord(raw)) {
+    problem('exhibit (a JSON object with a kind)')
+    return null
+  }
+  const kind = raw.kind
+  const strings = (name: string, value: unknown, min: number, max: number, each: number): string[] => {
+    const list = Array.isArray(value) ? value : []
+    if (list.length < min || list.length > max)
+      problem(`${name} (${min === max ? min : `${min} to ${max}`} lines, got ${list.length})`)
+    return list.slice(0, max).map((line, i) => bounded(problem, `${name}[${i}]`, line, each))
+  }
+  const optionOf = (name: string, value: unknown): string => {
+    const label = text(value)
+    if (label === null || !context.labels.some((candidate) => candidate.toLowerCase() === label.toLowerCase())) {
+      problem(`${name} (not one of the options: ${context.labels.join(' | ')})`)
+      return label ?? ''
+    }
+    return context.labels.find((candidate) => candidate.toLowerCase() === label.toLowerCase()) ?? label
+  }
+  const everyOption = (name: string, used: readonly string[]) => {
+    const missing = context.labels.filter((label) => !used.includes(label))
+    if (used.length !== new Set(used).size || missing.length > 0)
+      problem(`${name} (one for each option, once: missing ${missing.join(' | ') || 'none, one is repeated'})`)
   }
 
-  const question = need('question', body.question)
-  const recommendation = need('recommendation', body.recommendation)
-  const checked = need('checked', body.checked)
+  switch (kind) {
+    case 'before_after':
+      return {
+        kind,
+        today: strings('exhibit.today', raw.today, 1, L.exhibitLines, L.exhibitLine),
+        after: strings('exhibit.after', raw.after, 1, L.exhibitLines, L.exhibitLine),
+      }
+    case 'pictures': {
+      if (context.artifact === null) problem('exhibit.pictures (needs --artifact: the Spec the pictures are from)')
+      const list = Array.isArray(raw.pictures) ? raw.pictures : []
+      const pictures = list.map((entry, i) => {
+        const item = isRecord(entry) ? entry : {}
+        const image = bounded(problem, `exhibit.pictures[${i}].image`, item.image, 2000)
+        if (image !== '' && !/^https:\/\/\S+$/.test(image))
+          problem(`exhibit.pictures[${i}].image (an https link, as written in the Spec)`)
+        return { option: optionOf(`exhibit.pictures[${i}].option`, item.option), image }
+      })
+      everyOption(
+        'exhibit.pictures',
+        pictures.map((picture) => picture.option),
+      )
+      return { kind, pictures }
+    }
+    case 'diagram': {
+      const caption = bounded(problem, 'exhibit.caption', raw.caption, L.exhibitLine, { oneLine: true })
+      const mermaid = bounded(problem, 'exhibit.mermaid', raw.mermaid, L.diagramChars)
+      const nodes = mermaidNodes(mermaid)
+      if (nodes > L.diagramNodes) problem(`exhibit.mermaid (${nodes} nodes: at most ${L.diagramNodes})`)
+      return { kind, caption, mermaid }
+    }
+    case 'table': {
+      const criteria = strings('exhibit.criteria', raw.criteria, 1, L.tableCriteria, L.tableCriterion)
+      const list = Array.isArray(raw.rows) ? raw.rows : []
+      const rows = list.map((entry, i) => {
+        const item = isRecord(entry) ? entry : {}
+        const cells = Array.isArray(item.cells) ? item.cells : []
+        if (cells.length !== criteria.length)
+          problem(`exhibit.rows[${i}].cells (one per criterion: ${criteria.length}, got ${cells.length})`)
+        return {
+          option: optionOf(`exhibit.rows[${i}].option`, item.option),
+          cells: cells
+            .slice(0, L.tableCriteria)
+            .map((cell, j) => bounded(problem, `exhibit.rows[${i}].cells[${j}]`, cell, L.tableCell)),
+        }
+      })
+      everyOption(
+        'exhibit.rows',
+        rows.map((row) => row.option),
+      )
+      return { kind, criteria, rows }
+    }
+    case 'numbers': {
+      const list = Array.isArray(raw.figures) ? raw.figures : []
+      if (list.length < 1 || list.length > L.figures) problem(`exhibit.figures (1 to ${L.figures}, got ${list.length})`)
+      const figures = list.slice(0, L.figures).map((entry, i) => {
+        const item = isRecord(entry) ? entry : {}
+        return {
+          label: bounded(problem, `exhibit.figures[${i}].label`, item.label, L.figureLabel),
+          value: bounded(problem, `exhibit.figures[${i}].value`, item.value, L.figureValue),
+          unit: bounded(problem, `exhibit.figures[${i}].unit`, item.unit, L.figureUnit),
+        }
+      })
+      return { kind, figures }
+    }
+    default:
+      problem(`exhibit.kind (one of ${EXHIBIT_KINDS.join(' | ')}; prose is not an exhibit)`)
+      return null
+  }
+}
+
+/**
+ * Reads a Decision form. A form that breaks a rule is refused with every violation named, so the lead fixes it in one go:
+ * `class`, `options[1].leadsTo`, `exhibit.today[0]`, `noAnswer.consequence`. A steward's Decision (`by: 'steward'`) is about a
+ * stall: it is held to the text cap only, and the class, the line and each option's `leadsTo` are filled from what it has.
+ */
+export function readDecisionForm(
+  raw: unknown,
+  opts: { by?: 'lead' | 'steward' } = {},
+): Result<DecisionForm, MissingFields> {
+  const problems: string[] = []
+  const problem: Problems = (name) => problems.push(name)
+  const steward = opts.by === 'steward'
+  const body = isRecord(raw) ? raw : {}
+
+  let decisionClass: DecisionClass | null = null
+  const rawClass = text(body.class)
+  if (rawClass !== null && (DECISION_CLASSES as readonly string[]).includes(rawClass)) {
+    decisionClass = rawClass as DecisionClass
+  } else if (steward) {
+    decisionClass = 'owner_fact'
+  } else {
+    problem(
+      `class (one of ${classList}${rawClass !== null ? `; "${rawClass}" is none` : ''}). A choice in none of these classes is yours: take the default a revert undoes and write it under Decided in your Spec (the operating contract's order 2)`,
+    )
+  }
+  const whyYours = steward
+    ? (text(body.whyYours) ?? STEWARD_WHY)
+    : bounded(problem, 'whyYours', body.whyYours, L.whyYours, { oneLine: true })
+
+  const question = steward
+    ? bounded(problem, 'question', body.question, L.text)
+    : bounded(problem, 'question', body.question, L.question, { oneLine: true })
+  if (!steward && question !== '' && !question.endsWith('?'))
+    problem('question (one sentence that ends in a question mark)')
+  const recommendation = bounded(problem, 'recommendation', body.recommendation, steward ? L.text : L.label)
+  const checked = steward ? bounded(problem, 'checked', body.checked, L.text) : checkedOf(problem, body.checked)
 
   const options: DecisionOption[] = []
   const rawOptions = Array.isArray(body.options) ? body.options : []
-  if (rawOptions.length < 2) problems.push('options (at least two)')
-  if (rawOptions.length > MAX_OPTIONS) problems.push(`options (at most ${MAX_OPTIONS})`)
-  for (const [i, rawOption] of rawOptions.slice(0, MAX_OPTIONS).entries()) {
+  const [lo, hi] = [L.optionsMin, steward ? MAX_STEWARD_OPTIONS : L.optionsMax]
+  if (rawOptions.length < lo) problem(`options (at least ${lo})`)
+  if (rawOptions.length > hi) problem(`options (at most ${hi}, got ${rawOptions.length})`)
+  for (const [i, rawOption] of rawOptions.slice(0, hi).entries()) {
     const option = isRecord(rawOption) ? rawOption : {}
-    const label = need(`options[${i}].label`, option.label)
-    const cost = need(`options[${i}].cost`, option.cost)
-    if (typeof option.reversible !== 'boolean') problems.push(`options[${i}].reversible`)
-    options.push({ label, cost, reversible: option.reversible === true })
+    const label = bounded(problem, `options[${i}].label`, option.label, steward ? L.text : L.label, { oneLine: true })
+    const cost = bounded(problem, `options[${i}].cost`, option.cost, steward ? L.text : L.cost)
+    const leadsTo = steward
+      ? (text(option.leadsTo) ?? cost)
+      : bounded(problem, `options[${i}].leadsTo`, option.leadsTo, L.leadsTo)
+    if (typeof option.reversible !== 'boolean') problem(`options[${i}].reversible`)
+    options.push({ label, leadsTo, cost, reversible: option.reversible === true })
   }
   const labels = options.map((option) => option.label.toLowerCase()).filter(Boolean)
-  if (new Set(labels).size !== labels.length) problems.push('options (two have the same label)')
+  if (new Set(labels).size !== labels.length) problem('options (two have the same label)')
 
   const find = (label: string) => options.find((option) => option.label.toLowerCase() === label.toLowerCase())
   const recommended = find(recommendation)
@@ -97,32 +294,34 @@ export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFiel
           .join(' | ')}`
       : 'no option has a label yet'
   if (recommendation !== '' && !recommended) {
-    problems.push(
+    problem(
       `recommendation (not one of the options: it is the label of one, exactly as in options and case ignored, not a sentence about it; ${labelList})`,
     )
   }
 
+  const artifact = text(body.artifact)
+  const exhibit = readExhibit(problem, body.exhibit, { labels: options.map((option) => option.label), artifact })
+
   const rawNo = isRecord(body.noAnswer) ? body.noAnswer : {}
-  const consequence = need('noAnswer.consequence', rawNo.consequence)
+  const consequence = bounded(problem, 'noAnswer.consequence', rawNo.consequence, L.text)
   const fallback = text(rawNo.default)
   let waitMinutes: number | null = null
   if (rawNo.waitMinutes !== undefined && rawNo.waitMinutes !== null) {
     const wait = rawNo.waitMinutes
     if (typeof wait !== 'number' || !Number.isInteger(wait) || wait < 1 || wait > MAX_WAIT_MINUTES) {
-      problems.push(`noAnswer.waitMinutes (a whole number from 1 to ${MAX_WAIT_MINUTES})`)
+      problem(`noAnswer.waitMinutes (a whole number from 1 to ${MAX_WAIT_MINUTES})`)
     } else waitMinutes = wait
   }
   let chosen: string | null = null
   if (fallback !== null) {
     const option = find(fallback)
-    if (!option)
-      problems.push(`noAnswer.default (not one of the options: it is the label of a reversible one, ${labelList})`)
+    if (!option) problem(`noAnswer.default (not one of the options: it is the label of a reversible one, ${labelList})`)
     else if (!option.reversible)
-      problems.push(`noAnswer.default (${option.label} is not reversible: only a reversible option is a default)`)
+      problem(`noAnswer.default (${option.label} is not reversible: only a reversible option is a default)`)
     else chosen = option.label
-    if (waitMinutes === null) problems.push('noAnswer.waitMinutes (a default needs the wait before it is taken)')
+    if (waitMinutes === null) problem('noAnswer.waitMinutes (a default needs the wait before it is taken)')
   } else if (waitMinutes !== null) {
-    problems.push('noAnswer.default (a wait names the option taken when it ends)')
+    problem('noAnswer.default (a wait names the option taken when it ends)')
   }
 
   if (problems.length > 0) {
@@ -130,19 +329,39 @@ export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFiel
       kind: 'missing_field',
       fields: problems,
       detail: `a Decision needs: ${problems.join('; ')}. Nothing was raised: ask again with every field.${
-        problems.some((problem) => problem.startsWith('recommendation'))
+        problems.some((p) => p.startsWith('recommendation'))
           ? ` --recommendation is the label of one option, exactly as in --options and case ignored (--recommendation "<label>"), not a sentence about it.`
           : ''
       }`,
     })
   }
   return ok({
+    class: decisionClass,
+    whyYours: whyYours === '' ? null : whyYours,
     question,
     recommendation: recommended?.label ?? recommendation,
     checked,
     options,
+    exhibit,
+    artifact,
     noAnswer: { consequence, default: chosen, waitMinutes },
   })
+}
+
+/** `checked`: at most three lines of 160 characters; a blank line is no line. */
+function checkedOf(problem: Problems, value: unknown): string {
+  const found = text(value)
+  if (found === null) {
+    problem('checked')
+    return ''
+  }
+  const lines = found.split(/\r?\n/).filter((line) => line.trim() !== '')
+  if (lines.length > L.checkedLines) problem(`checked (${lines.length} lines: at most ${L.checkedLines})`)
+  for (const [i, line] of lines.entries()) {
+    if (line.length > L.checkedLine)
+      problem(`checked line ${i + 1} (${line.length} characters: at most ${L.checkedLine})`)
+  }
+  return lines.join('\n')
 }
 
 /**
@@ -238,14 +457,21 @@ export interface JudgeInput {
   question: string
   recommendation: string
   checked: string
-  options: DecisionOption[]
+  /** the label, the cost (what it leads to and what changing it later costs) and whether it can be taken back */
+  options: { label: string; reversible: boolean; cost: string }[]
   noAnswer: NoAnswer
   precedents: Precedent[]
   /** the Judge may send it back to its lead: a lead's Decision on its first look only */
   sendBack?: boolean
+  /** the class the lead claims; absent on a Decision asked before the class existed */
+  class?: DecisionClass
+  /** the head of the Spec the question belongs to (its Build and Decided); untrusted data */
+  spec?: string
 }
 
 const MAX_JUDGE_TEXT = 2000
+/** What agw takes of the Spec's head (`factory-ask`: 20,000); the Issue as filed is the case file's (`app/case-agw.ts`). */
+const MAX_JUDGE_SPEC = 20_000
 
 const cut = (value: string): string => scrub(value).slice(0, MAX_JUDGE_TEXT)
 
@@ -259,6 +485,7 @@ export function judgeInputOf(input: {
   form: DecisionForm
   precedents: readonly Precedent[]
   sendBack?: boolean
+  spec?: string
 }): JudgeInput {
   const { form } = input
   return {
@@ -268,7 +495,11 @@ export function judgeInputOf(input: {
     question: cut(form.question),
     recommendation: cut(form.recommendation),
     checked: cut(form.checked),
-    options: form.options.map((option) => ({ ...option, label: cut(option.label), cost: cut(option.cost) })),
+    options: form.options.map((option) => ({
+      label: cut(option.label),
+      reversible: option.reversible,
+      cost: cut(option.leadsTo ? `leads to: ${option.leadsTo}. Changing it later: ${option.cost}` : option.cost),
+    })),
     noAnswer: { ...form.noAnswer, consequence: cut(form.noAnswer.consequence) },
     precedents: input.precedents.map((p) => ({
       ...p,
@@ -277,6 +508,8 @@ export function judgeInputOf(input: {
       answer: cut(p.answer),
     })),
     ...(input.sendBack ? { sendBack: true } : {}),
+    ...(form.class ? { class: form.class } : {}),
+    ...(input.spec ? { spec: scrub(input.spec).slice(0, MAX_JUDGE_SPEC) } : {}),
   }
 }
 

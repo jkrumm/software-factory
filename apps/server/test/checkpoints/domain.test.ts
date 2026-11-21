@@ -17,6 +17,7 @@ import {
   guardVerdict,
   judgeInputOf,
   precedentTerms,
+  mermaidNodes,
   readDecisionForm,
   refuseNoOpDefault,
   scrub,
@@ -42,13 +43,15 @@ import {
 import type { DecisionId } from '../../src/domains/checkpoints/decision.ts'
 
 const RAW = {
+  class: 'direction',
+  whyYours: 'What the server logs is what its users can ask support about.',
   question: 'Which logging library should the server use?',
   recommendation: 'pino',
   checked: 'Read the package sizes and the Bun support notes.',
   options: [
-    { label: 'pino', reversible: true, cost: 'one dependency, fast' },
-    { label: 'winston', reversible: true, cost: 'heavier, more transports' },
-    { label: 'drop the table', reversible: false, cost: 'the rows are gone' },
+    { label: 'pino', leadsTo: 'JSON lines on stdout', reversible: true, cost: 'one dependency, fast' },
+    { label: 'winston', leadsTo: 'transports to files', reversible: true, cost: 'heavier, more transports' },
+    { label: 'drop the table', leadsTo: 'no log table at all', reversible: false, cost: 'the rows are gone' },
   ],
   noAnswer: { consequence: 'The lead logs with console until someone answers.', default: 'pino', waitMinutes: 30 },
 }
@@ -134,6 +137,228 @@ describe('readDecisionForm', () => {
     expect(readDecisionForm({ ...RAW, options: [RAW.options[0]] }).ok).toBe(false)
     const twice = readDecisionForm({ ...RAW, options: [RAW.options[0], { ...RAW.options[0], label: 'PINO' }] })
     expect(!twice.ok && twice.error.fields.join()).toContain('same label')
+  })
+})
+
+describe('the form of a Decision', () => {
+  const fields = (patch: Record<string, unknown>) => {
+    const read = readDecisionForm({ ...RAW, ...patch })
+    return read.ok ? [] : read.error.fields
+  }
+  const long = (n: number) => 'x'.repeat(n)
+  const opts = RAW.options.slice(0, 2)
+
+  test("a class is required and one of the eight; its absence says the choice is the lead's", () => {
+    const { class: _gone, ...without } = RAW
+    const missing = readDecisionForm(without)
+    expect(!missing.ok && missing.error.fields[0]).toContain(
+      'class (one of direction | look | own_surface | spend | security | people | irreversible | owner_fact',
+    )
+    expect(!missing.ok && missing.error.fields[0]).toContain('is yours')
+    expect(fields({ class: 'taste' })[0]).toContain('"taste" is none')
+    for (const known of [
+      'direction',
+      'look',
+      'own_surface',
+      'spend',
+      'security',
+      'people',
+      'irreversible',
+      'owner_fact',
+    ])
+      expect(fields({ class: known })).toEqual([])
+  })
+
+  test('why it is his is one line of at most 140 characters', () => {
+    expect(fields({ whyYours: undefined })).toContain('whyYours')
+    expect(fields({ whyYours: long(141) })[0]).toContain('whyYours (141 characters: at most 140)')
+    expect(fields({ whyYours: 'a\nb' })[0]).toContain('whyYours (one line')
+  })
+
+  test('the question is one sentence of at most 200 characters that ends in a question mark', () => {
+    expect(fields({ question: 'Use pino.' })).toContain('question (one sentence that ends in a question mark)')
+    expect(fields({ question: `${long(200)}?` })[0]).toContain('question (201 characters: at most 200)')
+    expect(fields({ question: 'Which?\nAnd?' })[0]).toContain('question (one line')
+  })
+
+  test('two to four options, each with a label of at most 80, what it leads to and its cost of at most 160', () => {
+    expect(fields({ options: opts.slice(0, 1) })).toContain('options (at least 2)')
+    expect(fields({ options: [...RAW.options, { ...opts[0], label: 'a' }, { ...opts[0], label: 'b' }] })[0]).toContain(
+      'options (at most 4, got 5)',
+    )
+    expect(fields({ options: [{ ...opts[0], label: long(81) }, opts[1]], recommendation: long(81) })).toEqual(
+      expect.arrayContaining([expect.stringContaining('options[0].label (81 characters: at most 80)')]),
+    )
+    expect(fields({ options: [{ ...opts[0], leadsTo: undefined }, opts[1]] })).toEqual(['options[0].leadsTo'])
+    expect(fields({ options: [{ ...opts[0], leadsTo: long(161) }, opts[1]] })[0]).toContain(
+      'options[0].leadsTo (161 characters',
+    )
+    expect(fields({ options: [{ ...opts[0], cost: long(161) }, opts[1]] })[0]).toContain(
+      'options[0].cost (161 characters',
+    )
+  })
+
+  test('what was checked is at most three lines of 160 characters', () => {
+    expect(fields({ checked: 'a\nb\nc' })).toEqual([])
+    expect(fields({ checked: 'a\nb\nc\nd' })[0]).toContain('checked (4 lines: at most 3)')
+    expect(fields({ checked: long(161) })[0]).toContain('checked line 1 (161 characters: at most 160)')
+  })
+
+  test('every violation is named at once', () => {
+    const read = readDecisionForm({ question: 'q', options: [{ label: 'a' }, { label: 'b' }] })
+    expect(!read.ok && read.error.fields.map((field) => field.split(' ')[0])).toEqual(
+      expect.arrayContaining([
+        'class',
+        'whyYours',
+        'question',
+        'recommendation',
+        'checked',
+        'options[0].leadsTo',
+        'options[1].cost',
+        'noAnswer.consequence',
+      ]),
+    )
+  })
+})
+
+describe('the exhibit of a Decision', () => {
+  const read = (exhibit: unknown, patch: Record<string, unknown> = {}) =>
+    readDecisionForm({ ...RAW, ...patch, exhibit })
+  const fields = (exhibit: unknown, patch: Record<string, unknown> = {}) => {
+    const result = read(exhibit, patch)
+    return result.ok ? [] : result.error.fields
+  }
+  const long = (n: number) => 'x'.repeat(n)
+  const labels = RAW.options.map((option) => option.label)
+
+  test('no exhibit is fine; prose, an unknown kind or a non-object is not an exhibit', () => {
+    expect(readDecisionForm(RAW)).toMatchObject({ ok: true, value: { exhibit: null } })
+    expect(fields('some prose')).toEqual(['exhibit (a JSON object with a kind)'])
+    expect(fields({ kind: 'essay' })[0]).toContain(
+      'exhibit.kind (one of before_after | pictures | diagram | table | numbers; prose is not an exhibit)',
+    )
+  })
+
+  test('before_after: one to three lines of at most 160 on each side', () => {
+    expect(read({ kind: 'before_after', today: ['a'], after: ['b', 'c', 'd'] }).ok).toBe(true)
+    expect(fields({ kind: 'before_after', today: [], after: ['b'] })).toEqual(['exhibit.today (1 to 3 lines, got 0)'])
+    expect(fields({ kind: 'before_after', today: ['a'], after: ['1', '2', '3', '4'] })).toEqual([
+      'exhibit.after (1 to 3 lines, got 4)',
+    ])
+    expect(fields({ kind: 'before_after', today: [long(161)], after: ['b'] })[0]).toContain(
+      'exhibit.today[0] (161 characters',
+    )
+  })
+
+  test('pictures: one per option, an https link, from the linked Spec', () => {
+    const pictures = labels.map((option) => ({ option, image: `https://img.example.com/${option.length}.png` }))
+    expect(read({ kind: 'pictures', pictures }, { artifact: 'artifact_1' }).ok).toBe(true)
+    expect(fields({ kind: 'pictures', pictures })[0]).toContain('needs --artifact')
+    expect(fields({ kind: 'pictures', pictures: pictures.slice(0, 2) }, { artifact: 'artifact_1' })[0]).toContain(
+      'one for each option, once: missing drop the table',
+    )
+    expect(
+      fields(
+        {
+          kind: 'pictures',
+          pictures: [{ option: 'bunyan', image: 'https://a.example.com/x.png' }, ...pictures.slice(1)],
+        },
+        { artifact: 'artifact_1' },
+      )[0],
+    ).toContain('exhibit.pictures[0].option (not one of the options')
+    expect(
+      fields(
+        { kind: 'pictures', pictures: pictures.map((p) => ({ ...p, image: 'http://a/x.png' })) },
+        { artifact: 'artifact_1' },
+      )[0],
+    ).toContain('an https link')
+  })
+
+  test('diagram: a caption and one Mermaid figure of at most twelve nodes and 2000 characters', () => {
+    const nodes = (n: number) =>
+      `flowchart LR\n${Array.from({ length: n }, (_, i) => `  n${i} --> n${i + 1}`).join('\n')}`
+    expect(mermaidNodes(nodes(11))).toBe(12)
+    expect(read({ kind: 'diagram', caption: 'The flow', mermaid: nodes(11) }).ok).toBe(true)
+    expect(fields({ kind: 'diagram', caption: 'The flow', mermaid: nodes(12) })).toEqual([
+      'exhibit.mermaid (13 nodes: at most 12)',
+    ])
+    expect(mermaidNodes('stateDiagram-v2\n  [*] --> a: filed\n  a --> b: done\n  b --> [*]')).toBe(2)
+    expect(mermaidNodes('flowchart TD\n  A[Start] -->|yes| B{Ok?}\n  A & C --> B')).toBe(3)
+    expect(fields({ kind: 'diagram', mermaid: 'flowchart LR\n a --> b' })).toEqual(['exhibit.caption'])
+    expect(fields({ kind: 'diagram', caption: 'c', mermaid: `flowchart LR\n a --> b\n%% ${long(2000)}` })[0]).toContain(
+      'exhibit.mermaid (',
+    )
+  })
+
+  test('table: the options against one to four criteria, one cell each', () => {
+    const rows = labels.map((option) => ({ option, cells: ['a', 'b'] }))
+    expect(read({ kind: 'table', criteria: ['speed', 'size'], rows }).ok).toBe(true)
+    expect(fields({ kind: 'table', criteria: ['1', '2', '3', '4', '5'], rows })[0]).toBe(
+      'exhibit.criteria (1 to 4 lines, got 5)',
+    )
+    expect(
+      fields({
+        kind: 'table',
+        criteria: ['speed', 'size'],
+        rows: [{ option: labels[0], cells: ['a'] }, ...rows.slice(1)],
+      })[0],
+    ).toContain('exhibit.rows[0].cells (one per criterion: 2, got 1)')
+    expect(
+      fields({
+        kind: 'table',
+        criteria: ['speed', 'size'],
+        rows: rows.map((r) => ({ ...r, cells: [long(81), 'b'] })),
+      })[0],
+    ).toContain('exhibit.rows[0].cells[0] (81 characters')
+    expect(fields({ kind: 'table', criteria: ['speed', 'size'], rows: rows.slice(1) })[0]).toContain(
+      'exhibit.rows (one for each option, once',
+    )
+  })
+
+  test('numbers: at most three figures, each with its unit', () => {
+    const figure = { label: 'cost', value: '12', unit: 'USD a month' }
+    expect(read({ kind: 'numbers', figures: [figure, figure, figure] }).ok).toBe(true)
+    expect(fields({ kind: 'numbers', figures: [figure, figure, figure, figure] })).toEqual([
+      'exhibit.figures (1 to 3, got 4)',
+    ])
+    expect(fields({ kind: 'numbers', figures: [{ ...figure, unit: '' }] })).toEqual(['exhibit.figures[0].unit'])
+    expect(fields({ kind: 'numbers', figures: [{ ...figure, value: long(25) }] })[0]).toContain(
+      'exhibit.figures[0].value (25 characters',
+    )
+  })
+})
+
+describe('a steward asks about a stall', () => {
+  test('its form is held to the text cap only, and class, line and leadsTo are filled', () => {
+    const read = readDecisionForm(
+      {
+        question: 'Issue 7 is stalled: try again or drop it',
+        recommendation: 'try again',
+        checked: 'one\ntwo\nthree\nfour',
+        options: [1, 2, 3, 4, 5].map((n) => ({ label: `option ${n}`.repeat(10), reversible: true, cost: `cost ${n}` })),
+        noAnswer: { consequence: 'stays stalled' },
+      },
+      { by: 'steward' },
+    )
+    expect(read).toMatchObject({ ok: false })
+    const fixed = readDecisionForm(
+      {
+        question: 'Issue 7 is stalled: try again or drop it',
+        recommendation: 'try again',
+        checked: 'one\ntwo\nthree\nfour',
+        options: [
+          { label: 'try again', reversible: true, cost: 'the lead is woken' },
+          { label: 'drop', reversible: true, cost: 'closed as dropped' },
+        ],
+        noAnswer: { consequence: 'stays stalled' },
+      },
+      { by: 'steward' },
+    )
+    expect(fixed).toMatchObject({
+      ok: true,
+      value: { class: 'owner_fact', options: [{ leadsTo: 'the lead is woken' }, { leadsTo: 'closed as dropped' }] },
+    })
+    expect(fixed.ok && fixed.value.whyYours).toContain('steward')
   })
 })
 

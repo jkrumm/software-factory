@@ -12,6 +12,8 @@ import {
 import type { ArtifactId } from '../domains/checkpoints/artifact.ts'
 import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
+import { idOf } from '../kernel/ids.ts'
+import { specHeadText } from '@software-factory/contract'
 import { type DecisionRecord, type DecisionStatus, type StepClaim, statusOf } from '../domains/checkpoints/ports.ts'
 import { type MacbookVerbPort } from '../domains/errands/ports.ts'
 import type { AgwPort } from '../kernel/agw.ts'
@@ -166,7 +168,8 @@ async function judgeStep(deps: CheckpointLoopDeps, decision: DecisionRecord, tit
   if (decision.steps.find((step) => step.step === 'judge')?.outcome === 'back') return ok(BACK)
   const now = deps.clock.now()
   const claimed = await deps.uow.run<
-    { precedents: Precedent[]; tries: number; sendBack: boolean } | Exclude<StepClaim, 'claimed'>,
+    | { precedents: Precedent[]; tries: number; sendBack: boolean; specBlob: string | null }
+    | Exclude<StepClaim, 'claimed'>,
     never
   >(async (stores) => {
     const { checkpoints } = stores
@@ -178,6 +181,7 @@ async function judgeStep(deps: CheckpointLoopDeps, decision: DecisionRecord, tit
       precedents: terms ? await checkpoints.precedents(terms, { excluding: decision.id, limit: 5 }) : [],
       tries,
       sendBack: await mayGoBack(stores, decision),
+      specBlob: await specBlobOf(checkpoints, decision.form),
     })
   })
   if (!claimed.ok) return claimed
@@ -186,6 +190,8 @@ async function judgeStep(deps: CheckpointLoopDeps, decision: DecisionRecord, tit
   if (claimed.value === 'done') return ok(null)
 
   const { sendBack } = claimed.value
+  // The Spec's head is read with no transaction open: a blob is a port.
+  const specText = claimed.value.specBlob ? await deps.blobs.get(claimed.value.specBlob) : null
   const input = judgeInputOf({
     decision: decision.id,
     repo: decision.repo,
@@ -193,6 +199,7 @@ async function judgeStep(deps: CheckpointLoopDeps, decision: DecisionRecord, tit
     form: decision.form,
     precedents: claimed.value.precedents,
     sendBack,
+    ...(specText?.ok ? { spec: specHeadText(specText.value) } : {}),
   })
   // The key names the try and the form: a retry or a re-judge of an amended form must not find the earlier run.
   const verdict = await deps.agw.run(
@@ -318,7 +325,6 @@ async function ownerStep(deps: CheckpointLoopDeps, decision: DecisionRecord): St
         link: deepLink(deps.consoleUrl, decision.id),
         decision: decision.id,
         question: decision.form.question,
-        recommendation: decision.form.recommendation,
       }),
       at,
     )

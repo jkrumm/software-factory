@@ -43,11 +43,14 @@ export const LEAD_REPOS = ['argo', 'harbor', 'atlas', 'beacon', 'cedar', 'delta'
 /** The Decision of a lead's `issue ask`. With no default it waits on the owner: only then is he paged and does it show on his list. */
 const form = (question: string, recommendation: string, others: string[]) => ({
   attempt: 1,
+  class: 'direction',
+  whyYours: 'Which library the product ships with is his to say.',
   question,
   recommendation,
   checked: 'Read the package sizes and the release notes.',
   options: [recommendation, ...others].map((label, i) => ({
     label,
+    leadsTo: i === 0 ? 'the small library ships' : 'the larger library ships',
     reversible: i === 0,
     cost: i === 0 ? 'one dependency, fast to swap later' : 'heavier, with more moving parts',
   })),

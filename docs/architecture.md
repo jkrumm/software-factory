@@ -332,7 +332,8 @@ request's review by someone else. Each rule is one line with the symbol that hol
 (`waitHint`); the verbs in `app/checkpoints.ts`, each sub-machine in its `app/checkpoints-*.ts` sibling.
 
 **Decisions** (`domains/checkpoints/decision.ts`)
-- A form with a missing field is refused: 422 `missing_field`, nothing stored (`askDecision`).
+- A form that breaks a rule (a missing field, no class, a limit, an exhibit over its limit) is refused: 422 `missing_field`, every violation named, nothing stored (`readDecisionForm`, `askDecision`). A Spec named by `artifact` must be this Issue's, and the pictures of an exhibit must be ones its latest revision holds.
+- The Judge is given the class the lead claims, the Issue as filed (`filedText`) and the Spec's Build and Decided (`specHeadText`), beside the form.
 - A recommendation to keep waiting is refused (`refuseNoOpDefault`); what waits on a person is an Errand.
 - Settled in order: the Judge (`factory-ask`), the default after its wait when reversible, then the owner. Three Judge
   tries, 5 minutes apart (`decision_steps.tries`).

@@ -6,9 +6,12 @@ A checkpoint is where the factory stops for a person. Each kind has a contract t
 
 ## Decisions
 
-A Decision is one question as a form. The lead raises it with `factory issue ask`, and the form is refused unless every field is filled.
+A Decision is one question with its case, and the only way a lead asks the owner. The lead raises it with `factory issue ask`, and the form is refused unless every field is filled and every limit holds.
 
-- **Required fields.** `question`, `recommendation`, `checked` (what the lead looked at), at least two `options` each with a `label`, a `cost` and a `reversible` flag, and `noAnswer.consequence`. A form with a missing field is refused with every missing field named, and nothing is stored.
+- **Why it is his.** A `class` (one of `direction`, `look`, `own_surface`, `spend`, `security`, `people`, `irreversible`, `owner_fact`) and `whyYours`, one line of at most 140 characters. A choice in none of the eight classes is the lead's: the form is refused with that sentence, and the lead takes the default a revert undoes and writes it under Decided in its Spec.
+- **One question.** `question` is one sentence of at most 200 characters that ends in a question mark. Two to four `options`, each with a `label` (80), `leadsTo` (what gets built if it is chosen, 160), a `cost` (what changing it later costs, 160) and a `reversible` flag. `checked` is at most three lines of 160 characters, and `noAnswer.consequence` says what happens with no answer. An optional `artifact` names the Spec the question belongs to.
+- **The exhibit.** One optional, typed figure shows the change where prose would narrate it: `before_after` (today and after, up to three lines each), `pictures` (one per option, from the linked Spec), `diagram` (one Mermaid figure of up to twelve nodes), `table` (the options against up to four criteria) or `numbers` (up to three figures with their units). Prose is not an exhibit.
+- **Every violation at once.** A form that breaks a rule is refused with every violation named, and nothing is stored.
 - **A recommendation is an option.** It must be the label of one of the options.
 - **A default is reversible.** `noAnswer.default` names a reversible option and comes with `waitMinutes` (1 to 10080). Both are given or neither is. When the wait runs out, the default is taken; a lead that already went on with it takes it sooner with `factory decision take-default <id> --attempt <n>`.
 - **Waiting is not a choice.** A recommendation or default of "Keep waiting", "Wait for review", "Do nothing" or "Hold" is refused. What it waits for is a person's chore, and a chore is an Errand. The steward's own asks are exempt: a hold is a real answer to a stall.
@@ -52,7 +55,7 @@ The Judge is the agw workflow `factory-ask` that tries to answer a Decision befo
 
 - **Every Decision, first.** The Judge sees a Decision before the owner does. A failed call is retried after 5 minutes, three tries in all. After the third the Decision goes to the owner unjudged.
 - **It reads what a lead would.** The plan, the docs and the precedents: Decisions the owner answered before. An answer the Judge, a default or the orchestrator gave is never one.
-- **It sees scrubbed text and the case file.** Every field is scrubbed and cut at 2000 characters; the repo is passed as its name. Beside the form it gets the case file (the Issue as filed, the owner's notes, the repo's project and AGENTS.md, its open Issues, the plan rows, its own earlier answers in the repo) and the path of the repo's main checkout, which it reads with read, glob and grep.
+- **It sees scrubbed text and the case file.** Every field is scrubbed and cut at 2000 characters; the repo is passed as its name. Beside the form (its class too) and the head of the Spec the question belongs to (its Build and Decided, up to 20000 characters) it gets the case file (the Issue as filed, the owner's notes, the repo's project and AGENTS.md, its open Issues, the plan rows, its own earlier answers in the repo) and the path of the repo's main checkout, which it reads with read, glob and grep.
 - **It answers, hands on, or sends back.** The verdict is `answer`, `owner` or, on a lead's own Decision's first look, `back`: the question returns to the lead with a note (yours to decide, or the owner's but not ready), stays open and out of Needs you. The lead settles it (`take-default` takes its default, or with none its reversible recommendation) or asks again, which amends it; the second look answers or hands it on, never back. The factory checks an answer before acting on it.
 - **Never irreversible.** The answer must be exactly one of the options, must name a source, and must not be an option that cannot be taken back. An irreversible option is the owner's.
 

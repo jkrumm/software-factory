@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { JudgeCase } from './case-file.ts'
-import { SPEC_SCREEN_PRECEDENTS, SpecPrecedent } from './checkpoints.ts'
+import { DECISION_CLASSES, SPEC_SCREEN_PRECEDENTS, SpecPrecedent } from './checkpoints.ts'
 import { ISSUE_KINDS, ISSUE_SIZES } from './vocab.ts'
 
 /**
@@ -43,6 +43,9 @@ export const JudgeInputWire = z.object({
   case: JudgeCase.optional(),
   /** the Judge may send the question back to its lead (verdict `back`): a lead's Decision on its first look only */
   sendBack: z.boolean().optional(),
+  /** the class the lead claims, and the head of the Spec behind the question (agw's `factory-ask` takes both) */
+  class: z.enum(DECISION_CLASSES).optional(),
+  spec: z.string().max(20_000).optional(),
 })
 
 export const JudgeVerdictWire = z.object({

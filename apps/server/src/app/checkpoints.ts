@@ -81,7 +81,7 @@ import { backoffsIn, backoffUntil, isBackoff } from '../kernel/backoff.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
-import { type IssueId, issueNumber } from '../kernel/ids.ts'
+import { idOf, type IssueId, issueNumber } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import type { MissingFields } from '../kernel/missing-fields.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
@@ -216,13 +216,54 @@ const artifactOfDecision = (id: DecisionId): ArtifactId => id as string as Artif
 export const formDigest = (form: DecisionForm): string =>
   digest(
     JSON.stringify([
+      form.class,
+      form.whyYours,
       form.question,
       form.recommendation,
       form.checked,
-      form.options.map((o) => [o.label, o.reversible, o.cost]),
+      form.options.map((o) => [o.label, o.leadsTo, o.reversible, o.cost]),
+      form.exhibit,
+      form.artifact,
       [form.noAnswer.consequence, form.noAnswer.default, form.noAnswer.waitMinutes],
     ]),
   )
+
+/**
+ * The Spec a Decision names (`artifact`): it must be a Spec of this Issue, and the pictures of an exhibit must be ones its
+ * latest revision holds, so a question never shows a picture the Spec does not.
+ */
+async function checkSpec(deps: CheckpointDeps, issueId: IssueId, form: DecisionForm): Promise<CheckpointResult<null>> {
+  if (form.artifact === null) return ok(null)
+  const id = idOf('artifact', form.artifact)
+  if (!id) return err({ kind: 'not_found', what: 'artifact', id: form.artifact })
+  const found = await deps.uow.run(async ({ checkpoints }) => {
+    const artifact = await checkpoints.artifact(id)
+    const revisions = artifact ? await checkpoints.revisions(id) : []
+    return ok({ artifact, latest: revisions.toSorted((a, b) => b.n - a.n)[0] ?? null })
+  })
+  if (!found.ok) return found
+  const { artifact, latest } = found.value
+  if (!artifact) return err({ kind: 'not_found', what: 'artifact', id: form.artifact })
+  if (artifact.kind !== 'spec' || artifact.issueId !== issueId) {
+    return err({
+      kind: 'invalid',
+      detail: `artifact ${form.artifact} is not a Spec of this Issue: name the Spec this question belongs to. Nothing was raised.`,
+    })
+  }
+  if (form.exhibit?.kind !== 'pictures') return ok(null)
+  const content = latest ? await deps.blobs.get(latest.blob) : null
+  if (!content?.ok)
+    return err({
+      kind: 'invalid',
+      detail: `the Spec ${form.artifact} could not be read for its pictures. Nothing was raised.`,
+    })
+  const absent = form.exhibit.pictures.filter((picture) => !content.value.includes(picture.image))
+  if (absent.length === 0) return ok(null)
+  return err({
+    kind: 'invalid',
+    detail: `exhibit.pictures: ${absent.map((picture) => `the picture of "${picture.option}"`).join(', ')} is not in the latest revision of ${form.artifact}: use the image links exactly as the Spec has them. Nothing was raised.`,
+  })
+}
 
 export interface Asked {
   result: 'applied' | 'replayed' | 'amended'
@@ -243,9 +284,11 @@ export async function askDecision(
   deps: CheckpointDeps,
   input: { issueId: IssueId; attempt: number; form: unknown; by?: 'lead' | 'steward'; salt?: string; call?: string },
 ): Promise<CheckpointResult<Asked>> {
-  const read = readDecisionForm(input.form)
+  const read = readDecisionForm(input.form, { by: input.by ?? 'lead' })
   if (!read.ok) return read
   const form = read.value
+  const linked = await checkSpec(deps, input.issueId, form)
+  if (!linked.ok) return linked
   // The steward's ask is about a stall, where a backoff ("wait for it") is a real answer; a lead's is a choice for the owner.
   const noChoice = (input.by ?? 'lead') === 'lead' ? refuseNoOpDefault(form) : null
   if (noChoice) return err({ kind: 'invalid', detail: noChoice })
@@ -537,9 +580,10 @@ export interface Answered {
  */
 export function answerDecision(
   deps: CheckpointDeps,
-  input: { decisionId: DecisionId; answer: unknown; by?: 'owner' | 'orchestrator' },
+  input: { decisionId: DecisionId; answer: unknown; note?: string; by?: 'owner' | 'orchestrator' },
 ): Promise<CheckpointResult<Answered>> {
   const text = typeof input.answer === 'string' ? input.answer.trim() : ''
+  const note = input.note?.trim() || null
   if (text === '') {
     return Promise.resolve(err({ kind: 'missing_field', fields: ['answer'], detail: 'an answer needs: answer' }))
   }
@@ -547,7 +591,7 @@ export function answerDecision(
     const decision = await stores.checkpoints.decision(input.decisionId)
     if (!decision) return err(notFound('Decision', input.decisionId))
     const by = input.by ?? 'owner'
-    const outcome = await answerIn(stores, deps, { decision, text, by, source: `the ${by}`, note: null })
+    const outcome = await answerIn(stores, deps, { decision, text, by, source: `the ${by}`, note })
     if (!outcome.ok) return outcome
     if (outcome.value.status === 'withdrawn') return ok<Answered>({ decision: outcome.value.decision, issue: null })
     const { recorded } = outcome.value

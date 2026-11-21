@@ -95,18 +95,29 @@ test('the Judge’s input as the checkpoints build it is the shape the workflow 
     repo: '/home/x/src/example-app',
     issue: 'Add request logging',
     form: {
+      class: 'direction',
+      whyYours: 'What the server logs is what support reads.',
       question: 'Which logging library?',
       recommendation: 'pino',
       checked: 'looked',
       options: [
-        { label: 'pino', reversible: true, cost: 'one dependency' },
-        { label: 'winston', reversible: true, cost: 'one dependency' },
+        { label: 'pino', leadsTo: 'JSON lines', reversible: true, cost: 'one dependency' },
+        { label: 'winston', leadsTo: 'files', reversible: true, cost: 'one dependency' },
       ],
+      exhibit: null,
+      artifact: null,
       noAnswer: { consequence: 'waits', default: 'pino', waitMinutes: 30 },
     },
+    facts: 'The owner said: logging stays on stdout.',
+    spec: '## Build\n\nRequest logging.',
     precedents: [precedent],
   })
   expect(JudgeInputWire.parse(input)).toEqual(input)
+  expect(input).toMatchObject({
+    class: 'direction',
+    facts: expect.stringContaining('stdout'),
+    spec: expect.stringContaining('Build'),
+  })
   expect(input.repo).toBe('example-app')
 })
 
