@@ -1,4 +1,4 @@
-import { type FixCommit, parseFixSubject } from '../../domains/hygiene/fix-classes.ts'
+import { type FixCommit, parseFixSubject } from '../../domains/hygiene/fix-causes.ts'
 import type { FixCommitReader } from '../../domains/hygiene/ports.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 import { CannotExecute } from '../process.ts'

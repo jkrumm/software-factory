@@ -45,7 +45,7 @@ apps/server/src/
     quality/       the ship gate, evidence, the watch and verify
     checkpoints/   Decisions, artifacts and revisions, collections, the owner's pages, rechecks
     errands/       Errands and requests, need, triage by rule, match keys, the desk
-    hygiene/       probes and findings, the lifecycle, scripted fixes, dependency refresh, fix classes
+    hygiene/       probes and findings, the lifecycle, scripted fixes, dependency refresh, fix causes
     improve/       the loops that watch the factory: selfwatch, overload, throughput, friction, retro, digest, ledger
   app/           use cases: one transaction to claim, the port call outside it, one to record
     loops/         the runner (`passLoop`, `createSaid`) and each loop's pass with its `LoopSpec`
@@ -400,7 +400,7 @@ docs-check` fails when it is stale):
 | `friction` | 15 min | none |
 | `hygiene` | 15 min | `factory-hygiene` |
 | `screen` | 10 min | `factory-screen` |
-| `fix-classes` | 6 h | none |
+| `fix-causes` | 6 h | none |
 | `selfwatch` | 5 min | none |
 | `ci-ledger` | 15 min | none |
 | `host` | 1 min | none |
@@ -485,9 +485,9 @@ What each decides in code and what it files:
   back after 2 h, the MacBook answering after it was down, the Console's button, 6 h since the last, a command never
   pushed), then runs checks, a second Errand screen (`rescreenErrand`) and pushes MacBook commands through the
   dotfiles' ask-human script, all of them on a return, one a pass while he is away.
-- `fix-classes` (`app/loops/fix-classes.ts`, `domains/hygiene/fix-classes.ts`): every 6 hours, per project, the
+- `fix-causes` (`app/loops/fix-causes.ts`, `domains/hygiene/fix-causes.ts`): every 6 hours, per project, the
   conventional `fix` commits of 35 days on origin's default branch (`adapters/hygiene/fix-commits.ts`) classed by rule
-  into `fix_commits` (`FIX_CLASSES`, `docs/product.md`). No model.
+  into `fix_commits` (`FIX_CAUSES`, `docs/product.md`). No model.
 - `host` (`app/loops/host.ts`, `domains/capacity/classes.ts`, `adapters/planning/snapshot.ts`): every minute, one
   reading of the host in `host_samples` (load, memory as Activity Monitor counts it, swap, the kernel's pressure level
   and free share, compressor, processes, CPU) beside that minute's capacity facts (`leads`, `queued`, `seats`,

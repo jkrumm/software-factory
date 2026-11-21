@@ -310,7 +310,7 @@ export function useLoopYield() {
   })
 }
 
-/** Fix commits by class over the last four weeks. */
+/** Fix commits by cause over the last four weeks. */
 export function useFixCommits() {
   const live = useLive()
   return useQuery({

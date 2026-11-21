@@ -232,7 +232,7 @@ function fakePasses(recorded: [LoopName, Date][], load?: () => Promise<never>) {
 test('a loop with a long interval that never ran runs on the first tick after start', async () => {
   const counts = { runs: 0 }
   const runner = createLoopRunner({
-    loops: [spec('fix-classes', { counts, intervalMs: 6 * 3_600_000 })],
+    loops: [spec('fix-causes', { counts, intervalMs: 6 * 3_600_000 })],
     clock,
     passes: fakePasses([]),
     ...quiet,
@@ -246,9 +246,9 @@ test('a loop with a long interval that never ran runs on the first tick after st
 test('a loop whose pass was an hour ago does not run after start', async () => {
   const counts = { runs: 0 }
   const runner = createLoopRunner({
-    loops: [spec('fix-classes', { counts, intervalMs: 6 * 3_600_000 })],
+    loops: [spec('fix-causes', { counts, intervalMs: 6 * 3_600_000 })],
     clock,
-    passes: fakePasses([['fix-classes', new Date(clock.now().getTime() - 3_600_000)]]),
+    passes: fakePasses([['fix-causes', new Date(clock.now().getTime() - 3_600_000)]]),
     ...quiet,
   })
   await runner.start()

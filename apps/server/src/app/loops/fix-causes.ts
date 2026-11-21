@@ -1,4 +1,4 @@
-import { classOf, FIX_WINDOW_DAYS, type FixCommit, type FixCommitRow } from '../../domains/hygiene/fix-classes.ts'
+import { causeOf, FIX_WINDOW_DAYS, type FixCommit, type FixCommitRow } from '../../domains/hygiene/fix-causes.ts'
 import type { FixCommitReader } from '../../domains/hygiene/ports.ts'
 import type { LoopStore } from './stores.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
@@ -8,7 +8,7 @@ import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
-export interface FixClassesDeps {
+export interface FixCausesDeps {
   uow: UnitOfWork<{ loops: LoopStore; planning: PlanningStore }>
   clock: Clock
   reader: FixCommitReader
@@ -16,7 +16,7 @@ export interface FixClassesDeps {
   repos: readonly string[] | null
 }
 
-interface FixClassesPass {
+interface FixCausesPass {
   repos: number
   /** fix commits stored this pass */
   stored: number
@@ -27,11 +27,11 @@ interface FixClassesPass {
 const DAY_MS = 86_400_000
 
 /**
- * One pass of the fix-classes loop: the fix commits of every project's default branch of the last 35 days, those not stored
- * yet classed by the rules (`classOf`; no rule means `other`) and stored. A repo that cannot be read is named and read
+ * One pass of the fix-causes loop: the fix commits of every project's default branch of the last 35 days, those not stored
+ * yet sorted by the rules (`causeOf`; no rule means `other`) and stored. A repo that cannot be read is named and read
  * again next pass.
  */
-async function fixClassesPass(deps: FixClassesDeps): Promise<Result<FixClassesPass, PortError>> {
+async function fixCausesPass(deps: FixCausesDeps): Promise<Result<FixCausesPass, PortError>> {
   const now = deps.clock.now()
   const since = new Date(now.getTime() - FIX_WINDOW_DAYS * DAY_MS)
   const read = await deps.uow.run(async ({ planning }) => ok(await planning.projects()))
@@ -42,7 +42,7 @@ async function fixClassesPass(deps: FixClassesDeps): Promise<Result<FixClassesPa
       !p.project.work &&
       (deps.repos === null || deps.repos.includes(p.name) || deps.repos.includes(repoTextOf(p))),
   )
-  const pass: FixClassesPass = { repos: 0, stored: 0, problems: [] }
+  const pass: FixCausesPass = { repos: 0, stored: 0, problems: [] }
   for (const project of projects) {
     const repo = repoTextOf(project)
     const commits = await deps.reader.read(repo, since)
@@ -67,27 +67,27 @@ async function fixClassesPass(deps: FixClassesDeps): Promise<Result<FixClassesPa
 }
 
 const rowOf = (repo: string, commit: FixCommit): FixCommitRow => {
-  const { class: cls, reason } = classOf(commit)
+  const { cause, reason } = causeOf(commit)
   return {
     repo,
     sha: commit.sha,
     committedAt: commit.committedAt,
     subject: commit.subject,
     scope: commit.scope,
-    class: cls,
+    class: cause,
     by: 'rule',
     reason: reason.slice(0, 300),
   }
 }
 
-const fixClassesSummary = (pass: FixClassesPass): string =>
-  `${pass.repos} repo(s): ${pass.stored} fix commit(s) classed by rule`
+const fixCausesSummary = (pass: FixCausesPass): string =>
+  `${pass.repos} repo(s): ${pass.stored} fix commit(s) sorted by rule`
 
-/** Fix commits of every project's default branch, classed by rule, stored for the Improve screen. */
-export const fixClassesLoop = (wiring: LoopWiring, deps: FixClassesDeps): LoopSpec =>
+/** Fix commits of every project's default branch, sorted by cause by rule, stored for the Improve screen. */
+export const fixCausesLoop = (wiring: LoopWiring, deps: FixCausesDeps): LoopSpec =>
   passLoop(wiring, {
-    name: 'fix-classes',
-    pass: () => fixClassesPass(deps),
+    name: 'fix-causes',
+    pass: () => fixCausesPass(deps),
     problems: (pass) => pass.problems,
-    summary: fixClassesSummary,
+    summary: fixCausesSummary,
   })

@@ -92,12 +92,12 @@ is the transcript pass of `factory retro`. The friction loop's weekly pass files
 writes a Report (the numbers against last week, the patterns in a sample of transcripts, the ledger of earlier retro
 signals with what each number did) and files one marked signal per change (`docs/architecture.md`, the `friction` loop).
 
-### Fix classes
+### Fix causes
 
-A fix commit is a commit on a project's default branch whose subject is a conventional `fix`. The `fix-classes` loop sorts
-each into one class by rule: by its scope or its words where they settle it, `other` otherwise.
+A fix commit is a commit on a project's default branch whose subject is a conventional `fix`. The `fix-causes` loop sorts
+each into one cause by rule: by its scope or its words where they settle it, `other` otherwise.
 
-| Class | A fix for |
+| Cause | A fix for |
 |-|-|
 | `tests` | tests, scenarios or e2e only |
 | `docs` | documentation only |

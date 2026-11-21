@@ -241,7 +241,7 @@ export interface ClassRow {
 
 /** The classes largest first, then by the fixed order; a class with no footprint stays in the list as zeros. */
 export function classRows(model: ThroughputModel): ClassRow[] {
-  return [...model.host.byClass]
+  return [...model.host.byCause]
     .sort(
       (a, b) =>
         b.footprintMib - a.footprintMib ||

@@ -246,7 +246,7 @@ export const KIT_METERS = [
   { label: 'Swap', value: 0.94 },
 ]
 
-/** Fix commits by class and week for the stacked bars: nine classes in a fixed order, one of them "other" (the quiet slot). */
+/** Fix commits by cause and week for the stacked bars: nine causes in a fixed order, one of them "other" (the quiet slot). */
 export const KIT_FIX_SERIES = [
   { key: 'tests', label: 'tests', slot: 1 },
   { key: 'docs', label: 'docs', slot: 2 },

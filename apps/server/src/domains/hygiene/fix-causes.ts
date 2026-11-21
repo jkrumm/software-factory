@@ -1,7 +1,7 @@
-// Fix commits by class. A commit whose subject is `fix(<scope>): …` is a fix; its scope or its words settle the class by a rule
-// (`classOf`), and a commit no rule classes is `other`. No model is asked.
+// Fix commits by cause. A commit whose subject is `fix(<scope>): …` is a fix; its scope or its words decide the cause by a rule
+// (`causeOf`), and a commit no rule places is `other`. No model is asked.
 
-import type { FixClassKey } from '@software-factory/contract'
+import type { FixCauseKey } from '@software-factory/contract'
 
 /** Commits older than this are not read: the Improve screen shows four weeks, and a week of slack covers a late pass. */
 export const FIX_WINDOW_DAYS = 35
@@ -14,14 +14,14 @@ export interface FixCommit {
   scope: string | null
 }
 
-/** A fix commit with its class, as stored (`migrations/0997_fix_commits.sql`). */
+/** A fix commit with its cause, as stored (`migrations/0997_fix_commits.sql`, the column `class`). */
 export interface FixCommitRow {
   repo: string
   sha: string
   committedAt: Date
   subject: string
   scope: string | null
-  class: FixClassKey
+  class: FixCauseKey
   by: 'rule'
   reason: string | null
 }
@@ -35,7 +35,7 @@ export function parseFixSubject(subject: string): { scope: string | null; text: 
   return { scope: match[1]?.trim() || null, text: (match[2] ?? '').trim() }
 }
 
-const BY_SCOPE: Record<string, FixClassKey> = {
+const BY_SCOPE: Record<string, FixCauseKey> = {
   test: 'tests',
   tests: 'tests',
   scenarios: 'tests',
@@ -53,20 +53,20 @@ const BY_SCOPE: Record<string, FixClassKey> = {
 
 const REVIEW_WORDS = /\b(review (finding|round)s?|address(ed|es|ing)? (the )?review)\b/i
 
-/** The class the scope or the words of the subject settle; `other` when no rule does. */
-export function classOf(commit: Pick<FixCommit, 'subject'>): { class: FixClassKey; reason: string } {
-  const other = { class: 'other', reason: 'no rule classes it' } as const
+/** The cause the scope or the words of the subject decide; `other` when no rule does. */
+export function causeOf(commit: Pick<FixCommit, 'subject'>): { cause: FixCauseKey; reason: string } {
+  const other = { cause: 'other', reason: 'no rule places it' } as const
   const parsed = parseFixSubject(commit.subject)
   if (!parsed) return other
-  const classes = new Set(
+  const causes = new Set(
     (parsed.scope ?? '')
       .toLowerCase()
       .split(/[\s,/+&]+/)
       .filter(Boolean)
       .map((part) => BY_SCOPE[part]),
   )
-  const [only] = classes
-  if (classes.size === 1 && only) return { class: only, reason: `scope ${parsed.scope}` }
-  if (REVIEW_WORDS.test(parsed.text)) return { class: 'review', reason: 'the subject names a review' }
+  const [only] = causes
+  if (causes.size === 1 && only) return { cause: only, reason: `scope ${parsed.scope}` }
+  if (REVIEW_WORDS.test(parsed.text)) return { cause: 'review', reason: 'the subject names a review' }
   return other
 }

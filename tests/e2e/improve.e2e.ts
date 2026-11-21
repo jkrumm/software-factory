@@ -293,7 +293,7 @@ test('muted finders read what the API says: a line when none is muted, else each
   }
 })
 
-test('the fix-commit card reads the API: the newest week, the change, the legend and the busiest class', async ({
+test('the fix-commit card reads the API: the newest week, the change, the legend and the busiest cause', async ({
   page,
   apiUrl,
 }) => {
@@ -311,12 +311,12 @@ test('the fix-commit card reads the API: the newest week, the change, the legend
   )
 
   const legend = article.getByRole('list', { name: /legend/ })
-  const present = card.classes.filter((c) => c.total > 0)
+  const present = card.causes.filter((c) => c.total > 0)
   await expect(legend.getByRole('listitem')).toHaveCount(present.length)
   for (const c of present)
     await expect(legend.getByRole('listitem').filter({ hasText: c.key })).toContainText(String(c.total))
 
-  const chart = article.getByRole('group', { name: /^Fix commits per week by class/ })
+  const chart = article.getByRole('group', { name: /^Fix commits per week by cause/ })
   await expect(chart.locator('tbody tr')).toHaveCount(card.weeks.length)
   await chart.focus()
   const newest = card.weeks.at(-1)

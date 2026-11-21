@@ -35,7 +35,7 @@ import type { MainCheckoutLines } from './app/loops/checkout-lines.ts'
 import { deskLoop, hasUnpushed } from './app/loops/desk.ts'
 import { digestLoop } from './app/loops/digest.ts'
 import { errandsLoop } from './app/loops/errands.ts'
-import { fixClassesLoop } from './app/loops/fix-classes.ts'
+import { fixCausesLoop } from './app/loops/fix-causes.ts'
 import { frictionLoop, RETRO_SUBJECT } from './app/loops/friction.ts'
 import { freshHostMemory, hostLoop } from './app/loops/host.ts'
 import { hygieneLoop } from './app/loops/hygiene.ts'
@@ -358,7 +358,7 @@ export function composeLoops(ctx: LoopContext) {
       promote: intake.api.promote,
       dismiss: intake.api.dismiss,
     }),
-    fixClassesLoop(wiring('fix-classes'), {
+    fixCausesLoop(wiring('fix-causes'), {
       ...writes,
       reader: createFixCommitReader({ repos }),
       repos: null,

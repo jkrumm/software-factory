@@ -47,7 +47,7 @@ const Count = z.object({ n: z.coerce.number().int() })
 const Grouped = Count.extend({ key: z.string().nullable(), detail: z.string().nullable() })
 
 /** Rows of one refusal class summed, most frequent first (ties by class). */
-function byClass(rows: readonly { detail: string | null; n: number }[]): { id: string; words: string; n: number }[] {
+function byCause(rows: readonly { detail: string | null; n: number }[]): { id: string; words: string; n: number }[] {
   const classes = new Map<string, { id: string; words: string; n: number }>()
   for (const row of rows) {
     const { id, words } = refusalClass(row.detail)
@@ -114,7 +114,7 @@ async function countsOf(
     'Events the state machine refused',
     refused.reduce((sum, row) => sum + row.n, 0),
   )
-  for (const row of byClass(refused)) add('refusal', `refusal:${row.id}`, `An event was refused: ${row.words}`, row.n)
+  for (const row of byCause(refused)) add('refusal', `refusal:${row.id}`, `An event was refused: ${row.words}`, row.n)
   const ships = await grouped(sql`
     SELECT NULL::text AS key, detail, count(*) AS n FROM factory.quality_ships
     WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to} GROUP BY detail`)
@@ -124,7 +124,7 @@ async function countsOf(
     'Ships the gate refused',
     ships.reduce((sum, row) => sum + row.n, 0),
   )
-  for (const row of byClass(ships)) add('refusal', `ship_refused:${row.id}`, `A ship was refused: ${row.words}`, row.n)
+  for (const row of byCause(ships)) add('refusal', `ship_refused:${row.id}`, `A ship was refused: ${row.words}`, row.n)
 
   // A stall the next event of the Issue moved up (the light seat's own rule, `moveUpIfDue`: the attempt ends and the Issue
   // queues on the lead row) is the seat's cost, which `read finders` and the seat KPIs already count: no loop.

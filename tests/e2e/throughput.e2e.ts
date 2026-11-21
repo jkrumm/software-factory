@@ -163,7 +163,7 @@ test('the cost detail: the seven classes with the API figures, tenants and proje
     await expect(cells.nth(1)).toHaveText(mibWords(row.footprintMib))
     await expect(cells.nth(2)).toHaveText(mibWords(row.peakMib))
   }
-  expect(model.host.byClass.reduce((sum, c) => sum + c.share, 0)).toBeCloseTo(1, 2)
+  expect(model.host.byCause.reduce((sum, c) => sum + c.share, 0)).toBeCloseTo(1, 2)
   const tenants = table(page, 'Memory by tenant')
   await expect(tenants.locator('tbody tr')).toHaveCount(model.host.byTenant.length)
   await expect(tenants.locator('tbody tr').first().getByRole('rowheader')).toHaveText(

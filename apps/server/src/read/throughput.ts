@@ -470,7 +470,7 @@ export async function readThroughput(
     const seconds = (ms: number | null) => round((ms ?? 0) / 1000, 1)
     const found = new Map(classRows.map((raw) => ClassRow.parse(raw)).map((r) => [r.class, r]))
     const classTotal = [...found.values()].reduce((sum, r) => sum + r.fp, 0)
-    const byClass = CLASSES.map((name) => {
+    const byCause = CLASSES.map((name) => {
       const r = found.get(name)
       const cpuSeconds = seconds(r?.cpu ?? null)
       return {
@@ -485,7 +485,7 @@ export async function readThroughput(
     }).sort((a, b) => b.footprintMib - a.footprintMib || a.class.localeCompare(b.class))
 
     const budgetMib = options.tenantBudget?.budgetMib ?? DEFAULT_TENANT_BUDGET_MIB
-    const tenantMib = byClass.find((c) => c.class === 'tenant')?.footprintMib ?? 0
+    const tenantMib = byCause.find((c) => c.class === 'tenant')?.footprintMib ?? 0
     const collectorSeconds = (signals.collector_ms ?? 0) / 1000
     const improvements = findingRows.map((raw) => {
       const r = FindingRow.parse(raw)
@@ -555,7 +555,7 @@ export async function readThroughput(
           cpuSeconds: collectorSeconds,
           coreShare: signals.collector_minutes === 0 ? null : collectorSeconds / (signals.collector_minutes * 60),
         },
-        byClass,
+        byCause,
         tenantBudget: {
           budgetMib,
           footprintMib: tenantMib,

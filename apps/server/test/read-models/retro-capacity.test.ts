@@ -98,7 +98,7 @@ describe('the retro bundle carries the capacity loop', () => {
     ])
     // the two Issues closed inside the week are the project's closed Issues, with or without a lead
     expect(week.throughput.project.find((p) => p.repo === 'app')?.closedIssues).toBe(2)
-    expect(week.throughput.host.byClass).toHaveLength(7)
+    expect(week.throughput.host.byCause).toHaveLength(7)
   })
 
   test('the figures are per day and match SQL; the ledger measures a capacity key against the window', async () => {

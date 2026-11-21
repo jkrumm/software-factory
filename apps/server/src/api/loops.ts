@@ -62,7 +62,7 @@ export const loopRoutes = (loops: LoopsApi | undefined) =>
         detail: {
           operationId: 'loop.run',
           summary:
-            'one pass of one loop now (leads, planning, watch, checkpoints, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch, ci-ledger, host, reaper, digest, errands, reviews, desk, throughput); a pass already running is waited for, not started again',
+            'one pass of one loop now (leads, planning, watch, checkpoints, send, steward, triage, queue, friction, hygiene, screen, fix-causes, selfwatch, ci-ledger, host, reaper, digest, errands, reviews, desk, throughput); a pass already running is waited for, not started again',
         },
       },
     )

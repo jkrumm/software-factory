@@ -139,16 +139,16 @@ test('finderWords: a muted finder says when it is asked again, a probation finde
   )
 })
 
-const week = (to: string, total: number, byClass: Record<string, number>): FixCommitsModel['weeks'][number] => ({
+const week = (to: string, total: number, byCause: Record<string, number>): FixCommitsModel['weeks'][number] => ({
   from: '2026-01-01T00:00:00.000Z',
   to,
   total,
-  byClass,
+  byCause,
 })
 
-test('fix commit weeks read oldest first, empty classes are left out and the totals follow the weeks', () => {
-  const model: Pick<FixCommitsModel, 'classes' | 'weeks'> = {
-    classes: [
+test('fix commit weeks read oldest first, empty causes are left out and the totals follow the weeks', () => {
+  const model: Pick<FixCommitsModel, 'causes' | 'weeks'> = {
+    causes: [
       { key: 'tests', meaning: 'a' },
       { key: 'logic', meaning: 'b' },
       { key: 'docs', meaning: 'c' },
@@ -267,9 +267,9 @@ test('history labels, x labels, subtitle and footer', () => {
   })
 })
 
-test('fixCard: the newest week against the one before, fewer is better, classes keep their slot', () => {
-  const model: Pick<FixCommitsModel, 'classes' | 'weeks'> = {
-    classes: [
+test('fixCard: the newest week against the one before, fewer is better, causes keep their slot', () => {
+  const model: Pick<FixCommitsModel, 'causes' | 'weeks'> = {
+    causes: [
       { key: 'tests', meaning: 'a' },
       { key: 'logic', meaning: 'b' },
       { key: 'docs', meaning: 'c' },
@@ -287,7 +287,7 @@ test('fixCard: the newest week against the one before, fewer is better, classes 
   expect(card.tone).toBe('bad')
   expect(card.total).toBe(6)
   expect(card.busiest).toEqual({ key: 'logic', total: 4 })
-  expect(card.classes.map((c) => [c.key, c.slot, c.total])).toEqual([
+  expect(card.causes.map((c) => [c.key, c.slot, c.total])).toEqual([
     ['tests', 0, 2],
     ['logic', 1, 4],
     ['docs', 2, 0],
@@ -302,11 +302,11 @@ test('fixCard: the newest week against the one before, fewer is better, classes 
   const falling = fixCard({ ...model, weeks: [before ?? week('', 0, {}), newest ?? week('', 0, {}), ...older] })
   expect(falling.change.text).toBe('-2')
   expect(falling.tone).toBe('good')
-  const none = fixCard({ classes: model.classes, weeks: model.weeks.map((w) => week(w.to, 0, {})) })
+  const none = fixCard({ causes: model.causes, weeks: model.weeks.map((w) => week(w.to, 0, {})) })
   expect(none.busiest).toBeNull()
   expect(none.change).toMatchObject({ text: 'No change', direction: 0 })
   expect(none.tone).toBe('neutral')
-  expect(fixCard({ classes: model.classes, weeks: [week('2026-11-08T00:00:00.000Z', 2, {})] }).change.text).toBe(
+  expect(fixCard({ causes: model.causes, weeks: [week('2026-11-08T00:00:00.000Z', 2, {})] }).change.text).toBe(
     'no earlier data',
   )
 })
@@ -449,7 +449,7 @@ test('yieldWords: what a loop’s Issues came to, healed counted as done', () =>
     cancelled: 0,
     open: 1,
     medianCloseSeconds: 60,
-    classes: [],
+    finders: [],
   }
   expect(yieldWords(base)).toBe('3 done, 1 dropped or cancelled, 1 open')
   expect(yieldWords({ ...base, issues: 0 })).toBe('no Issue')

@@ -42,7 +42,7 @@
   "scenarios/loops/checkout.test.ts": 6,
   "scenarios/loops/deadlock.test.ts": 20,
   "scenarios/loops/digest.test.ts": 7,
-  "scenarios/loops/fix-classes.test.ts": 4,
+  "scenarios/loops/fix-causes.test.ts": 4,
   "scenarios/loops/friction.test.ts": 4,
   "scenarios/loops/guard.test.ts": 5,
   "scenarios/loops/host.test.ts": 5,

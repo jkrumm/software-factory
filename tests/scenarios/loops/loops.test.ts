@@ -70,7 +70,7 @@ test('every timer of packages 3 to 6 runs through the loop runner: twenty-one na
     'ci-ledger',
     'throughput',
     'screen',
-    'fix-classes',
+    'fix-causes',
     'host',
     'digest',
     'errands',

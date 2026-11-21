@@ -261,7 +261,7 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
         {...common}
         hint={FIX_HINT}
         value={model || !pending ? 'Not measured' : 'Loading'}
-        sub={model ? 'No fix commit is stored yet: the fix-classes loop has not sorted any' : undefined}
+        sub={model ? 'No fix commit is stored yet: the fix-causes loop has not sorted any' : undefined}
         chart={model ? null : <Skeleton height={CHART_HEIGHT} />}
         footer={[
           { label: 'Target', value: 'falling' },
@@ -282,22 +282,22 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
       sub="Falling is the target"
       chart={
         <StackedBars
-          name="Fix commits per week by class"
+          name="Fix commits per week by cause"
           unit="fix commits"
           height={CHART_HEIGHT}
-          series={card.classes.map((c) => ({ key: c.key, label: c.key, slot: c.slot + 1 }))}
+          series={card.causes.map((c) => ({ key: c.key, label: c.key, slot: c.slot + 1 }))}
           bars={card.weeks.map((w) => ({ label: `Week to ${w.label}`, values: w.counts }))}
         />
       }
       xLabels={first && last ? [shortDate(first.label), 'Weeks ending', shortDate(last.label)] : undefined}
       footer={[
         { label: 'Total in the shown weeks', value: String(card.total) },
-        { label: 'Busiest class', value: card.busiest ? `${card.busiest.key} (${card.busiest.total})` : 'None' },
+        { label: 'Busiest cause', value: card.busiest ? `${card.busiest.key} (${card.busiest.total})` : 'None' },
       ]}
       menu={
         <MenuPopover label="Fix commits: what is counted" title="What is counted">
-          Commits on a project's default branch whose subject is a conventional fix, sorted into a class by the
-          fix-classes loop; each week is seven days ending on the date shown, the newest on the right.
+          Commits on a project's default branch whose subject is a conventional fix, sorted into a cause by the
+          fix-causes loop; each week is seven days ending on the date shown, the newest on the right.
         </MenuPopover>
       }
     />
@@ -434,7 +434,7 @@ function LoopYieldSection({ model }: { model: LoopYieldModel | undefined }) {
                   <td className="px-4 py-2">{yieldWords(window)}</td>
                   <td className={CELL}>{closeWords(window.medianCloseSeconds)}</td>
                   <td className="px-4 py-2 text-muted-foreground">
-                    {window.classes.map((c) => `${c.class} (${c.issues})`).join(', ') || '–'}
+                    {window.finders.map((c) => `${c.finder} (${c.issues})`).join(', ') || '–'}
                   </td>
                 </tr>
               )),

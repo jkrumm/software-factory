@@ -2,7 +2,7 @@ import type { HygieneFinding } from '@software-factory/contract'
 import type { FixEntry, SweepReport } from './hygiene-model.ts'
 import type { FindingIssue, LifecycleAction } from './hygiene-lifecycle.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
-import type { FixCommit, FixCommitRow } from './fix-classes.ts'
+import type { FixCommit, FixCommitRow } from './fix-causes.ts'
 
 /** What `factory-hygiene` made of a sweep's documents; `skipped` is final (nothing to judge), `failed` is retried a few times. */
 export interface HygieneJudgment {

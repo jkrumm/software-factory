@@ -841,16 +841,16 @@ export type FindersModel = z.infer<typeof FindersModel>
 /** The loops that file signals; the others (leads, steward, host, ...) judge or sample and file none. */
 export const YIELD_LOOPS = ['friction', 'hygiene', 'selfwatch', 'throughput'] as const
 
-export const LoopYieldClass = z
+export const LoopYieldFinder = z
   .strictObject({
-    /** the pattern group, probe, finding kind or KPI the loop filed under */
-    class: z.string(),
+    /** the finder: the pattern group, probe, finding kind or KPI the loop filed under */
+    finder: z.string(),
     issues: z.number().int(),
     /** of those, dropped or cancelled */
     noise: z.number().int(),
   })
-  .meta({ id: 'LoopYieldClass' })
-export type LoopYieldClass = z.infer<typeof LoopYieldClass>
+  .meta({ id: 'LoopYieldFinder' })
+export type LoopYieldFinder = z.infer<typeof LoopYieldFinder>
 
 /** One loop over one window: what it filed and how it ended. Issues are counted by the day they were filed. */
 export const LoopYieldWindow = z
@@ -874,8 +874,8 @@ export const LoopYieldWindow = z
     open: z.number().int(),
     /** median seconds from the Issue's filing to its close, over the closed ones; null with none */
     medianCloseSeconds: z.number().nullable(),
-    /** the three kinds of finding with the most Issues, then by name */
-    classes: z.array(LoopYieldClass),
+    /** the three finders with the most Issues, then by name */
+    finders: z.array(LoopYieldFinder),
   })
   .meta({ id: 'LoopYieldWindow' })
 export type LoopYieldWindow = z.infer<typeof LoopYieldWindow>
@@ -899,8 +899,8 @@ export const FixWeek = z
     from: at,
     to: at,
     total: z.number().int().min(0),
-    /** every class key, 0 included */
-    byClass: z.record(z.string(), z.number().int().min(0)),
+    /** every cause key, 0 included */
+    byCause: z.record(z.string(), z.number().int().min(0)),
   })
   .meta({ id: 'FixWeek' })
 export type FixWeek = z.infer<typeof FixWeek>
@@ -909,8 +909,8 @@ export const FixCommitsModel = z
   .strictObject({
     /** at least one fix commit is stored */
     measured: z.boolean(),
-    /** the classes in the order they are shown, with what each means (`docs/product.md` "Fix classes") */
-    classes: z.array(z.strictObject({ key: z.string(), meaning: z.string() })),
+    /** the causes in the order they are shown, with what each means (`docs/product.md` "Fix causes") */
+    causes: z.array(z.strictObject({ key: z.string(), meaning: z.string() })),
     /** four trailing 7-day windows, the newest first: week i is [now - 7(i+1) days, now - 7i days) */
     weeks: z.array(FixWeek),
     /** repos with a stored fix commit in those four weeks */
@@ -1452,7 +1452,7 @@ export const ThroughputModel = z
         coreShare: nullableNumber,
       }),
       /** all seven classes (lead, step, tenant, factory, system, owner, other), zeros when absent, largest footprint first then by name */
-      byClass: z.array(
+      byCause: z.array(
         z.strictObject({
           class: z.string(),
           /** mean MiB per minute, over `host.minutes`, an integer */
@@ -1971,7 +1971,7 @@ export const RetroThroughput = z
     hours: z.number().int(),
     epoch: ThroughputEpoch.nullable(),
     answers: ThroughputAnswers,
-    host: ThroughputModel.shape.host.pick({ minutes: true, signals: true, byClass: true }),
+    host: ThroughputModel.shape.host.pick({ minutes: true, signals: true, byCause: true }),
     lead: ThroughputModel.shape.lead.omit({ issues: true }),
     project: ThroughputModel.shape.project,
     improvements: ThroughputModel.shape.improvements,

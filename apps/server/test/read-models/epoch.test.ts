@@ -145,7 +145,7 @@ describe('the throughput read counts nothing before the epoch', () => {
     expect(model.host.minutes).toBe(2)
     expect(model.host.signals.pressureMinutes).toEqual({ normal: 1, warning: 1, critical: 0, unread: 0 })
     expect(model.host.signals.swapUsedPct.max).toBe(20)
-    expect(model.host.byClass.find((c) => c.class === 'lead')).toMatchObject({ footprintMib: 1000, peakMib: 1000 })
+    expect(model.host.byCause.find((c) => c.class === 'lead')).toMatchObject({ footprintMib: 1000, peakMib: 1000 })
     expect(model.host.timeline.points).toHaveLength(1)
   })
 

@@ -21,10 +21,10 @@ import {
   throughputWindowOf,
 } from '../src/lib/throughput.ts'
 
-const byClass = (rows: [string, number, number][]): ThroughputModel =>
+const byCause = (rows: [string, number, number][]): ThroughputModel =>
   ({
     host: {
-      byClass: rows.map(([name, footprintMib, share]) => ({
+      byCause: rows.map(([name, footprintMib, share]) => ({
         class: name,
         footprintMib,
         peakMib: footprintMib,
@@ -43,7 +43,7 @@ test('a window is one of the three, anything else the day', () => {
 
 test('classes come largest first, ties in the fixed order', () => {
   const rows = classRows(
-    byClass([
+    byCause([
       ['other', 0, 0],
       ['lead', 100, 0.1],
       ['system', 800, 0.8],

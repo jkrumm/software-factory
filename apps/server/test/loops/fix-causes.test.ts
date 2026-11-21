@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { classOf, parseFixSubject, type FixCommit } from '../../src/domains/hygiene/fix-classes.ts'
+import { causeOf, parseFixSubject, type FixCommit } from '../../src/domains/hygiene/fix-causes.ts'
 
 const commit = (sha: string, subject: string): FixCommit => ({
   sha,
@@ -18,7 +18,7 @@ test('a conventional fix subject parses with or without scope and breaking mark;
 })
 
 test('the scope settles tests, docs and tooling; a subject naming a review settles review; the rest is other', () => {
-  const by = (subject: string) => classOf(commit('abcdef1', subject)).class
+  const by = (subject: string) => causeOf(commit('abcdef1', subject)).cause
   for (const scope of ['test', 'tests', 'scenarios', 'e2e']) expect(by(`fix(${scope}): x`)).toBe('tests')
   for (const scope of ['docs', 'doc', 'readme']) expect(by(`fix(${scope}): x`)).toBe('docs')
   for (const scope of ['ci', 'deps', 'build', 'lint', 'scripts', 'release'])

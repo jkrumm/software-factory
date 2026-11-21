@@ -44,12 +44,12 @@ function yieldWindow(
   }
   const inWindow = [...byIssue.values()]
   const closes = inWindow.flatMap((i) => (i.closedAt ? [(i.closedAt.getTime() - i.filedAt.getTime()) / 1000] : []))
-  const classes = new Map<string, { issues: number; noise: number }>()
+  const finders = new Map<string, { issues: number; noise: number }>()
   for (const i of rows) {
-    const row = classes.get(i.class) ?? { issues: 0, noise: 0 }
+    const row = finders.get(i.class) ?? { issues: 0, noise: 0 }
     row.issues += 1
     if (i.outcome === 'dropped' || i.outcome === 'cancelled') row.noise += 1
-    classes.set(i.class, row)
+    finders.set(i.class, row)
   }
   const count = (outcome: YieldIssue['outcome']): number => inWindow.filter((i) => i.outcome === outcome).length
   const moved = inWindow.filter((i) => i.outcome === 'done' && i.verdict === 'moved')
@@ -66,9 +66,9 @@ function yieldWindow(
     cancelled: count('cancelled'),
     open: inWindow.filter((i) => i.closedAt === null).length,
     medianCloseSeconds: percentile(closes, 0.5),
-    classes: [...classes]
-      .map(([name, row]) => ({ class: name, ...row }))
-      .sort((a, b) => b.issues - a.issues || by(a.class, b.class))
+    finders: [...finders]
+      .map(([name, row]) => ({ finder: name, ...row }))
+      .sort((a, b) => b.issues - a.issues || by(a.finder, b.finder))
       .slice(0, 3),
   }
 }

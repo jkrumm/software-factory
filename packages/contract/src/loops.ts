@@ -247,10 +247,10 @@ export const HygieneAnswer = z.object({
 })
 export type HygieneAnswer = z.infer<typeof HygieneAnswer>
 
-// ---- fix classes -------------------------------------------------------------------------------------------------
+// ---- fix causes ---------------------------------------------------------------------------------------------------
 
-/** The classes a fix commit is sorted into (`docs/product.md` "Fix classes"); the rules of `domains/hygiene/fix-classes.ts` give one of the keys. */
-export const FIX_CLASSES = [
+/** The causes a fix commit is sorted into (`docs/product.md` "Fix causes"); the rules of `domains/hygiene/fix-causes.ts` give one of the keys. */
+export const FIX_CAUSES = [
   { key: 'tests', meaning: 'the fix is in tests, scenarios or e2e only' },
   { key: 'docs', meaning: 'the fix is in documentation only' },
   { key: 'tooling', meaning: 'CI, dependencies, build, lint or scripts' },
@@ -264,8 +264,8 @@ export const FIX_CLASSES = [
   { key: 'environment', meaning: 'deploy, host, process, paths, runtime or secrets' },
   { key: 'other', meaning: 'none of the above' },
 ] as const
-export type FixClassKey = (typeof FIX_CLASSES)[number]['key']
-export const FIX_CLASS_KEYS: readonly FixClassKey[] = FIX_CLASSES.map((c) => c.key)
+export type FixCauseKey = (typeof FIX_CAUSES)[number]['key']
+export const FIX_CAUSE_KEYS: readonly FixCauseKey[] = FIX_CAUSES.map((c) => c.key)
 
 // ---- the loops, as the routes show them ----------------------------------------------------------------------------------
 
@@ -281,7 +281,7 @@ export const LOOP_NAMES = [
   'friction',
   'hygiene',
   'screen',
-  'fix-classes',
+  'fix-causes',
   'selfwatch',
   'ci-ledger',
   'host',

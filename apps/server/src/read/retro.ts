@@ -243,13 +243,13 @@ async function throughputOf(
 ): Promise<RetroThroughput> {
   const hours = Math.min(THROUGHPUT_MAX_HOURS, options.days * 24)
   const model = await readThroughput(sql, { now: options.now, hours, epoch: options.epoch, queue: options.queue })
-  const { minutes, signals, byClass } = model.host
+  const { minutes, signals, byCause } = model.host
   const { issues: _issues, ...lead } = model.lead
   return {
     hours,
     epoch: model.epoch,
     answers: model.answers,
-    host: { minutes, signals, byClass },
+    host: { minutes, signals, byCause },
     lead,
     project: model.project,
     improvements: model.improvements,

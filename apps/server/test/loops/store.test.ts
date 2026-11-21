@@ -49,18 +49,18 @@ test('recordPass keeps the newest time of each loop and never moves it backwards
   const loops = postgresLoopStore(db.sql)
   const at = new Date('2026-11-07T10:00:00Z')
   expect((await loops.passes()).size).toBe(0)
-  await loops.recordPass('fix-classes', at)
+  await loops.recordPass('fix-causes', at)
   await loops.recordPass('steward', at)
-  await loops.recordPass('fix-classes', new Date(at.getTime() - 60_000))
+  await loops.recordPass('fix-causes', new Date(at.getTime() - 60_000))
   expect(await loops.passes()).toEqual(
     new Map([
-      ['fix-classes', at],
+      ['fix-causes', at],
       ['steward', at],
     ]),
   )
   const later = new Date(at.getTime() + 60_000)
-  await loops.recordPass('fix-classes', later)
-  expect((await loops.passes()).get('fix-classes')).toEqual(later)
+  await loops.recordPass('fix-causes', later)
+  expect((await loops.passes()).get('fix-causes')).toEqual(later)
 })
 
 // ---- finders ------------------------------------------------------------------------------------------------------

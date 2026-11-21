@@ -4,9 +4,9 @@ import { type Lab, startLab } from '../planning/lab.ts'
 import { runLoop } from './support.ts'
 
 /**
- * The fix-classes loop against the real server and Postgres, the real git reader and a fixture repo with conventional
+ * The fix-causes loop against the real server and Postgres, the real git reader and a fixture repo with conventional
  * commits dated now and ten days ago. The classes are the rules' alone (no agw is called); every pass is driven through
- * `factory loop run fix-classes` (the intervals are off).
+ * `factory loop run fix-causes` (the intervals are off).
  */
 let lab: Lab
 
@@ -49,7 +49,7 @@ const stored = async (): Promise<Record<string, { class: string; by: string }>> 
 }
 
 test('a pass stores the fix commits of the window by rule, a commit no rule classes as other, and a later pass nothing new', async () => {
-  const first = await runLoop(lab, 'fix-classes')
+  const first = await runLoop(lab, 'fix-causes')
   expect(first).toMatchObject({ started: true, error: null })
   const expected = {
     'fix(test): flaky timer in the suite': { class: 'tests', by: 'rule' },
@@ -60,13 +60,13 @@ test('a pass stores the fix commits of the window by rule, a commit no rule clas
   }
   expect(await stored()).toEqual(expected)
 
-  expect((await runLoop(lab, 'fix-classes')).error).toBeNull()
+  expect((await runLoop(lab, 'fix-causes')).error).toBeNull()
   expect(await stored()).toEqual(expected)
 })
 
 test('a commit made after a pass is stored by the next one', async () => {
   await commit('fix(api): the schema and the client disagree', 1)
-  await runLoop(lab, 'fix-classes')
+  await runLoop(lab, 'fix-causes')
   expect((await stored())['fix(api): the schema and the client disagree']).toEqual({ class: 'other', by: 'rule' })
   expect(Object.keys(await stored())).toHaveLength(6)
 })
@@ -79,10 +79,10 @@ test('factory read fix-commits counts each class in the week it was committed, t
   expect(model.repos).toBe(1)
   expect(model.weeks).toHaveLength(4)
   const [thisWeek, lastWeek, ...older] = model.weeks
-  expect(thisWeek?.byClass).toMatchObject({ tests: 1, tooling: 1, other: 2, docs: 0, logic: 0 })
+  expect(thisWeek?.byCause).toMatchObject({ tests: 1, tooling: 1, other: 2, docs: 0, logic: 0 })
   expect(thisWeek?.total).toBe(4)
-  expect(lastWeek?.byClass).toMatchObject({ docs: 1, other: 1, tests: 0 })
+  expect(lastWeek?.byCause).toMatchObject({ docs: 1, other: 1, tests: 0 })
   expect(lastWeek?.total).toBe(2)
   expect(older.map((w) => w.total)).toEqual([0, 0])
-  expect(model.classes.map((c) => c.key)).toContain('environment')
+  expect(model.causes.map((c) => c.key)).toContain('environment')
 })
