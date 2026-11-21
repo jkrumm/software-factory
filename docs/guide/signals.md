@@ -66,9 +66,9 @@ export function originOf(source: string): IssueOrigin {
 
 **Example files:**
 
-- [`contract/src/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/intake.ts#L51-L80): the envelope: kinds, origins, trusts, and the fields the receiver sets
-- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L13-L21): `originOf`, source name to origin
-- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L121-L132): `fingerprintOf`
+- [`contract/src/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/intake.ts#L52-L80): the envelope: kinds, origins, trusts, and the fields the receiver sets
+- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L10-L18): `originOf`, source name to origin
+- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L118-L129): `fingerprintOf`
 - [`kernel/keys.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/keys.ts#L12-L23): `key`, the one way to build a deterministic key
 
 ## Triage
@@ -114,9 +114,9 @@ The factory itself calls no model. Every judgment goes through an adapter in `ap
 **Example files:**
 
 - [`app/intake-receive.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-receive.ts#L103-L196): `receive`, the whole decision in order
-- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L47-L62): `gate`, who may put work in which repo
+- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L44-L59): `gate`, who may put work in which repo
 - [`adapters/agw/amend.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/agw/amend.ts#L17-L70): the `factory-triage` call in amend mode and its checks
-- [`domains/planning/settle.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/settle.ts#L39-L54): `settleRule`, deterministic first
+- [`domains/planning/settle.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/settle.ts#L46-L61): `settleRule`, deterministic first
 
 ## Incidents and amendments
 
@@ -232,7 +232,7 @@ A work repo is a repo no `project.yaml` describes, or one whose `project.yaml` s
 
 **Example files:**
 
-- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L43-L62): `gate`, work repo before any other rule
+- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L40-L59): `gate`, work repo before any other rule
 - [`app/intake-receive.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-receive.ts#L103-L129): `receive`, where the exception for an owner-filed lead sits
 
 **Read more:**

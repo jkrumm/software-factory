@@ -62,8 +62,8 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
 
 **Example files:**
 
-- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L21-L135): `PAYLOADS`, every event with its payload
-- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L151-L178): `SENDERS`, who may send each
+- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L29-L143): `PAYLOADS`, every event with its payload
+- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L159-L186): `SENDERS`, who may send each
 
 ## The transition table
 
@@ -185,7 +185,7 @@ export const startLead = (issue: IssueId, attempt: number): Effect => ({
 - [`kernel/keys.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/keys.ts#L1-L23): `Key` and `key`
 - [`domains/work/effects.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/effects.ts#L35-L71): the four effects and their keys
 - [`domains/leads/names.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/names.ts#L1-L7): `leadKey`, the name that labels a terminal
-- [`adapters/postgres/work-store.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/postgres/work-store.ts#L115-L128): `appendEvent`, one row per key
+- [`adapters/postgres/work-store.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/postgres/work-store.ts#L116-L129): `appendEvent`, one row per key
 
 ## Facts are stored, state is derived
 
@@ -212,7 +212,7 @@ The version-guarded update:
 
 **Example files:**
 
-- [`adapters/postgres/work-store.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/postgres/work-store.ts#L106-L113): the version-guarded update
+- [`adapters/postgres/work-store.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/postgres/work-store.ts#L107-L114): the version-guarded update
 - [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L148-L160): `replay`, the Issue from its applied events
 
 ## issue_1809, end to end
