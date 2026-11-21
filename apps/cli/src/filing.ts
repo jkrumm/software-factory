@@ -152,7 +152,7 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
     plain: artifactListPlain,
   },
   'issue.ship': {
-    help: "One --acceptance per acceptance line of the Issue, each starting `met: ` or `not met: `; over 500 characters is cut, and a refusal prints the line it wants. A `not met` with its why is allowed and honest; a ship stating nothing is counted as friction, like one without a /review at standard or deep (the factory never refuses a ship for a review). The factory finds what your branch, or an earlier attempt's, landed on the default branch: you type no commit.",
+    help: "One --acceptance per acceptance line of the Issue, each starting `met: ` or `not met: `; over 500 characters is cut, and a refusal prints the line it wants. A `not met` with its why is allowed and honest; a ship stating nothing is counted as friction, like one without a /review at standard or deep (the factory never refuses a ship for a review). The factory finds what your branch, or an earlier attempt's, landed on the default branch: you type no commit. `--call` names this ship (`ship-<attempt>`, then `ship-<attempt>-2` after a regression): the same name twice is one ship.",
     notice: shipNotice,
   },
   'issue.defer': {
