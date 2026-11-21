@@ -155,7 +155,7 @@ if ('failed' in outcome) {
 }
 ```
 
-The brief wraps the deploy as `factory deploy-lock --project <repo> -- make -C <main checkout> deploy` when the project shares it with other leads: from the main checkout, never a worktree, because a worktree's `make deploy` repoints the LaunchAgents at the worktree.
+The brief wraps the deploy as `factory deploy-lock --project <repo> -- make -B -C <main checkout> deploy` when the project shares it with other leads: from the main checkout, never a worktree, because a worktree's `make deploy` repoints the LaunchAgents at the worktree. `-B` forces the recipe, since a `deploy/` directory would otherwise make plain `make deploy` a silent no-op.
 
 **Example files:**
 

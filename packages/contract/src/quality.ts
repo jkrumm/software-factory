@@ -100,7 +100,9 @@ export const ShipBody = z
     call: z
       .string()
       .min(1)
-      .describe("the lead's name for this ship, e.g. ship-<attempt>: the same name twice is one ship"),
+      .describe(
+        "the lead's name for this ship, e.g. ship-<attempt>, then ship-<attempt>-2 after a regression: the same name twice is one ship",
+      ),
     /** omitted or empty: the commits of the Issue's branches that are on the default branch, as git finds them */
     commits: z.array(z.string().min(1)).max(50).optional(),
     /** the flag form `--commit <sha>` (repeatable), joined with `commits` */

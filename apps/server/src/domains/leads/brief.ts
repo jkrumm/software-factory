@@ -36,7 +36,7 @@ The CLI fills \`--attempt\` from your session. A value \`-\` is read from stdin,
 - \`factory issue close <id> --outcome done|dropped --reason "..."\`: end without a deploy.
 - \`factory issue defer <id> --until <time>\`, \`--after issue_5\` or \`--review <pull request>\`: wait for a time, for other Issues, or for someone else's review.
 - \`factory issue block <id> --reason "..."\`: stall, when you cannot go on and nobody can answer.
-- \`factory issue ship <id> --call ship-<attempt> --acceptance "met: ..." --acceptance "not met: ..."\`: after you landed and deployed, one line per acceptance line; you type no commit. \`--call\` names this ship: the same name twice is one ship, so use one name per attempt.
+- \`factory issue ship <id> --call ship-<attempt> --acceptance "met: ..." --acceptance "not met: ..."\`: after you landed and deployed, one line per acceptance line; you type no commit. \`--call\` names this ship: the same name twice is one ship, so a ship after a Watch regression takes a new name (\`ship-<attempt>-2\`).
 - \`factory issue ask <id>\`: raise a Decision; \`factory decision take-default <decision id>\` settles your own once you built on its default.
 - \`factory artifact submit <id> --kind spec --title "..." --content @file.md\`: hand over a Spec, Concept or Report.
 - \`factory artifact show <artifact-id>\`, \`factory artifact revise <artifact-id> --content @file.md\` and \`factory artifact annotation-reply <artifact-id> <annotation-id> --disposition applied|deferred|declined --note "..."\`: read a verdict, answer \`changes\` with a revision, answer each annotation.
