@@ -38,6 +38,7 @@ const FIXTURES: Record<string, { failing: string; passing: string }> = {
   'linked issue': { failing: 'linkedIssues', passing: 'chainedIssues' },
   scorer: { failing: 'new Scorer()', passing: 'new Loop()' },
   babysitter: { failing: "'babysitter'", passing: "'steward'" },
+  'specs not needed': { failing: 'specs_not_needed', passing: 'asks_not_needed' },
   'ask judge': { failing: 'FACTORY_ASK_JUDGE', passing: 'FACTORY_JUDGE // ask the Judge? no: ask, then judge' },
   'light review': { failing: 'lightReview', passing: 'standardReview' },
   'per-commit coverage': { failing: '// per-commit coverage', passing: '// per commit' },

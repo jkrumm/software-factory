@@ -108,7 +108,7 @@ export function targetTally(kpis: readonly Pick<Kpi, 'value' | 'measured' | 'tar
 const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   avoidable_touches: ['Issue', 'Issues'],
   first_verification_passes: ['watch', 'watches'],
-  specs_not_needed: ['Spec verdict', 'Spec verdicts'],
+  asks_not_needed: ['answer', 'answers'],
   errands_reached_per_100: ['Issue', 'Issues'],
   cycle_p50: ['sample', 'samples'],
   queue_wait_p90: ['sample', 'samples'],
@@ -125,7 +125,7 @@ export function sampleWords(kpi: Pick<Kpi, 'key' | 'n'>): string {
 export const KPI_HINT = {
   avoidable_touches: 'avoidable touch',
   first_verification_passes: 'first verification pass',
-  specs_not_needed: 'needed me',
+  asks_not_needed: 'asks not needed',
   errands_reached_per_100: 'errand',
   cycle_p50: 'cycle',
   queue_wait_p90: 'queue wait',
@@ -407,7 +407,8 @@ export const MEANING: Record<KpiKey, string> = {
   avoidable_touches:
     'How often you had to step in on something the factory should have settled, per Issue a person, an agent or an alert filed. Lower is better.',
   first_verification_passes: 'Of the first checks after a ship, how many passed. Higher is better.',
-  specs_not_needed: 'Of the Specs sent to you, how many you said did not need you. Lower is better.',
+  asks_not_needed:
+    'Of your answers to Specs, Concepts and Decisions, how many changed nothing: Looks good with no word, or the recommendation taken. Lower is better.',
   errands_reached_per_100:
     'How many Errands got through to you per 100 Issues: a device, a portal or a secret only you can supply. Lower is better.',
   cycle_p50: 'How long a typical Issue takes from filed to closed. Shorter is better.',
@@ -423,7 +424,7 @@ export const FIX_MEANING = 'How many fix commits landed per week, each one a mis
 export const KPI_ORDER: readonly KpiKey[] = [
   'avoidable_touches',
   'first_verification_passes',
-  'specs_not_needed',
+  'asks_not_needed',
   'errands_reached_per_100',
   'cycle_p50',
   'queue_wait_p90',

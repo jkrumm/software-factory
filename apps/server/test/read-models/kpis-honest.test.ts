@@ -92,7 +92,7 @@ test('the queue wait is split by what held it, the largest first, and nothing is
 
 test('a ratio over nothing and a share under the floor read as not measured, never zero', async () => {
   const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-  for (const key of ['specs_not_needed', 'first_verification_passes', 'cycle_p50']) {
+  for (const key of ['asks_not_needed', 'first_verification_passes', 'cycle_p50']) {
     const kpi = model.kpis.find((k) => k.key === key)
     expect(kpi, key).toMatchObject({ value: null, measured: false })
     expect(kpi?.reason, key).toContain('counted')

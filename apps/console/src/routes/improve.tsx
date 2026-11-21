@@ -90,7 +90,7 @@ const BAND_CARD = 'row-span-3 grid grid-rows-subgrid gap-y-1 self-stretch'
 const KPI_ICON: Record<KpiKey, Icon> = {
   avoidable_touches: HandPointingIcon,
   first_verification_passes: SealCheckIcon,
-  specs_not_needed: FileTextIcon,
+  asks_not_needed: FileTextIcon,
   errands_reached_per_100: HandPointingIcon,
   cycle_p50: TimerIcon,
   queue_wait_p90: HourglassIcon,

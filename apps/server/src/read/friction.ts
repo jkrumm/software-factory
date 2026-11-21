@@ -2,7 +2,17 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { FrictionCount, FrictionModel, SpecSource } from '@software-factory/contract'
 import { readEdgeIncidents } from './api-errors.ts'
-import { avoidableTouches, issuesFiled, orchestratorSteering, ownerVerdict, TOUCH_LABELS, type Window } from './kpis.ts'
+import {
+  askVerdict,
+  avoidableTouches,
+  decisionChangedNothing,
+  issuesFiled,
+  orchestratorSteering,
+  ownerDecision,
+  TOUCH_LABELS,
+  verdictChangedNothing,
+  type Window,
+} from './kpis.ts'
 import { specSourceSql } from './spec-screen.ts'
 import { per, windowOf } from './stats.ts'
 import { refusalKind } from './refusal-kind.ts'
@@ -28,12 +38,12 @@ const STEERS: Record<string, string> = {
   reopened: 'Issues the orchestrator reopened',
 }
 
-/** Who made a Spec owed that the owner marked not needed: the friction line names its source, so the rule behind it is found. */
+/** Who made an ask owed whose answer changed nothing: the friction line names its source, so the rule behind it is found. */
 const SPEC_SOURCES_SAID: Record<SpecSource, string> = {
-  triage: 'Specs triage made owed that did not need the owner',
-  filer: 'Specs the filer made owed that did not need the owner',
-  replan: 'Replan Specs that did not need the owner',
-  lead: 'Specs a lead judged due that did not need the owner',
+  triage: 'Specs triage made owed that changed nothing when he answered',
+  filer: 'Specs the filer made owed that changed nothing when he answered',
+  replan: 'Replan Specs that changed nothing when he answered',
+  lead: 'Specs a lead judged due that changed nothing when he answered',
 }
 
 const ANSWERERS: Record<string, string> = {
@@ -230,11 +240,26 @@ async function countsOf(
     FROM factory.verdicts v
     JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
     LEFT JOIN factory.spec_screens s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
-    WHERE ${ownerVerdict(sql, w)} AND v.needed_me IS FALSE
+    WHERE ${askVerdict(sql, w)} AND ${verdictChangedNothing(sql)}
     GROUP BY 1`)
   for (const [source, label] of Object.entries(SPEC_SOURCES_SAID)) {
-    add('spec_unneeded', `spec_unneeded:${source}`, label, unneeded.find((row) => row.key === source)?.n ?? 0)
+    add('ask_unneeded', `ask_unneeded:${source}`, label, unneeded.find((row) => row.key === source)?.n ?? 0)
   }
+  add(
+    'ask_unneeded',
+    'ask_unneeded:concept',
+    'Concepts that changed nothing when he answered',
+    await one(sql`
+      SELECT count(*) AS n FROM factory.verdicts v JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'concept'
+      WHERE ${askVerdict(sql, w)} AND ${verdictChangedNothing(sql)}`),
+  )
+  add(
+    'ask_unneeded',
+    'ask_unneeded:decision',
+    'Decisions he answered with the recommendation',
+    await one(sql`
+      SELECT count(*) AS n FROM factory.decisions d WHERE ${ownerDecision(sql, w)} AND ${decisionChangedNothing(sql)}`),
+  )
 
   const settled = await grouped(sql`
     SELECT settled_by AS key, NULL::text AS detail, count(*) AS n FROM factory.decisions

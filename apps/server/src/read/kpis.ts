@@ -1,10 +1,11 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { HISTORY_WINDOWS, type Kpi, type KpiModel, type KpiPart } from '@software-factory/contract'
+import { HISTORY_WINDOWS, type Kpi, type KpiModel, type KpiPart, type SpecSource } from '@software-factory/contract'
 import { AUTO_RUN_NOTE_PATTERN } from '../kernel/auto-run.ts'
 import { boundedRead } from './bounded.ts'
 import { MIN_SAMPLES, percentile, per, shareOf, windowOf } from './stats.ts'
 import { catalogFields, type CatalogField } from './kpi-fields.ts'
+import { specSourceSql } from './spec-screen.ts'
 import { QUEUE_GROUPS, hoursByKind, queuedHours } from './queue-time.ts'
 import { flowFigures, regressionParts } from './kpis-flow.ts'
 import { costBySeat, USAGE_TIMEOUT_MS, type SeatCost } from './usage.ts'
@@ -66,6 +67,80 @@ export const ownerVerdict = (sql: SQL, w: Window) => sql`
   AND NOT EXISTS (
     SELECT 1 FROM factory.issue_events e
     WHERE e.key = 'verdict_given:' || v.artifact_id || ':' || v.revision AND e.actor = 'factory')`
+
+/**
+ * The owner's own verdicts on an ask: a Concept or a Spec (a Report is for information and asks nothing). `v` is the verdict
+ * row, `a` its artifact.
+ */
+export const askVerdict = (sql: SQL, w: Window) => sql`${ownerVerdict(sql, w)} AND a.kind IN ('concept', 'spec')`
+
+/**
+ * A verdict that changed nothing: Looks good with no note (a stored `with_notes` reads as Looks good) and no comment of his on
+ * that revision. The lead applies a note and every comment, so either one is a word he had to say.
+ */
+export const verdictChangedNothing = (sql: SQL) => sql`
+  v.verdict IN ('looks_good', 'with_notes') AND COALESCE(btrim(v.note), '') = ''
+  AND NOT EXISTS (
+    SELECT 1 FROM factory.annotations n
+    WHERE n.artifact_id = v.artifact_id AND n.revision = v.revision AND n.author = 'owner')`
+
+/** The Decisions the owner himself answered in the window (`d`); the Judge's, a default's and his delegate's answers are not his. */
+export const ownerDecision = (sql: SQL, w: Window) =>
+  sql`d.settled_by = 'owner' AND d.answered_at >= ${w.from} AND d.answered_at < ${w.to}`
+
+/** A Decision answered with the lead's recommendation and nothing else: an answer is an option or his own words, and his words differ. */
+export const decisionChangedNothing = (sql: SQL) => sql`lower(btrim(d.answer)) = lower(btrim(d.recommendation))`
+
+const ASK_KINDS: ReadonlyArray<readonly [string, string]> = [
+  ['spec', 'Spec verdicts that changed nothing'],
+  ['concept', 'Concept verdicts that changed nothing'],
+  ['decision', 'Decision answers that took the recommendation'],
+]
+const ASK_SOURCES: Record<SpecSource, string> = {
+  filer: 'Specs the filer made owed that changed nothing',
+  triage: 'Specs triage made owed that changed nothing',
+  replan: 'Replan Specs that changed nothing',
+  lead: 'Specs a lead judged due that changed nothing',
+}
+
+/**
+ * The owner's own answers in the window that asked him something (verdicts on a Concept or Spec, Decisions he answered) and
+ * how many of them changed nothing: `n` and `count` over all of them, and the same per kind and, for Specs, per who made the
+ * Spec owed. Each part is a share of its own group's answers.
+ */
+async function askAnswers(sql: SQL, w: Window): Promise<{ n: number; count: number; parts: KpiPart[] }> {
+  const rows: unknown[] = await sql`
+    SELECT 'kind:' || a.kind AS key, count(*) AS n, count(*) FILTER (WHERE ${verdictChangedNothing(sql)}) AS nothing
+    FROM factory.verdicts v JOIN factory.artifacts a ON a.id = v.artifact_id
+    WHERE ${askVerdict(sql, w)} GROUP BY a.kind
+    UNION ALL
+    SELECT 'source:' || ${specSourceSql(sql)}, count(*), count(*) FILTER (WHERE ${verdictChangedNothing(sql)})
+    FROM factory.verdicts v JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
+    LEFT JOIN factory.spec_screens s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
+    WHERE ${ownerVerdict(sql, w)} GROUP BY 1
+    UNION ALL
+    SELECT 'kind:decision', count(*), count(*) FILTER (WHERE ${decisionChangedNothing(sql)})
+    FROM factory.decisions d WHERE ${ownerDecision(sql, w)}`
+  const found = new Map(
+    rows.map((raw) => {
+      const row = z.object({ key: z.string(), n: z.coerce.number().int(), nothing: z.coerce.number().int() }).parse(raw)
+      return [row.key, row] as const
+    }),
+  )
+  const part = (key: string, label: string): KpiPart[] => {
+    const row = found.get(key)
+    return row && row.n > 0 ? [{ key, label, value: row.nothing / row.n, unit: 'share' }] : []
+  }
+  const kinds = ASK_KINDS.map(([kind]) => found.get(`kind:${kind}`))
+  return {
+    n: kinds.reduce((sum, row) => sum + (row?.n ?? 0), 0),
+    count: kinds.reduce((sum, row) => sum + (row?.nothing ?? 0), 0),
+    parts: [
+      ...ASK_KINDS.flatMap(([kind, label]) => part(`kind:${kind}`, label)),
+      ...Object.entries(ASK_SOURCES).flatMap(([source, label]) => part(`source:${source}`, label)),
+    ],
+  }
+}
 
 /**
  * Errands that reached the owner in the window, by what they need. One that reached him before `need` was stored counts under
@@ -501,12 +576,7 @@ async function kpisOf(
   const touches = await avoidableTouches(sql, w)
   const touchCount = Object.values(touches).reduce((a, b) => a + b, 0)
   const reached = await errandsReached(sql, w)
-  const specsAtOwner = await one(sql`
-    SELECT count(*) AS n FROM factory.verdicts v JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
-    WHERE ${ownerVerdict(sql, w)}`)
-  const specsNotNeeded = await one(sql`
-    SELECT count(*) AS n FROM factory.verdicts v JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
-    WHERE ${ownerVerdict(sql, w)} AND v.needed_me IS FALSE`)
+  const asks = await askAnswers(sql, w)
   const firstWatches = await one(sql`
     SELECT count(*) AS n FROM factory.quality_watches WHERE watch = 1 AND answer IN ('passed', 'regressed') AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const firstPassed = await one(sql`
@@ -545,14 +615,15 @@ async function kpisOf(
       beside: side?.flow.passBeside ?? [],
     }),
     kpi({
-      key: 'specs_not_needed',
-      value: per(specsNotNeeded, specsAtOwner),
+      key: 'asks_not_needed',
+      value: per(asks.count, asks.n),
       unit: 'share',
-      n: specsAtOwner,
-      count: specsNotNeeded,
+      n: asks.n,
+      count: asks.count,
       measured: true,
       definition:
-        "Of the owner's own verdicts on a Spec in the window (the Spec screen passed it to him; the factory's looks_good on a Spec it settled, and a default after the wait, are not his), the share he marked not needed (`needed me: no`). An unmarked verdict does not count against it. Beside it: the Specs per 100 Issues (near zero for weeks means the Spec path is silent) and the share of his verdicts that asked for notes or changes.",
+        "Of the owner's own answers in the window to what the factory asked of him (a verdict on a Concept or a Spec, a Decision he answered; the factory's defaults and his delegate's answers are not his), the share that changed nothing: a verdict of Looks good with no note and no comment of his on that revision, or a Decision answered with the lead's recommendation and nothing else. It reads his answer, never a mark he sets afterwards. The parts are that share by kind of ask and, for Specs, by who made the Spec owed (the filer, triage, a Replan, the lead). Beside it: the Specs per 100 Issues (near zero for weeks means the Spec path is silent) and the share of his verdicts that asked for notes or changes.",
+      parts: asks.parts,
       beside: side?.specBeside ?? [],
     }),
     kpi({
@@ -624,12 +695,10 @@ async function detailOf(
     SELECT count(*) AS n FROM factory.decisions
     WHERE asked_at >= ${w.from} AND asked_at < ${w.to}
       AND (settled_by IN ('owner', 'orchestrator') OR (answered_at IS NULL AND withdrawn_at IS NULL))`)
-  const byOwner = await one(sql`
-    SELECT count(*) AS n FROM factory.decisions WHERE settled_by = 'owner' AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
-  const recommended = await one(sql`
-    SELECT count(*) AS n FROM factory.decisions
-    WHERE settled_by = 'owner' AND lower(trim(answer)) = lower(trim(recommendation))
-      AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
+  const byOwner = await one(sql`SELECT count(*) AS n FROM factory.decisions d WHERE ${ownerDecision(sql, w)}`)
+  const recommended = await one(
+    sql`SELECT count(*) AS n FROM factory.decisions d WHERE ${ownerDecision(sql, w)} AND ${decisionChangedNothing(sql)}`,
+  )
   const verdicts = await one(sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)}`)
   const verdictsChanged = await one(
     sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)} AND (v.verdict IN ('with_notes', 'changes') OR (v.verdict = 'looks_good' AND v.note IS NOT NULL))`,

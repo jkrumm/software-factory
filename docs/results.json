@@ -34,10 +34,10 @@
         "max": null
       }
     },
-    "specs_not_needed": {
-      "value": 0.05128205128205128,
-      "n": 78,
-      "count": 4,
+    "asks_not_needed": {
+      "value": 0.3176470588235294,
+      "n": 85,
+      "count": 27,
       "target": {
         "kind": "at_most",
         "min": null,

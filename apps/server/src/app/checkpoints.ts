@@ -1208,8 +1208,8 @@ export async function verdictIn(
 
 /**
  * The owner's one-click mark on a verdict of a Spec, Concept or Report: did it need him. Stored like a Decision's
- * worth-asking flag; the newest marks are the Spec screen's and triage's precedents, and the "Specs at the owner not
- * needed" KPI counts them. The revision defaults to the latest one with a verdict.
+ * worth-asking flag; the newest marks are the Spec screen's and triage's precedents. No KPI reads it: whether an ask
+ * needed him is read from his answer. The revision defaults to the latest one with a verdict.
  */
 export function markNeeded(
   deps: CheckpointDeps,

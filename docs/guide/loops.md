@@ -59,7 +59,7 @@ export const THRESHOLDS = {
   kpis: {
     avoidable_touches: atMost(0.07),
     first_verification_passes: atLeast(0.9),
-    specs_not_needed: atMost(0.2),
+    asks_not_needed: atMost(0.2),
     errands_reached_per_100: NONE_YET,
     cycle_p50: atMost(3 * HOUR_MS),
     queue_wait_p90: atMost(8 * HOUR_MS),
@@ -202,7 +202,7 @@ The retro is a weekly review written by a lead. The friction pass files one retr
 - **A recommendation is a signal** with a marker (`Retro: <date> kpi=<key> before=<value> direction=<up|down>`), so the next retro finds it.
 - **The ledger.** Each retro states for every earlier recommendation whether it shipped and what its number did.
 - **A pattern needs a line.** A pattern the lead names without a cited transcript line is not in the Report.
-- **A repeated preference becomes a rule.** A preference the owner showed twice in the owner's verdict notes is written into the repo's `AGENTS.md` or `DESIGN.md`.
+- **A repeated preference becomes a rule.** A preference the owner showed twice in the owner's verdict notes, comments or Decision answers is written into the repo's `AGENTS.md` or `DESIGN.md`.
 
 <!-- snippet: apps/server/src/domains/improve/retro.ts outcomesLine -->
 ```ts

@@ -418,17 +418,11 @@ describe('the Specs that wait', () => {
     expect(calls).toEqual([])
   })
 
-  test("the owner's mark counts in the KPI and friction; the preview names the rule and sends no request", async () => {
+  test('his answer counts in the KPI and friction, not a mark; the preview names the rule and sends no request', async () => {
     const first = await workingIssue({ checkpoint: 'gate' })
     const gate = await submit(first, 'A product gate', '# Gate')
     value(await screenSpecs(deps))
-    value(
-      await giveVerdict(deps, { artifactId: gate, verdict: 'looks_good', note: 'Shouldnt reach me', revision: null }),
-    )
-    expect(value(await markNeeded(deps, { artifactId: gate, needed: false, revision: null }))).toMatchObject({
-      revision: 1,
-      neededMe: false,
-    })
+    value(await giveVerdict(deps, { artifactId: gate, verdict: 'looks_good', note: null, revision: null }))
     // a plan has no verdict to mark
     const second = await workingIssue({ title: 'A new tile' })
     const tile = await submit(second, 'A new tile', '# Tile')
@@ -445,19 +439,19 @@ describe('the Specs that wait', () => {
     clock.set(new Date(clock.now().getTime() + 60_000))
     const kpis = KpiModel.parse(await readKpis(db.sql, { now: clock.now(), days: 7 }))
     // one verdict is counted but is under the floor of three, so no share is claimed from it
-    expect(kpis.kpis.find((k) => k.key === 'specs_not_needed')).toMatchObject({
+    expect(kpis.kpis.find((k) => k.key === 'asks_not_needed')).toMatchObject({
       count: 1,
       n: 1,
       value: null,
       measured: false,
     })
     const friction = await readFriction(db.sql, { now: clock.now(), days: 7 })
-    expect(friction.counts.find((c) => c.key === 'spec_unneeded:filer')).toMatchObject({
-      group: 'spec_unneeded',
+    expect(friction.counts.find((c) => c.key === 'ask_unneeded:filer')).toMatchObject({
+      group: 'ask_unneeded',
       count: 1,
     })
-    expect(await readFrictionEvidence(db.sql, { now: clock.now(), days: 7 }, ['spec_unneeded:filer'])).toEqual({
-      'spec_unneeded:filer': [first],
+    expect(await readFrictionEvidence(db.sql, { now: clock.now(), days: 7 }, ['ask_unneeded:filer'])).toEqual({
+      'ask_unneeded:filer': [first],
     })
     expect(calls).toEqual([])
   })
