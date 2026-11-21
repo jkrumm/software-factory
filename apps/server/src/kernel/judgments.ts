@@ -39,7 +39,7 @@ const LEDGER: Readonly<Record<LedgerJudge, { label: string; rule: string }>> = {
   },
   queue: {
     label: 'The queue loop (edges)',
-    rule: 'an edge whose Issues touched no file in common, or one the loop took back',
+    rule: 'an edge whose Issues touched no file in common, or one the loop took back for that reason',
   },
   screen: {
     label: 'The screen (quarantined signals)',

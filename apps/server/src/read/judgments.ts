@@ -124,6 +124,7 @@ const EdgeRow = z.object({
   repo: z.string().nullable(),
   after: z.string(),
   removed: z.boolean(),
+  removalKind: z.string().nullable(),
   outcome: z.enum(ANSWER_OUTCOMES),
 })
 
@@ -221,9 +222,12 @@ async function answersOf(
     }))
 }
 
-/** What became of an edge: taken back or touching no common file was overruled, needed stood, the rest is not known yet. */
+/**
+ * What became of an edge: taken back because the Issues share no file, or touching none, was overruled; needed stood; the rest is
+ * not known yet. A removal for `owner_wait` says nothing of the edge (the blocker waited on the owner): it is read as if it stayed.
+ */
 const edgeOutcome = (sql: SQL) =>
-  sql`CASE WHEN f.removed THEN 'overruled' WHEN f.measured AND f.shared THEN 'stood' WHEN f.measured THEN 'overruled' ELSE 'unknown' END`
+  sql`CASE WHEN f.removal_kind = 'disjoint' THEN 'overruled' WHEN f.measured AND f.shared THEN 'stood' WHEN f.measured THEN 'overruled' ELSE 'unknown' END`
 
 /**
  * The edges one source (`triage` or `queue`) added in `[from, to)`, each with its outcome: the one expression the ledger
@@ -233,12 +237,20 @@ export async function edgeOutcomes(
   tx: SQL,
   options: { source: 'triage' | 'queue'; from: Date; to: Date; issues?: readonly string[]; repo?: string },
 ): Promise<
-  { at: Date; issue: string; repo: string | null; after: string; removed: boolean; outcome: AnswerOutcome }[]
+  {
+    at: Date
+    issue: string
+    repo: string | null
+    after: string
+    removed: boolean
+    removalKind: string | null
+    outcome: AnswerOutcome
+  }[]
 > {
   const { source, from, to, issues, repo } = options
   if (issues?.length === 0) return []
   const rows: unknown[] = await tx`
-    SELECT f.added_at AS at, f.issue_id AS issue, i.repo, f.after_issue AS after, f.removed, ${edgeOutcome(tx)} AS outcome
+    SELECT f.added_at AS at, f.issue_id AS issue, i.repo, f.after_issue AS after, f.removed, f.removal_kind AS "removalKind", ${edgeOutcome(tx)} AS outcome
     FROM (${edgeFacts(tx, { from, to }, issues)}) f
     JOIN factory.issues i ON i.id = f.issue_id
     WHERE f.source = ${source} AND (${repo ?? null}::text IS NULL OR i.repo = ${repo ?? null})
@@ -254,7 +266,7 @@ async function edgeAnswers(tx: SQL, source: 'triage' | 'queue', { from, to }: Sp
     issue: edge.issue,
     repo: edge.repo,
     subject: `${edge.issue} waits for ${edge.after}`,
-    answer: `edge added by ${source}${edge.removed ? ', taken back' : ''}`,
+    answer: `edge added by ${source}${edge.removed ? `, taken back (${edge.removalKind})` : ''}`,
     outcome: edge.outcome,
   }))
 }

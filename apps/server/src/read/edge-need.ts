@@ -44,19 +44,19 @@ export async function readEdgeNeed(tx: SQL, window: { from: Date; to: Date }): P
 
 /**
  * One row per edge the factory added in `[from, to)`: its source, the two Issues, when it was added, whether it was taken
- * back, whether both Issues' shipped paths are known (`measured`) and whether they share one (`shared`). The rows
+ * back (and why: `disjoint` or `owner_wait`), whether both Issues' shipped paths are known (`measured`) and whether they share one (`shared`). The rows
  * `readEdgeNeed` counts and the judge ledger lists.
  */
 export function edgeFacts(tx: SQL, window: { from: Date; to: Date }, issues?: readonly string[]) {
   const only = issues === undefined ? tx`` : tx`AND e.issue_id IN ${tx([...issues])}`
   return tx`
     WITH e AS (
-      SELECT issue_id, after_issue, inferred_by, created_at AS added_at, false AS removed
+      SELECT issue_id, after_issue, inferred_by, created_at AS added_at, false AS removed, NULL::text AS removal_kind
       FROM factory.planning_edges WHERE inferred_by IS NOT NULL
       UNION ALL
-      SELECT issue_id, after_issue, inferred_by, added_at, true AS removed FROM factory.queue_edge_removals
+      SELECT issue_id, after_issue, inferred_by, added_at, true AS removed, kind AS removal_kind FROM factory.queue_edge_removals
     )
-    SELECT split_part(e.inferred_by, ':', 1) AS source, e.removed, e.issue_id, e.after_issue, e.added_at,
+    SELECT split_part(e.inferred_by, ':', 1) AS source, e.removed, e.removal_kind, e.issue_id, e.after_issue, e.added_at,
         (EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id = e.issue_id AND q.kind = 'commits')
           AND EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id = e.after_issue AND q.kind = 'commits')
           AND NOT EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id IN (e.issue_id, e.after_issue)

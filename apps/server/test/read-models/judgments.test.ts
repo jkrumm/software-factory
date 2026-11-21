@@ -136,6 +136,9 @@ beforeAll(async () => {
   // an edge the queue loop took back: both Issues shipped a file in common, and it was still wrong
   await sql`INSERT INTO factory.queue_edge_removals (issue_id, after_issue, inferred_by, added_at, removed_at, kind, reason)
     VALUES ('issue_35', 'issue_34', 'queue: again', ${days(5)}, ${days(4)}, 'disjoint', 'no path in common')`
+  // the same pair taken back later because the blocker waited on the owner: it says nothing of the edge, which both Issues' files show was needed
+  await sql`INSERT INTO factory.queue_edge_removals (issue_id, after_issue, inferred_by, added_at, removed_at, kind, reason)
+    VALUES ('issue_35', 'issue_34', 'queue: again', ${days(5)}, ${days(3)}, 'owner_wait', 'waited 9 h')`
   // the calls whose edges those are
   await sql`INSERT INTO factory.loop_calls (key, loop, issue_id, subject, round, claimed_at, lease_until, outcome, answer, finished_at)
     VALUES ('triage:1', 'triage', 'issue_32', 'settle', 1, ${days(5)}, ${days(5)}, 'answered', '{}'::jsonb, ${days(5)}),
@@ -193,11 +196,11 @@ test('triage: an amend whose words came back as their own Issue, and an edge tou
 
 test('the queue loop: an edge needed stood, one touching no common file did not', async () => {
   const queue = await ledger('queue')
-  // needed, touching no common file, and taken back though both shipped a file in common
-  expect(queue).toMatchObject({ answers: 3, stood: 1, didNotStand: 2 })
+  // needed, touching no common file, taken back as disjoint though both shipped a file in common, and taken back for the owner's wait (stood)
+  expect(queue).toMatchObject({ answers: 4, stood: 2, didNotStand: 2 })
   expect(queue.newest.map((a) => a.answer).toSorted()).toEqual([
     'edge added by queue',
-    'edge added by queue, taken back',
+    'edge added by queue, taken back (disjoint)',
   ])
 })
 
