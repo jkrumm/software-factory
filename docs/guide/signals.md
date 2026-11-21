@@ -238,7 +238,7 @@ A work repo is a repo no `project.yaml` describes, or one whose `project.yaml` s
 
 **Read more:**
 
-- [`docs/architecture.md` Signals and triage](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L86-L149): quarantine, the screen, the door's registry, healing
+- [`docs/architecture.md` Signals and triage](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#signals-and-triage): quarantine, the screen, the door's registry, healing
 - [`docs/language.md` Work](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L7-L46): signal, triage outcome, held signal, door route, work repo
 
 Next: [Issues](./issues.md)

@@ -702,7 +702,7 @@ An audit of 2026-11-20 ([`docs/research/2026-11-maturation`](docs/research/2026-
 - **It measured more than it acted on.** 28 KPIs, 5 with a target, and no code acted on one; the friction loop had thresholds of its own. Now seven KPIs carry their targets in one table with the friction rules, and a KPI off its target over a whole window is a friction finding.
 - **Most loops do not check their own effect.** They file 18 % of all Issues, and only throughput looks again after the ship to see whether its number moved.
 - **A lead pays for what the server knows.** The gate refused 101 ships that week, about 70 for a commit sha typed by hand.
-- **The reference documents are too long.** `docs/architecture.md` is about 146 KB; this page and the guide are the way in.
+- **The reference documents are too long.** `docs/architecture.md` is about 59 KB; this page and the guide are the way in.
 
 
 ## The Console

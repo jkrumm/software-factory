@@ -5,7 +5,7 @@ help:
 	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, dead code the change introduces (fallow audit), boundaries, retired words, state words on screens, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
 	@echo "make check-fast  the lead's local check (project.yaml checks.fast): everything of make check up to the tests, then the unit tests of the files the branch changed (CHECK_FAST_ALL=1: all of them); CI runs the full gate sharded"
 	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free, the head's CI finished green and master's last finished CI run is not red (MERGE_GUARD_ARGS=--wait waits for the head's CI; --allow-red only for the change that fixes a red master)"
-	@echo "make docs-check  the README's counts and lists (event kinds, callers, tokens, screens, domains, states, Console port and writes) against the code, docs/settings.md against the settings loaders; also this repo's hygiene probe \`readme\`"
+	@echo "make docs-check  the README's counts and lists (event kinds, callers, tokens, screens, domains, states, Console port and writes) against the code, docs/settings.md against the settings loaders, the loops table of docs/architecture.md against the loop code; also this repo's hygiene probe \`readme\`"
 	@echo "make hygiene-tools  install the host tools of the hygiene probes that Homebrew provides (osv-scanner, for the advisories probe)"
 	@echo "make accounts-bundle  build packages/accounts into one file (packages/accounts/dist/claude-account, ACCOUNTS_OUT=<path>) that runs with bun alone: the claude-account for a machine without the factory"
 	@echo "make guide-check  the guide (docs/guide): its own install, Basalt tokens current, pages, links into master and the code the pages quote (scripts/guide-links.ts), the VitePress build"
@@ -199,7 +199,8 @@ hygiene-tools:
 
 # The README states counts and lists (event kinds, callers, tokens, screens, domains, states, the Console's port and writes): this reads them
 # from the code and fails on a README that disagrees. docs/settings.md is generated from the settings loaders (scripts/settings-table.ts) and fails
-# when it is not what they say. A step of check-static and this repo's hygiene probe `readme` (project.yaml `hygiene.probes`).
+# when it is not what they say; so is the loops table of docs/architecture.md (scripts/loops-table.ts). A step of check-static and this repo's hygiene probe `readme` (project.yaml `hygiene.probes`).
 docs-check:
 	@bun scripts/readme-check.ts
 	@bun scripts/settings-table.ts --check
+	@bun scripts/loops-table.ts --check

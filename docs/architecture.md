@@ -1,9 +1,12 @@
 # Architecture: what is built
 
 **A modular monolith on Bun: plain TypeScript and zod, Postgres as the only store, domains with no I/O behind ports,
-Elysia at the edge, and a generated CLI.** It has been the running factory since the cutover of 2026-11-08. Words follow `docs/language.md`; the rules a change must keep
-are in `AGENTS.md`; why something is as it is, in `docs/decisions.md`. This page says where things are and how they fit.
-What is not built is the last section.
+Elysia at the edge, and a generated CLI.** It has been the running factory since the cutover of 2026-11-08. Words
+follow `docs/language.md`; the rules a change must keep are in `AGENTS.md`; why something is as it is, in
+`docs/decisions.md`; the teaching text is `docs/guide/`. This page says where things are and how they fit; what is not
+built is the last section. A rule is one line with the symbol that holds it, and the symbol's docblock has the
+reasoning. Paths not starting with `apps/`, `packages/`, `docs/`, `scripts/`, `tests/` or `config/` are under
+`apps/server/src/`.
 
 ## Layout
 
@@ -11,18 +14,19 @@ What is not built is the last section.
 apps/
   server/     Elysia app: domains, application services, adapters, read models; migrations in apps/server/migrations
   door/       the alert door: loopback, one token (`machine`), posts alerts and refusal reports to the server
-  cli/        `factory`: commands generated from the OpenAPI document, plus the hook, slot, deploy-lock, merge-lock, land, follow, role and issue schema verbs
-  console/    the Console: a Vite and React PWA (shadcn on Base UI, Tailwind 4 with Basalt tokens, TanStack Router and Query); the server's second listener serves its build
+  cli/        `factory`: commands generated from the OpenAPI document, plus hook, slot, land and more
+  console/    the Console: a Vite and React PWA; the server's second listener serves its build
 packages/
   contract/   zod schemas: every request, response and event; the OpenAPI source; the spool format the hook shares
   client/     typed client (Eden) and the CLI's transport, including the change-stream follower
-  accounts/   the Claude Code subscription picker and the `claude-account` CLI (`packages/accounts/docs/accounts.md`): a pure rule over ports, no server or database (the server reads it in-process: `adapters/planning/accounts-source.ts`), one file buildable for a machine without a checkout
+  accounts/   the Claude Code subscription picker and `claude-account` (`packages/accounts/docs/accounts.md`): a pure
+              rule over ports; the server reads it in-process (`adapters/planning/accounts-source.ts`)
 tests/
-  scenarios/  use cases run against a real server and Postgres with fake hc and agw: the acceptance suite
+  scenarios/  use cases against a real server and Postgres with fake hc and agw: the acceptance suite
   e2e/        Playwright against a seeded server: every Console screen, and the source of the README's screenshots
-integrations/ the client pieces other machines install: the Claude Code hook entries, the Herdr glance mod, rd's contract, the Hermes fleet skill
-config/       roles.json (tier and effort per role), infra.json (host to repo, for incidents), throughput.json (the counting epoch)
-scripts/      deploy, verify, launch, env-file, merge-guard, the checks of the build (boundaries, retired words, vocabulary, public scan, README)
+integrations/ client pieces other machines install: the Claude Code hook entries, the Herdr glance mod, rd's contract
+config/       roles.json (tier and effort per role), infra.json (host to repo), throughput.json (the counting epoch)
+scripts/      deploy, verify, launch, env-file, merge-guard, and the build's checks (boundaries, vocabulary, README)
 deploy/       LaunchAgent templates
 docs/         product, language, architecture, operations, decisions, plan format, research, evidence
 ```
@@ -31,33 +35,35 @@ docs/         product, language, architecture, operations, decisions, plan forma
 
 ```
 apps/server/src/
-  kernel/        Result, ids, clock, keys, the event envelope, agw call types. Imports nothing else
+  kernel/        Result, ids, clock, keys, the event envelope, agw call types, WORKFLOWS. Imports nothing else
   domains/       pure: types, rules, state machines, ports (interfaces). No I/O, no SQL, no Elysia
-    intake/        signal envelope, trust and routing rules, fingerprints, incidents, the incident correlation
-    planning/      projects, plans, the chain, queue order; the steward's stall rules, settling, the queue loop's edges, the agw call ledger
+    intake/        signal envelope, trust and routing rules, fingerprints, incidents, correlation
+    planning/      projects, plans, the chain, queue order; the steward's stall rules, settling, queue edges
     capacity/      accounts and windows, memory, load, repo claims, queue state, test slots, admission
-    work/          the Issue: events, the total transition table, effects, the generated diagram, the review wait
-    leads/         attempts, the brief, notes, session state derived from hook events, the stop rule, the reaper, the main checkout look
+    work/          the Issue: events, the total transition table, effects, the review wait
+    leads/         attempts, the brief, notes, session state from hook events, the stop rule, the reaper
     quality/       the ship gate, evidence, the watch and verify
     checkpoints/   Decisions, artifacts and revisions, collections, the owner's pages, rechecks
-    errands/       Errands and requests, need, triage by rule, match keys, the desk, the Errand store and its ports
-    hygiene/       the hygiene loop: probes and their findings, the lifecycle, scripted fixes, dependency refresh, fix classes
-    improve/       the loops that watch the factory itself: selfwatch, overload, throughput, caps, friction, retro, digest, finding classes and the findings ledger
+    errands/       Errands and requests, need, triage by rule, match keys, the desk
+    hygiene/       probes and findings, the lifecycle, scripted fixes, dependency refresh, fix classes
+    improve/       the loops that watch the factory: selfwatch, overload, throughput, friction, retro, digest, ledger
   app/           use cases: one transaction to claim, the port call outside it, one to record
-    loops/         the loop runner (`passLoop`, `createSaid`) and each loop's pass with its LoopSpec (`xLoop`)
-  adapters/      postgres stores, hc terminals, agw, git, ntfy, filesystem blobs, the intake pollers, the hook socket, the uptime poller (`adapters/uptime/`: Argo's Kuma snapshot, `uptime` of `GET /v1/overview`: up, down, total, at most 10 down names, null when `FACTORY_UPTIME_URL` is unset, never read or older than 10 min; `FACTORY_UPTIME_TOKEN`, `FACTORY_UPTIME_EVERY_MS` default 60 s), the metrics export (`adapters/otel/`: the queue by reason, slot waits by reason and repo, step placements, seats per account and the load beside its ceiling, from `read/capacity-gauges.ts`, as OTLP/HTTP JSON gauges to ClickStack every `FACTORY_OTEL_EVERY_MS` (60 s) over the last 5 minutes; off without `FACTORY_OTEL_ENDPOINT`, a failed push is one log line and touches no loop; `FACTORY_OTEL_ENDPOINT` and `FACTORY_OTEL_KEY` are refs of `.env.server.tpl`)
+    loops/         the runner (`passLoop`, `createSaid`) and each loop's pass with its `LoopSpec`
+  adapters/      postgres stores, hc terminals, agw, git, ntfy, blobs, intake pollers, the hook socket, uptime, otel
   api/           Elysia route groups, auth and the caller policy
   read/          read models (SQL projections) for the API and the stream
-  compose-*.ts   wiring of each domain; `compose-loops.ts` hands each loop its ports and builds the runner; main.ts boots, takes the process lock first and shuts down in order
+  compose-*.ts   wiring of each domain; `compose-loops.ts` hands each loop its ports and builds the runner;
+                 `main.ts` boots, takes the process lock first and shuts down in order
 ```
 
 **Rules, enforced in `make check` by `scripts/boundaries.ts`:**
 
 - `domains/*` import only `kernel` and their own folder. A domain reaches another only through `app/`.
 - Each domain owns its tables. `read/` crosses them and is read-only.
-- A port is an interface in its domain; an adapter in `adapters/` implements it; tests use fakes of the same interface.
-- Only the unit of work, the migration runner and the read models' bounded read (`read/bounded.ts`: read-only, with a statement timeout) open a transaction. A port is never called inside one: claim,
-  commit, call, record.
+- A port is an interface in its domain; an adapter in `adapters/` implements it; tests use fakes of the same
+  interface.
+- Only the unit of work, the migration runner and the read models' bounded read (`read/bounded.ts`: read-only, with a
+  statement timeout) open a transaction. A port is never called inside one: claim, commit, call, record.
 - Every port returns `Result<T, PortError>`; only a programming error throws. `PortError.kind` is `timeout`, `gone`,
   `refused` or `unreadable`.
 - An intake poller reads the outside world and hands signals to the sink; it touches nothing else of the server.
@@ -65,426 +71,643 @@ apps/server/src/
 
 ## The Issue machine
 
-States (stored; screens show the five words of `docs/language.md` "Where work stands", `workOf` in `packages/contract/src/work-words.ts`: Running, Paused, Ready, Held, Checking, and Planned for plan rows; `scripts/vocabulary.ts` fails `make check` on a state word in a screen's text): `settling`, `queued`, `working`, `waiting`, `watching`, `closed`. `apply(state, event)` is a total table in
-`domains/work/table.ts`: every `(state, event)` cell is written down as a transition with its effects, a named refusal
-or a named ignore, and a missing cell fails `tsc`. The diagram and the wait table in `docs/language.md` are generated
-from that table.
+States (stored; screens show the five words of `docs/language.md` "Where work stands", `workOf` in
+`packages/contract/src/work-words.ts`; `scripts/vocabulary.ts` fails `make check` on a state word in a screen's text):
+`settling`, `queued`, `working`, `waiting`, `watching`, `closed`. `apply(state, event)` is a total table in
+`domains/work/table.ts`: every cell is a transition with its effects, a named refusal or a named ignore, and a missing
+cell fails `tsc`. The diagram and the wait table in `docs/language.md` are generated from it.
 
-**The owner's pause (`paused`).** `factory issue pause <id> --reason "..." [--until <iso>]` (`POST /issues/:id/pause`, owner and orchestrator) records `paused`: from `working` the Issue waits as `paused` and the lead hears it once (`note_lead`, the wait begins told); from a stall (not `lead_gone`, whose new attempt a resume would skip) or a `timer` wait the pause replaces the wait with no effect (the lead has no turn, and hears it with the resume); a second pause updates it in place; a dependency, `external` or person wait, an Issue no lead has started, a watch and a closed Issue refuse. The wait is not a stall, so the steward and the Judge never see it, a lead's `block`, `defer`, `ask`, `ship` and `close` are refused with the pause named, and the repo claim is free. It ends with `woken` from the owner or orchestrator (`factory issue note <id> "..." --wake`) or from the factory once `until` has passed (the planning pass reads `paused` with an `until` beside `timer`); the steward's wake is refused. It is Paused on you (`workOf`), not a need, and the retro's owner waits do not count it.
-
-- **One writer.** `app/` stores the event, the new state (`UPDATE … WHERE id = $1 AND version = $2`) and the effects in an
-  outbox in one transaction, then the outbox runs the effects (`app/outbox.ts`): claimed with a lease, retried with a
-  doubling delay. A late event that names an old attempt, watch, wait or checkpoint is ignored or refused by the table.
-- **A review wait takes Decisions.** While an Issue waits for the verdict on a Concept or Spec, the lead may raise and amend
-  Decisions about it (`wait.decisions`, each linked by `decisions.artifact_id`; the steward's ask stays stall-only). The wait
-  keeps its `since` and `told`, and ends when the verdict is given and every such Decision is settled, in either order
-  (`verdictGiven` marks a verdict that came first): one `note_lead` then covers the verdict and the answers. Needs lists
-  the Decision with its `artifact`, and the review item only until the verdict is given.
+- **One writer.** `app/` stores the event, the new state (`UPDATE … WHERE id = $1 AND version = $2`) and the effects
+  in an outbox in one transaction, then the outbox runs the effects (`app/outbox.ts`): claimed with a lease, retried
+  with a doubling delay. A late event that names an old attempt, watch, wait or checkpoint is ignored or refused by
+  the table.
+- **The owner's pause.** `factory issue pause <id> --reason "..." [--until <iso>]` records `paused`: a working Issue
+  waits as `paused` and its lead hears it once; a stall or `timer` wait is replaced by it silently; a second pause
+  updates in place; other waits, an unstarted Issue, a watch and a closed Issue refuse. It is no stall (the steward
+  and the Judge never see it), a lead's `block`, `defer`, `ask`, `ship` and `close` are refused with the pause named,
+  and the repo claim is free. It ends with `woken` from the owner or orchestrator (`factory issue note <id> "..."
+  --wake`) or once `until` has passed (the planning pass); the steward's wake is refused.
+- **A review wait takes Decisions.** While an Issue waits for the verdict on a Concept or Spec, the lead may raise and
+  amend Decisions about it (`wait.decisions`, each linked by `decisions.artifact_id`). The wait keeps its `since` and
+  `told` and ends when the verdict is given and every such Decision is settled, in either order (`verdictGiven`): one
+  `note_lead` covers both.
 - **Model test** (`apps/server/test/work/model.test.ts`): a seeded generator plays random event sequences and checks
-  invariants: a machine wait always has an exit that needs no person; a wait on the owner always states what it holds (a review wait with Decisions open leaves in steps: the verdict and each answer); a
-  closed Issue reopens only by its verb, within 30 days.
+  invariants: a machine wait always has an exit that needs no person; a wait on the owner always states what it holds;
+  a closed Issue reopens only by its verb, within 30 days.
 - No XState, no workflow engine. Events in Postgres plus a row version are the whole mechanism (NL11).
 
 ## Signals and triage
 
-Every input is one envelope (`source`, `kind`, `origin`, `trust`, `repo`, `fingerprint`, `title`, `text`, `link`) and goes
-through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/language.md`).
+Every input is one envelope (`source`, `kind`, `origin`, `trust`, `repo`, `fingerprint`, `title`, `text`, `link`:
+`packages/contract/src/intake.ts`) and goes through `receive` in `app/intake.ts`; the answer is a triage outcome
+(`docs/language.md`).
 
-- **Sources.** The owner (`factory signal`, Hermes through the narrow `signal` caller as `owner:hermes`), agents
-  (`agent:<repo>`), the alert door (Kuma and HyperDX), and two pollers: GitHub (the owner's new issues and failing
-  checks, a failing one filed as an `incident` so it takes the fix's place beyond the repo's `leads` and the lead of every
-  other Issue of the repo with an open pull request is noted once; anyone else's need the label and are held) and launchd (a
-  LaunchAgent's state). Infra alerts (memory, disk, load, swap, silent hosts, containers) are ClickStack alerts through the door (A4), not a poller. `repo` comes from the route, the door registry or the caller, never from an outside payload.
-  **App feedback** is a door source of its own: `POST /feedback/<app>` with the app's token (`feedback-<app>` in the door's
-  tokens file) becomes `POST /signals/feedback`, one envelope for every app (`FeedbackRequest`: app, version, route, title,
-  text, link). It is a signal from `feedback:<app>`, trust `outside`, whose text opens with an `app/version/route` header;
-  the repo is the door route `(feedback, <app>)` or none, and the fingerprint is the repo (or app) and the title, never the
-  version or route, so one complaint from two builds is one.
-  **A monitor with no route** is counted, and the settle pass deals with it without the owner: one whose name says a
-  project (`domains/intake/place.ts`: the project name is a run of the monitor's words, the longest and only match) or
-  that has a `<name> - Push|Door` sibling routed gets that route (`set_by` `factory:name`), up or down; one down past
-  10 min with no place is filed in `FACTORY_HOME_REPO` when set, else, past `unroutedHeldMs` (6 h), held once as a signal
-  with no repo (the owner or the Judge promotes it with one). Setting a route for a monitor that is down files its last
-  alert in that repo (Kuma notifies on a change only) and answers the held signal.
-- **Backlog sweep.** With `FACTORY_GITHUB_BACKLOG=1` the GitHub poller's first pass after a start also reads every open issue
-  of each polled project (oldest first, pull requests out) and files it through `receive`: the label's and the author's as
-  `machine`, everyone else's `outside` (held). It carries `writeback: false` and no `admitted`, so nothing is ever written to
-  GitHub for it (promoting a held one keeps that); one `github backlog:` log line per issue says the outcome. A replay is idempotent (the subject and event keys), and a sweep
-  that could not read a repo whole runs again on the next pass. Unset it after the sweep.
-- **Who may file where.** `domains/intake/rules.ts` gates a signal: a work repo hears only the owner (NL18), an unknown
-  repo hears no one, and a project hears the automatic sources its `signals:` lists. The door's are routed.
-  One exception to the work-repo rule: a lead's signal (`from agent:<its repo>`, `filer` set by the CLI) whose own Issue the owner filed (origin `you`) is held, not dropped, so the owner can promote work it owes a work repo; any other agent signal there is dropped (`work_repo`). The `screen` loop never reads such a signal (a work repo's words go to no workflow, and the last look never dismisses it): it stays held in Needs you.
-- **Incidents.** Alerts of the monitoring sources on one host or dependency inside a window join one incident: the VPS
-  down fires HyperDX (its infra and app alerts) and Kuma, and there is one Issue. The window is a setting (`FACTORY_INCIDENT_WINDOW_MIN`).
-- **Amend or new.** A loop's finding (friction, hygiene, selfwatch, throughput: `intake.api.file` with a `LoopFinding`) is
-  matched by its key alone (loop, class, repo, subject; `findingKeyOf`, a subject row `finding:…`): an open Issue of
-  that key takes it as a note, one closed within its repeat window counts it as a repeat, else it files anew (the window is the 24 h fingerprint window counted from the filing, or, for a finding that sets `LoopFinding.repeatWindowMs` (friction: 7 days), that window counted from the close); no
-  title match and no workflow call (an open Issue filed before the key existed is taken over once by its title's
-  fingerprint), and an agent's own signal is never matched or offered for amending to an open Issue a finding filed. An
-  amend by title match or workflow keeps a subject row for the signal's fingerprint, so the same words again are a repeat.
-  A repeat of a fingerprint inside its window changes nothing. A signal that carries the retro marker (`Retro: <date> kpi=…`, the last words of its text) is one recommendation with its own number to move: it skips the title match and the workflow and files its own Issue (only its own fingerprint folds it into an open one). An owner or agent signal that matches an
-  open Issue clearly (title overlap) amends it and reaches its lead as a note. Otherwise, unless a fingerprint, subject or
-  open incident already settles it, the `factory-triage` workflow sees the repo's open Issues and those closed in the last
-  day (outcome, reason) and answers amend `<open Issue>`, "already settled: `<closed Issue>`" or neither (file anew): a
-  settled answer acks `dropped`/`settled` and stores the signal dismissed by the judge, for a person's request and for a
-  `down` alert alike. The request waits for the workflow at most `triageWaitMs` (8 s, under the client's 10 s): later, or never (the line is down), it files anew and the run goes on unwatched; the same signal sent again rejoins it by its key. `POST /signals` therefore answers from the local database whatever the network does. The workflow side (agent-workflows `factory-triage`) must learn `settled`; until it does the extra
-  input is ignored and `settled` never comes back, which is today's behaviour. A `down` waits out a heal grace as `held`: an `up` inside it makes it `healed`, and a project's heal rule runs
-  `make restart` in its repo (`adapters/intake/runbook.ts`, outside any transaction) before an Issue is filed.
-- **Quarantine.** An outside signal is held and reaches a lead only when the owner or the Judge promotes it, fenced as data.
-  Promoting keeps a subject row for the signal's fingerprint (as for a person's request). A later outside signal with that
-  fingerprint from the same source amends the promoted Issue while it is open (a `noted` event, fenced; the signal is stored
-  `amended`, once per distinct text); when that Issue is closed it is held again as new, and while a signal is still held a
-  duplicate is that held signal (`replayed`, no second row). A held signal can also be **dismissed** (`POST /signals/:id/dismiss`,
-  the owner or the Judge, a reason of 1 to 500 characters): state `dismissed` with `dismissed_reason`, `dismissed_by`
-  (`owner`, `judge` or `probe`) and `dismissed_at`, no Issue, and it leaves Needs you and the friction count. Only a held
-  signal can be dismissed or promoted; a later signal with a dismissed one's key is a new report, held under that key extended with the dismissed id (and so on down the chain). A **probe** (`probe: true` on `POST /signals` or the door's feedback, carried on the
-  `Signal` envelope) passes the loop guard, the work-repo rule and the trust gate as any signal does, then is stored
-  `dismissed` by `probe` under a key of its source and fingerprint (a replay stores once): it files nothing, is never held and
-  never reaches the triage workflow; its ack is `dropped`, detail `probe`.
-- **Screen.** The `screen` loop (below) has the Judge look at held signals. Prompt injection: the workflow's verdict can only
-  promote, dismiss or leave the one signal it was shown (a `leave` stores `screen_note`, `screened_at`; the Console shows it as
-  "Judge: ..." above Promote and Dismiss); a promote files an Issue whose text is still outside text, fenced as data in the
-  lead's brief, as the owner's promote does. A newly held signal waits for the next pass (no kick; the interval is
-  10 minutes at least).
+- **Sources.** The owner (`factory signal`; Hermes through the narrow `signal` caller as `owner:hermes`), agents
+  (`agent:<repo>`), the alert door (Kuma and HyperDX; infra alerts come through it, not a poller), and two pollers:
+  GitHub (the owner's new issues and failing checks; anyone else's need the label and are held) and launchd. `repo`
+  comes from the route, the door registry or the caller, never from an outside payload. A failing check is filed as an
+  `incident`: its fix goes past the repo's `leads` cap, and while it is unsolved only its fix is admitted (stop the
+  line).
+- **App feedback** is a door source: `POST /feedback/<app>` with the app's token becomes `POST /signals/feedback`
+  (`FeedbackRequest`), from `feedback:<app>`, trust `outside`; the fingerprint is the repo (or app) and the title,
+  never version or route.
+- **A monitor with no route** is placed by the settle pass without the owner (`domains/intake/place.ts`: its name
+  holds a project's name, or a `<name> - Push|Door` sibling is routed; `set_by` `factory:name`). One down past 10 min
+  with no place is filed in `FACTORY_HOME_REPO` when set, else held after 6 h (`unroutedHeldMs`) as a signal with no
+  repo.
+- **Backlog sweep.** With `FACTORY_GITHUB_BACKLOG=1` the first GitHub pass after a start also files every open issue
+  of each polled project (`writeback: false`; everyone but the label and the owner is `outside`, held). Unset it
+  after.
+- **Who may file where** (`domains/intake/rules.ts`): a work repo hears only the owner (NL18), an unknown repo no one,
+  a project the automatic sources its `signals:` lists. A lead's signal about an Issue the owner filed (origin `you`)
+  is held, not dropped, so the owner can promote work it owes a work repo; any other agent signal to a work repo is
+  dropped (`work_repo`). The `screen` loop never reads a work repo's signal.
+- **Incidents.** Monitoring alerts on one host or dependency inside `FACTORY_INCIDENT_WINDOW_MIN` join one incident
+  and one Issue.
+- **Amend or new.** A loop's finding (`intake.api.file` with a `LoopFinding`) is matched by its key alone
+  (`findingKeyOf`: loop, class, repo, subject): an open Issue of that key takes it as a note, one closed within its
+  repeat window counts it as a repeat (24 h from the filing, or `LoopFinding.repeatWindowMs` from the close), else it
+  files anew; no title match, no workflow call. Any other signal that clearly overlaps an open Issue's title amends it
+  and reaches its lead as a note; otherwise, unless a fingerprint, subject or open incident settles it, the
+  `factory-triage` workflow sees the repo's open Issues and those closed in the last day and answers amend `<Issue>`,
+  "already settled" (acked `dropped`, stored dismissed by the judge) or neither. `POST /signals` waits for it at most
+  `triageWaitMs` (8 s); later it files anew and the run goes on unwatched, and the same signal sent again rejoins it
+  by its key. A signal with the retro marker (`Retro: <date> kpi=…`) skips both and files its own Issue. A `down`
+  waits out a heal grace as `held`; an `up` inside it is `healed`, and a project's heal rule runs `make restart` in
+  its repo (`adapters/intake/runbook.ts`) before an Issue is filed.
+- **Quarantine.** An outside signal is held and reaches a lead only when the owner or the Judge promotes it, fenced as
+  data. A later outside signal with a promoted one's fingerprint amends the Issue while it is open (`noted`, fenced),
+  else is held anew. A held signal can be dismissed (`POST /signals/:id/dismiss`, owner or Judge, a reason of 1 to 500
+  characters; `dismissed_by` is `owner`, `judge` or `probe`); only a held signal can be dismissed or promoted. A
+  **probe** (`probe: true`) passes the guards, is stored dismissed by `probe`, files nothing and never reaches triage.
+- **Screen.** The `screen` loop has the Judge look at held signals; its verdict can only promote, dismiss or leave the
+  one signal it was shown (`domains/intake/screen.ts`), and a promoted signal's text stays outside text, fenced in the
+  brief.
 - **Loop guard.** A change a loop made never fires that loop again.
-- **Stop the line.** While a repo's alert is unsolved, only its fix is admitted.
 
 ## Capacity and leads
 
-What runs on this host, and why an Issue waits. The reasons are in [the capacity guide](guide/capacity.md) and [the leads guide](guide/leads.md). Every setting a settings loader reads, with its default and what it tunes, is in [settings](settings.md), generated from the loaders. The CLI reads a few knobs of its own, which the table does not list; the two that pin a step are named under Steps off the mini. Each rule names the symbol that holds it.
+What runs on this host, and why an Issue waits. The reasons are in [the capacity guide](guide/capacity.md) and [the
+leads guide](guide/leads.md). Every setting a settings loader reads, with its default and what it tunes, is in
+[settings](settings.md), generated from the loaders. The CLI reads a few knobs of its own, which the table does not
+list; the two that pin a step are named under Steps off the mini. Each rule names the symbol that holds it.
 
 **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order:
 
 - **Queue**: `drain` starts nothing.
-- **Doctor** (`domains/capacity/doctor.ts`, `adapters/doctor/`): the project's `doctor` target says whether this host can run it. A red reading holds the project's Issues queued, with the reason in its first lines, and skips its hygiene `check` probe. A doctor that cannot run admits.
-- **Boot grace** (`domains/capacity/boot.ts`): for 30 minutes after boot, no lead until the newest samples show low load and memory; then one lead every 2 minutes.
-- **Load and processes** (`domains/capacity/host.ts`, `hostRule` in `app/planning-settings.ts`): a load ceiling in multiples of the cores and a process-count cap, always on. The panic class is a process storm, not memory.
-- **Memory**: the swap-out and swap ceilings, then the **learned fit** (`learnLeadCost`, `domains/capacity/leadcost.ts`): a repo's lead is the median of its newest ten attempts' peaks, set against the free memory of the newest host sample less headroom and less what young leads still take (`leadGrowth`). A falling cost is believed after three settled attempts. Refusal kind `memory`.
+- **Doctor** (`domains/capacity/doctor.ts`, `adapters/doctor/`): the project's `doctor` target says whether this host
+  can run it. A red reading holds the project's Issues queued, with the reason in its first lines, and skips its
+  hygiene `check` probe. A doctor that cannot run admits.
+- **Boot grace** (`domains/capacity/boot.ts`): for 30 minutes after boot, no lead until the newest samples show low
+  load and memory; then one lead every 2 minutes.
+- **Load and processes** (`domains/capacity/host.ts`, `hostRule` in `app/planning-settings.ts`): a load ceiling in
+  multiples of the cores and a process-count cap, always on. The panic class is a process storm, not memory.
+- **Memory**: the swap-out and swap ceilings, then the **learned fit** (`learnLeadCost`,
+  `domains/capacity/leadcost.ts`): a repo's lead is the median of its newest ten attempts' peaks, set against the free
+  memory of the newest host sample less headroom and less what young leads still take (`leadGrowth`). A falling cost
+  is believed after three settled attempts. Refusal kind `memory`.
 - **Disk fit** (`domains/capacity/disk.ts`).
-- **Lanes and claims**: `lanes` in `project.yaml` caps a resource class inside a repo (`domains/capacity/lanes.ts`); `leads` in `project.yaml` caps the repo's claims. A fix is never held.
-- **Test line and lead aim**: `lineRefusal` (`admission.ts`, kind `tests`) and `leadAimStep` hold new leads; see Test slots.
-- **Seats** (`domains/capacity/seats.ts`): each account has its own lead cap, raised by a bounded bonus while the host is idle. The repo's own cap is never raised, and no account goes past its window.
-- **Account**: `packages/accounts` alone decides which accounts are open and in what order (`adapters/planning/accounts-source.ts`); the server keeps no window limit of its own. An account a turn ended on a 401 for stays closed until its login Errand closes (`account_auth_marks`). A reading not renewed for ten minutes admits nothing.
+- **Lanes and claims**: `lanes` in `project.yaml` caps a resource class inside a repo (`domains/capacity/lanes.ts`);
+  `leads` in `project.yaml` caps the repo's claims. A fix is never held.
+- **Test line and lead aim**: `lineRefusal` (`domains/capacity/admission.ts`, kind `tests`) and `leadAimStep` hold new
+  leads; see Test slots.
+- **Seats** (`domains/capacity/seats.ts`): each account has its own lead cap, raised by a bounded bonus while the host
+  is idle. The repo's own cap is never raised, and no account goes past its window.
+- **Account**: `packages/accounts` alone decides which accounts are open and in what order
+  (`adapters/planning/accounts-source.ts`); the server keeps no window limit of its own. An account a turn ended on a
+  401 for stays closed until its login Errand closes (`account_auth_marks`). A reading not renewed for ten minutes
+  admits nothing.
 
-Relearn: `factory capacity relearn --repo <name>` ignores a repo's samples before a point (`lead_relearn`, `migrations/1034_lead_relearn.sql`). Fewer than three attempts after it means the lane's prior applies.
+**Walls and moves.** A lead that runs into an account's limit (`limit_stop`) stalls as `wall` and waits for the
+window's reset (`wallResetAt`, `windowOf`). While its account is closed and another is open with room, the steward
+moves the lead (`seats.move`, `moveWalled`, `noteLead`): the same session resumes under the other account's
+`CLAUDE_CONFIG_DIR`.
 
-**Walls and moves.** A lead that runs into an account's limit (`limit_stop`) stalls as `wall` and waits for the window's reset (`wallResetAt`, `windowOf`). While its account is closed and another is open with room, the steward moves the lead (`seats.move`, `moveWalled`, `noteLead`): the same session resumes under the other account's `CLAUDE_CONFIG_DIR`. Nothing is copied; the accounts share one `projects/` directory (`dotfiles/docs/claude-accounts.md`).
+**Owed Issues first.** A woken lead is the same session on its admitted account, so the account cap never refuses its
+resume; a herd woken at once takes the repo's places oldest wait first.
 
-**Owed Issues first.** A woken lead is the same session on the account it was admitted on, so the account cap never refuses its resume; from its wait's end it counts as a lead there. A herd woken at once takes the repo's places in order of its waits, oldest first.
-
-**API errors** (`domains/leads/apierror.ts`, `kindOfApiError`, `app/leads-api-errors.ts`). Claude Code fires `StopFailure`, not `Stop`, when a turn ends on an API error: the hook spools `api_error`, and a turn silent too long has its transcript read (`TranscriptTails`). Transient errors (429, 5xx, a timeout, `server_error`, a 403 `authentication_failed`) get one `continue` after 1, 3, 10, 10 and 10 minutes at most per incident; three leads failing within five minutes are one edge incident, staggered (`STAGGER_MS`). An auth error (401, a revoked token) marks the account and raises one login Errand. The screen is read before anything is typed (`HcTerminals.resume`).
+**API errors** (`domains/leads/apierror.ts`, `kindOfApiError`, `app/leads-api-errors.ts`). Claude Code fires
+`StopFailure`, not `Stop`, when a turn ends on an API error: the hook spools `api_error`, and a turn silent too long
+has its transcript read (`TranscriptTails`). Transient errors (429, 5xx, a timeout, a 403 `authentication_failed`) get
+one `continue` after a growing delay, at most five per incident; three leads failing within five minutes are one edge
+incident, staggered (`STAGGER_MS`). An auth error (401, a revoked token) marks the account and raises one login
+Errand.
 
 **The lead's life**
 
-- **Start** (`app/leads-start.ts`): claim, worktree `factory/<issue>-<attempt>`, terminal, then the brief (`domains/leads/brief.ts`). The standing orders are byte-identical in every brief, so the prompt cache serves them. Notes and nudges typed after a server start are paced (`app/type-pace.ts`).
-- **Hooks**: `factory hook` appends to the spool and posts to the socket; the server replays the spool with idempotent keys. Session state is derived when read, never stored.
-- **Notes** (`app/leads-note.ts`): typed once; the delivery key is claimed before the typing. A note from the owner binds the lead. The factory's, the steward's and the Judge's notes are data.
-- **Quiescing** (`app/leads-quiesce.ts`, `domains/leads/quiesce.ts`): a lead quiet in a wait is ended and marked dormant; worktree, branch and session id stay. Never quiesced: a stall, a turn in progress or with background work, a lead with a process under it, a slot in its worktree. The wake is `claude --resume` (`HcTerminals.revive`) with `--strict-mcp-config` (`HcTerminals.argv`). A live terminal that runs no agent after a restart is a lost lead (`followLeads`, `lead_losses`).
-- **Stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once; the next stop is let through, since a finished background task can restart it.
-- **Finalize** (`app/leads-finalize.ts`): claim back, terminals closed, transcripts archived, worktree and branch removed when clean and on the base. On close, every `factory/<issue>-*` branch goes once its work is on origin's default (`adapters/git/branches.ts`).
+- **Start** (`app/leads-start.ts`): claim, worktree `factory/<issue>-<attempt>`, terminal, then the brief
+  (`domains/leads/brief.ts`).. The standing orders are byte-identical in every brief, so the prompt cache serves them.
+- **Hooks**: `factory hook` appends to the spool and posts to the socket; the server replays the spool with idempotent
+  keys. Session state is derived when read, never stored.
+- **Notes** (`app/leads-note.ts`): typed once; the delivery key is claimed before the typing. A note from the owner
+  binds the lead. The factory's, the steward's and the Judge's notes are data.
+- **Quiescing** (`app/leads-quiesce.ts`, `domains/leads/quiesce.ts`): a lead quiet in a wait is ended and marked
+  dormant; worktree, branch and session id stay. Never quiesced: a stall, a turn in progress or with background work,
+  a lead with a process under it, a slot in its worktree. The wake is `claude --resume` (`HcTerminals.revive`) with
+  `--strict-mcp-config` (`HcTerminals.argv`). A live terminal that runs no agent after a restart is a lost lead
+  (`followLeads`, `lead_losses`).
+- **Stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once; the next stop is
+  let through, since a finished background task can restart it.
+- **Finalize** (`app/leads-finalize.ts`): claim back, terminals closed, transcripts archived, worktree and branch
+  removed when clean and on the base. On close, every `factory/<issue>-*` branch goes once its work is on origin's
+  default (`adapters/git/branches.ts`).
 
-**Quiet leads and stalls.** A `working` Issue whose lead ends a turn with nothing reported gets a steward note after the idle threshold (`nudgeIdle` in `app/loops/steward.ts`, `decideIdle` in `domains/planning/stall.ts`); a lead with background work waits longer. A quiet lead is never stalled or turned into a Decision. A same-cause stall, reworded after the last answer, stays stalled and asks nothing (`repeatedStall`, `decideStall`, `sameWords`).
+**Holds** (`kernel/hold.ts`). An answer that reads as a hold makes the wait a timer: one hour, doubling per hold, at
+most twelve.
 
-**Holds** (`kernel/hold.ts`). An answer that reads as a hold makes the wait a timer: one hour, each later hold of the attempt doubling, at most twelve hours.
+**Replans** (`app/planning-replan.ts`, `factory.replans`). One open Replan per project. The lead applies an approved
+Spec with `factory issue replan` (`applyReplan`); its only cancel is `factory issue withdraw` (`withdrawIssue`).
 
-**Claim deadlock** (`breakClaimDeadlocks`, `app/loops/steward.ts`). An Issue queued behind another of its repo that holds the claim is named with `after`; the blocker is admitted, and the holder is woken on close (`wakeDependents`). Only open planning edges count.
+**Test slots** (`domains/capacity/slots.ts`). `factory slot run` takes a host-wide slot around each heavy command; a
+wait past 45 minutes exits 75. A server that is down grants host-local slots (`~/.local/state/factory/local-slots`),
+so repair still runs.
 
-**Timers and long waits.** `wakeTimers` (`app/planning-pass.ts`) wakes each timer whose `until` has passed. A timed wait that open Issues sit behind for long enough reaches Needs you as `long_wait` (`read/long-waits.ts`), derived on every read.
-
-**Annotations.** `factory artifact annotation-reply` gives each owner annotation `applied`, `deferred` or `declined`. A ship or a `done` close is refused while one has none.
-
-**Replans** (`app/planning-replan.ts`, `factory.replans`). One open Replan per project. The lead applies an approved Spec with `factory issue replan` (`applyReplan`). A lead's only cancel is `factory issue withdraw` (`withdrawIssue`), for its own signal Issues.
-
-**Test slots** (`domains/capacity/slots.ts`). `factory slot run` takes a host-wide slot around each heavy command; a wait past 45 minutes exits 75. A server that is down grants host-local slots (`~/.local/state/factory/local-slots`), so repair still runs.
-
-- **Grant**: a base count of slots and a cap above it. A step beyond the base waits while the load tripwire holds (`loadTrip`, `SUSTAINED_LOAD_SAMPLES` in `domains/capacity/host.ts`: over the lead ceiling in each of the newest five minute samples). While swap grows, only the first step runs.
-- **Fit**: a step's peak is learned per project (`stepNameOf`, `domains/capacity/costs.ts`) as the p80 of its eight newest runs. A step with nothing learned is sized by a prior and never refused (`stepPrior`, `DEFAULT_PRIOR_MIB`). The free memory is the kernel's own (`freeMibOf`, `kernel_free_pct`), not the factory's sum.
-- **Order**: `lineOrder` (asked plus learned run). A small step passes a head that does not fit; a passed head's memory is reserved after ten minutes (`reservedStartMs`).
-- **Cores and classes**: `learnedCores`. Host-wide classes (`stepClassOf`): `<repo>-apple` or `<project> apple` runs one at a time, whichever repo runs it.
-- **Aim** (`domains/capacity/slot-aim.ts`, `app/capacity-aim.ts`): once a minute the slot count moves AIMD on the kernel's pressure level and swap (`factory.slot_aim`, `factory.slot_shadow`). The lead aim (`leadAimStep`, `slot_aim.lead_target`) gates lead admission and fails closed without a pressure reading.
-- **Waits**: each wait counts its reason (`migrations/1038_slot_waits.sql`, `factory.slot_waits`); `factory read capacity-loop` shows the split.
-- **Results**: each step writes `factory.step_costs` and its JUnit results (`apps/cli/src/junit.ts`, `factory.test_results`). Only a run inside a slot reports.
+- **Grant**: a base count of slots and a cap above it. A step beyond the base waits while the load tripwire holds
+  (`loadTrip`, `SUSTAINED_LOAD_SAMPLES` in `domains/capacity/host.ts`: over the lead ceiling in each of the newest
+  five minute samples). While swap grows, only the first step runs.
+- **Fit**: a step's peak is learned per project (`stepNameOf`, `domains/capacity/costs.ts`) as the p80 of its eight
+  newest runs; a step with nothing learned is sized by a prior and never refused (`stepPrior`). Free memory is the
+  kernel's (`freeMibOf`, `kernel_free_pct`).
+- **Order**: `lineOrder`. A small step passes a head that does not fit; a passed head's memory is reserved after ten
+  minutes (`reservedStartMs`). Host-wide classes (`stepClassOf`): an `apple` step runs one at a time, whichever repo
+  runs it.
+- **Aim** (`domains/capacity/slot-aim.ts`, `app/capacity-aim.ts`): once a minute the slot count moves AIMD on the
+  kernel's pressure level and swap (`factory.slot_aim`, `factory.slot_shadow`). The lead aim (`leadAimStep`,
+  `slot_aim.lead_target`) gates lead admission and fails closed without a pressure reading.
+- **Waits**: each wait counts its reason in `factory.slot_waits`; `factory read capacity-loop` shows the split.
+- **Results**: each step writes `factory.step_costs` and its JUnit results (`apps/cli/src/junit.ts`,
+  `factory.test_results`). Only a run inside a slot reports.
 
 ### Steps off the mini
 
-Issue 1793. A repo names its steps in `project.yaml` (`docs/project.md`); `remote: true` says a step passes in the step image on Ubuntu 24.04. The step host is the owner's setting ([settings](settings.md)). One call can be pinned to a host with `FACTORY_SLOT_HOST=mini|vps`, or kept on the mini with `FACTORY_SLOT_REMOTE=0`; the CLI reads both (`apps/cli/src/slot.ts`), so they are not in the table.
+A repo names its steps in `project.yaml` (`docs/project.md`); `remote: true` says a step passes in the step image on
+Ubuntu 24.04. The step host is the owner's setting ([settings](settings.md)). One call can be pinned to a host with
+`FACTORY_SLOT_HOST=mini|vps`, or kept on the mini with `FACTORY_SLOT_REMOTE=0`; the CLI reads both
+(`apps/cli/src/slot.ts`), so they are not in the table.
 
-- **Placement** (`app/capacity-slots.ts` `touchSlot`, `domains/capacity/remote.ts`): the VPS takes a step when `decideRemote` finds room and `finishesSooner` holds. A caller may run off the mini when the mini makes it wait, or when a slot is free but the VPS is learned to run the step in less time (issue 2668). A step that needs what only the mini has (`mac`, `apple`, `secrets`, `services`), or the host-wide class `apple`, never leaves the mini. Sooner: the learned VPS run against the expected mini wait (zero when a slot is free now) plus the mini run. A step the VPS would have taken but has no room for is placed `no_room`, not `free`.
-- **Pressure line** (`kernel/remote-pressure.ts`): the VPS's own memory and io stall, against a p99 baseline derived at each read.
+- **Placement** (`app/capacity-slots.ts` `touchSlot`, `domains/capacity/remote.ts`): the VPS takes a step when
+  `decideRemote` finds room and `finishesSooner` holds. A caller may run off the mini when the mini makes it wait, or
+  when a slot is free but the VPS is learned to run the step in less time (issue 2668). A step that needs what only
+  the mini has (`mac`, `apple`, `secrets`, `services`), or the host-wide class `apple`, never leaves the mini. Sooner:
+  the learned VPS run against the expected mini wait (zero when a slot is free now) plus the mini run.
+- **Pressure line** (`kernel/remote-pressure.ts`): the VPS's own memory and io stall against a p99 baseline.
 - **Why** (`step_placements`): `free`, `no_room`, `not_sooner` or `held`.
-- **Probe** (`adapters/remote/probe.ts`): one ssh at most every 30 s, never awaited by its caller.
-- **Run** (`apps/cli/src/remote-step.ts`): the worktree travels as a git snapshot (`commit-tree`) into a bare repository on the host. The image is built once per content and revision (`IMAGE_REVISION`). Install runs with network, the step without; both under `factory-steps.slice`, with a memory ceiling of 1.5 times the learned peak.
-- **Retention** (`adapters/remote/trim.ts`): a trim every six hours removes idle slot copies, cache entries and scratch directories.
-- **Results**: the exit code is the step's own. ssh's 255 and docker's 125 to 127 are the host's failure: the step goes back to the mini's line. A red on the VPS runs again on the mini, and only that result counts; a green there is `disagreed`.
-- **Hold** (`kernel/remote-hold.ts`, derived from the ledger): a disagreement holds the step on the mini for an hour, doubling up to seven days; the first green VPS run halves it.
-
-Not built: proving runs in idle time, pausing step containers under a production stall, a result cache keyed by tree, a browser in the image, a third host.
+- **Run** (`apps/cli/src/remote-step.ts`): the worktree travels as a git snapshot (`commit-tree`) into a bare
+  repository on the host. The image is built once per content and revision (`IMAGE_REVISION`). Install runs with
+  network, the step without, under a memory ceiling of 1.5 times the learned peak.
+- **Results**: the exit code is the step's own. ssh's 255 and docker's 125 to 127 are the host's failure: the step
+  goes back to the mini's line. A red on the VPS runs again on the mini, and only that result counts; a green there is
+  `disagreed`.
+- **Hold** (`kernel/remote-hold.ts`, derived from the ledger): a disagreement holds the step on the mini for an hour,
+  doubling up to seven days; the first green VPS run halves it.
 
 ## Quality
 
-- **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits, or none: then the factory
-  finds what the Issue's branches landed (`Commits.landed`: each attempt's branch, newest first; by content: the first
-  default-branch commit that holds every file the branch changed since it forked as the branch has it, a squash or a
-  rebase; or, for a branch the default branch holds and the lead made a commit on, the first-parent commit that brought
-  it in, a merge or its tip). Either way git must find them on the default branch and
-  newer than the Issue's cut (its first attempt's, so a later attempt ships what an earlier one landed), read by the
-  factory, never taken from the lead. Without that the ship is refused with the error named and
-  counted as friction; so is the ship of an Issue flagged `checkpoint: spec` with no Spec submitted ("The Spec checkpoint", under Checkpoints). A review is recorded as evidence when agw's ledger covers the range, and its absence is recorded
-  with its reason; it never refuses a ship (NL23). A commit agw routes to light is no absence (NL12: a review is owed at standard or deep), so a range whose only uncovered commits are light is recorded `not_required` and the friction loop does not count it; the brief has the lead read `agw review covered` before the merge. Whether a rebased, squash-merged change still counts as reviewed is
-  agw's judgment (`covered`), not the factory's; `factory issue ship` prints one stderr line naming the range to `/review`
-  when the answer is `uncovered`, or the reason when it was not read. The lead also states one line per acceptance line of the Issue
-  (`--acceptance "met: ..."` or `"not met: ..."`; the factory parses no criteria), recorded as `acceptance` evidence and shown on the
-  Issue page; the natural forms are normalised (a list marker, `AC2:`, bold, a dash for the colon), a line over 500 characters is cut, and a malformed line is refused (422) with the corrected `--acceptance` line built from what was sent; a `not met` never refuses, and a ship that states nothing is counted as
-  friction (`unstated_acceptance`) like an unreviewed one. The pull request the commits landed through is read from GitHub
-  (`adapters/quality/ci.ts`, the `Ci` port) and its head's CI recorded as `ci` evidence (`green`, `red`, `running`, `missing`
-  when no pull request or no check was found, `unknown` when GitHub could not be read); it never refuses a ship, and a red
-  or missing one is counted as friction (`unproven_ci`). One refusal reads CI at the ship (NL42): after a Watch regressed on the default
-  branch's CI, a ship is refused while that CI is still red for the commit it lands at (`ciStillRed`, `quality-ship.ts`). A second refusal holds a repeat ship after an alert regression: while the Issue's alert is still down, a ship naming no commit the last accepted one did not is refused (`afterAlertRegression`, `alertStillDown`, `quality-ship.ts`; the alert state is `intake.subjectsOfIssue`, wired in `main.ts`). A third refusal reads the deployed version (NL49): under deploy mode `make`, a change that deploys is refused while `make version` names a commit that does not hold the landed one (`notDeployed`, `quality-ship.ts`; the check is the Watch's own, `Proof.run` with the version only). A project that ships by push (no `via: pr` rule) or has no
-  `project.yaml` records no `ci` evidence and asks GitHub nothing. `evidence.ts` decides whether the paths deploy at all; its built-in inert
-  paths equal `scripts/verify.sh`'s. A project's `deploy.paths` (globs in `project.yaml`; empty by default, which changes nothing) narrows
-  that further: with some declared, a path deploys only if a glob names it and it is not built-in inert, so a rewrite built beside the
-  running system ships with `deploys: false` (no deploy, no version check). The gate, the watch's version check (`deployedHolds`) and
-  `ProjectChecks.deployPaths` all read it; `scripts/verify.sh` stays the built-in floor.
-- **Watch and verify** (`domains/quality/watch.ts`, `app/quality-watch.ts`): the project's `make verify` and probes run on
-  their own loop, so a slow verify never holds the leads' pass. What the watch runs is the synced `project.yaml`
-  (`app/quality-projects.ts`): deploy mode, `hold` as the window, `make verify` from a target, URL targets and probes. Only
-  mode `make` reads `make version`; a missing version target there is red. A file with no target leaves verify to the
-  Makefile, and a repo without a `project.yaml` is read from its Makefile alone (`adapters/quality/projects.ts`). A red check is retried with a doubling delay before it is
-  a regression, unless it is a `make` target that failed the same way in the repo's last finished run before the ship, another Issue's watch, or in the last run of another Issue's watch of the repo that regressed in the last day and no pass of that Issue has answered (one red, one owner: that lead has it; the Issue's own regressions never count) (every failing line of this run, numbers aside, is among the failing lines of those runs together, so a drift list that shrank or a changed number is the same red, a line none of them had (an added drift item too) is not; the Regressed note opens with the failed checks' names and first failing lines): that one is stored `inherited`, counts green, is never retried and stays on the Issue's page; a regression returns the Issue to its lead, twice, then it stalls. A checkout that cannot be read is
-  rechecked, never passed. In a project that ships through a pull request (`ship:` `via: pr`) verify also reads the default
-  branch's CI for the exact merged commit (`ci` check; `mergedSha`, the first-parent commit that holds the ship's named commits, never the branch tip at the ship, which a later commit of another lead may have moved): green passes, red is red (unless the first parent of the merged commit, the default branch before the change, was red on the same first failing check: that red is stored `inherited`, counts green and is no regression of the Issue; a parent that is green, running, missing or unreadable leaves it the change's), and a run still running (or not yet visible
-  within 10 min of the merge) is neither, so the watch is looked at again after `FACTORY_VERIFY_RECHECK_MS` and does not pass;
-  one running past an hour is red, and no run at all after 10 min passes with that said (the repo may have none). A pending
-  CI wins over a red `make verify` until it settles (`outcomeOf`: blocked first).
+- **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`). The lead names the merged commits, or none and the
+  factory finds what the Issue's branches landed (`Commits.landed`, by content: the first default-branch commit that
+  holds every file the branch changed, or the first-parent commit that brought a merged branch in). Git must find them
+  on the default branch and newer than the Issue's cut (its first attempt's); the lead's word is never taken.
+  Refusals: no such commits; an Issue flagged `checkpoint: spec` with no Spec (see Checkpoints); after a Watch
+  regressed on the default branch's CI, a ship while that CI is still red for the commit it lands at (`ciStillRed`,
+  NL42); a repeat ship after an alert regression that names nothing new while the alert is still down
+  (`afterAlertRegression`, `alertStillDown`); under deploy mode `make`, a deploying change while `make version` names
+  a commit that does not hold the landed one (`notDeployed`, NL49).
+- **Evidence, never a refusal.** Review: recorded when agw's ledger covers the range, its absence with the reason; a
+  commit agw routes to light is `not_required` (NL12, NL23); `factory issue ship` prints the range to `/review` when
+  it is `uncovered`. Acceptance: one `--acceptance "met: ..."` or `"not met: ..."` line per acceptance line of the
+  Issue, normalised, cut at 500 characters, a malformed line refused (422) with the corrected line; a ship that states
+  none is friction (`unstated_acceptance`). CI: the pull request the commits landed through and its head's CI (`Ci`
+  port, `adapters/quality/ci.ts`; `green`, `red`, `running`, `missing`, `unknown`); red or missing is friction
+  (`unproven_ci`). A project that ships by push, or has no `project.yaml`, records no `ci` evidence.
+- **Which paths deploy** (`domains/quality/evidence.ts`): its built-in inert paths equal `scripts/verify.sh`'s; a
+  project's `deploy.paths` globs narrow that (a path deploys only when a glob names it and it is not inert). The gate,
+  the watch's `deployedHolds` and `ProjectChecks.deployPaths` all read it.
+- **Watch and verify** (`domains/quality/watch.ts`, `app/quality-watch.ts`). The project's `make verify` and probes
+  run on the `watch` loop, so a slow verify never holds the leads' pass. What it runs is the synced `project.yaml`
+  (`app/quality-projects.ts`: deploy mode, `hold` as the window, the `make verify` target, URL targets, probes); a
+  repo without one is read from its Makefile (`adapters/quality/projects.ts`). Only mode `make` reads `make version`.
+  A red check is retried with a doubling delay before it is a regression; a regression returns the Issue to its lead,
+  twice, then it stalls. A checkout that cannot be read is rechecked, never passed.
+- **Inherited reds.** A `make` target that failed the same way (every failing line, numbers aside, among theirs) in
+  the repo's last finished run before the ship, or in the last run of another Issue's watch that regressed in the last
+  day and is unanswered, is stored `inherited`: it counts green, is never retried and stays on the Issue's page (one
+  red, one owner). A CI red whose merged commit's first parent was red on the same first failing check is inherited
+  the same way.
+- **CI of a pull-request repo** (`ship:` `via: pr`). Verify reads the default branch's CI for the exact merged commit
+  (`mergedSha`: the first-parent commit that holds the ship's commits, never the branch tip): green passes, red is
+  red, a run still running or not yet visible within 10 min is neither and is looked at again after
+  `FACTORY_VERIFY_RECHECK_MS`; one running past an hour is red; none after 10 min passes with that said. A pending CI
+  wins over a red `make verify` until it settles (`outcomeOf`).
 - **Reopen** (`app/quality-reopen.ts`) is the owner's, within 30 days of closing.
 
 ## Checkpoints
 
-A lead's wait ends at a checkpoint: a Decision, an Errand (a person's hands), a Spec or Concept (a verdict), or a pull request's review by someone else. Each rule is one line with the symbol that holds it; the reasoning is in `docs/guide/checkpoints.md`. Paths are under `apps/server/src/` unless shown. The waits are in `domains/work/table.ts` (`waitHint`); the verbs in `app/checkpoints.ts`, each sub-machine in its `app/checkpoints-*.ts` sibling.
+A lead's wait ends at a checkpoint: a Decision, an Errand (a person's hands), a Spec or Concept (a verdict), or a pull
+request's review by someone else. Each rule is one line with the symbol that holds it; the reasoning is in
+`docs/guide/checkpoints.md`. Paths are under `apps/server/src/` unless shown. The waits are in `domains/work/table.ts`
+(`waitHint`); the verbs in `app/checkpoints.ts`, each sub-machine in its `app/checkpoints-*.ts` sibling.
 
 **Decisions** (`domains/checkpoints/decision.ts`)
 - A form with a missing field is refused: 422 `missing_field`, nothing stored (`askDecision`).
 - A recommendation to keep waiting is refused (`refuseNoOpDefault`); what waits on a person is an Errand.
-- Settled in order: the Judge (`factory-ask`), the default after its wait when reversible, then the owner. Three Judge tries, 5 minutes apart (`decision_steps.tries`).
+- Settled in order: the Judge (`factory-ask`), the default after its wait when reversible, then the owner. Three Judge
+  tries, 5 minutes apart (`decision_steps.tries`).
 - A second ask from the same asker amends the open Decision; `guardVerdict` checks the Judge's answer.
 - A lead that built on its default settles it with `factory decision take-default` (`takeDefault`).
 
 **Errands** (`domains/errands/`, `app/checkpoints-errands.ts`)
-- Need is `secret`, `hands`, `approval` or `place` (`need.ts`). A stated need is checked for presence, never stored.
-- Before the owner sees it: rules, then `factory-errand`, then the owner. Rules: `screenByReview`, `screenByRule`, `screenByNeed` (`errand.ts`); `refuseKeyless`, `refuseBotCheck`, `refuseOffMacbook`, `verbFor` (`triage.ts`); `declinedMatch` (`app/checkpoints.ts`, `DECLINE_HOLD_MS`); `refuseHostClass`, `refuseUndialogable` (`errand.ts`). A refusal stores one `errand_refusals` row.
-- The same need joins the open Errand (`matchKey`, `app/checkpoints.ts`); `eachJoined` tells every joined Issue how it ended.
-- `--check` closes the Errand itself (`runCheck`, `resolveErrand`): exit 1..125 closes `not_needed`; 127 is `broken` (`checkVerdict`, `tellCheckBroken`).
-- The desk pass (`app/loops/desk.ts`, `domains/errands/desk.ts`) pushes MacBook dialogs through `ask-human.sh` (dotfiles; the caller is `pushQueue`, `adapters/shell/ask-human.ts`), for `secret` and `hands` only. A `place` waits on Needs you; an `approval` never goes to the MacBook.
-- Fixed gate verbs run with no dialog (`askHumanVerbs`, `verbFor`); a class the owner granted runs by itself (`kernel/auto-run.ts`).
-- The desk pass is due on the owner's return, on the Console's push button, when it never ran, and at least every 6 hours.
-- A done is checked: `finishErrand` reopens an Errand whose check still says needed, and keeps a failed run open (`run_*` columns). A command that fails twice ends (`retireFailed`, `MAX_RUN_TRIES`).
-- Approve (`checkpoints-approve.ts`): the owner runs an `approval` on the mini. It is recorded consent, not a barrier.
-- Turn back closes the Errand `turned_back`; the lead hears the note. The orchestrator's done needs `confirmedBy` and is never for `approval` (`finishErrand`).
-- A request is an Errand no Issue raised (`request.ts`, `requestErrand`, `SCREENED_SOURCES`). It expires 7 days after filing without a check; a new request with the same `request_key` supersedes the open one.
-- Recheck: an Errand or Decision in front of the owner past `FACTORY_CHECKPOINT_RECHECK_MS` (6 h) is looked at again (`recheckOpen`, `withdrawalReason`); each look is a `checkpoint_rechecks` row.
+- Need is `secret`, `hands`, `approval` or `place` (`domains/errands/need.ts`). A stated need is checked for presence,
+  never stored.
+- Before the owner sees it: rules, then `factory-errand`, then the owner. Rules: `screenByReview`, `screenByRule`,
+  `screenByNeed` (`domains/errands/errand.ts`); `refuseKeyless`, `refuseBotCheck`, `refuseOffMacbook`, `verbFor`
+  (`domains/errands/triage.ts`); `declinedMatch` (`app/checkpoints.ts`, `DECLINE_HOLD_MS`); `refuseHostClass`,
+  `refuseUndialogable` (`domains/errands/errand.ts`). A refusal stores one `errand_refusals` row.
+- The same need joins the open Errand (`matchKey`, `app/checkpoints.ts`); `eachJoined` tells every joined Issue how it
+  ended.
+- `--check` closes the Errand itself (`runCheck`, `resolveErrand`): exit 1..125 closes `not_needed`; 127 is `broken`
+  (`checkVerdict`, `tellCheckBroken`).
+- The desk pass (`app/loops/desk.ts`, `domains/errands/desk.ts`) pushes MacBook dialogs through the dotfiles'
+  ask-human script (the caller is `pushQueue`, `adapters/shell/ask-human.ts`), for `secret` and `hands` only. A
+  `place` waits on Needs you; an `approval` never goes to the MacBook.
+- Fixed gate verbs run with no dialog (`askHumanVerbs`); a class the owner granted runs by itself
+  (`kernel/auto-run.ts`).
+- A done is checked: `finishErrand` reopens an Errand whose check still says needed, and keeps a failed run open
+  (`run_*` columns). A command that fails twice ends (`retireFailed`, `MAX_RUN_TRIES`).
+- Approve (`app/checkpoints-approve.ts`): the owner runs an `approval` on the mini. It is recorded consent, not a
+  barrier.
+- Turn back closes the Errand `turned_back`; the lead hears the note. The orchestrator's done needs `confirmedBy` and
+  is never for `approval` (`finishErrand`).
+- A request is an Errand no Issue raised (`domains/errands/request.ts`, `requestErrand`, `SCREENED_SOURCES`). It
+  expires 7 days after filing without a check; a new request with the same `request_key` supersedes the open one.
+- Recheck: an Errand or Decision in front of the owner past `FACTORY_CHECKPOINT_RECHECK_MS` (6 h) is looked at again
+  (`recheckOpen`, `withdrawalReason`); each look is a `checkpoint_rechecks` row.
 
 **Specs and Concepts** (`domains/checkpoints/spec-screen.ts`, `app/checkpoints-specs.ts`)
-- A Spec flag (`checkpoint: spec`, or `gate` for one only the owner's verdict ends) owes a Spec. `shipIssue` (`app/quality-ship.ts`) refuses the ship until one exists.
-- The screen is `screenSpecByRule`, then `factory-spec-screen`. A failed call is retried; after the third it passes unscreened.
-- No verdict within `SPEC_WAIT_HOURS` (24 h, `packages/contract/src/lane.ts`): `recheckReviews` (`checkpoints-reviews.ts`) defaults it to `looks_good` by the factory, or `no_longer_applies` when its Issue closed.
-- The orchestrator may give a Spec's verdict (`delegateRefusal`), never a gate's or a Report's; the owner's verdict replaces it (`replaceDelegatedVerdict`).
+- A Spec flag (`checkpoint: spec`, or `gate` for one only the owner's verdict ends) owes a Spec. `shipIssue`
+  (`app/quality-ship.ts`) refuses the ship until one exists.
+- The screen is `screenSpecByRule`, then `factory-spec-screen`. A failed call is retried; after the third it passes
+  unscreened.
+- No verdict within `SPEC_WAIT_HOURS` (24 h, `packages/contract/src/lane.ts`): `recheckReviews`
+  (`app/checkpoints-reviews.ts`) defaults it to `looks_good` by the factory, or `no_longer_applies` when its Issue
+  closed.
+- The orchestrator may give a Spec's verdict (`delegateRefusal`), never a gate's or a Report's; the owner's verdict
+  replaces it (`replaceDelegatedVerdict`).
 - A filed Spec (`factory issue new --spec`) is stored as `filed-spec:<issue>` and starts no wait.
 
-**Reports and collections** (`adapters/postgres/collection-store.ts`, `checkpoint-store.ts`)
-- A Report with no Issue never waits and never reaches Needs you. `artifact link` names the Issues it concerns; only a Report can be linked. `artifact retire` hides it from the list.
-- A collection groups pages under one lead page; a page belongs to at most one (`409 refused`).
+**Reports and collections** (`adapters/postgres/collection-store.ts`, `adapters/postgres/checkpoint-store.ts`)
+- A Report with no Issue never waits or reaches Needs you; `artifact link` names the Issues it concerns, `artifact
+  retire` hides it. A collection groups pages under one lead page; a page belongs to at most one (`409 refused`).
 
 **Pull request reviews** (`adapters/reviews/pr.ts`)
-- A required review by someone else puts the Issue in the `external` wait. The `reviews` loop reads each such pull request every 15 minutes and wakes the lead on an approval, a change request, a comment, a merge or a close (`factory issue defer --review`).
+- A required review by someone else puts the Issue in the `external` wait. The `reviews` loop reads each such pull
+  request every 15 minutes and wakes the lead on an approval, a change request, a comment, a merge or a close
+  (`factory issue defer --review`).
+
 ## Loops and agw
 
-A loop is a named tick (`app/loops/runner.ts`) with a trigger (an interval, or a kick when something changed), a budget
-and single-flight passes. Its deterministic part runs in the server; its judgment is a dedicated agw workflow with its
-own prompt, tools and skills (`agent-workflows`), called through the agw port with an idle watchdog (`AGW_IDLE_MS`, 10 minutes: an `agw` process that prints nothing and does not exit for that long is killed with its process group; `agw` ends a pending wait every 110 s, so a run that is alive, however long, is never cut by the clock, `rules/agent-limits.md`). A call is
-recorded in `loop_calls` under its key, so the next boot takes it up again. The clock runs from the loop's last pass, not from
-boot (`loop_passes`, written at the end of every pass): the first pass after a restart comes when the interval since the
-last one is up, at once if it never ran, so a 6-hour loop still passes on a server that restarts on every deploy.
+A loop is a named tick (`app/loops/runner.ts`: `LoopSpec`, `passLoop`) with a trigger (an interval, or a kick when
+something changed), a budget and single-flight passes; `factory loop list` shows each loop's interval, kicks and
+passes. Its deterministic part runs in the server; its judgment is a dedicated agw workflow with its own prompt, tools
+and skills (`agent-workflows`), called through the agw port with an idle watchdog (`AGW_IDLE_MS`, 10 minutes: an `agw`
+process that prints nothing for that long is killed with its process group; `agw` ends a pending wait every 110 s, so
+a live run is never cut by the clock). A call is recorded in `loop_calls` under its key, so the next boot takes it up
+again. The clock runs from the loop's last pass (`loop_passes`), not from boot, so a 6-hour loop still passes on a
+server that restarts on every deploy.
 
-Every workflow the factory calls is one entry of `WORKFLOWS` (`kernel/workflows.ts`): its agw name, request and answer schemas, the
-prefix of its idempotency keys and its retry rule (tries and backoff). A caller asks `agw.run(name, request, key)`; the agw
-port (`adapters/agw/port.ts`) is the only code that knows `agw`. Each entry has an example in `packages/contract/fixtures/loops.json`
-that `apps/server/test/loops/wire.test.ts` parses, and that test also parses the copy agent-workflows holds when it is checked out.
+Every workflow the factory asks is one entry of `WORKFLOWS` (`kernel/workflows.ts`): its agw name, request and answer
+schemas, the prefix of its idempotency keys and its retry rule. A caller asks `agw.run(name, request, key)`; the agw
+port (`adapters/agw/port.ts`) is the only code that knows `agw`. Each entry has an example in
+`packages/contract/fixtures/loops.json`, parsed by `apps/server/test/loops/wire.test.ts` together with the copy
+agent-workflows holds when it is checked out. An entry marked `failsWhenUnavailable` answers a failed model run with a
+neutral result whose reason starts "<name> unavailable:"; the port reads that reason and turns the answer into a
+failed call (`gone`), so the retry runs and nothing is recorded as asked, settled or paged on it.
 
-Five workflows (`factory-ask`, `-triage` in settle mode, `-steward`, `-queue`, `-hygiene`) catch a model failure inside agw and answer with a neutral
-result whose reason starts "<name> unavailable:". The agw port reads that reason for the entries marked `failsWhenUnavailable`: such an
-answer is a failed call (`gone`), so the Judge's tries, the loops' rounds and retry windows run and nothing is recorded as asked,
-settled or paged on it. Until agw lets those runs fail, the reason is the only mark.
+The loops, their default intervals and the workflows their code asks (generated by `scripts/loops-table.ts`; `make
+docs-check` fails when it is stale):
 
-| Loop | Deterministic | agw workflow |
+<!-- loops-table:begin (scripts/loops-table.ts) -->
+
+| Loop | Interval | Asks agw |
 |-|-|-|
-| `leads` | spool replay, start, notes, finalize, the outbox | none |
-| `planning` | read projects, file plan rows (`docs/plan.md`) whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come, file a Replan for a project whose chain head is in a long wait (one open per project) | none |
-| `watch` | verify and probes | none |
-| `settle`, `send` | rechecks of checkpoints at the owner past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps, unscreened Errands and Spec revisions, pages | `factory-ask` (the Judge); `factory-spec-screen` (the Spec screen): stdin `SpecScreenRequest` `{ spec: { id, revision, title, source, content, format }, issue: { id, repo, title, kind }, precedents[] }` labelled untrusted data, stdout `SpecScreenAnswer` `{ verdict: pass\|settle, reason (1..300) }`, call key `factory-spec-screen:<artifact>:<revision>:<try>`; `factory-errand` (the Errand screen): stdin `ErrandScreenRequest` `{ errand: { id, summary, detail\|null (8000), command\|null, host: mini\|macbook\|null, need: secret\|hands\|place\|approval\|null }, issue: { id, repo, title, kind } }` labelled untrusted data; stdout `ErrandScreenAnswer` `{ verdict: pass\|turn_away, reason (1..300) }`; call key `factory-errand:<errand>:<try>` |
-| `steward` | wake, re-check, requeue, deliver (`domains/planning/stall.ts`), nudge a quiet lead, note a watch whose checkout stays blocked, break a claim deadlock; while a project has a live lead, read its main checkout once a pass from local refs (`domains/leads/checkout.ts`): off the default branch or with tracked uncommitted changes, it is a `main-checkout` health line and, when its branch is a live lead's (`factory/<n>-<attempt>`), one note to that lead (once per branch state and clean/dirty); a branch no lead owns names no session and reaches no lead, no model | `factory-steward`: what a stalled Issue needs when the rules do not say |
-| `triage` | fingerprint, routes, correlation window | `factory-triage`: kind, amend-or-new-or-already-settled (open and last-day closed Issues), likely `after` edges (held to evidence, below), `checkpoint: spec` for a change that needs a Spec first |
+| `leads` | 10 s | none |
+| `planning` | 10 s | none |
+| `watch` | 10 s | none |
+| `settle` | 10 s | `factory-ask`, `factory-errand`, `factory-spec-screen` |
+| `send` | 10 s | none |
+| `steward` | 10 s | `factory-steward` |
+| `triage` | 10 s | `factory-triage` |
+| `queue` | 10 s | `factory-queue` |
+| `friction` | 15 min | none |
+| `hygiene` | 15 min | `factory-hygiene` |
+| `screen` | 10 min | `factory-screen` |
+| `fix-classes` | 6 h | none |
+| `selfwatch` | 5 min | none |
+| `ci-ledger` | 15 min | none |
+| `host` | 1 min | none |
+| `reaper` | 5 min | none |
+| `digest` | 3 h | none |
+| `errands` | 1 h | `factory-errand-needed` |
+| `reviews` | 15 min | none |
+| `desk` | 15 min | `factory-errand` |
+| `throughput` | 24 h | none |
 
-**Inferred edges** (`checkSettle` in `domains/planning/settle.ts`). A settle answer's `after` edge stands only when the filed title or text names the blocker (`Issue 1177`, `issue_1177`, `#1177`): a shared file or topic is no evidence that an Issue builds on another's output (2026-11-14: an incident fix and a Spec were chained behind a registry Issue and a 48-hour reading). An Issue the owner ranked at `prio` 400 or above (`RANKED_PRIO`) takes no inferred edge at all; the owner's `--after` is stated, not inferred. A dropped edge is recorded in the call's detail (`dropped: <why>`) and counted as `dropped`. An edge that stands is stored with `planning_edges.inferred_by` (`triage: <the answer's reason>`, `queue: <the edge's reason>` for one the queue loop adds; null for a stated edge; only triage's edges are held to the evidence rule, and `#N` also matches a GitHub reference), and the queue reason says it: `waits for Issue 1177 (inferred by triage: <reason>) to close`. Not built: an open pull request changing the same lines as evidence.
+<!-- loops-table:end -->
 
-**Whether an edge held an Issue behind free capacity** (`planning_edges.ready_since`, `QueueEntry.readyWithoutEdges`). Each admission look decides an Issue its `after` edges hold a second time as if the edges were gone: nothing else of the chain keeps it out (`Ordered.withoutEdges`) and every admission rule passes for it against the claims as they stand. `recordReadiness` sets `ready_since` on its unsatisfied edges at the first such look and clears it on a look that finds it refused for another reason; a satisfied edge is never touched, so the value is final. An edge with `ready_since` held its Issue idle capacity from then until `satisfied_at` (not needed); one without held it while something else would have refused it anyway (needed). The edge's `inferred_by` separates the factory's edges from stated ones. Readiness is judged per Issue against the claims as they stand, so two Issues held behind one free lead each read ready: the value says the Issue would have been admitted alone, not that all of them could have started together. Null also covers an edge no look saw. The attempt's seat is stored the same way, as `lead_attempts.tier` and `effort`, set in the transaction that records `lead_started` (attempts before the column are filled from that event's payload), so cost per Issue and first passes can be joined to the seat by attempt.
-| `queue` | per repo: cycles in the chain, the queued Issues that wait for nothing (an ask needs two), the queue's shape (asked once per shape; an edge the loop added is part of it), a budget (one ask per repo per `FACTORY_QUEUE_GAP_MS`, three repos a pass), the sweep of the edges the factory added (taken back when the files turned out disjoint or the blocker waited on the owner), the edges checked and added through planning (never against the owner's `prio`, never a pair the sweep took back, none while the loop's own kind of edge is mostly not needed) | `factory-queue`: `after` edges and a tie-break order; the order is recorded in `loop_calls` (loop `queue`) and the admission order reads it as the tie-break after size (see **The queue order for throughput**) |
-| `friction` | the week's counts (`read/friction.ts`), cut at the counting epoch (`config/throughput.json`: nothing before it is counted), against the rules in `domains/improve/friction.ts`: a rate per Issue closed with a minimum sample of 10 closed, or a bare count for the serious patterns (a lead that stopped reporting, lead lost, undelivered note, which counts a note of an open Issue whose lead is still there, a closed Issue and a lost lead being no one to tell; a regression, and the `regressed` stall of the same Watch, is a rate of 0.05 per Issue closed from 3, NL37, NL52); retired mechanisms (the review gate, NL23) are skipped. One signal per pattern over its rule, 5 at most, filed on this repo through intake with the evidence Issues; a pattern whose Issue is open amends it with a note, and one whose Issue closed less than 7 days ago is dropped as a repeat (intake's finding key, the pattern key, with `LoopFinding.repeatWindowMs` counted from the close). The loop asks every 15 minutes (`CADENCE` in `app/loops/settings.ts`); a pass is due after a day, or when 200 Issues closed since the last pass (`FRICTION_PASS_EVERY_MS`, `FRICTION_PASS_EVERY_CLOSED`, whichever comes first, the volume read from the event log), read from `friction_passes`; every pass still reads the last 7 days, and the signal budget is the one `MAX_SIGNALS_PER_PASS` (5) that hygiene, selfwatch and throughput share (`kernel/signal-budget.ts`); the pass files the retro signal when none was filed in the last 7 days (`retroFiledAt`, read from `intake_subjects`; `domains/improve/retro.ts`: one Issue on this repo whose lead reads `factory retro --days 7`, writes a Report that opens with the three largest sources of waste in hours (`waste` of `GET /v1/retro`, `read/retro-waste.ts`: queue by reason, slot wait, stalls, refused ships, waits on the owner, in Issue-hours) and files one signal per change with a `Retro:` marker line that the next retro's ledger reads; the signal's text says what the retro signals of the last 7 days led to, `read/retro-outcomes.ts`), a failure to file it only named in the pass line | none |
-| `hygiene` | one project a tick (those with a `project.yaml`): a throwaway checkout of the default branch swept by the probes of the catalogue (`packages/contract/src/hygiene-catalogue.ts`, rendered as `docs/hygiene.md`; `adapters/hygiene/`), a full pass weekly (`FACTORY_HYGIENE_EVERY_MS`: every probe, the project's own `probe`s, then the judgment) and a daily pass of the probes the catalogue marks daily, promoted to a full pass for a repo with 30 commits since its last one; a repo with no commit on its default branch for 30 days is idle and gets its full pass (`deps` and the judgment) monthly and a `steady` one weekly (every probe the catalogue does not mark `idle: monthly`); `runrules` is dotfiles `rules/run-on-mini.md` read from the files (one finding per rule and file, `runrules:<rule>:<path>`), `browser` is dotfiles `rules/browser.md` (`browser:<path>`), `context` is the byte budgets of `rules/writing-for-agents.md` (key `context`), `project` is the lint of `factory project check` (`packages/project-lint`); `deps` and `advisories` are folded by `domains/hygiene/dependency-refresh.ts` into one `deps` finding per repo, filed only past the bar (a high advisory with a fixed version, a runtime major, a runtime minor 30 days old, or 10 rows behind; `docs/hygiene.md`), else named in the run's detail; no probe calls a model; at most 5 findings a project and pass, probe findings ranked in catalogue order and limited to 3, the rest named in `over_budget`; the findings of a pass (probe and judgment) are one signal and so one Issue, a section per finding under its key (`batchSignalText`, `domains/hygiene/hygiene.ts`), filed through intake as the project's own agent with one `Seat:` line, intake's finding key the hash of the keys (`batchSubject`); `loop_findings` keeps a row per key on that Issue (`migrations/1064_loop_findings_per_key.sql`), so each key has its own class, figure and verdict. Before it files, the red findings of the probes that only read files (catalogue cost `file`, `REREAD_PROBES`) are read again when origin's default branch moved during the sweep, and only what the new head still raises goes on; then `planLifecycle` (`domains/hygiene/hygiene-lifecycle.ts`) reads each Issue through its keys: the Issue is closed as healed when every key's probe ran green and no lead has started (an Issue carrying a judgment key is never healed), a lead at work or an Issue with keys still red is told which keys are green, a red key whose Issue closed done reopens it once for all its red keys (at most twice), an open Issue holds its findings; the `check` probe runs the gate in a test slot and is skipped for a project whose `signals.github.checks` files a red default branch; every action is on the pass (`hygiene_passes.lifecycle`) and the Hygiene tab. Before `planLifecycle`, a probe whose catalogue entry has a `fix` (`stale`, bun `deps`) is fixed by script in the checkout (`adapters/hygiene/fixes/`, rules in `domains/hygiene/hygiene-fixes.ts`) and run again: what is green files nothing, a failed fix keeps the finding with its output, a fix that found no test slot is held one pass; for a repo that ships by pull request the bump lands as a pull request on `factory/hygiene-deps` inside the repo's merge window (`factory merge-lock`, held by the pass), merged by the method the repo allows once its CI and `make merge-guard` are green, and nothing is deployed (NL46); every fix is on the pass (`hygiene_passes.fixes`) and the Hygiene tab (NL44). A project's own settings are `hygiene: { check, reason, skip: [{ probe, reason }], probes: [{ name, target }], idleAfterDays, deps: { runtimeStaleDays, behindRows } }` in `project.yaml` (`docs/project.md`) | `factory-hygiene`: the stale and recently edited documents read against the code, at most the budget left (2 at least); its title is built from the kind and the path, so the same document is one pattern for intake; a failed ask is retried at the stored commit every `FACTORY_HYGIENE_RETRY_MS`, 3 attempts at most; a full pass only |
-| `selfwatch` | every `FACTORY_LOOP_SELFWATCH_MS` (5 min), twelve deterministic conditions (`domains/improve/selfwatch.ts`, the three of the factory's own capacity in `domains/improve/overload.ts`; all but `budget_breach` are the factory itself on this repo): `migration_clash` (one number on two file names where one is on origin/master and the other on master or on any local or remote branch except a closed Issue's lead branch, bar `SHARED_NUMBERS`; two open branches that take one number with each other are left to `scripts/merge-guard.ts`; past 200 refs a pass the rest are named in a `refs-unchecked` finding of the same kind), `wait_overdue` (a `timer` wait past its `until`, a `dependency` wait whose Issues all closed, each plus `FACTORY_SELFWATCH_GRACE_MS`, 10 min), `lead_idle` (a working lead quiet past the steward's `idleLeadMs`), `inert_regression` (a `regressed` wait whose attempt's stored ship has `deploys` false and only inert paths), `heartbeat_stale` (`GET /health`'s heartbeat not ok: no successful leads tick for 20 min, or a database error the health probe has held for 5 min; a database-class miss is also read again twice, 5 s apart, as a second guard), and three of the host (read from the host loop's rows, so they hold only while it samples): `process_growth` (a process, by pid and program name (not `postgres`, whose footprint counts the shared buffers it maps: `SHARED_MEMORY_PROGRAMS`, not `kernel_task`, whose footprint follows memory pressure: `isKernelTask`, not Apple's transient `XProtectRemediator*` malware scanners: `isTransientScanner`, and not a tenant, a launchd job or VM no lead of this repo can shrink: the throughput loop's `tenant_growth_mib` reads it), in `host_process_samples` whose footprint rose by more than 1 GiB between the first and last of its samples in the last hour, seen over at least 30 minutes and sampled within the last 3; one subject per process, filed on the repo whose Issue runs it when the sample names one (a lead's or step's process), else on this repo; the figures and that owner are context, so one signal until the growth clears), `swap_growth` (`host_samples.swap_used_pct` read in 16 consecutive minutes, never falling and 0.5 points higher at the end without its largest one-minute step, so one burst that moves swap once and stays flat is no growth: 15 minutes in a row; one subject, `host`) and `process_storm` (`host_samples.processes` over the cap in the last 3 samples; the cap is `DEFAULT_PROCESS_CAP`, 2500, until the capacity layer's own process-count cap of `tp-leads` exists). A host with no sample in the last 3 minutes leaves the three host rows alone. The ninth, `budget_breach`, is a project's `budgets:` (`project.yaml`) against its last 24 hours of `step_costs` (`read/throughput-loop.ts`, `readBudgetFacts`): `fast` the median of the fast-tier runs (at least 3), `peak` the largest peak memory of a step, `fail` the share of steps that exited non-zero, a red `check-fast` (a lead's pre-push fix loop, which never reaches master) left out of both counts (at least 5 steps, and over only when the share held on the day before too, a whole day each: a one-day burst or a window the counting epoch cut is no breach; the failing steps by name and exit code, and the number of check-fast reds left out, are context of the signal, so a lead needs no database read). One subject per project and budget, filed on the project's own repo as its own agent, so a breach is one signal the pass after it happens and the next only after the figure was back inside; the day's figure is context, never hashed. A budget the day has too few runs to judge is not over, and a `fast` or `fail` figure over a window the counting epoch cut under a day is not judged (the ranking waits the same way; `peak` is a maximum and is). The three of the factory's own overload (the evening of 2026-11-14: load 200 twice, the Console 502, five causes found by hand, none by a loop), each read from rows that exist and each one subject until it clears: `load_over_ceiling` (`host_samples.load` over that sample's `load_ceiling` in the newest 10 consecutive minute samples, the newest within 3 minutes; subject `host`), `slot_line` (from `slot_shadow`, which the slot aim writes every minute: more than 8 callers waiting, `holders`/`waiters`, in the newest 15 consecutive minutes, subject `waiting`; or `holders` under the base with a caller waiting in the newest 5, which is the memory rule refusing a step the host could run, subject `base_empty`; the base is the lower of `live_slots` and that minute's `aim_slots`, because that is what the grant rule is handed: an aim of 1 with one holder is "all 1 slots are busy", the aim working, not an empty slot), `gates_passed` (judged per admission, an Issue's applied `admitted` event in the newest 10 minutes, never by the `leads` count, which a lead resuming from a wait also raises without asking a gate; set against the `host_samples` on either side of it, each within 2.5 minutes: past the load rule when the tripwire admission itself reads held (the load over its ceiling in each of the newest 5 minute samples before it, and over in the load admission read, which its `admitted` event records because a live reading under the ceiling clears a tripped tripwire and no minute sample shows it; an event from before that, or one with no reading, is judged by the sample after; with fewer fresh samples the instant reading, as admission does), so a short peak the rule lets through by design is no finding, past the memory rule when swap use or the swapout rate was over the memory ceilings in both; the seat cap is not judged, the idle host's seat bonus lets `leads` exceed `seats` by the rule; the comparisons are `overLoad` and `overMemory` of `domains/capacity/host.ts`, handed in by the loop; a load that fell under its ceiling by the reading (or, with none recorded, by the sample after) is a lead the rule let in; one subject `host`, the passed gates are its facts). A host with no sample in the last 3 minutes leaves `load_over_ceiling` and `gates_passed` alone, no slot minute in the last 3 leaves `slot_line`. The signal of these three carries an evidence block after its eight lines, read when it is filed and never hashed (`overloadEvidence`; intake keeps a signal's text on one line, so every evidence line starts with `- ` and names its field): the slot lines with their reasons, the queue by reason (open `queue_intervals`), the newest host sample (load against its ceiling, leads and seats, memory used, compressor, swap, swapouts, pressure level), the CPU by class and repo over the newest 10 host minutes as cores (`classCpu`, `host_class_samples`; a `lead` group is work no test slot admitted, a `step` group one it did: the 2026-11-18 load of 148 was one repo's hand-run cargo, 4220 s of `lead` rustc against 987 s of `step`), the CPU accounting (the `top` header's busy share averaged over the same minutes, as cores of the host's, against the cores those groups account for: the remainder is what a once-a-minute sample cannot name, processes that start and exit within a minute and kernel time; 2026-11-20: load 36-51 at 0% idle with 3.5 cores named), the 15 busiest processes with `ps -o pri`, the scheduling priority of the server, the door and Postgres against a lead's `claude` (a control plane that runs at a lower priority than the work it controls was the first cause), and the last 6 lines of `data/deploys.log`. Filed through intake as the repo's own agent, 5 a pass at most. A subject is its newest row in `loop_findings` (loop `selfwatch`, the key `<kind>:<subject>`): filed once, and through the class gate (a kind whose Issues were mostly dropped files nothing); the same evidence files nothing; changed evidence is filed again under the same kind and subject, which intake's finding key turns into a note on the open Issue; a subject that no longer holds is cleared and files anew if it returns. The title carries the subject in words for the lead; a source that cannot be read (no token, no origin/master) names itself in the pass summary and leaves its open rows alone. A red default branch is filed by `signals.github.checks` alone, the intake's own first-red signal (turned on in `project.yaml`) | none |
-| `ci-ledger` | every `FACTORY_LOOP_CI_LEDGER_MS` (15 min), the CI ledger (`app/loops/ci-ledger.ts`, `githubCiLedger`): the finished workflow runs of the repo itself and of every stored project, queued, started and finished per run in `factory.ci_runs` (a rerun is queued at its latest attempt's start; read from the day before the newest stored run, 14 days back for a repo with none, at most 300 runs; pruned after 30 days). A repo it cannot read is a note in the pass summary, never a failed pass; one that is refused (outside the allowed roots, no github.com origin, a GitHub 403 that is not the rate limit, a 404) is a note once and is left alone for a day, kept in the server's memory (a restart asks again). A 403 or 429 with the rate limit spent is a plain error that passes by itself | none |
-| `screen` | up to 10 held signals not yet screened (oldest first, `intake_signals.screened_at` null, `screen_attempts` under 5, `screen_retry_at` due), one call each, outside any transaction; the answer is checked before anything is done (`domains/intake/screen.ts`): a promote needs a known non-work repo (the signal's own, else the one named), a duplicate must be an open Issue of the repo it was shown, else the verdict becomes `leave` with a note; then `promote` or `dismiss` as `judge` (each looks at the state again: an owner who acted first is counted, not an error). A failed, unparseable or timed-out call (a missing workflow too) leaves the signal held and records the attempt with a backoff of `min(10 min * 2^n, 6 h)`; the pass still ends ok and its summary says `screen workflow unavailable` when every call failed | `factory-screen`: stdin `ScreenRequest` `{ signal: { id, source, kind, origin, repo, title, text, link, receivedAt }, openIssues: [{ id, title, kind, state }] (open Issues of `signal.repo`, at most 40, empty with no repo), projects: [name] (known projects that are not work repos) }` with title and text scrubbed and labelled untrusted data; stdout `ScreenAnswer` `{ verdict: promote\|dismiss\|leave, reason (1..300), repo\|null, duplicateOf\|null, recommendation (<=300)\|null }`; call key `screen:<signal>:<attempt>` (`screen:<signal>:<attempt>:final` on the last look, which sends other input for the same attempt). A held signal 72 h old (`FINAL_SCREEN_MS`) that was not screened since it got that old is on its **last look**: `final: true` in the request, failed calls not capped, and a `leave` is replaced by the factory (`decideFinal`): promote when the signal's repo is a known non-work project (the new Issue carries a `noted` steer: investigate, draft the reply, post nothing, raise the draft as an Errand), else dismiss with the reason. It leaves Needs you either way |
-| `errands` | every hour (off with the tick), over the open requests (Errands with no Issue), oldest first, outside any transaction (`app/loops/errands.ts`): past `expires_at` closes `expired`; with a `check`, up to 20 a pass, exit 0 keeps it (`check_note`), exit 1..125 closes it `not_needed` by `check` with the output, and a check that could not answer (126, 127, 128 and up, a timeout, no start) keeps it open and is noted, named in the pass on the third run in a row; with no check, from 24 h old and again every 24 h (5 a pass), the still-needed look reads the request and the same source's other requests of the last 14 days (how each ended, scrubbed, cut) and only `not_needed` with a reason closes it by `judge`; a failed look is made again after 6 h. Every closure not by the owner is listed once in the `errands` category ("Errands closed without you") of `GET /v1/since`. A request the owner closed while a check ran stays his | `factory-errand-needed`: stdin `ErrandNeededRequest` `{ errand: { id, source, summary, detail\|null, command\|null, host, raisedAt, ageHours }, evidence }` labelled untrusted data; stdout `ErrandNeededAnswer` `{ verdict: needed\|not_needed\|unsure, reason (1..300) }`; call key `factory-errand-needed:<errand>:<day>`; a missing workflow fails the call, keeps the request and is named in the pass |
-| `reviews` | every 15 min (`REVIEW_POLL_MS`; off with the tick), over the Issues in an `external` wait, outside any transaction (`app/loops/reviews.ts`): `gh pr view` / `glab mr view` in the repo's checkout; an approval, a request for changes, a review or comment by someone else after the first look, a merge or a close wakes the lead with `woken` (key `woken:<issue>:external:<since>`); a read that fails changes nothing and is named in the pass | none (`gh`, `glab`) |
-| `desk` | asks every 15 min (off with the tick) whether the desk pass is due (the owner back after 2 h, which also starts it at once, the MacBook answering after it was down, his button, 6 h since the last, or a MacBook command never pushed), then runs it (`app/loops/desk.ts`): checks, a second screen, the MacBook commands pushed through `ask-human.sh push`, all of them on a return and one per pass while he is away (a hang guard of 30 min on the script) | `factory-errand` on the second screen |
-| `fix-classes` | every 6 hours (repos checked as for hygiene): per project (those with a `project.yaml`), `git log --no-merges` on origin's default branch since 35 days (`adapters/hygiene/fix-commits.ts`), the commits whose subject is a conventional `fix`, those not in `fix_commits` yet classed by the rules of `domains/hygiene/fix-classes.ts` (scope `test`/`docs`/`ci` and the like, a subject naming a review; a commit no rule classes is `other`) and stored `by: rule`; no workflow is called | none. The classes are `FIX_CLASSES` (`docs/product.md` "Fix classes"). Read on Improve ("Fix commits by class", the last four weeks) and in `GET /v1/fix-commits` (`factory read fix-commits`) |
-| `host` | every minute (`FACTORY_LOOP_HOST_MS`): one reading of the host (load, memory as the kernel's app (`vm.page_pageable_internal_count` minus purgeable), wired and compressor pages over RAM, as Activity Monitor's Memory Used (`sysctl` and `vm_stat`; summed process RSS counts shared pages many times), swap use and swapout rate through the capacity reader; and the same memory, the RAM, the swap in use and its size as bytes, `migrations/1044_host_bytes.sql`, which the Throughput page draws as GB, reading an older minute as its share of the newest known RAM), stored in `host_samples` with the capacity facts of that minute (`leads` = claims held, `queued`, `seats` = the sum of the enabled accounts' caps (`FACTORY_ACCOUNT_LEADS`, else `FACTORY_LEADS_PER_ACCOUNT`), `load_ceiling`; null when unreadable), rows older than 14 days dropped in the same pass. The same pass costs every lead: the one `ps` (`pid,ppid,pcpu,rss,comm`) and one `lsof -nP -a -d cwd -Fpn` (`FACTORY_LSOF_BIN`, 10 s) give each process's directory, `domains/capacity/leadcost.ts` assigns a process to the attempt worktree (live, or ended in the last 10 min) with the longest path containing its directory and adds all its descendants (a pid counted once), except what runs under a `factory slot run` (the class snapshot's `step` processes: a holder's tree and `FACTORY_SLOT_ACTIVE=1`, `stepNames` in `domains/capacity/classes.ts`; the slot grant weighs those steps against free memory itself, so the lead is not charged for them twice; a minute with no class snapshot stores no lead rows, as it cannot tell them apart), one `top -l 1 -n 5000 -stats pid,ppid,mem,time` (`FACTORY_TOP_BIN`, cached 10 s with the `ps` rows; its MEM column is the kernel's `phys_footprint`, shared clean pages left out, at 0.4 s for the whole host where `footprint -p` costs about 12 ms per pid) gives each process's physical footprint, summed per tree beside RSS (a process `top` did not list counts at its RSS; a failed `top` leaves the footprint null and the row RSS-only), and one transaction stores a `lead_samples` row per worktree (rss MiB, footprint MiB, process count, `outside_slots` true; kept 30 days; `migrations/1031_lead_outside_slots.sql` marked every earlier row false, and the learned cost and `read/lead-costs.ts` take only true rows, so a repo falls back to the lane prior until three attempts sampled outside slots exist). Admission still learns from `rss_mib` and its refusal says the figure is outside test slots; the footprint is recorded to be calibrated against it first. A failed `ps` or `lsof` records the host sample without lead rows and the summary says so. `read/lead-costs.ts` answers per repo the attempts, the p80 of the newest ten attempts' peaks and the newest peak, and the same two figures from the footprint (over the newest ten attempts that have one) with the median footprint-to-RSS ratio (`factory read capacity-loop`, `leadCosts`). `GET /v1/host` (`factory read host`) answers the last 24 h, each sample with its process count and user, system and idle CPU, with the top 8 processes by cpu and memory (one `ps`, cached 10 s) and the server's version and start time; a reading that failed is null. The same pass takes the **class snapshot** (`migrations/1022_host_classes.sql`, `domains/capacity/classes.ts`, `adapters/planning/snapshot.ts`): the minute's one `top -l 1 -stats pid,ppid,mem,time` (cached with the footprints above) lists every process with its footprint and cumulative CPU, joined by pid with one `ps -Eww -Ao pid=,ppid=,user=,command=` (user, executable, `FACTORY_SESSION`, a `factory slot run` holder and its name, `FACTORY_SLOT_ACTIVE`, a Lima instance in the command; the command line is dropped there), `launchctl list` (`FACTORY_LAUNCHCTL_BIN`: the label of each job launchd started), the shared `lsof` cwd map and one `lsof -p` on the Virtualization VM processes (the Lima instance whose disk they hold). Each process gets a class, first rule that holds: `step` (a slot holder's tree or `FACTORY_SLOT_ACTIVE=1`, with its lead's repo and Issue and the slot name without the `factory-<n>-<a> ` prefix), `lead` (the worktree rule above, or a `FACTORY_SESSION` naming an attempt, with descendants), `factory` (the server's launchd job and every job with a process working in the release directory), then by its launchd job: a Lima VM, helper or named instance is the tenant `vm:<instance>`; pid 0 and 1, root and `_` users, `com.apple.` labels and programs under `/System`, `/usr`, `/bin`, `/sbin` are `system`; an application (`application.` label, or an unlabelled app bundle: Chrome, Obsidian, the owner's Herdr terminals) is `owner`; another labelled job is the tenant of its label; the rest is `other`. CPU is the difference of a pid's cumulative time from the last snapshot (a new or reused pid counts all of it; a process that ended between two snapshots is lost; none at the first snapshot after a start). Stored per minute: one `host_class_samples` row per class, repo, tenant, Issue and step (footprint MiB, CPU ms, process count; a Postgres cluster counts the shared buffers its processes map once: its largest process whole, each other at its private rest, `isSharedMemoryProgram`) and `host_process_samples` for the 15 largest processes, any over 1 GiB and any grown 200 MiB within 10 minutes (program name only, kept in memory between passes); both kept 14 days, and complete hours roll up into `host_class_hours` per class, repo and tenant (MiB-minutes, peak, CPU seconds, minutes present; kept 400 days). `host_samples` gains `pressure_level` (`kern.memorystatus_vm_pressure_level`: 1, 2, 4), `kernel_free_pct` (`kern.memorystatus_level`, the share of RAM the kernel counts as available: what admission and the slot grant take as free memory), `compressor_mib` (`vm.compressor_bytes_used`), `processes`, `cpu_idle_pct`, `cpu_user_pct` and `cpu_sys_pct` (top's header; the last two from `migrations/1039_host_cpu_split.sql`), `vm_free_gib` (statfs of `FACTORY_VM_VOLUME`, default `/System/Volumes/VM`) and `collector_cpu_ms` (the CPU of every helper the loop ran since the last snapshot, from each child's resource usage: the collector's own cost, measured). A failed `top` stores no snapshot and null signals; a failed `ps -E`, `launchctl` or cwd `lsof` stores the signals but no class or process rows that minute (whole trees would land in the wrong class), and the next minute's CPU covers both | none |
-| `digest` | every 3 h (off with the tick): for each project with a `project.yaml` (`source = 'file'`, work repos included; worktrees and a second directory of a name are the one project, `kernel/digest-scope.ts`) that has an Issue open or closed in the last 7 days, builds the digest in code (`digestOf` in `domains/improve/digest.ts`, from the Issues' titles, states and outcomes: shipped is done and healed of the window newest first, next what runs and then what is ready, risks a paused Issue with its wait reason and one dropped or cancelled in the window with its outcome, the headline counts them, the themes are the kinds of what shipped) and stores it as a new row of `project_digests` (project, hash of the digest, route `code`) when its hash differs from the newest stored one. No port is called, so the pass is one read and one write. `GET /v1/projects/digests` (`factory read project-digests`) answers the newest digest of each project with work in the window and its counts (done in 7 days and `counts.work`: running, paused, ready, held, checking) read from the Issues now, never from the model, by the one definition of the five words (`workOf` in the contract, `docs/language.md` "Where work stands"; Issues, never sessions) that the strip, the Overview list, the Overview sidebar, `perProject`, the project pages and the Herdr bar also use; the read token gets the counts of a work project and no words (the work projects share one entry named `private`) | none |
-| `throughput` | once a day (`FACTORY_LOOP_THROUGHPUT_MS`; off with the tick; the last pass is in `loop_passes`, so a restart does not skip a day), no model call (`app/loops/throughput.ts`, `domains/improve/throughput.ts`, `read/throughput-loop.ts`): the **ledger** first, then the **ranking**, see "The throughput loop" below | none |
-| `reaper` | every 5 min, no model call: ends the processes of **closed** lead attempts (`domains/leads/reaper.ts`, `app/loops/reaper.ts`). Closed = the attempt's finalization is done (`lead_finalizations.done_at`: claim released, terminals closed, transcripts archived, worktree removed or kept), never merely `gone_at` while finalization could still need the worktree; an attempt with no such row counts as live. One `ps -Eww -Ao pid=,ppid=,etime=,command=` (`FACTORY_PS_BIN`; macOS `-E` appends the environment) and the `lsof` cwd map (`FACTORY_LSOF_BIN`), 10 s each, give every process its `FACTORY_SESSION` (the lead key `lead-<issue>-<attempt>` its terminal's `factory.key` label also carries; only that value is kept, never the command line) and directory; a failed `ps` or `lsof` fails the pass and ends nothing. A process is a leak when its session names an attempt closed longer than 5 min with no live twin, or its directory lies inside (path boundary) such an attempt's worktree and inside no live attempt's (a worktree the finalization kept, `lead_finalizations.worktree_path` set, is exempt from this path rule: the owner may work in it to rescue what it holds; its session rule stays); an unknown session or directory, pid 1, this server and its ancestors are never touched, so a browser reparented to launchd is found where a process-tree walk is not. SIGTERM first; a leak that survived an earlier SIGTERM (same pid, not younger than recorded: a reused pid is a new process) gets SIGKILL on a later pass; the pid's age is read again just before each signal. One transaction records a row per signal in `reaped_processes` (pid, session, worktree, program name, signal, reason, age; kept 30 days). | none |
+What each decides in code and what it files:
 
-**Finding classes.** `friction`, `hygiene` and `selfwatch` hold a noisy kind of finding back (a selfwatch class is the condition's kind; a held kind is named in the pass line, and does not use up the pass's cap). A class is the loop plus the finding's
-first key segment (`judgment:<kind>` for a judgment): the probe, the kind of judgment, the pattern group, across all
-repos: the noise is one probe misfiring everywhere, a few Issues per repo, so a per-repo class would never reach 3. The fact is
-`factory.loop_findings` (which class filed which Issue, with the figure it was filed against; below); the state is derived from the Issues' outcomes
-(`domains/improve/classes.ts`) and never stored. Of a class's ten newest decided Issues (done, healed, dropped or
-cancelled), with at least 3 decided, a share of dropped or cancelled above one half **holds** it for 14 days after its last
-Issue closed: it files nothing, and the held findings are named in the pass record's `overBudget`. After the hold it is on
-**probation**: one Issue at a time across repos, none while another of its Issues is open in any repo, until one closes done, which forgives the
-history before it. Held and probation classes show on Improve ("Held finding classes") and in `GET /v1/finding-classes`
-(`factory read finding-classes`); the `runrules` probe is the class `runrules`, listed from its first filed Issue. Deviation: the owner asked for a rollup signal, and this is the section and the read
-model, not a signal: an agent-trust signal files an Issue, and no loops page exists to carry it.
+- `leads` (`app/leads-tick.ts`): spool replay, start, notes, finalize, the outbox. `planning`
+  (`app/planning-pass.ts`): reads projects, files plan rows (`docs/plan.md`) whose `after` rows closed, marks the
+  chain, wakes dependency and timer waits whose time has come, files a Replan for a project whose chain head sits in a
+  long wait. `watch`: verify and probes (Quality).
+- `settle`, `send` (`app/checkpoints-settle.ts`, `app/checkpoints-pages.ts`): rechecks of checkpoints at the owner
+  past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps (the Judge, `factory-ask`), unscreened Errands
+  (`factory-errand`) and Spec revisions (`factory-spec-screen`), and the owner's pages.
+- `steward` (`app/loops/steward.ts`, `domains/planning/stall.ts`): wake, re-check, requeue, deliver, nudge a quiet
+  lead, note a watch whose checkout stays blocked, break a claim deadlock; `factory-steward` says what a stalled Issue
+  needs when the rules do not. While a project has a live lead it reads the main checkout once a pass from local refs
+  (`domains/leads/checkout.ts`): off the default branch or dirty is a `main-checkout` health line and, when the branch
+  is a live lead's, one note to that lead.
+- `triage` (`app/loops/triage.ts`): fingerprint, routes, correlation window; `factory-triage` in settle mode names the
+  Issues an Issue must wait for (held to evidence, below), in amend mode the open or settled Issue a signal belongs
+  to.
+- `queue` (`app/loops/queue.ts`, `domains/planning/queue-edges.ts`): per repo, cycles in the chain, queued Issues that
+  wait for nothing, the queue's shape (asked once per shape), the sweep of edges the factory added. `factory-queue`
+  answers `after` edges and a tie-break order, recorded in `loop_calls` and read by admission after size. One ask per
+  repo per `FACTORY_QUEUE_GAP_MS`, three repos a pass; never against the owner's `prio`.
+- `friction` (`app/loops/friction.ts`, `domains/improve/friction.ts`): the week's counts (`read/friction.ts`), cut at
+  the counting epoch, against rules: a rate per Issue closed with a minimum sample of 10, or a bare count for the
+  serious patterns (a lead that stopped reporting, lead lost, undelivered note; a regression is 0.05 per Issue closed
+  from 3). One signal per pattern, 5 a pass (`kernel/signal-budget.ts`, shared by all four signal loops). A pass is
+  due after a day or 200 closed Issues (`friction_passes`). It files the retro signal when none went out in 7 days
+  (`domains/improve/retro.ts`): an Issue whose lead reads `factory retro --days 7`, writes a Report opening with the
+  three largest sources of waste (`read/retro-waste.ts`) and files a signal per change with a `Retro:` marker.
+- `hygiene` (`app/loops/hygiene.ts`, `domains/hygiene/`, `adapters/hygiene/`): one project a tick, a throwaway
+  checkout of its default branch swept by the probes of `packages/contract/src/hygiene-catalogue.ts` (rendered as
+  `docs/hygiene.md`; no probe calls a model). A full pass weekly (`FACTORY_HYGIENE_EVERY_MS`: every probe, the
+  project's own, then the judgment), a daily pass of the daily probes; an idle repo's full pass is monthly.
+  `factory-hygiene` reads stale and recently edited documents against the code (retried every
+  `FACTORY_HYGIENE_RETRY_MS`, 3 attempts). At most 5 findings a project and pass, one signal and Issue
+  (`batchSignalText`), a row per key in `loop_findings`. A probe with a `fix` (`stale`, bun `deps`) is fixed by script
+  first (`adapters/hygiene/fixes/`, `domains/hygiene/hygiene-fixes.ts`); for a pull-request repo the bump lands as a
+  pull request on `factory/hygiene-deps` inside the merge window and nothing is deployed (NL44, NL46). `planLifecycle`
+  (`domains/hygiene/hygiene-lifecycle.ts`) reads each Issue through its keys: healed and closed when every probe ran
+  green and no lead started, a lead told which keys are green, a red key of a done Issue reopens it (twice at most).
+  `deps` and `advisories` fold into one finding per repo, filed past the bar of `docs/hygiene.md`
+  (`domains/hygiene/dependency-refresh.ts`). A project's settings are `hygiene:` in `project.yaml`
+  (`docs/project.md`).
+- `selfwatch` (`app/loops/selfwatch.ts`, `domains/improve/selfwatch.ts`, `domains/improve/overload.ts`): twelve
+  deterministic conditions, no model; all but `budget_breach` are the factory itself on this repo. The kinds are
+  `migration_clash`, `wait_overdue`, `lead_idle`, `inert_regression`, `heartbeat_stale`, `process_growth`,
+  `swap_growth`, `process_storm`, `load_over_ceiling`, `slot_line`, `gates_passed` and `budget_breach` (a project's
+  `budgets:` against its last 24 hours of `step_costs`, `readBudgetFacts` in `read/throughput-loop.ts`). The host
+  kinds read the host loop's rows; the overload kinds (`load_over_ceiling`, `slot_line`, `gates_passed`) carry an
+  evidence block (`overloadEvidence`). A subject is its newest row in `loop_findings`: filed once and through the
+  class gate; the same evidence files nothing; changed evidence is filed again, which intake turns into a note on the
+  open Issue; a subject that no longer holds is cleared. A red default branch is filed by `signals.github.checks`
+  alone. `docs/guide/loops.md` lists the kinds.
+- `ci-ledger` (`app/loops/ci-ledger.ts`, `githubCiLedger`): the finished workflow runs of this repo and of every
+  stored project, queued, started and finished per run in `factory.ci_runs` (pruned after 30 days). An unreadable repo
+  is a note in the pass.
+- `screen` (`app/loops/screen.ts`, `domains/intake/screen.ts`): up to 10 held signals not yet screened, one
+  `factory-screen` call each outside any transaction. The answer is checked before anything is done (a promote needs a
+  known non-work repo, a duplicate must be an open Issue it was shown, else `leave`), then promote or dismiss as
+  `judge`. A failed call leaves the signal held with a backoff of `min(10 min * 2^n, 6 h)`, 5 attempts; a held signal
+  72 h old (`FINAL_SCREEN_MS`) gets a last look whose `leave` is replaced (`decideFinal`) by promote, for a known
+  non-work project, or dismiss.
+- `errands` (`app/loops/errands.ts`): hourly over open requests (Errands no Issue raised): past `expires_at` closes
+  `expired`; with a `check`, up to 20 a pass, exit 0 keeps it, 1..125 closes `not_needed`, anything else is noted;
+  with none, from 24 h old and daily (5 a pass), `factory-errand-needed` reads it and only `not_needed` with a reason
+  closes it, by `judge`. Closures not by the owner are listed in `GET /v1/since`.
+- `reviews` (`app/loops/reviews.ts`): every 15 min (`REVIEW_POLL_MS`) over Issues in an `external` wait, `gh pr view`
+  or `glab mr view` in the repo's checkout: an approval, a change request, a comment by someone else, a merge or a
+  close wakes the lead (`woken:<issue>:external:<since>`); a failed read changes nothing.
+- `desk` (`app/loops/desk.ts`, `domains/errands/desk.ts`): asks every 15 min whether the desk pass is due (the owner
+  back after 2 h, the MacBook answering after it was down, the Console's button, 6 h since the last, a command never
+  pushed), then runs checks, a second Errand screen (`rescreenErrand`) and pushes MacBook commands through the
+  dotfiles' ask-human script, all of them on a return, one a pass while he is away.
+- `fix-classes` (`app/loops/fix-classes.ts`, `domains/hygiene/fix-classes.ts`): every 6 hours, per project, the
+  conventional `fix` commits of 35 days on origin's default branch (`adapters/hygiene/fix-commits.ts`) classed by rule
+  into `fix_commits` (`FIX_CLASSES`, `docs/product.md`). No model.
+- `host` (`app/loops/host.ts`, `domains/capacity/classes.ts`, `adapters/planning/snapshot.ts`): every minute, one
+  reading of the host in `host_samples` (load, memory as Activity Monitor counts it, swap, the kernel's pressure level
+  and free share, compressor, processes, CPU) beside that minute's capacity facts (`leads`, `queued`, `seats`,
+  `load_ceiling`); one `lead_samples` row per attempt worktree (RSS and footprint, `domains/capacity/leadcost.ts`;
+  steps under a `factory slot run` are not charged to the lead); and the **class snapshot**, every process joined from
+  `top`, `ps -Eww`, `launchctl list` and the cwd `lsof` and given the first class that holds: `step`, `lead`,
+  `factory`, a tenant (a VM or a launchd job's label), `system`, `owner`, `other`. It stores `host_class_samples`,
+  `host_process_samples` and the hourly `host_class_hours` rollup, and runs the slot aim (`app/capacity-aim.ts`) in
+  the same pass. `GET /v1/host` reads it.
+- `digest` (`app/loops/digest.ts`, `digestOf` in `domains/improve/digest.ts`): every 3 h, per project with an Issue
+  open or closed in 7 days, built in code from the Issues (no port) and stored in `project_digests` when its hash
+  differs. `GET /v1/projects/digests` counts work by `workOf` from the Issues now.
+- `throughput`: once a day, no model; see The throughput loop.
+- `reaper` (`app/loops/reaper.ts`, `domains/leads/reaper.ts`): every 5 min ends the processes of closed lead attempts
+  (`lead_finalizations.done_at`; an attempt with no row counts as live). One `ps -Eww` and the `lsof` cwd map give
+  each process its `FACTORY_SESSION` and directory; a leak is a process whose session names an attempt closed over 5
+  min with no live twin, or whose directory lies in such an attempt's worktree (a kept worktree is exempt from the
+  path rule). Unknown processes, pid 1, this server and its ancestors are never touched. SIGTERM first, SIGKILL on a
+  later pass; each signal is a `reaped_processes` row.
 
-**The ledger.** `factory.loop_findings` is the one table of "which Issue did this loop's finding open", for all four loops (`migrations/1061_loop_ledger.sql`, `domains/improve/ledger.ts`, `app/loops/ledger.ts`): one row per Issue, with the loop, repo, class, key, when and by which signal it was filed, and **the figure** the finding was filed against (a friction pattern's count, a hygiene finding's items, a selfwatch condition's number where it has one, a throughput finding's `before`; null when it has none). Once the Issue closed, the next pass of the loop reads the same figure again (a pattern no longer counted, a key a probe judged and did not raise is 0; a source that could not be read waits) and stores a **verdict**: `moved` (the figure fell: a count is exact, a measured figure of the throughput loop keeps its 10% band), `flat`, `worse`, or `unmeasured` (the Issue ended dropped or cancelled, or the finding keeps no figure). A key a loop files again says in its signal `Last time: Issue N at figure X, now Y (moved).` when its newest earlier Issue closed. The throughput loop's rows also carry the target, unit, cost and the ship its after is measured from (its status is the verdict and the ship: no verdict and no ship is `open`, a ship is `shipped`, an `unmeasured` row with no ship is `dropped`), and the self-watch loop's the evidence hash and when it saw and cleared the subject: its memory of a subject is the newest row of its key. The old tables `selfwatch_findings` and `throughput_findings` are no longer written (a later contract migration drops them).
+**Inferred edges** (`checkSettle`, `domains/planning/settle.ts`). A settle answer's `after` edge stands only when the
+filed title or text names the blocker (`Issue 1177`, `issue_1177`, `#1177`): a shared file or topic is no evidence. An
+Issue the owner ranked at `prio` 400 or above (`RANKED_PRIO`) takes none, and the owner's `--after` is stated, not
+inferred. A dropped edge is recorded in the call's detail (`dropped: <why>`); one that stands carries
+`planning_edges.inferred_by` (`triage: <reason>`, `queue: <reason>`; null when stated) and the queue reason says it.
 
-**What each loop yields.** `GET /v1/loop-yield` (`factory read loop-yield`, Improve's "What the loops yielded") answers per signal-filing loop (friction, hygiene, selfwatch, throughput) over the last 7 and 30 days (`read/loop-yield.ts`): the passes it recorded (null for selfwatch and throughput, which keep no row per pass), the signals it filed, the Issues those opened or reached, how they ended (done, healed, dropped, cancelled, still open), the median seconds from filing to close, how many of the done ones moved their figure (`moved`, and `movedShare` of the done ones: a done Issue whose figure was not read or whose finding keeps none is not moved) and the three kinds of finding with most Issues. An Issue counts in the window it was filed in; all four loops' Issues come from `loop_findings`. `apps/server/test/read-models/loop-yield.test.ts` restates every figure in plain rows.
+**Edge readiness** (`planning_edges.ready_since`, `QueueEntry.readyWithoutEdges`, `recordReadiness`). Each admission
+look decides an Issue its edges hold a second time as if they were gone. The first look that finds it admissible sets
+`ready_since` on its unsatisfied edges; a look that finds it refused for another reason clears it; a satisfied edge is
+never touched. An edge with `ready_since` held idle capacity until `satisfied_at` (not needed); one without held it
+while something else would have refused it (needed). Readiness is judged per Issue: two Issues behind one free lead
+each read ready.
+
+**Finding classes** (`domains/improve/classes.ts`). `friction`, `hygiene` and `selfwatch` hold a noisy kind back. A
+class is the loop plus the finding's first key segment (`judgment:<kind>` for a judgment), across all repos, and its
+state is derived from Issue outcomes, never stored: of its ten newest decided Issues (at least 3), a share of dropped
+or cancelled above one half **holds** it for 14 days after its last Issue closed (it files nothing; the held findings
+are named in the pass record's `overBudget`). After the hold it is on **probation**: one Issue at a time across repos
+until one closes done. Both show on Improve and in `GET /v1/finding-classes`.
+
+**The ledger** (`factory.loop_findings`; `domains/improve/ledger.ts`, `app/loops/ledger.ts`) is the one table of which
+Issue a loop's finding opened: loop, repo, class, key, signal, and the figure it was filed against (null when it has
+none). Once the Issue closed, the next pass reads the same figure again and stores a verdict: `moved` (it fell; a
+throughput figure keeps a 10 % band), `flat`, `worse` or `unmeasured` (dropped, cancelled, or no figure). A key filed
+again says `Last time: Issue N at figure X, now Y (moved).` in its signal.
+
+`GET /v1/loop-yield` (`read/loop-yield.ts`) answers per signal-filing loop over 7 and 30 days: passes, signals,
+Issues, how they ended, the median time to close and how many done Issues moved their figure.
 
 ## API, client, CLI
 
-- **Elysia** with zod through Standard Schema and `@elysiajs/openapi` for the document. Who may call a route is the one
-  table in `api/policy.ts`; a walk of the OpenAPI document fails the tests on a route without a row.
-- **The CLI is generated** from the OpenAPI document (`apps/cli/scripts/generate.ts`), one command per operation, keeping
-  agw's contract: `--format json|plain`, data on stdout, messages on stderr, the exit codes, never a prompt. The hook, slot,
-  deploy-lock, follow, retro (the retro bundle: `GET /v1/retro` plus `retro-transcripts.ts`, a pass over the lead transcripts for seconds by tool category, idle gaps, tool-error classes and `make check` runs, no model), role and issue schema verbs are hand-written where their contracts demand it. The CLI authenticates itself on the host: with no `FACTORY_TOKEN` and no `FACTORY_READ_TOKEN` it resolves the owner token from the deployed release's `.env.tpl` through `secrets-run` (`credentials.ts`; a set token wins, offline verbs and `health get` never resolve), so a session files with `factory issue new` and `factory signal file --from agent:<repo>` and needs no wrapper. Commands of the old CLI answer with
-  the way to the same thing (`apps/cli/src/retired.ts`). A flag's help and the client-side validation of a body (bare Issue
-  numbers normalised to `issue_<n>`, every violated limit named, exit 2, nothing sent) derive from the contract schema of the
-  request body (`apps/cli/src/body-schema.ts`); `--schema` prints that body's JSON Schema.
-- **A restart is waited out** (`packages/client` `sendPatient`, `apps/cli/src/restart-wait.ts`): a deploy stops and starts the
-  one process, so a call that finds the port closed retries with a backoff (0.5 s to 5 s) for up to 90 s
-  (`FACTORY_RESTART_WAIT_MS`), 10 minutes while `data/deploy.lock` names a live pid (`FACTORY_DEPLOY_WAIT_MS`), and says
-  `server restarting (deploy), waiting` once on stderr; then the usual `server unreachable` (exit 7). A refused connection is
-  retried for every verb (nothing reached the server); a reset or a timeout only for a read, since Bun's `ECONNRESET` does not
-  say whether the request was read. An answer of `version_conflict` (409: the Issue moved between the server's read and its rolled-back write) is asked again up to three times, 0.1 s, 0.2 s, 0.3 s apart, for every verb. `health get` (monitors, `make verify`), and the hook never wait; `slot run` waits a restart out like every other call, then takes a host-local slot. The Console
-  shows "Server restarting, reconnecting" for up to 3 minutes after the stream drops or a fetch gets no answer, keeps the data
-  on screen, retries with a backoff and refetches everything when the stream greets again (`apps/console/src/lib/restart.ts`).
-  `scripts/deploy.sh` restarts less: a deploy whose commit is live and healthy restarts nothing (`FACTORY_DEPLOY_FORCE=1`
-  restarts anyway), one whose master moved while it built builds the newer commit (`DEPLOY_ROUNDS`, 3), and the release's
-  pending migrations are dry-run in a rolled-back transaction (`apps/server/src/migrate-check.ts`) before the old process is
-  stopped. Why no gapless handover: `docs/decisions.md` NL31.
-- **Callers and tokens.** The caller is decided by the bearer token alone: `owner` (`FACTORY_TOKEN`, required), `orchestrator`
-  (`FACTORY_ORCHESTRATOR_TOKEN`), `agent` (a lead), `machine` (the door), `signal` (Hermes) and `read`; every other token is
-  optional, all differ, and a caller whose token is unset does not exist. The orchestrator, the owner's delegate agent, is on
-  every owner row except the eight that are the owner's own judgment or hands (a Decision's worth-asking flag, an artifact's
-  annotations with their edit and delete, an artifact's needed mark, an Errand's approve, a held signal's promote and dismiss). Its events carry the actor `orchestrator` and a Decision it answers is settled by
-  `orchestrator`, so the owner-touch counts (`read/kpis.ts` `ownerTouch`) read the owner alone and its steering is the friction
-  group `orchestrator_steer` (`steer:*`). A lead hears its note exactly as the owner's. Rows from before the token (the owner's
-  actor with `via: orchestrator`) count as steering too.
-- **One contract** in `packages/contract` builds every body; a body that does not parse is exit 9.
-- **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, finding classes, fix commits, kpis, retro (`GET /v1/retro`: the KPI table with history, the friction counts, the lead sessions with their transcript paths, samples of Issues worth reading and the ledger of earlier retro signals; the read token gets no path and no words), host, since (the Console's "since you were here" band: `read/since.ts` counts what the event log, Decisions, Errands, signals and incidents say after a start; only the owner's read moves the one-row `console_visit` marker, `app/visit.ts`: a read 30 minutes after the last starts a new visit at the old `seen_at`, the first looks back 24 h) and
-  the change stream. Health lines (`read/lines.ts`) are kinds `door`, `account`, `loop`, `checkout` (a blocked watch), `lead-no-agent` (a working Issue whose lead has no agent in its terminal) and `main-checkout` (a shared main checkout off its branch or dirty under a live lead). The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
-  `GET /health` carries the heartbeat and answers from memory: a background probe (`read/health-probe.ts`, every
-  `FACTORY_HEALTH_PROBE_MS`, 10 s, one read at a time) holds the database facts (`queueMovedAt`, the door lines, a database error),
-  so a request never waits for Postgres and answers within a second at load 200. `ok` is false only for a stopped factory:
-  no successful leads tick for 20 min (`TICK_DEAD_MS`; `FACTORY_HEARTBEAT_STALE_MS` replaces it for a scenario), no first tick
-  5 min after a start on a host that is not starved (a load of twice the CPU count or more keeps `starved: no tick has succeeded yet` ok until the 20 min), or a database that errors for 5 min. Everything short of that is `ok` with a `reason` that says so:
-  `starting` (before the first tick, up to 5 min), `deploying` (`scripts/deploy.sh` holds `data/deploy.lock` for a live pid, up to
-  30 min; it also appends its start and end to `data/deploys.log`, the end with `unreachable_s=N`, the seconds from stopping the old process to `/health` at the new sha, which `GET /v1/throughput` sums per day as `deploys.days`, and `stopped_s=N started_s=N`, its two halves: the old process told to stop to gone, then to `/health` ok), `starved: …` (a tick older than three intervals and a minute: the
-  process is alive, with the age and the load) or `failing: …` (the same, with the tick's error).
-  **Up but useless.** `/health` never queries the database, so on 2026-11-14 it answered while every database-backed route timed out. The heartbeat therefore also carries
-  `routeP95Ms` and `routeSamples` (additive: the four names stay): the p95 in ms of the answer times of the server's own routes over the last 5 minutes
-  and how many requests that is (`api/route-timer.ts`, in the process, from memory; `/health`, the event stream and the routes that wait on a port by design (`POST /signals` with `/alerts` and `/feedback`, which wait up to 8 s for triage, and `POST /issues/:id/ship`, which waits for git, agw and GitHub) and the report reads (`GET /v1/retro`, `/v1/throughput`, `/v1/kpis`, `/v1/seats`, which scan days of history and take seconds by design) are not timed, a request still
-  unanswered counts at its age; requests begun in the first 120 s after the process starts are not timed, since a deploy's cold, loaded restart is not a useless server; null with no request). The reader outside the server is the dev host's Uptime Kuma push monitor (the heartbeat pusher in
-  the dotfiles repo), which today reads the four names: it should push down while `routeP95Ms` is over 2000 with `routeSamples` of 20 or more (below 20 the nearest-rank p95 is the one slowest answer, which a cold request after a deploy is).
-  That monitor is the one filer of slow routes (the self-watch no longer watches them: one fact, one detector); the change to the pusher is the pusher's repo's (a signal was filed there); until it lands the figure is read by hand.
-- The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, stdout empty bar the compaction line) is the
-  hook's, not the API's.
+- **Elysia** with zod through Standard Schema and `@elysiajs/openapi`. Who may call a route is the one table in
+  `api/policy.ts`; a walk of the OpenAPI document fails the tests on a route without a row. One contract in
+  `packages/contract` builds every body; a body that does not parse is exit 9.
+- **The CLI is generated** from the OpenAPI document (`apps/cli/scripts/generate.ts`), one command per operation,
+  keeping agw's contract: `--format json|plain`, data on stdout, messages on stderr, exit codes, never a prompt. The
+  hook, slot, deploy-lock, merge-lock, land, follow, retro (`GET /v1/retro` plus `apps/cli/src/retro-transcripts.ts`),
+  role and issue schema verbs are hand-written. With no `FACTORY_TOKEN` or `FACTORY_READ_TOKEN` it resolves the owner
+  token from the deployed release's `.env.tpl` through `secrets-run` (`apps/cli/src/credentials.ts`). Retired commands
+  answer with the way to the same thing (`apps/cli/src/retired.ts`). Flag help and client-side validation derive from
+  the request body's schema (`apps/cli/src/body-schema.ts`; `--schema` prints it).
+- **A restart is waited out** (`packages/client` `sendPatient`, `apps/cli/src/restart-wait.ts`): a call that finds the
+  port closed retries with a backoff for up to 90 s (`FACTORY_RESTART_WAIT_MS`), 10 minutes while `data/deploy.lock`
+  names a live pid (`FACTORY_DEPLOY_WAIT_MS`); a refused connection is retried for every verb, a reset or timeout only
+  for a read, `version_conflict` (409) up to three times. `health get` and the hook never wait. The Console shows
+  "Server restarting, reconnecting" and refetches when the stream greets again (`apps/console/src/lib/restart.ts`).
+  `scripts/deploy.sh` restarts nothing when the commit is live and healthy (`FACTORY_DEPLOY_FORCE=1` forces), builds
+  the newer commit when master moved meanwhile (`DEPLOY_ROUNDS`, 3) and dry-runs the pending migrations in a
+  rolled-back transaction (`apps/server/src/migrate-check.ts`) before stopping the old process. Why no gapless
+  handover: `docs/decisions.md` NL31.
+- **Callers and tokens.** The bearer token alone decides the caller: `owner` (`FACTORY_TOKEN`, required),
+  `orchestrator`, `agent` (a lead), `machine` (the door), `signal` (Hermes) and `read`; every other token is optional
+  and a caller whose token is unset does not exist. The orchestrator, the owner's delegate, has every owner row except
+  eight that are the owner's own judgment or hands (a Decision's worth-asking flag, an artifact's annotations with
+  edit and delete, its needed mark, an Errand's approve, a held signal's promote and dismiss). Its events carry the
+  actor `orchestrator`; `ownerTouch` (`read/kpis.ts`) counts the owner alone, and its steering is the friction group
+  `orchestrator_steer`.
+- **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction,
+  finding classes, fix commits, kpis, retro, host, since and the change stream (`read/stream.ts`: it resumes from an
+  opaque cursor without losing or doubling a change). `GET /v1/since` (`read/since.ts`) is the Console's "since you
+  were here" band; only the owner's read moves the `console_visit` marker (`app/visit.ts`). Health lines
+  (`read/lines.ts`) are kinds `door`, `account`, `loop`, `checkout`, `lead-no-agent` and `main-checkout`.
+- **Health.** `GET /health` answers from memory: a background probe (`read/health-probe.ts`, every
+  `FACTORY_HEALTH_PROBE_MS`, 10 s) holds the database facts, so a request never waits for Postgres. `ok` is false only
+  for a stopped factory: no successful leads tick for 20 min (`TICK_DEAD_MS`), no first tick 5 min after a start on a
+  host that is not starved, or a database that errors for 5 min. Else it is `ok` with a `reason`: `starting`,
+  `deploying` (`scripts/deploy.sh` holds `data/deploy.lock` and appends to `data/deploys.log`, which `GET
+  /v1/throughput` sums per day as `deploys.days`), `starved: …` or `failing: …`. The heartbeat also carries
+  `routeP95Ms` and `routeSamples` (`api/route-timer.ts`: the p95 of the server's own routes over 5 minutes; routes
+  that wait on a port by design, the report reads and the first 120 s after a start are not timed), since `/health`
+  alone answered on 2026-11-14 while every database route timed out. The reader outside the server is the dev host's
+  Uptime Kuma push monitor, the one filer of slow routes.
+- The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, stdout empty bar the
+  compaction line) is the hook's, not the API's.
 
 ## Perimeter
 
 The API stays loopback. The door and the Console are published on the tailnet by dotfiles-private's `tailscale serve`
-rows (the Console on :8797, to its loopback listener), and the perimeter is the tailnet ACL by device tag (a grant of
-`tag:mac` and `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25); the deploy publishes nothing. There is no
-per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the owner's fifteen write
-verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus eight owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
-another node. The Console listener reads, and forwards exactly the owner's fifteen verbs, his eleven answers, a collection's pin and unpin and an account's mode set and clear (a Decision's answer, an artifact's verdict and its needed-me mark,
-annotation and its edit and delete, an Errand done, an Errand approved, a held signal promoted or dismissed), guarded against a cross-site page (JSON only bar a delete, no cross-site fetch
-metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
-from a signal already held and dismiss files nothing. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
-served under its own CSP (scripts, no network, sandboxed), not the page's, whose `script-src` stays `'self'`.
+rows (the Console on :8797, to its loopback listener); the perimeter is the tailnet ACL by device tag (`tag:mac` and
+`tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25). There is no per-request identity: anything that reaches
+:8797 reads what the owner reads, plus the owner's fifteen write verbs and never a session start. The door holds only
+its own token; the Console proxy never uses the orchestrator's. The Console listener forwards exactly eleven answers
+(Decisions, artifact verdicts, marks and annotations, Errands done or approved, held signals promoted or dismissed), a
+collection's pin and unpin and an account's mode set and clear, guarded against a cross-site page (JSON only bar a
+delete, no cross-site fetch metadata, no foreign `origin`, 64 KiB). It starts no session and cancels or reopens no
+Issue; promote files one only from a signal already held, dismiss files nothing. The artifact frame (`/frame.html`,
+`/frame/*`) is served under its own CSP (scripts, no network, sandboxed); the page's `script-src` stays `'self'`.
 
 ## Data
 
-One database, schema `factory`. Migrations in `apps/server/migrations/` apply under an advisory lock with a checksum. Usage and cost are never copied: they join the `usage` schema at read (`read/usage.ts`), and an Issue's `insights` say `partial` while a lead is alive.
+One database, schema `factory`. Migrations in `apps/server/migrations/` apply under an advisory lock with a checksum.
+Usage and cost are never copied: they join the `usage` schema at read (`read/usage.ts`), and an Issue's `insights` say
+`partial` while a lead is alive.
 
 ## The counting epoch and the three answers
 
-`config/throughput.json` holds one ISO time (`FACTORY_THROUGHPUT_FILE` points elsewhere); a missing or bad file stops the start. Nothing before it counts: throughput, the capacity loop, friction, the ranking's window facts and lead costs start at `max(asked start, epoch)` and say so as `epoch.cut` (`kernel/epoch.ts`). No row is deleted; retention prunes on its own. A median over earlier days waits three days after the epoch, and the ranking files nothing from a window under a day (`MIN_RANK_DAYS`, `app/loops/throughput.ts`). An improvement filed before it reads `unmeasured`. `read/throughput-answers.ts` writes the three answers the Throughput page opens on: `host`, `queue`, `cost`.
+`config/throughput.json` holds one ISO time (`FACTORY_THROUGHPUT_FILE` points elsewhere); a missing or bad file stops
+the start. Nothing before it counts: throughput, the capacity loop, friction, the ranking's window facts and lead
+costs start at `max(asked start, epoch)` and say so as `epoch.cut` (`kernel/epoch.ts`). No row is deleted. A median
+over earlier days waits three days after the epoch, the ranking files nothing from a window under a day
+(`MIN_RANK_DAYS`), and an improvement filed before it reads `unmeasured`. `read/throughput-answers.ts` writes the
+three answers the Throughput page opens on: `host`, `queue`, `cost`. Each read has a test in
+`apps/server/test/read-models/` that restates its figures in plain SQL over seeded rows.
 
-Each read has a test in `apps/server/test/read-models/` that restates its figures in plain SQL over seeded rows.
-
-| Read | Route | Module | Answers |
-|-|-|-|-|
-| KPIs | `GET /v1/kpis` | `read/kpis.ts` | seven KPIs with parts, the figures beside them, six history windows |
-| Seats | `GET /v1/seats` | `read/seats.ts`, `seats-model.ts` | the light-seat and cheap-reviewer gates |
-| Capacity loop | `GET /v1/capacity-loop` | `read/capacity-loop.ts`, `capacity-tuning.ts` | closed Issues, idle seat-hours, slot waits, queue by reason, edges, the setting to change first |
-| Retro | `GET /v1/retro` | `read/retro.ts`, `retro-build.ts`, `retro-taste.ts` | capacity figures, build minutes per repo, the owner's taste |
-| Throughput | `GET /v1/throughput` | `read/throughput.ts`, `throughput-series.ts`, `throughput-account.ts`, `throughput-redact.ts` | host memory and CPU by class, repo and tenant; tests; series; each lead's wall time in seven places; the scorecard |
-| Sessions | `GET /v1/sessions` | `read/sessions.ts` | the newest attempts, paged by `before` |
-| Projects | `GET /v1/projects`, `/:name`, `/:name/setup`, `/:name/hygiene` | `read/project-index.ts`, `project-page.ts`, `project-setup.ts` | the Projects table, one project's page, its `project.yaml` as a form, its hygiene record |
+- `GET /v1/kpis` (`read/kpis.ts`): seven KPIs with parts, the figures beside them, six history windows.
+- `GET /v1/seats` (`read/seats.ts`, `read/seats-model.ts`): the light-seat and cheap-reviewer gates.
+- `GET /v1/capacity-loop` (`read/capacity-loop.ts`, `read/capacity-tuning.ts`): closed Issues, idle seat-hours, slot
+  waits, queue by reason, edges, the setting to change first.
+- `GET /v1/retro` (`read/retro.ts`, `read/retro-build.ts`, `read/retro-taste.ts`): capacity figures, build minutes per
+  repo, the owner's taste, the lead sessions with their transcript paths, the ledger of earlier retro signals; the
+  read token gets no path and no words.
+- `GET /v1/throughput` (`read/throughput.ts`, `read/throughput-series.ts`, `read/throughput-account.ts`,
+  `read/throughput-redact.ts`): host memory and CPU by class, repo and tenant; tests; series; each lead's wall time in
+  seven places; the scorecard.
+- `GET /v1/sessions` (`read/sessions.ts`, paged by `before`) and `GET /v1/projects` with `/:name`, `/:name/setup`,
+  `/:name/hygiene` (`read/project-index.ts`, `read/project-page.ts`, `read/project-setup.ts`).
 
 Rules, one line each:
-- Queue order (`orderQueue`, `domains/planning/queue.ts`): inside one project and `prio`, Issues sort by size, aged one size per `AGEING_STEP_MS`, then by the `factory-queue` order, then by number. Blockers and `prio` are never changed.
-- Edges the factory added come back out when both Issues shipped with no shared path, or the blocker waited on the owner past `OWNER_WAIT_MS` (`domains/planning/edge-need.ts`). `checkQueue` (`domains/planning/queue-edges.ts`) runs it through `removeInferredEdge` (`app/planning-chain.ts`), which keeps each removal in `factory.queue_edge_removals`.
-- A kind of edge stops (`EDGE_STOP_MIN`, `EDGE_STOP_SHARE`, `kernel/edge-need.ts`) on the measure `readEdgeNeed` (`read/edge-need.ts`). A shared file is a proxy for need.
-- Queue waits (`recordWaits`, `app/capacity-admit.ts`, `domains/capacity/waits.ts`): one interval per reason per Issue, kept `WAITS_KEEP_MS`.
-- Lead wall time (`read/throughput-account.ts`): seven places, each taking only the time the earlier ones did not: owner, step, slot, merge lock, CI, turn, idle.
-- Host signals (`host_samples`, `host_class_samples`, `host_process_samples`) are read in SQL and never kept as counters of their own; a lead sees work repos and tenants as `private`.
-- Build minutes: CI runs come through `githubCiTimes` (`adapters/selfwatch/github.ts`); a repo whose CI cannot be read keeps its check figures under `build.unreadable`.
-- The six capacity figures the ledger compares are `CAPACITY_FIGURE_KEYS` (`packages/contract/src/read-models.ts`).
+
+- Queue order (`orderQueue`, `domains/planning/queue.ts`): inside one project and `prio`, Issues sort by size, aged
+  one size per `AGEING_STEP_MS`, then by the `factory-queue` order, then by number. Blockers and `prio` are never
+  changed.
+- An edge the factory added comes back out when both Issues shipped with no shared path, or the blocker waited on the
+  owner past `OWNER_WAIT_MS` (`domains/planning/edge-need.ts`); `checkQueue` (`domains/planning/queue-edges.ts`) runs
+  it through `removeInferredEdge` (`app/planning-chain.ts`), which keeps each removal in
+  `factory.queue_edge_removals`. A kind of edge stops (`EDGE_STOP_MIN`, `EDGE_STOP_SHARE`, `kernel/edge-need.ts`) on
+  the measure `readEdgeNeed` (`read/edge-need.ts`): a shared file is a proxy for need.
+- Lead wall time (`read/throughput-account.ts`): seven places, each taking only the time the earlier ones did not:
+  owner, step, slot, merge lock, CI, turn, idle.
+- Build minutes: CI runs come through `githubCiTimes` (`adapters/selfwatch/github.ts`); a repo whose CI cannot be read
+  keeps its check figures under `build.unreadable`. The six capacity figures the ledger compares are
+  `CAPACITY_FIGURE_KEYS` (`packages/contract/src/read-models.ts`).
+
 ## Tests
 
-- **Unit** where logic is pure and dense: the machine, correlation, the gate, admission, the queue order.
-- **Model test** of the machine.
-- **Scenarios** (`tests/scenarios`): use cases end to end against a real server and Postgres with fake hc and agw. They
-  are the acceptance suite, and a lead runs the ones its change touches as its proof.
+- **Unit** where logic is pure and dense: the machine, correlation, the gate, admission, the queue order; a **model
+  test** of the machine.
+- **Scenarios** (`tests/scenarios`): use cases end to end against a real server and Postgres with fake hc and agw.
+  They are the acceptance suite, and a lead runs the ones its change touches as its proof.
 - **E2E** (`tests/e2e`): Playwright against a seeded server, every Console screen at three viewports.
 - `make check`: the whole gate, listed in `docs/operations.md` "Check tiers".
 
 ## The Console
 
 `apps/console` is the owner's window (NL1): Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
-Router, Query and Table, a PWA. `tests/e2e` (Playwright) holds its suite and the README's screenshots. The server's second
-loopback listener serves the build, published by dotfiles-private's serve row (`docs/operations.md` "The Console
-listener"). It is read-only apart from the fifteen verbs (eleven answers, pin and unpin, an account's mode), its perimeter is the tailnet ACL
-(NL25), and it can never spawn a session. The screens are the ones of `apps/console/src/lib/screens.ts` (Overview,
-Needs you, Chain, Projects, Artifacts, Improve, Throughput, Accounts) and the pages an Issue, a project, an artifact and a collection each have;
-`/checkpoints/<id>`, the link of the owner's pages, lands on its item. `apps/console/README.md` describes each screen and
-`apps/console/DESIGN.md` is the design bar.
+Router, Query and Table, a PWA. The server's second loopback listener serves the build, published by
+dotfiles-private's serve row (`docs/operations.md` "The Console listener"). It is read-only apart from the fifteen
+verbs (Perimeter) and can never spawn a session. The screens are those of `apps/console/src/lib/screens.ts` plus the
+pages an Issue, a project, an artifact and a collection each have; `/checkpoints/<id>`, the link of the owner's pages,
+lands on its item. `apps/console/README.md` describes each screen and `apps/console/DESIGN.md` is the design bar.
 
-- **The flow trend** (`GET /v1/flow/trend`, `factory read flow-trend`, `read/flow-trend.ts`): the four counts per bucket (running, paused, not started = ready plus held, checking; the trend is by stored state, so it cannot split ready from held), the peak (most Issues at any instant) and the time-weighted average, computed from the applied events' `to_state` intervals, never from samples: 24 hours by the hour, 7 days by the hour (the default), 30 days by the day, buckets on UTC hours and days; 7 days by the day and 30 days by the hour are refused. `FlowModel.trend` (eight daily samples, kept for the Herdr glance) stays; the Console's chart over time is this read.
+The flow trend (`GET /v1/flow/trend`, `read/flow-trend.ts`) counts running, paused, not started (ready plus held) and
+checking per bucket, with the peak and the time-weighted average, from the applied events' `to_state` intervals, never
+from samples: 24 hours by the hour, 7 days by the hour (default), 30 days by the day, on UTC buckets.
+
 ## The throughput loop
 
-**The throughput loop** (`tp-loop`; the measures are `GET /v1/throughput`'s and `read/throughput-loop.ts`'s, its ledger the throughput rows of `loop_findings`, `migrations/1061_loop_ledger.sql`; before it `throughput_findings`, `migrations/1027_throughput_findings.sql`). Measured costs only pay off when someone acts on the largest one and checks that it moved. Once a day, without a model, the loop ranks what cost most over the last 7 days, in minutes of the host's capacity: a project's slot-minutes of failed `factory slot run` steps (`failed_run_minutes`, a per-day figure); slot-minutes per Issue closed `done` when it is 25% above the median of the same ratio per day over the 14 days before (`slot_minutes_per_issue`, cost the excess times the Issues closed); a step tier whose 90th percentile peak memory is over the project's `budgets.peak` (2 GiB when it sets none), cost the minutes of the runs over it (`step_peak_mib`); a process (not `postgres`, `SHARED_MEMORY_PROGRAMS`, not `kernel_task`, `isKernelTask`, not `XProtectRemediator*`, `isTransientScanner`, and not of the tenant class, which `tenant_growth_mib` below reads) whose footprint grew by 1 GiB or more between its first and last notable minute, cost its notable minutes, on the repo it belongs to or on software-factory (`process_growth_mib`); and the minutes queued Issues waited, one candidate per binding reason read from the queue intervals (`queued_minutes`, the subject the reason; "What the queue waits for" above): `memory` (interval kinds `memory` and `memory_fit`, the label names the share of the lead-fit refusal) and `account` (`window`, `cap`) are filed on software-factory with the repos they hit most, `claim` and `lane` on the repo whose Issues waited, naming its `leads` and the lanes (with their caps) its Issues waited in (`WAIT_SUBJECTS`, `waitFacts` in `read/throughput-loop.ts`). A wait behind an `after` edge, a stopped line, a Spec at the owner, a drain, the boot grace or the load is not ranked (the parts of `queue_wait_p90` in `factory read kpis` are the cut between an `after` edge and capacity, and `queueByReason` shows every kind). A finding filed before the reasons were recorded (subject `*`) is `unmeasured` at its after. A cost under 30 minutes is not a finding. A cost the newest 3 days already left behind (its figure over them is at or under the target: fixed days ago, or a burst that ended) is not filed, though it still sits in the 7-day total; a figure those days cannot give (no run, no closed Issue) says nothing and the candidate stands. Two findings read the tenant class (launchd jobs and VMs) from the hourly rollups `host_class_hours` (complete hours; a cluster's shared mapping is counted once, as the class rows store it), both filed on the repo that owns the host's configuration (`DEFAULT_TENANT_PROJECT`, `dotfiles`) because a tenant is a job or VM no project's lead can shrink: `tenant_class_mib`, the class's mean footprint over the 7 days above its budget (`DEFAULT_TENANT_BUDGET_MIB`, 6144, what the dotfiles program aims at with its work profile up; target the budget), filed with the three largest tenants and their figures; and `tenant_growth_mib`, a tenant whose mean over the newest 24 hours is 1 GiB or more above its own median of the 14 days (24-hour buckets of sampled hours, an absent tenant counting 0, at least 7 buckets or no median) before them, which needs no budget and no list of tenants and catches a VM left on (subject the tenant, target that median). The excess is turned into minutes as slot-minutes: the excess over 2048 MiB (one test slot's default step budget) times the minutes it was held, the 7 days for the class and 24 hours for a tenant, so standing memory ranks against the other costs. The after of both is the same mean over the 3 days past the ship. They hold the repo like any finding: one open at a time. Only the class kinds read a budget: the other classes have none (the Console's Throughput page shows each class's share, and the pressure level and swap carry the state); `GET /v1/throughput` carries `host.tenantBudget` (the budget, the window's tenant footprint, `over`). Per project, with no improvement open, the largest cost that no finding holds is filed as a signal on the project's repo (`agent:<project>`): the measured before in the figure's unit, a target (half of a time figure; the median for the per-Issue ratio; the peak budget for a step), the query that reads it again, and the retro marker (`Retro: <date> kpi=<kpi> before=<n> direction=down`) as its last words, so the weekly retro's ledger lists it. At most 5 a pass. A project holds one open improvement: while a finding's Issue is not shipped, nothing else is filed for it.
+The loop (`app/loops/throughput.ts`, `domains/improve/throughput.ts`, `read/throughput-loop.ts`; its ledger the
+throughput rows of `loop_findings`) ranks once a day, with no model, what cost the host's capacity most over the last
+7 days in minutes, and files the largest cost per project as a signal. The candidates:
 
-**A binding cap and the disk fit** (NL48; `domains/improve/caps.ts`, `read/cap-facts.ts`, `domains/capacity/disk.ts`). A repo's `leads` or a lane cap is a claim about a resource, and the throughput pass checks it beside the ranking: when an Issue of the repo was queued for `claim` (or `lane`) in at least 60 minutes of the last 24 hours in which an account seat was idle (`host_samples.seats` over `leads`) and the cap is still below the default, it files one signal on the repo (`The lead cap \`leads: N\` of <repo> binds while seats idle`; the cap and the repo are its finding key, so one open signal per cap) with the cap, the comment beside it in the default branch's `project.yaml` (`capComment` of `@software-factory/project-lint`) and the figures for the resource the comment names (`capReasonOf` in `contract/project`: disk, merge windows, a lead's memory); the repo's `queued_minutes` finding for the same wait is not filed beside it. Disk is not a cap: the host loop measures each running attempt's worktree with its build output (`du -sk`, at most every 10 minutes per worktree and 3 per pass, `factory.worktree_sizes`, `migrations/1055_worktree_sizes.sql`) and admission refuses a lead as `disk` when the repo's learned footprint (p80 of the newest ten attempts, at least three) does not fit the home volume's free disk less the headroom (10 GiB or 5 %) and the footprints of leads started in the last 10 minutes (`diskRefusal`; `HostReader.disk`, `statfs`). With no lead running, no learned size or no reading it keeps nobody out.
+- `failed_run_minutes`: slot-minutes of failed `factory slot run` steps.
+- `slot_minutes_per_issue`: slot-minutes per Issue closed `done`, when 25 % above the median of the 14 days before.
+- `step_peak_mib`: a step tier whose p90 peak memory is over the project's `budgets.peak` (2 GiB when unset).
+- `process_growth_mib`: a process whose footprint grew 1 GiB or more between its first and last notable minute (not
+  `postgres`, `kernel_task` or transient scanners: `SHARED_MEMORY_PROGRAMS`, `isKernelTask`, `isTransientScanner`;
+  tenants are read below).
+- `queued_minutes`: the minutes queued Issues waited, one candidate per binding reason (`WAIT_SUBJECTS`, `waitFacts`):
+  `memory` and `account` on this repo, `claim` and `lane` on the repo whose Issues waited. A wait behind an `after`
+  edge, a stopped line, a Spec, a drain, the boot grace or the load is not ranked.
+- `tenant_class_mib` and `tenant_growth_mib`: launchd jobs and VMs, from the hourly `host_class_hours` rollups, filed
+  on the repo that owns the host's configuration (`DEFAULT_TENANT_PROJECT`): the class's 7-day mean over its budget
+  (`DEFAULT_TENANT_BUDGET_MIB`), and a tenant whose newest 24 hours run 1 GiB above its own 14-day median.
 
-The **ledger** is the table: a row per filing (`open`), marked `shipped` with the ship's time once its Issue shipped, or `dropped` when it closed without a ship (the subject is left out for 14 days). Three days after the ship the loop reads the same figure over `[shipped, shipped + 3 days)` (`figureOf`, the same SQL as the ranking, so a figure is read one way) and stores the `after`: `moved` when it fell by 10% of the before or more, `flat` or `worse` otherwise, `unmeasured` when the window has no run, Issue or step of the subject. A finding that moved is held out of the ranking until the 7-day window has left the days before its ship; one that did not move is ranked again at once and filed with the earlier attempt named (`reopens` is that row), because its cost is still there. The weekly retro's ledger (`read/retro.ts`, `ledgerOf`) joins the table by signal: its `now` is the loop's own after and its `measured` is `after`. A reading that fails (the database, a slow query) is a note in the pass and leaves the row for the next day.
+A cost under 30 minutes is not a finding; a cost the newest 3 days already left behind is not filed; at most 5 a pass
+(`kernel/signal-budget.ts`); a project holds one open improvement. The signal carries the measured before, a target
+(half of a time figure; the median for the per-Issue ratio; the peak budget for a step), the query that reads it again
+and the retro marker (`Retro: <date> kpi=<kpi> before=<n> direction=down`) as its last words.
 
-`budgets:` in `project.yaml` (`{ fast: 90s, peak: 2GiB, fail: 10% }`, each optional, a duration, a size, a share; `budgetsOf` in `packages/contract/src/project-file.ts`) makes a breach a signal the day it happens (`fail` the second day in a row, a red `check-fast` not counted), through the `selfwatch` loop above, not the daily pass. `peak` is also the step target of the daily ranking.
+**The ledger.** A row per filing is `open`, `shipped` once its Issue shipped, or `dropped` when it closed without a
+ship. Three days after the ship the loop reads the same figure over those days (`figureOf`, the SQL of the ranking)
+and stores the `after`: `moved` when it fell by 10 % of the before, else `flat` or `worse`, `unmeasured` when the
+window has no run, Issue or step. A finding that moved is held out of the ranking until the 7-day window has left the
+days before its ship; one that did not is ranked again at once with the earlier attempt named (`reopens`). The weekly
+retro's ledger (`read/retro.ts`, `ledgerOf`) joins it by signal.
+
+**A binding cap and the disk fit** (NL48; `domains/improve/caps.ts`, `read/cap-facts.ts`, `domains/capacity/disk.ts`).
+When an Issue of a repo was queued for `claim` or `lane` in at least 60 minutes of the last 24 hours while an account
+seat was idle and the cap is below the default, one signal on the repo names the cap, the comment beside it in
+`project.yaml` (`capComment`) and the figures for the resource the comment names (`capReasonOf`). Disk is no cap:
+admission refuses a lead as `disk` when the repo's learned worktree footprint (`factory.worktree_sizes`, p80 of ten
+attempts) does not fit the free disk less headroom (`diskRefusal`).
+
+`budgets:` in `project.yaml` (`budgetsOf` in `packages/contract/src/project-file.ts`) make a breach a signal the day
+it happens through `selfwatch`, not this pass; `peak` is also the step target of the ranking.
 
 ## Not built
 
-- **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings are gone from
-  the env allow-list; the server reads none of them.
-- **A per-request identity on the Console listener:** accepted (NL25). The tailnet ACL is the perimeter; see "Perimeter".
+- **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The server reads none of the old core's
+  `FACTORY_ALERT_*` settings.
+- **A per-request identity on the Console listener:** accepted (NL25). The tailnet ACL is the perimeter; see
+  Perimeter.
 - **Client work in other repos:** Argo's factory pages leaving for the Console; Iris rendering an artifact inside it.
-
