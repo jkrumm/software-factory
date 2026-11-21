@@ -1,5 +1,5 @@
 import type { ChainModel, ChainNode, ReadIssueDetail } from '@software-factory/contract'
-import { ISSUE_KINDS, type IssueKind } from '@/components/kit/kind-badge'
+import { ISSUE_KINDS, ISSUE_OUTCOMES, type IssueKind } from '@software-factory/contract'
 import type { LozengeState } from '@/components/kit/lozenge'
 import type { Tone } from '@/components/kit/tone'
 import type { Step } from '@/components/kit/step-rail'
@@ -23,12 +23,10 @@ export const TAB_LABEL: Record<TabKey, string> = {
 /** The tab a URL value names; anything unknown or missing is the overview. */
 export const tabOf = (value: unknown): TabKey => TAB_KEYS.find((key) => key === value) ?? 'overview'
 
-const OUTCOMES = ['done', 'dropped', 'healed', 'cancelled'] as const
-
 /** What the lozenge shows: the outcome once the Issue closed with a known one, else the word its work stands under. */
 export function lozengeStateOf(issue: Pick<ReadIssueDetail, 'state' | 'outcome' | 'work'>): LozengeState {
   if (issue.work) return issue.work.word
-  return OUTCOMES.find((outcome) => outcome === issue.outcome) ?? 'closed'
+  return ISSUE_OUTCOMES.find((outcome) => outcome === issue.outcome) ?? 'closed'
 }
 
 /** The Issue's kind when it is one of the five known, else null. */

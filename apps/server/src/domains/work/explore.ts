@@ -1,15 +1,8 @@
+import { ISSUE_STATES, type IssueState } from '@software-factory/contract'
 import type { Actor } from '../../kernel/events.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 import { type AnyIssueEvent, EVENT_KINDS, type EventKind, type IssueEvent } from './events.ts'
-import {
-  type Issue,
-  MAX_REGRESSIONS,
-  MAX_RESTARTS,
-  type State,
-  STATES,
-  WAIT_REASONS,
-  type WaitReason,
-} from './issue.ts'
+import { type Issue, MAX_REGRESSIONS, MAX_RESTARTS, WAIT_REASONS, type WaitReason } from './issue.ts'
 import { apply, file } from './machine.ts'
 
 /**
@@ -118,8 +111,8 @@ export function filedIssue(id: IssueId): Issue {
 }
 
 export interface Edge {
-  from: State
-  to: State
+  from: IssueState
+  to: IssueState
   kind: EventKind
   /** the wait it enters or leaves, when it does */
   reason: WaitReason | null
@@ -167,8 +160,8 @@ export function edges(): Edge[] {
   const order = <T>(list: readonly T[], value: T) => list.indexOf(value)
   return [...found.values()].sort(
     (a, b) =>
-      order(STATES, a.from) - order(STATES, b.from) ||
-      order(STATES, a.to) - order(STATES, b.to) ||
+      order(ISSUE_STATES, a.from) - order(ISSUE_STATES, b.from) ||
+      order(ISSUE_STATES, a.to) - order(ISSUE_STATES, b.to) ||
       order(EVENT_KINDS, a.kind) - order(EVENT_KINDS, b.kind) ||
       order<WaitReason | null>(WAIT_REASONS, a.reason) - order<WaitReason | null>(WAIT_REASONS, b.reason),
   )

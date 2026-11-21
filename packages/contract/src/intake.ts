@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { ISSUE_ID_META, IssueRefInput } from './issues.ts'
+import { ISSUE_ORIGINS } from './vocab.ts'
 
 /** A NUL, or half of a surrogate pair: what Postgres cannot store in text or JSON. */
 // oxlint-disable-next-line no-control-regex -- the NUL is exactly what is removed
@@ -51,7 +52,6 @@ export const DoorSource = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, 'not a sour
 export const SIGNAL_STATES = ['held', 'filed', 'amended', 'incident', 'promoted', 'dismissed'] as const
 export const DISMISSERS = ['owner', 'judge', 'probe'] as const
 export const SIGNAL_KINDS = ['alert', 'request', 'feedback', 'remark'] as const
-export const SIGNAL_ORIGINS = ['you', 'application', 'infrastructure', 'github', 'feedback', 'factory'] as const
 export const SIGNAL_TRUSTS = ['owner', 'machine', 'agent', 'outside'] as const
 
 /**
@@ -63,7 +63,7 @@ export const Signal = z
     /** kuma, hyperdx, github, checks, launchd, feedback:<app>, owner:hermes, agent:<repo> */
     source: z.string(),
     kind: z.enum(SIGNAL_KINDS),
-    origin: z.enum(SIGNAL_ORIGINS),
+    origin: z.enum(ISSUE_ORIGINS),
     trust: z.enum(SIGNAL_TRUSTS),
     /** from the route or the caller, never from an outside payload */
     repo: z.string().nullable(),
@@ -205,7 +205,7 @@ export const StoredSignal = z
     id: z.string(),
     source: z.string(),
     kind: z.enum(SIGNAL_KINDS),
-    origin: z.enum(SIGNAL_ORIGINS),
+    origin: z.enum(ISSUE_ORIGINS),
     trust: z.enum(SIGNAL_TRUSTS),
     repo: z.string().nullable(),
     title: z.string(),
@@ -331,7 +331,7 @@ export const ScreenRequest = z
       id: z.string(),
       source: z.string(),
       kind: z.enum(SIGNAL_KINDS),
-      origin: z.enum(SIGNAL_ORIGINS),
+      origin: z.enum(ISSUE_ORIGINS),
       repo: z.string().nullable(),
       title: z.string(),
       text: z.string(),

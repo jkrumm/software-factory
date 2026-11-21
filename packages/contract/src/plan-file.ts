@@ -3,15 +3,12 @@ import * as z from 'zod'
 import { CheckpointName, LaneName } from './lane.ts'
 import { PLAN_LIMITS } from './planning.ts'
 import { PlanSeat } from './seat.ts'
+import { ISSUE_KINDS } from './vocab.ts'
 
 /**
  * The plan file's schema and its hardened YAML read, shared by the server and the offline `factory plan check`.
  * A subpath export (`@software-factory/contract/plan`), not part of the index: the hook never loads `yaml`.
  */
-
-/** What a row's Issue is; the same words as the Issue's kinds (`app/` checks the two lists agree). */
-export const PLAN_KINDS = ['feature', 'bug', 'chore', 'docs', 'incident'] as const
-export type PlanKind = (typeof PLAN_KINDS)[number]
 
 export const PLAN_VERSION = 1
 
@@ -52,7 +49,7 @@ export const PlanRow = z
     /** what the filed Issue's lead reads: free-form; the conventional keys are `FACTS_KEYS` (packages/contract/src/filing.ts) */
     facts: z.record(z.string(), z.unknown()).optional(),
     /** what the Issue is; default `feature` */
-    kind: z.enum(PLAN_KINDS).optional(),
+    kind: z.enum(ISSUE_KINDS).optional(),
     /** the tier and effort its lead starts on: `{tier, effort}` or `{role}`; default the table's lead role */
     seat: PlanSeat.optional(),
     /** the resource its Issue runs in; the target project's `lanes:` caps how many of a lane run at once */

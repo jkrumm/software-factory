@@ -1,8 +1,8 @@
 import * as z from 'zod'
 import { QueueReason, QueueStatesView } from './capacity.ts'
-import { SIGNAL_ORIGINS } from './intake.ts'
 import { IssueRef } from './planning.ts'
 import { EFFORTS, LeadSeat, TIERS } from './roles.ts'
+import { ISSUE_KINDS, ISSUE_ORIGINS, ISSUE_OUTCOMES, OPEN_ISSUE_STATES, type OpenIssueState } from './vocab.ts'
 import { WORK_WORDS, WorkCounts } from './work-words.ts'
 
 /**
@@ -38,7 +38,7 @@ export const NeedItem = z
     link: z.strictObject({ type: z.enum(['decision', 'artifact', 'errand', 'signal', 'issue']), id: z.string() }),
     /** the artifact under review a Decision was raised about; null for everything else */
     artifact: z.string().nullable(),
-    /** where it came from, in the words of `SIGNAL_ORIGINS`: a quarantined signal's own origin, else the Issue's; null when unknown */
+    /** where it came from, in the words of `ISSUE_ORIGINS`: a quarantined signal's own origin, else the Issue's; null when unknown */
     origin: z.string().nullable(),
     /** a quarantined signal's source in a person's word (never a tool name); a request's asker (`ask-human`); null for everything else */
     source: z.string().nullable(),
@@ -95,10 +95,9 @@ export type NeedsModel = z.infer<typeof NeedsModel>
 
 // -- flow ----------------------------------------------------------------------------------------------------------------
 
-export const FLOW_STATES = ['settling', 'queued', 'working', 'waiting', 'watching'] as const
-export type FlowState = (typeof FLOW_STATES)[number]
-
-export const FLOW_KINDS = ['feature', 'bug', 'incident', 'chore', 'docs'] as const
+/** One entry of `schema` per open state, keyed by `OPEN_ISSUE_STATES`: a new state is a new key everywhere it is counted. */
+const perOpenState = <T extends z.ZodType>(schema: T) =>
+  z.strictObject(Object.fromEntries(OPEN_ISSUE_STATES.map((state) => [state, schema])) as Record<OpenIssueState, T>)
 
 export const FlowIssue = z
   .strictObject({
@@ -106,9 +105,9 @@ export const FlowIssue = z
     repo: z.string(),
     title: z.string(),
     /** where it came from: a shape, so a work repo's Issue shows it too */
-    origin: z.enum(SIGNAL_ORIGINS),
+    origin: z.enum(ISSUE_ORIGINS),
     /** the settled kind, else the filed one: a shape, so a work repo's Issue shows it too */
-    kind: z.enum(FLOW_KINDS),
+    kind: z.enum(ISSUE_KINDS),
     /** when it entered the state it is in */
     since: at,
     /** the wait of a `waiting` Issue */
@@ -131,9 +130,9 @@ export const FlowClosed = z
     id: IssueRef,
     repo: z.string(),
     title: z.string(),
-    origin: z.enum(SIGNAL_ORIGINS),
-    kind: z.enum(FLOW_KINDS),
-    outcome: z.enum(['done', 'dropped', 'healed', 'cancelled']),
+    origin: z.enum(ISSUE_ORIGINS),
+    kind: z.enum(ISSUE_KINDS),
+    outcome: z.enum(ISSUE_OUTCOMES),
     closedAt: at,
     /** the seat its last lead ran on; null when it never had one */
     seat: LeadSeat.nullable(),
@@ -157,13 +156,7 @@ export const FlowTrend = z
     /** 8 samples, oldest first, 24 h apart, the last one is `at` of the model */
     at: z.array(at).length(8),
     /** per state, how many Issues were in it at each sample */
-    states: z.strictObject({
-      settling: flowStateCounts,
-      queued: flowStateCounts,
-      working: flowStateCounts,
-      waiting: flowStateCounts,
-      watching: flowStateCounts,
-    }),
+    states: perOpenState(flowStateCounts),
     /** Issues closed done or healed in each daily window (at[i], at[i+1]], oldest first */
     shipped: z.array(z.number().int()).length(7),
     /** the same count over the 7 days before at[0] */
@@ -178,13 +171,7 @@ export const FlowTrend = z
 export const FlowModel = z
   .strictObject({
     at,
-    states: z.strictObject({
-      settling: FlowColumn,
-      queued: FlowColumn,
-      working: FlowColumn,
-      waiting: FlowColumn,
-      watching: FlowColumn,
-    }),
+    states: perOpenState(FlowColumn),
     /** closed in the last 24 hours, newest first */
     closedRecently: z.array(FlowClosed),
     perProject: z.array(FlowProject),
@@ -269,7 +256,7 @@ export const ChainNode = z
     /** the word it stands under (`workOf`): an open Issue's five, a row's `planned` with its split `due` (to file now), `issue` (after another Issue) or `date` (not before a time); null for a closed Issue */
     work: z.strictObject({ word: z.enum([...WORK_WORDS, 'planned']), split: z.string().nullable() }).nullable(),
     /** an Issue's settled kind, else its filed one (`chore` when unknown); a row's `kind` (default `feature`) */
-    issueKind: z.enum(FLOW_KINDS),
+    issueKind: z.enum(ISSUE_KINDS),
     /** when the Issue entered the state it is in; null for a row */
     since: z.string().nullable(),
     /** the wait of a `waiting` Issue; null for a row */
@@ -1061,7 +1048,7 @@ export type SinceCategory = z.infer<typeof SinceCategory>
 export const SinceFiled = z
   .strictObject({
     count: z.number().int(),
-    byOrigin: z.array(z.strictObject({ origin: z.enum(SIGNAL_ORIGINS), count: z.number().int() })),
+    byOrigin: z.array(z.strictObject({ origin: z.enum(ISSUE_ORIGINS), count: z.number().int() })),
     items: z.array(SinceItem),
   })
   .meta({ id: 'SinceFiled' })

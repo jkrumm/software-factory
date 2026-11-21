@@ -5,7 +5,6 @@ import {
   factsHead,
   factsNote,
   filable,
-  type PlanKind,
   type PlanOf,
   type PlanRow,
   rowStatuses,
@@ -13,7 +12,6 @@ import {
 } from '../domains/planning/plan.ts'
 import { type HeldRow, OWNER_WAIT_MS } from '../domains/planning/replan.ts'
 import { projectOf, repoTextOf, type StoredProject } from '../domains/planning/sync.ts'
-import type { Kind } from '../domains/work/issue.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
@@ -22,10 +20,6 @@ import type { PlanningDeps, PlanningStores } from './planning-deps.ts'
 import { fileReplan } from './planning-replan.ts'
 import { resolveSeat } from './seat.ts'
 import { type SyncDeps, type SyncResult, syncProjects } from './planning-sync.ts'
-
-/** The kinds a plan row may name are the Issue's own: this fails `tsc` when the two lists drift. */
-const planKindsAreIssueKinds: PlanKind extends Kind ? (Kind extends PlanKind ? true : never) : never = true
-void planKindsAreIssueKinds
 
 export interface PlanView {
   project: string

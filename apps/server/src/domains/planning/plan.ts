@@ -2,7 +2,7 @@ import { PLAN_LIMITS } from '@software-factory/contract'
 import { findCycle, notBeforeMs, type PlanFile, type PlanRow } from '@software-factory/contract/plan'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
 
-export { PlanFile, type PlanKind, PlanRow, parsePlan } from '@software-factory/contract/plan'
+export { PlanFile, PlanRow, parsePlan } from '@software-factory/contract/plan'
 
 /** `docs/plan.yaml` is read from the default branch like `project.yaml`; a larger file is a broken plan. */
 export const MAX_PLAN_BYTES = PLAN_LIMITS.maxBytes

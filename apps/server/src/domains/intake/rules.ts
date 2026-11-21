@@ -1,4 +1,4 @@
-import { RETRO_MARKER, type Signal } from '@software-factory/contract'
+import { type IssueKind, type IssueOrigin, RETRO_MARKER, type Signal } from '@software-factory/contract'
 import { key, type Key } from '../../kernel/keys.ts'
 import type { LoopFinding, OpenIssue, Received, RepoSignals } from './model.ts'
 
@@ -7,11 +7,8 @@ const DOOR_SOURCES: readonly string[] = ['kuma', 'hyperdx']
 /** The sources that correlate into an incident when they sit on one host. */
 const CORRELATED_SOURCES: readonly string[] = ['kuma', 'hyperdx']
 
-export type IssueKindName = 'feature' | 'bug' | 'chore' | 'docs' | 'incident'
-export type OriginName = Signal['origin']
-
 /** Where a source comes from, in the words a person uses (`docs/language.md`, Origin). */
-export function originOf(source: string): OriginName {
+export function originOf(source: string): IssueOrigin {
   if (source === 'kuma' || source === 'launchd') return 'infrastructure'
   if (source === 'hyperdx') return 'application'
   if (source === 'github' || source === 'checks') return 'github'
@@ -25,7 +22,7 @@ export function originOf(source: string): OriginName {
  * many signals); a failing check on the default branch is one too, since a red default branch stops every merge and
  * takes the urgent claim; a failing job is a bug; the rest is a request, which triage refines.
  */
-export function issueKindOf(received: Received): IssueKindName {
+export function issueKindOf(received: Received): IssueKind {
   const { signal } = received
   if (signal.kind === 'alert') return signal.source === 'launchd' ? 'bug' : 'incident'
   return signal.kind === 'remark' ? 'chore' : 'feature'

@@ -14,14 +14,16 @@ An Issue is one unit of work: one repo, one branch, one ship.
 
 The row holds the state, the wait reason, the outcome and a version. Everything else is read from the events.
 
-<!-- snippet: apps/server/src/domains/work/issue.ts STATES -->
+<!-- snippet: packages/contract/src/vocab.ts OPEN_ISSUE_STATES -->
 ```ts
-export const STATES = ['settling', 'queued', 'working', 'waiting', 'watching', 'closed'] as const
+export const OPEN_ISSUE_STATES = ['settling', 'queued', 'working', 'waiting', 'watching'] as const
 ```
+
+`closed` is the sixth state: `ISSUE_STATES` is the open ones and `closed`.
 
 **Example files:**
 
-- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L4-L25): states, kinds, origins, sizes and outcomes
+- [`contract/vocab.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/vocab.ts#L7-L43): states, kinds, origins, sizes and outcomes, each written once
 - [`domains/leads/names.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/names.ts#L18-L19): `leadBranch`, the branch of one attempt
 
 ## Events
@@ -80,13 +82,13 @@ The drawing shows the main path and the moves that change it: a wait, a lead tha
 ```ts
 export type Cell =
   | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; heard?: true; effects: Effect[] }
-  | { to: 'closed'; outcome: Outcome; effects: Effect[] }
+  | { to: 'closed'; outcome: IssueOutcome; effects: Effect[] }
   | { to: 'settling' | 'queued' | 'working' | 'watching'; effects: Effect[] }
   | { refuse: string }
   | { ignore: string }
 
 /** The total table: every state takes every event. A missing cell fails `tsc`. */
-export type Table = { [S in State]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } }
+export type Table = { [S in IssueState]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } }
 ```
 
 Six states times 25 events is 150 cells. A queued Issue shows what most of them look like: it takes `admitted` and says why it takes almost nothing else. The excerpt below is the start of its row:
@@ -149,14 +151,14 @@ An outcome is how a closed Issue ended.
 
 A closed Issue opens again only by `reopened`, within 30 days.
 
-<!-- snippet: apps/server/src/domains/work/issue.ts OUTCOMES -->
+<!-- snippet: packages/contract/src/vocab.ts ISSUE_OUTCOMES -->
 ```ts
-export const OUTCOMES = ['done', 'dropped', 'healed', 'cancelled'] as const
+export const ISSUE_OUTCOMES = ['done', 'dropped', 'healed', 'cancelled'] as const
 ```
 
 **Example files:**
 
-- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L20-L25): the four outcomes
+- [`contract/vocab.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/vocab.ts#L36-L42): the four outcomes
 
 ## Deterministic keys
 
@@ -250,7 +252,7 @@ The Issue's insights, from the same read: 2 h 8 min from filed to closed, 12.7 m
 
 **Example files:**
 
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L570-L735): `TABLE`, the cells this timeline walked through
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L569-L734): `TABLE`, the cells this timeline walked through
 
 **Read more:**
 

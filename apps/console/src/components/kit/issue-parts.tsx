@@ -3,7 +3,7 @@ import type { LeadSeat } from '@software-factory/contract'
 import { ageWords } from '@/lib/age'
 import { cn } from '@/lib/utils'
 import type { CardLinkProps, LinkRender } from './card-link'
-import type { IssueKind } from './kind-badge'
+import type { IssueKind } from '@software-factory/contract'
 import type { LozengeState } from './lozenge'
 import { MenuButton } from './menu-button'
 

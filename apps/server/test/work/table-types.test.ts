@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { EVENT_KINDS } from '../../src/domains/work/events.ts'
-import { STATES } from '../../src/domains/work/issue.ts'
+import { ISSUE_STATES } from '@software-factory/contract'
 import { type Cell, TABLE, type Table } from '../../src/domains/work/table.ts'
 
 /**
@@ -25,7 +25,7 @@ const closedWithoutOutcome: Cell = closedNoOutcome
 
 test('the fixtures exist, and the real table has a cell for every state and event', () => {
   expect([missingCell, missingState, strayState, closedWithoutOutcome].length).toBe(4)
-  for (const state of STATES) {
+  for (const state of ISSUE_STATES) {
     expect(Object.keys(TABLE[state]).sort()).toEqual([...EVENT_KINDS].sort())
     for (const kind of EVENT_KINDS) expect(typeof TABLE[state][kind]).toBe('function')
   }

@@ -1,4 +1,10 @@
-import type { Kind } from '../domains/work/issue.ts'
+import {
+  type IssueKind,
+  type IssueSize,
+  LEAD_ACTIVE_ISSUE_STATES,
+  OPEN_ISSUE_STATES,
+  UNSTARTED_ISSUE_STATES,
+} from '@software-factory/contract'
 import { cycleThrough, type Edge } from '../domains/planning/chain.ts'
 import type { OwnerActor } from '../kernel/events.ts'
 import { type IssueId, issueNumber } from '../kernel/ids.ts'
@@ -78,9 +84,9 @@ export async function settleIssue(
   input: {
     issue: IssueId
     after: readonly IssueId[]
-    kind?: Kind | undefined
+    kind?: IssueKind | undefined
     checkpoint?: 'spec' | undefined
-    size?: 'small' | 'medium' | 'large' | undefined
+    size?: IssueSize | undefined
     /** who inferred the edges and why, kept on each edge and named in the queue order; absent when they were stated */
     inferredBy?: string | undefined
   },
@@ -145,7 +151,9 @@ export async function addAfter(
           : { kind: 'unknown_issue', issue: input.issue },
       )
     }
-    const takes = input.running ? ['settling', 'queued', 'working', 'watching'] : ['settling', 'queued']
+    const takes: readonly string[] = input.running
+      ? [...UNSTARTED_ISSUE_STATES, ...LEAD_ACTIVE_ISSUE_STATES]
+      : UNSTARTED_ISSUE_STATES
     if (!takes.includes(open.state)) {
       return err<PlanningError>({
         kind: 'wrong_state',
@@ -158,7 +166,7 @@ export async function addAfter(
   })
 }
 
-const UNAFTER_STATES = ['settling', 'queued', 'working', 'watching', 'waiting']
+const UNAFTER_STATES: readonly string[] = OPEN_ISSUE_STATES
 
 /**
  * Removes the stored edges `issue -> after` (from `planning after`, `issue new --after` or a settle). Refuses the whole set (nothing is removed) when one is not a stored,

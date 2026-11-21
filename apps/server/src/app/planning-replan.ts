@@ -1,4 +1,4 @@
-import { cleanText } from '@software-factory/contract'
+import { cleanText, LEAD_ACTIVE_ISSUE_STATES } from '@software-factory/contract'
 import {
   type HeldRow,
   outsideProject,
@@ -155,8 +155,6 @@ export interface ReplanOpResult {
 /** The principal an applied Replan acts as: the owner's approved Spec, not the owner's hands (no owner touch). */
 const APPLY_ACTOR: OwnerActor = 'orchestrator'
 
-const APPLIED = ['working', 'watching']
-
 /** Why one op did not run, in a line. */
 function detailOf(error: PlanningError | PortError): string {
   switch (error.kind) {
@@ -195,7 +193,7 @@ export async function applyReplan(
     const replan = await stores.planning.replanOf(input.issue)
     if (!replan) return err({ kind: 'not_a_replan', issue: input.issue })
     const current = replay(input.issue, history)
-    if (!APPLIED.includes(current.state) || current.attempt !== input.attempt) {
+    if (!(LEAD_ACTIVE_ISSUE_STATES as readonly string[]).includes(current.state) || current.attempt !== input.attempt) {
       return err({
         kind: 'wrong_state',
         issue: input.issue,

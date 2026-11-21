@@ -8,7 +8,8 @@ import { fileIssue, type IssueWrites, recordIssueEvent } from '../src/app/issues
 import { runOutbox } from '../src/app/outbox.ts'
 import type { EffectKind } from '../src/domains/work/effects.ts'
 import type { AnyIssueEvent, EventKind, IssueEvent } from '../src/domains/work/events.ts'
-import { OUTCOMES, STATES, WAIT_REASONS } from '../src/domains/work/issue.ts'
+import { ISSUE_OUTCOMES, ISSUE_STATES } from '@software-factory/contract'
+import { WAIT_REASONS } from '../src/domains/work/issue.ts'
 import type { EffectPorts, WorkStore } from '../src/domains/work/ports.ts'
 import { fixedClock } from '../src/kernel/clock.ts'
 import type { Actor } from '../src/kernel/events.ts'
@@ -203,7 +204,7 @@ describe('the write path', () => {
 
   test('the tables take every state, wait reason and outcome of the machine', async () => {
     await db.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES ('issue_9', 'r', 'queued', 1)`
-    for (const state of STATES) {
+    for (const state of ISSUE_STATES) {
       const reason = state === 'waiting' ? 'timer' : null
       const outcome = state === 'closed' ? 'done' : null
       await db.sql`UPDATE factory.issues SET state = ${state}, wait_reason = ${reason}, outcome = ${outcome} WHERE id = 'issue_9'`
@@ -211,7 +212,7 @@ describe('the write path', () => {
     for (const reason of WAIT_REASONS) {
       await db.sql`UPDATE factory.issues SET state = 'waiting', wait_reason = ${reason}, outcome = NULL WHERE id = 'issue_9'`
     }
-    for (const outcome of OUTCOMES) {
+    for (const outcome of ISSUE_OUTCOMES) {
       await db.sql`UPDATE factory.issues SET state = 'closed', wait_reason = NULL, outcome = ${outcome} WHERE id = 'issue_9'`
     }
     expect(await rejection(db.sql`UPDATE factory.issues SET state = 'paused' WHERE id = 'issue_9'`)).toContain('check')

@@ -1,10 +1,11 @@
+import type { IssueState } from '@software-factory/contract'
 import type { EventEnvelope } from '../../kernel/events.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { Effect, EffectKind, EffectOf } from './effects.ts'
 import type { EventKind } from './events.ts'
-import type { Issue, State } from './issue.ts'
+import type { Issue } from './issue.ts'
 import type { AppliedRecord, Transition } from './machine.ts'
 
 /** An event as `issue_events` holds it: applied, refused or ignored, every one a fact. */
@@ -13,7 +14,7 @@ export interface StoredEvent extends EventEnvelope<EventKind> {
   /** why it was refused or ignored */
   detail: string | null
   /** the state it found; null for `filed` */
-  from: State | null
+  from: IssueState | null
   /** what it did, when applied */
   transition: Transition | null
 }

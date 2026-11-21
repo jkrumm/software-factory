@@ -10,7 +10,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CALLERS } from '../apps/server/src/api/policy.ts'
-import { STATES } from '../apps/server/src/domains/work/issue.ts'
+import { ISSUE_STATES } from '../packages/contract/src/vocab.ts'
 import { PAYLOADS } from '../apps/server/src/domains/work/events.ts'
 
 /** What the code says: every list and count the README states. */
@@ -207,7 +207,7 @@ export function readFacts(root: string): Facts {
     tokens,
     screens: nav,
     domains,
-    states: STATES,
+    states: ISSUE_STATES,
     consolePort: Number(port?.[1]),
     consoleWrites: writes?.length ?? 0,
   }

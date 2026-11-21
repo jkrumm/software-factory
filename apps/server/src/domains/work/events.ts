@@ -1,8 +1,16 @@
-import { EFFORTS, LaneName, MAX_AFTER_IDS, TIERS } from '@software-factory/contract'
+import {
+  EFFORTS,
+  ISSUE_KINDS,
+  ISSUE_ORIGINS,
+  ISSUE_OUTCOMES,
+  ISSUE_SIZES,
+  LaneName,
+  MAX_AFTER_IDS,
+  TIERS,
+} from '@software-factory/contract'
 import * as z from 'zod'
 import type { Actor } from '../../kernel/events.ts'
 import { idOf, type IssueId } from '../../kernel/ids.ts'
-import { KINDS, ORIGINS, SIZES } from './issue.ts'
 
 const text = z.string().trim().min(1)
 const attempt = z.number().int().min(1)
@@ -23,8 +31,8 @@ export const PAYLOADS = {
   filed: z.object({
     repo: text,
     title: text,
-    kind: z.enum(KINDS),
-    origin: z.enum(ORIGINS),
+    kind: z.enum(ISSUE_KINDS),
+    origin: z.enum(ISSUE_ORIGINS),
     /** the seat its lead starts on, resolved at filing (old events carry none: the table's lead row) */
     seat: z
       .object({
@@ -43,10 +51,10 @@ export const PAYLOADS = {
   }),
   /** triage and the chain are done: it may be queued; triage may refine an owner or agent request's kind and flag it `checkpoint: spec` (old events carry none) */
   settled: z.object({
-    kind: z.enum(KINDS).optional(),
+    kind: z.enum(ISSUE_KINDS).optional(),
     checkpoint: z.literal('spec').optional(),
     /** triage's judgment of the work's size, kept as it answered it (old events and a rule settle carry none) */
-    size: z.enum(SIZES).optional(),
+    size: z.enum(ISSUE_SIZES).optional(),
   }),
   /**
    * capacity lets a lead start: the next attempt. `load` is the reading admission decided with (null: none was read); a
@@ -150,7 +158,7 @@ export const PAYLOADS = {
   /** ended without a watch: done or dropped by its lead, or healed before one started */
   closed: z.object({
     attempt: attempt.nullable(),
-    outcome: z.enum(['done', 'dropped', 'healed']),
+    outcome: z.enum(ISSUE_OUTCOMES).extract(['done', 'dropped', 'healed']),
     reason: text,
   }),
 } as const

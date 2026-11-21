@@ -15,7 +15,8 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
-import { KIND_ICON, type IssueKind } from '@/components/kit/kind-badge'
+import type { IssueKind } from '@software-factory/contract'
+import { KIND_ICON } from '@/components/kit/kind-badge'
 import {
   Command,
   CommandDialog,

@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import { IssueRefInput, MAX_AFTER_IDS } from './issues.ts'
 import { EVENT_KINDS } from './spool.ts'
+import { ISSUE_OUTCOMES } from './vocab.ts'
 
 /** Whether every string in a value, keys included, is one jsonb can store: no NUL, no lone surrogate. */
 function storable(value: unknown): boolean {
@@ -44,7 +45,12 @@ const Reason = z.string().trim().min(1).max(4_000)
 
 /** The lead's verbs. Each names the attempt it speaks for: a verb of an earlier attempt is refused. `call` makes a repeated call one event. */
 export const CloseBody = z
-  .object({ attempt: z.number().int().min(1), outcome: z.enum(['done', 'dropped']), reason: Reason, call: Call })
+  .object({
+    attempt: z.number().int().min(1),
+    outcome: z.enum(ISSUE_OUTCOMES).extract(['done', 'dropped']),
+    reason: Reason,
+    call: Call,
+  })
   .meta({ id: 'CloseBody' })
 export type CloseBody = z.infer<typeof CloseBody>
 

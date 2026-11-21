@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { ISSUE_STATES } from '@software-factory/contract'
 import type { FinderIssue, FindingLoop } from '../domains/improve/finders.ts'
 import type { ClosedFinding } from '../domains/improve/ledger.ts'
 import type { DigestIssue } from '../kernel/digest-scope.ts'
@@ -9,7 +10,7 @@ import type { ImproveReads } from '../domains/improve/ports.ts'
 const DigestRow = z.object({
   id: z.string(),
   repo: z.string(),
-  state: z.enum(['settling', 'queued', 'working', 'waiting', 'watching', 'closed']),
+  state: z.enum(ISSUE_STATES),
   title: z.string(),
   kind: z.string().nullable(),
   wait_reason: z.string().nullable(),

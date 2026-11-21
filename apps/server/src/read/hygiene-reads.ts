@@ -1,12 +1,13 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { ISSUE_STATES } from '@software-factory/contract'
 import type { FindingIssue } from '../domains/hygiene/hygiene-lifecycle.ts'
 import type { HygieneReads } from '../domains/hygiene/ports.ts'
 
 const FindingIssueRow = z.object({
   key: z.string(),
   issue: z.string(),
-  state: z.enum(['settling', 'queued', 'working', 'waiting', 'watching', 'closed']),
+  state: z.enum(ISSUE_STATES),
   outcome: z.enum(['done', 'healed', 'dropped', 'cancelled']).nullable(),
   filed_at: z.date(),
   closed_at: z.date().nullable(),

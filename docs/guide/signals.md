@@ -17,7 +17,6 @@ A signal has a kind, an origin and a trust level. The receiving side sets all th
 export const SIGNAL_STATES = ['held', 'filed', 'amended', 'incident', 'promoted', 'dismissed'] as const
 export const DISMISSERS = ['owner', 'judge', 'probe'] as const
 export const SIGNAL_KINDS = ['alert', 'request', 'feedback', 'remark'] as const
-export const SIGNAL_ORIGINS = ['you', 'application', 'infrastructure', 'github', 'feedback', 'factory'] as const
 export const SIGNAL_TRUSTS = ['owner', 'machine', 'agent', 'outside'] as const
 ```
 
@@ -55,7 +54,7 @@ The source name decides the origin and, for an alert, which projects listen.
 
 <!-- snippet: apps/server/src/domains/intake/rules.ts originOf -->
 ```ts
-export function originOf(source: string): OriginName {
+export function originOf(source: string): IssueOrigin {
   if (source === 'kuma' || source === 'launchd') return 'infrastructure'
   if (source === 'hyperdx') return 'application'
   if (source === 'github' || source === 'checks') return 'github'
