@@ -26,6 +26,7 @@ import { freshFor } from './kernel/fresh-for.ts'
 import { costOfIssues } from './read/kpis.ts'
 import { readTripwire } from './read/kpis-seats.ts'
 import type { IdSource } from './kernel/ids.ts'
+import type { ArchiveTidy } from './kernel/transcript-archive.ts'
 import type { PortError, Result } from './kernel/result.ts'
 
 /** The light seat's gate off one tripwire reading: triage's `small` starts light only while it is met. */
@@ -43,6 +44,8 @@ export interface LeadsComposition {
   routes: LeadRoutes
   /** one pass of the lead tick: spool, lost leads, outbox; with `signal` a drain ends it before its next step */
   tick(signal?: AbortSignal): Promise<Result<TickAnswer, PortError>>
+  /** one pass over the transcript archive (retention, compression, finished projects); null: one was already running */
+  tidyArchive(): Promise<Result<ArchiveTidy | null, PortError>>
   /** the hook socket, bound; stopping it removes the file */
   listen(): Promise<SocketListener>
 }
@@ -105,6 +108,7 @@ export function composeLeads(input: {
     windows: input.capacity.windows,
     transcripts: fileTranscripts({
       archiveDir: s.archiveDir,
+      retentionDays: s.archiveRetentionDays,
       projectsDirs: () => claudeProjectsDirs({ accountsFile: s.accountsFile, home: s.home }),
     }),
     startBudgetMs: s.startBudgetMs,
@@ -122,6 +126,7 @@ export function composeLeads(input: {
     },
     apiErrors: apiErrorPorts({
       tails: fileTranscriptTails({
+        archiveDir: s.archiveDir,
         projectsDirs: () => claudeProjectsDirs({ accountsFile: s.accountsFile, home: s.home }),
       }),
       errands: input.loginErrands,
@@ -159,6 +164,8 @@ export function composeLeads(input: {
       session: (issue) => leadSession(deps, issue),
     },
     tick,
+    /** One pass over the transcript archive (retention, compression, finished projects), for the boot: finalize runs its own. */
+    tidyArchive: () => deps.transcripts.tidy(),
     listen: () =>
       listenOnSocket(s.socket, {
         event: (body) => recordHook(deps, body),

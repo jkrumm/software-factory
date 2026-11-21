@@ -12,6 +12,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_API_PROBE_MS` | `20_000` | how often a session's transcript is read for an API error, at most | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_API_RESUME_MS` | unset | the waits before each `continue` after an API error, comma-separated ms (the length is the number of resumes) | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_ARCHIVE_DIR` | `$HOME/.local/share/factory/archive` | where a finished attempt's transcripts are archived | `apps/server/src/adapters/leads/settings.ts` |
+| `FACTORY_ARCHIVE_RETENTION_DAYS` | `90` | an attempt's archived transcripts are deleted this many days after they were archived; 0 keeps them | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_ASK_HUMAN_BIN` | `null` | the script the desk pass pushes a MacBook command through; unset, the dotfiles' own copy | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_ASK_HUMAN_HOST` | `null` | the ssh alias of the MacBook, for the probe whose answer counts as the owner's return; unset, no probe runs | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_CHECKPOINT_RECHECK_MS` | `DEFAULT_RECHECK_MS` | a checkpoint in front of the owner this long is checked once more (and again after this long, once the Issue has a new event); 0 is off | `apps/server/src/app/loops/settings.ts` |

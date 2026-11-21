@@ -100,6 +100,8 @@ export interface ReadModelDeps {
   ciTimes?: CiTimes
   /** the settings in force the capacity loop tunes; absent, `GET /v1/capacity-loop` is 503 */
   capacityConstants?: CapacityConstants
+  /** the transcript archive: `GET /v1/retro` names an archived transcript where Claude's own is gone */
+  archiveDir?: string
   /** the data directory `scripts/deploy.sh` writes `deploys.log` into; absent, `GET /v1/throughput` has no deploys */
   dataDir?: string
   /** the owner's Herdr groups file the Projects table groups by; absent or unreadable, every project is in Other */
@@ -479,6 +481,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
               capacityConstants: deps.capacityConstants,
               epoch: deps.epoch ?? null,
               queue: await deps.queueReasons?.().catch(() => null),
+              ...(deps.archiveDir ? { archiveDir: deps.archiveDir } : {}),
               ...(deps.ciTimes ? { ciTimes: deps.ciTimes } : {}),
             }),
           ),

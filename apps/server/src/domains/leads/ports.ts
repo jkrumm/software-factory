@@ -1,5 +1,6 @@
 import type { Effort, Tier } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
+import type { ArchiveTidy } from '../../kernel/transcript-archive.ts'
 import type { Result, PortError } from '../../kernel/result.ts'
 import type { ResumeRules } from './apierror.ts'
 import type { HookFact } from './session.ts'
@@ -282,7 +283,10 @@ export interface QuiescePorts {
   maxReviveTries: number
 }
 
-/** Copies the attempt's transcripts where they outlive Claude Code's own cleanup. */
+/**
+ * Keeps the attempt's transcripts, compressed, where they outlive Claude Code's own cleanup: once an archive copy reads
+ * back equal, the Claude copy goes (and the worktree's project directory with it).
+ */
 export interface Transcripts {
   archive(input: {
     issue: IssueId
@@ -290,6 +294,13 @@ export interface Transcripts {
     account: string | null
     sessions: readonly { claudeSession: string; transcriptPath: string }[]
   }): Promise<Result<{ archived: number }>>
+  /** Where a session's transcript can be read now: its reported path, or the archive's copy once that path is gone. */
+  resolve(input: { issue: IssueId; attempt: number; path: string }): Promise<string>
+  /**
+   * One pass over the archive: attempts past the retention are deleted, plain files are compressed, the project directories
+   * of finished worktrees are removed. null: a pass was already running.
+   */
+  tidy(): Promise<Result<ArchiveTidy | null>>
 }
 
 // --- the domain's own tables, inside one transaction ----------------------------------------------------------------

@@ -2,6 +2,7 @@ import type { ReadAccountQuota, ReadInsights, ReadSessionCard } from '@software-
 import type { SQL } from 'bun'
 import type { HookFact, SessionView } from '../domains/leads/session.ts'
 import type { Clock } from '../kernel/clock.ts'
+import { transcriptPathNow } from '../kernel/transcript-archive.ts'
 import { cut, plainText } from './plain.ts'
 import type { SeatTable } from './seats.ts'
 import { loadUsage, type IssueUsage, type UsageFigures } from './usage.ts'
@@ -22,6 +23,8 @@ export interface SessionDeps {
   seatTable?: SeatTable
   /** the statement timeout of the usage reads; absent, `USAGE_TIMEOUT_MS` */
   usageTimeoutMs?: number
+  /** the transcript archive: a finished attempt's transcript path names its archived copy once Claude's own is gone */
+  archiveDir?: string
 }
 
 /** What a session card needs to know of its Issue. */
@@ -297,7 +300,13 @@ export async function deriveLeads(
             : null,
           address: attempt.terminal,
           tab: attempt.tab,
-          transcriptPath: view.transcriptPath,
+          transcriptPath: view.transcriptPath
+            ? transcriptPathNow(deps.archiveDir, {
+                issue: brief.number,
+                attempt: attempt.attempt,
+                path: view.transcriptPath,
+              })
+            : null,
           repo: brief.repo,
           visible: brief.visible,
           since: startedAt.toISOString(),

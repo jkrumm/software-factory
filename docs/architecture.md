@@ -208,7 +208,7 @@ Errand.
   (`followLeads`, `lead_losses`).
 - **Stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once; the next stop is
   let through, since a finished background task can restart it.
-- **Finalize** (`app/leads-finalize.ts`): claim back, terminals closed, transcripts archived, worktree and branch
+- **Finalize** (`app/leads-finalize.ts`): claim back, terminals closed, transcripts archived (zstd; the Claude copy goes once the archive copy reads back; kept `FACTORY_ARCHIVE_RETENTION_DAYS` days), worktree and branch
   removed when its commits are on the base: the untracked files a lead left are copied to
   `<archive>/<issue>/<attempt>/worktree/` first (ignored files are dropped), a tracked change keeps the tree and
   says which file. The build output in it (`target/` beside a `Cargo.toml`, `node_modules`) is deleted at finalize
