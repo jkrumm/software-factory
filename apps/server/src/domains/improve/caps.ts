@@ -1,7 +1,7 @@
 /**
  * A repo's lead cap that binds while seats idle (docs/decisions.md, NL48). A `leads:` or a lane cap is a claim about a resource
  * the repo cannot share; the throughput loop checks it against what was measured. When the cap is the reason an Issue of the
- * repo stays queued for an hour or more while the accounts have idle seats, the loop files one signal on the repo: the cap, the
+ * repo stays queued for an hour or more while the accounts have allowance idle, the loop files one signal on the repo: the cap, the
  * comment beside it, and the measured figures for the resource that comment names. The default fix is to remove the cap, or to
  * raise it to what the figures allow. No I/O here.
  */
@@ -40,8 +40,8 @@ export interface CapFact {
   bindingMinutes: number
   /** the distinct Issues that waited */
   issues: number
-  /** the median of the idle seats (seats the accounts may hold less leads running) in those minutes */
-  idleSeats: number
+  /** the median of the idle allowance (the leads the accounts may run less those running) in those minutes */
+  idleAllowance: number
   hours: number
   figures: CapFigures
 }
@@ -98,7 +98,7 @@ export function capText(fact: CapFact): string {
   const { reason, hint } = capReasonOf(fact.comment)
   const lane = fact.lane === null ? '' : ` of lane ${fact.lane}`
   const lines = [
-    `\`${capName(fact)}\`${lane} in project.yaml kept ${fact.issues} Issue${fact.issues === 1 ? '' : 's'} of ${fact.project} queued for a claim for ${Math.round(fact.bindingMinutes)} of the last ${fact.hours} hours while a median ${fact.idleSeats} account seat${fact.idleSeats === 1 ? '' : 's'} sat idle.`,
+    `\`${capName(fact)}\`${lane} in project.yaml kept ${fact.issues} Issue${fact.issues === 1 ? '' : 's'} of ${fact.project} queued for a claim for ${Math.round(fact.bindingMinutes)} of the last ${fact.hours} hours while a median ${fact.idleAllowance} account seat${fact.idleAllowance === 1 ? '' : 's'} sat idle.`,
     '',
     `Its comment: ${fact.comment ?? 'none'}`,
     '',

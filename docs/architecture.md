@@ -171,7 +171,7 @@ list; the two that pin a step are named under Steps off the mini. Each rule name
   `leads` in `project.yaml` caps the repo's claims. A fix is never held.
 - **Test line and lead aim**: `lineRefusal` (`domains/capacity/admission.ts`, kind `tests`) and `leadAimStep` hold new
   leads; see Test slots.
-- **Seats** (`domains/capacity/seats.ts`): each account has its own lead cap, raised by a bounded bonus while the host
+- **Seats** (`domains/capacity/allowance.ts`): each account has its own lead cap, raised by a bounded bonus while the host
   is idle. The repo's own cap is never raised, and no account goes past its window.
 - **Account**: `packages/accounts` alone decides which accounts are open and in what order
   (`adapters/planning/accounts-source.ts`); the server keeps no window limit of its own. An account a turn ended on a
@@ -614,7 +614,7 @@ three answers the Throughput page opens on: `host`, `queue`, `cost`. Each read h
 
 - `GET /v1/kpis` (`read/kpis.ts`): seven KPIs with parts, the figures beside them, six history windows.
 - `GET /v1/seats` (`read/seats.ts`, `read/seats-model.ts`): the light-seat and cheap-reviewer gates.
-- `GET /v1/capacity-loop` (`read/capacity-loop.ts`, `read/capacity-tuning.ts`): closed Issues, idle seat-hours, slot
+- `GET /v1/capacity-loop` (`read/capacity-loop.ts`, `read/capacity-tuning.ts`): closed Issues, idle allowance-hours, slot
   waits, queue by reason, edges, the setting to change first.
 - `GET /v1/retro` (`read/retro.ts`, `read/retro-build.ts`, `read/retro-taste.ts`): capacity figures, build minutes per
   repo, the owner's taste, the lead sessions with their transcript paths, the ledger of earlier retro signals; the

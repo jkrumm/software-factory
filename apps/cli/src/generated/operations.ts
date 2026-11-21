@@ -1056,7 +1056,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/accounts',
     summary:
-      'every account as the picker judges it (state, mode, limits, lanes, forecast, resets) with the seats taken and free and the leads running',
+      'every account as the picker judges it (state, mode, limits, lanes, forecast, resets) with the allowance taken and free and the leads running',
     pathParams: [],
     queryParams: [],
     body: false,
@@ -1656,7 +1656,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/capacity-loop',
     summary:
-      'what the capacity loop did over the last days (1 to 90, default 7): Issues closed, idle seat-hours with work queued, minutes over the load ceiling, test-slot wait, the steps and repos that take most memory, processes the reaper ended, and the settings in force that tune it',
+      'what the capacity loop did over the last days (1 to 90, default 7): Issues closed, idle allowance-hours with work queued, minutes over the load ceiling, test-slot wait, the steps and repos that take most memory, processes the reaper ended, and the settings in force that tune it',
     pathParams: [],
     queryParams: ['days'],
     body: false,

@@ -182,7 +182,7 @@ describe('what the signal quotes for the resource the comment names', () => {
     comment,
     bindingMinutes: 200,
     issues: 4,
-    idleSeats: 12,
+    idleAllowance: 12,
     hours: 6,
     figures: {
       worktrees: { attempts: 5, p80Mib: 1500, largestMib: 2100 },

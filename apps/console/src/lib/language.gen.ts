@@ -1,9 +1,11 @@
 // Generated from docs/language.md by scripts/language.ts: do not edit (`bun run --cwd apps/console language`).
 export const LANGUAGE = {
   account:
-    "One Claude Code subscription the factory runs leads on. Whether it takes work, why not, when it opens again and the order of the open ones are packages/accounts' to decide (claude-account status, GET /v1/accounts); the factory adds only its seats and the leads running on it. A mode (normal, drain, reserve, paused) can be set on it for a time",
+    "One Claude Code subscription the factory runs leads on. Whether it takes work, why not, when it opens again and the order of the open ones are packages/accounts' to decide (claude-account status, GET /v1/accounts); the factory adds only its allowance and the leads running on it. A mode (normal, drain, reserve, paused) can be set on it for a time",
   'active time':
     'How long a lead worked on this Issue, summed over its attempts. Time spent waiting on a person, a timer or another Issue is not in it. What to do: when elapsed time is far above active time, read the Activity tab to see what it waited on',
+  allowance:
+    "How many leads the accounts may run at once: leads per account, plus the bonus the host's idle minutes earn (domains/capacity/allowance.ts). It is idle while work is queued and fewer leads run than it allows",
   amend: "Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note",
   annotation:
     'A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored"',
@@ -81,13 +83,13 @@ export const LANGUAGE = {
   'held signal':
     "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two held signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there",
   idle: 'Session state: its last turn ended',
-  'idle seat-hours':
-    'The hours a seat stood empty while Issues were queued: per minute the seats less the leads running, counted only where an Issue waited, over 60. The hours behind a drained queue are left out, because the owner stopped admission. What to do: many hours with the load low mean a limit is too tight; Binding reason names which, and the settings in force show its value.',
+  'idle allowance-hours':
+    'The hours the allowance stood unused while Issues were queued: per minute the allowance less the leads running, counted only where an Issue waited, over 60. The hours behind a drained queue are left out, because the owner stopped admission. What to do: many hours with the load low mean a limit is too tight; Binding reason names which, and the settings in force show its value.',
   incident:
     'One root cause seen through many signals: the VPS is down, so HyperDX and Kuma all fire. Triage groups them under one Issue',
   issue: "One unit of work: one repo, one branch, one ship. Warp's work item",
   'issues closed':
-    'How many Issues closed in the window, whatever the outcome, as the cycle KPI counts them, with the mean per UTC day. What to do: a fall while Issues are Ready means something holds them; read Idle seat-hours and Binding reason next.',
+    'How many Issues closed in the window, whatever the outcome, as the cycle KPI counts them, with the mean per UTC day. What to do: a fall while Issues are Ready means something holds them; read Idle allowance-hours and Binding reason next.',
   'issues per hour':
     'How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each',
   judge: 'The agw workflow that tries to settle a Decision before the owner sees it',
@@ -146,7 +148,7 @@ export const LANGUAGE = {
   'quota used at reset':
     'The capacity-weighted mean of the weekly percent each account stood at when its weekly window reset, per week, from the reset ledger. What the accounts left unused shows as the rest',
   ready:
-    "No lead has begun it and nothing but capacity keeps it out: it starts when its turn and a seat come. Its limit names what binds it: a free seat, the host (load, memory, boot, doctor), the repo's claims, the lane or the cap, or the account's window",
+    "No lead has begun it and nothing but capacity keeps it out: it starts when its turn and room in the allowance come. Its limit names what binds it: room in the allowance, the host (load, memory, boot, doctor), the repo's claims, the lane or the cap, or the account's window",
   reaper: 'The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind',
   refusal: 'An Issue event the state machine refused, or a ship the gate refused. Counted as friction',
   regressed:
@@ -165,10 +167,10 @@ export const LANGUAGE = {
   revision: "One version of an artifact's content. A Decision has one; a Concept or Spec gains one with each revise",
   round: 'The nth ask of a workflow about one subject. A subject has a limited number of rounds',
   running:
-    "A lead works on it now: the Issue is in the working state and holds a seat. A lead standing in line for a test slot is still Running. The count is of Issues, not sessions: one Running Issue may have no session open for an instant between two sessions, and a Checking Issue's session is open without being counted here",
+    "A lead works on it now: the Issue is in the working state and counts against the allowance. A lead standing in line for a test slot is still Running. The count is of Issues, not sessions: one Running Issue may have no session open for an instant between two sessions, and a Checking Issue's session is open without being counted here",
   screen:
     "The Judge looks at a held signal (bar a work repo's; the screen loop, factory-screen) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most",
-  seat: "One lead the accounts may hold at once (leads per account, plus the bonus the host's idle minutes earn). A seat is idle when work is queued and no lead holds it",
+  seat: "The tier, effort and role a lead runs on: the role table's row, or the one a filer or the owner set (factory issue seat, the event seated)",
   'session state':
     "What a lead's session is, derived from its hook events: starting (no hook yet), working (a turn is running), idle (its last turn ended), compacted (its context was just compacted, no turn since), walled (its account hit a limit), gone (its session ended or its terminal is gone)",
   settler:

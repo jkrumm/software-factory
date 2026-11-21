@@ -75,7 +75,7 @@ export interface PlanningSettings {
   /** the host's cores: the load ceiling is a multiple of them, and the slot aim adds no slot above twice them in load */
   cores: number
   memoryCeilings: MemoryCeilings
-  seatsMaxBonus: number
+  allowanceMaxBonus: number
   slots: number
   slotsMax: number
   slotExtraLoad: number
@@ -136,7 +136,7 @@ export function planningSettings(
       swapoutMbPer300s: DEFAULT_SWAPOUT_CEILING_MB,
       swapUsedPct: DEFAULT_SWAP_CEILING_PCT,
     },
-    seatsMaxBonus: e.FACTORY_SEATS_MAX_BONUS ?? 2,
+    allowanceMaxBonus: e.FACTORY_SEATS_MAX_BONUS ?? 2,
     slots: e.FACTORY_SLOTS ?? 2,
     slotsMax: Math.max(e.FACTORY_SLOTS ?? 2, e.FACTORY_SLOTS_MAX ?? 6),
     slotExtraLoad: e.FACTORY_SLOT_EXTRA_LOAD ?? 12,

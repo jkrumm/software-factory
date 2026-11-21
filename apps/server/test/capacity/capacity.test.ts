@@ -424,9 +424,9 @@ describe('admission', () => {
     expect(full).toMatchObject({ admit: false, refusal: { kind: 'cap' } })
     if (!full.admit) expect(full.refusal.message).toContain('iu 20 of 20, me 10 of 10')
     // the idle host's raise is on top of each account's own cap
-    const raised = verdict(20, 10, { leadsPerAccount: 3, seatBonus: 1 })
+    const raised = verdict(20, 10, { leadsPerAccount: 3, allowanceBonus: 1 })
     expect(raised).toMatchObject({ admit: true, account: { account: 'iu' } })
-    expect(verdict(21, 11, { leadsPerAccount: 3, seatBonus: 1 })).toMatchObject({ admit: false })
+    expect(verdict(21, 11, { leadsPerAccount: 3, allowanceBonus: 1 })).toMatchObject({ admit: false })
   })
 
   test('an account the package closes keeps a new lead out with its reason and when it opens', () => {

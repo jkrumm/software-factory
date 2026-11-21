@@ -217,7 +217,7 @@ test('gates_passed: the memory rule is its own fact of the one signal, and it cl
   const swapouts = swap.map((m) => ({ ...m, swapUsedPct: 10, swapoutMbPer300s: 5000 }))
   expect(gatesPassedFindings(swapouts, [admit(2)], RULES, NOW)).toHaveLength(1)
 
-  // the seat cap is not judged: the idle host's seat bonus lets leads exceed the seats by the rule
+  // the seat cap is not judged: the idle host's allowance bonus lets leads exceed the seats by the rule
   const seats = [minute({ at: ago(1), leads: 4, seats: 4 }), minute({ at: ago(0), leads: 5, seats: 4 })]
   expect(gatesPassedFindings(seats, [admit(1)], RULES, NOW)).toEqual([])
 

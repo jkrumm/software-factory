@@ -187,7 +187,7 @@ const memoryOver = (m: CapacityMinute, rules: AdmissionRules): boolean =>
  * of it, within `MINUTE_GAP_MS`: it passed the load rule when the tripwire admission reads (the load over its ceiling in each
  * of the newest 5 minute samples, and over in the reading admission recorded, or in the sample after for an admission that recorded none) held, not for one or two minutes over it, which the rule lets
  * through by design; the memory rule when swap use or the swapout rate was over its ceiling in both (a lead the rule let in has one of the two under). The seat cap
- * is not judged: the idle host's seat bonus lets leads exceed `host_samples.seats` by the rule. Judged over the ten minutes
+ * is not judged: the idle host's allowance bonus lets leads exceed `host_samples.seats` by the rule. Judged over the ten minutes
  * before the newest sample; one signal, the passed gates are its facts.
  */
 export function gatesPassedFindings(

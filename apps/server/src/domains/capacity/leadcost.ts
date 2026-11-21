@@ -143,8 +143,8 @@ export interface LearnedLead {
  * The share of the newest attempts' peaks a new lead is expected to take: the median. A lead's peak is a burst of its work,
  * not a size it holds, and not every lead bursts at once: over 2026-11-15 to 11-17 the lead class held a mean 4.6 GiB across
  * 13 to 22 running leads (0.2 to 0.35 GiB each; a lead at rest 0.3 GiB) against a p80 peak of 0.6 to 4.4 GiB per repo. Reserving
- * that p80 for every candidate kept leads out for 159 queued hours (`memory_fit`, with 303 idle seat-hours) while memory cost
- * the host 0.7 idle seat-hours and 3 minutes of pressure. The burst is the headroom's, the swap and pressure ceilings' and
+ * that p80 for every candidate kept leads out for 159 queued hours (`memory_fit`, with 303 idle allowance-hours) while memory cost
+ * the host 0.7 idle allowance-hours and 3 minutes of pressure. The burst is the headroom's, the swap and pressure ceilings' and
  * the slot grant's to hold.
  */
 const LEAD_SHARE = 0.5

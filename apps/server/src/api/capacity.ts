@@ -46,7 +46,7 @@ export interface CapacityApi {
   limits: CapacityLimits & { slots: number; slotsMax: number }
   state(): Promise<Result<CapacityState, PortError>>
   refresh(): Promise<Result<AccountState[], PortError>>
-  /** `GET /v1/accounts`: the package's status of every account with the factory's seats and leads beside it */
+  /** `GET /v1/accounts`: the package's status of every account with the factory's allowance and leads beside it */
   accounts(): Promise<Result<AccountsView, PortError>>
   /** sets a mode override through the package; a request it refuses is `refused` */
   setAccountMode(account: string, body: AccountModeBody): Promise<Result<AccountMode, PortError>>
@@ -213,7 +213,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
         detail: {
           operationId: 'accounts.status',
           summary:
-            'every account as the picker judges it (state, mode, limits, lanes, forecast, resets) with the seats taken and free and the leads running',
+            'every account as the picker judges it (state, mode, limits, lanes, forecast, resets) with the allowance taken and free and the leads running',
         },
       },
     )

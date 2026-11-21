@@ -3,7 +3,7 @@ import type { BootSample } from '../domains/capacity/boot.ts'
 import { checkAdmission, type LeadFit, type RefusalKind, type TestLine } from '../domains/capacity/admission.ts'
 import { freeMibOf, headroomMib, SAMPLE_MAX_AGE_MS } from '../domains/capacity/costs.ts'
 import { type DoctorReader, doctorMessage } from '../domains/capacity/doctor.ts'
-import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
+import { DEFAULT_TYPICAL_LEAD_MIB, ALLOWANCE_SAMPLE_MAX_AGE_MS, ALLOWANCE_SAMPLES, allowanceBonus } from '../domains/capacity/allowance.ts'
 import { type LeadGrowth, leadGrowth, learnLeadCost } from '../domains/capacity/leadcost.ts'
 import { DISK_RAMP_MS, type DiskFit, diskHeadroomMib, learnedWorktreeMib } from '../domains/capacity/disk.ts'
 import {
@@ -44,7 +44,7 @@ export interface CapacityLimits {
   processCap?: number | null
   memoryCeilings: MemoryCeilings
   /** `FACTORY_SEATS_MAX_BONUS`: the most extra leads per account while the host idles; absent or 0: off */
-  seatsMaxBonus?: number
+  allowanceMaxBonus?: number
 }
 
 export interface CapacityDeps extends PlanningDeps {
@@ -191,7 +191,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     ok({
       projects: deps.doctor ? await planning.projects() : [],
       latest: await capacity.latestHostSample(),
-      recent: await capacity.recentHostSamples(Math.max(SEAT_SAMPLES, SUSTAINED_LOAD_SAMPLES)),
+      recent: await capacity.recentHostSamples(Math.max(ALLOWANCE_SAMPLES, SUSTAINED_LOAD_SAMPLES)),
       slots: await capacity.slots(),
       stepMs: await capacity.stepMedianMs(new Date(now.getTime() - STEP_WINDOW_MS)),
       peaks: await capacity.leadPeaks(now),
@@ -204,8 +204,8 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
   if (!facts.ok)
     notes.push(`the learned lead costs could not be read (${facts.error.detail}): admission goes on without them`)
   const fresh = facts.ok
-    ? facts.value.recent.length >= SEAT_SAMPLES &&
-      facts.value.recent.slice(0, SEAT_SAMPLES).every((s) => now.getTime() - s.at.getTime() <= SEAT_SAMPLE_MAX_AGE_MS)
+    ? facts.value.recent.length >= ALLOWANCE_SAMPLES &&
+      facts.value.recent.slice(0, ALLOWANCE_SAMPLES).every((s) => now.getTime() - s.at.getTime() <= ALLOWANCE_SAMPLE_MAX_AGE_MS)
     : false
   const newest = facts.ok ? facts.value.recent[0] : undefined
   const doctors = await readDoctors(deps.doctor, facts.ok ? facts.value.projects : [])
@@ -260,7 +260,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     rssByIssue: facts.ok ? facts.value.rss : new Map(),
     recent:
       facts.ok && fresh
-        ? facts.value.recent.slice(0, SEAT_SAMPLES).map((s) => ({ load: s.load, swapUsedPct: s.swapUsedPct }))
+        ? facts.value.recent.slice(0, ALLOWANCE_SAMPLES).map((s) => ({ load: s.load, swapUsedPct: s.swapUsedPct }))
         : [],
     doctors,
     leadAim: facts.ok
@@ -438,7 +438,7 @@ function youngGrowth(claims: readonly Claim[], snap: Snapshot, host: HostInputs)
  */
 function evaluateQueue(snap: Snapshot, host: HostInputs, limits: CapacityLimits): QueueEntry[] {
   const base = decide(snap, host, limits, 0)
-  const bonus = seatBonusOf(snap, host, limits, base)
+  const bonus = allowanceBonusOf(snap, host, limits, base)
   return bonus > 0 ? decide(snap, host, limits, bonus) : base
 }
 
@@ -459,14 +459,14 @@ function youngDiskMib(claims: readonly Claim[], snap: Snapshot, host: HostInputs
   }, 0)
 }
 
-function seatBonusOf(snap: Snapshot, host: HostInputs, limits: CapacityLimits, base: readonly QueueEntry[]): number {
+function allowanceBonusOf(snap: Snapshot, host: HostInputs, limits: CapacityLimits, base: readonly QueueEntry[]): number {
   const capped = base.filter((entry) => entry.reason?.kind === 'cap')
   if (capped.length === 0) return 0
   const learnedOf = (entry: QueueEntry): number | null => {
     return entry.project === null ? null : (host.learned.get(entry.project)?.mib ?? null)
   }
   const known = capped.map(learnedOf).filter((mib): mib is number => mib !== null)
-  return seatBonus({
+  return allowanceBonus({
     recent: host.recent,
     loadCeiling: limits.loadCeiling,
     swapCeilingPct: limits.memoryCeilings.swapUsedPct,
@@ -474,7 +474,7 @@ function seatBonusOf(snap: Snapshot, host: HostInputs, limits: CapacityLimits, b
     freeMib: host.freeMib,
     typicalLeadMib: known.length > 0 ? Math.max(...known) : DEFAULT_TYPICAL_LEAD_MIB,
     headroomMib: headroomMib(host.ramMib),
-    maxBonus: limits.seatsMaxBonus ?? 0,
+    maxBonus: limits.allowanceMaxBonus ?? 0,
   })
 }
 
@@ -611,7 +611,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       leadsByAccount,
       leadsPerAccount: limits.leadsPerAccount + bonus,
       accountLeads: limits.accountLeads,
-      seatBonus: bonus,
+      allowanceBonus: bonus,
     })
   }
 

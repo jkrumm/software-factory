@@ -221,7 +221,7 @@ describe('GET /v1/retro `build`', () => {
           slots: 2,
           slotsMax: 6,
           slotExtraLoad: 12,
-          seatsMaxBonus: 2,
+          allowanceMaxBonus: 2,
           reaperGraceMs: 300_000,
           swapoutCeilingMb: 2048,
           swapCeilingPct: 80,

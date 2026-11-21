@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { type AdmissionInputs, checkAdmission, type LeadFit } from '../../src/domains/capacity/admission.ts'
 import { freeMibOf, headroomMib } from '../../src/domains/capacity/costs.ts'
 import { leadGrowth } from '../../src/domains/capacity/leadcost.ts'
-import { type SeatInputs, seatBonus } from '../../src/domains/capacity/seats.ts'
+import { type AllowanceInputs, allowanceBonus } from '../../src/domains/capacity/allowance.ts'
 
 const now = new Date('2026-11-07T12:00:00Z')
 const reading = {
@@ -102,12 +102,12 @@ describe('the learned fit rule', () => {
   })
 
   test('a cap refusal names the raise when a bonus is in force', () => {
-    const capped = inputs({ leadsByAccount: new Map([['a', 3]]), leadsPerAccount: 3, seatBonus: 1 })
+    const capped = inputs({ leadsByAccount: new Map([['a', 3]]), leadsPerAccount: 3, allowanceBonus: 1 })
     expect(checkAdmission(capped)).toMatchObject({
       admit: false,
       refusal: { kind: 'cap', message: expect.stringContaining('(raised by 1: the host is idle)') },
     })
-    const plain = checkAdmission({ ...capped, seatBonus: 0 })
+    const plain = checkAdmission({ ...capped, allowanceBonus: 0 })
     expect(plain).toMatchObject({ admit: false, refusal: { kind: 'cap' } })
     if (!plain.admit) expect(plain.refusal.message).not.toContain('raised')
   })
@@ -155,9 +155,9 @@ describe('free memory and headroom', () => {
   })
 })
 
-describe('seatBonus', () => {
+describe('allowanceBonus', () => {
   const idle = { load: 2, swapUsedPct: 10 }
-  const base = (extra: Partial<SeatInputs> = {}): SeatInputs => ({
+  const base = (extra: Partial<AllowanceInputs> = {}): AllowanceInputs => ({
     recent: [idle, idle, idle, idle, idle],
     loadCeiling: 60,
     swapCeilingPct: 75,
@@ -170,32 +170,32 @@ describe('seatBonus', () => {
   })
 
   test('an idle host with work queued raises seats up to the maximum', () => {
-    expect(seatBonus(base())).toBe(2)
+    expect(allowanceBonus(base())).toBe(2)
   })
   test('the free memory beyond the headroom bounds it', () => {
-    expect(seatBonus(base({ freeMib: 7_000 }))).toBe(1)
-    expect(seatBonus(base({ freeMib: 6_000 }))).toBe(0)
-    expect(seatBonus(base({ freeMib: 2_000 }))).toBe(0)
+    expect(allowanceBonus(base({ freeMib: 7_000 }))).toBe(1)
+    expect(allowanceBonus(base({ freeMib: 6_000 }))).toBe(0)
+    expect(allowanceBonus(base({ freeMib: 2_000 }))).toBe(0)
   })
   test('the queued work bounds it', () => {
-    expect(seatBonus(base({ queued: 1 }))).toBe(1)
+    expect(allowanceBonus(base({ queued: 1 }))).toBe(1)
   })
   test('nothing queued, off, or unknown memory gives 0', () => {
-    expect(seatBonus(base({ queued: 0 }))).toBe(0)
-    expect(seatBonus(base({ maxBonus: 0 }))).toBe(0)
-    expect(seatBonus(base({ freeMib: null }))).toBe(0)
+    expect(allowanceBonus(base({ queued: 0 }))).toBe(0)
+    expect(allowanceBonus(base({ maxBonus: 0 }))).toBe(0)
+    expect(allowanceBonus(base({ freeMib: null }))).toBe(0)
   })
   test('fewer than five samples give 0', () => {
-    expect(seatBonus(base({ recent: [idle, idle, idle, idle] }))).toBe(0)
-    expect(seatBonus(base({ recent: [] }))).toBe(0)
+    expect(allowanceBonus(base({ recent: [idle, idle, idle, idle] }))).toBe(0)
+    expect(allowanceBonus(base({ recent: [] }))).toBe(0)
   })
   test('one busy sample, a load at the boundary, high swap or an unread figure gives 0', () => {
     const busy = { load: 15.1, swapUsedPct: 10 }
-    expect(seatBonus(base({ recent: [idle, idle, busy, idle, idle] }))).toBe(0)
-    expect(seatBonus(base({ recent: [idle, idle, { load: 15, swapUsedPct: 10 }, idle, idle] }))).toBe(2)
-    expect(seatBonus(base({ recent: [idle, idle, { load: 1, swapUsedPct: 75 }, idle, idle] }))).toBe(0)
-    expect(seatBonus(base({ recent: [idle, idle, { load: null, swapUsedPct: 1 }, idle, idle] }))).toBe(0)
-    expect(seatBonus(base({ recent: [idle, idle, { load: 1, swapUsedPct: null }, idle, idle] }))).toBe(0)
+    expect(allowanceBonus(base({ recent: [idle, idle, busy, idle, idle] }))).toBe(0)
+    expect(allowanceBonus(base({ recent: [idle, idle, { load: 15, swapUsedPct: 10 }, idle, idle] }))).toBe(2)
+    expect(allowanceBonus(base({ recent: [idle, idle, { load: 1, swapUsedPct: 75 }, idle, idle] }))).toBe(0)
+    expect(allowanceBonus(base({ recent: [idle, idle, { load: null, swapUsedPct: 1 }, idle, idle] }))).toBe(0)
+    expect(allowanceBonus(base({ recent: [idle, idle, { load: 1, swapUsedPct: null }, idle, idle] }))).toBe(0)
   })
 })
 

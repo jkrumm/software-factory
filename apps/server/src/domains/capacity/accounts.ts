@@ -2,7 +2,7 @@
  * Whether an account takes new leads, why not, when it opens again and in what order is decided in one place:
  * `packages/accounts` (the picker's rule, `claude-account status`). The server does not keep limits or a weekly pace of its
  * own for accounts: each poll copies the package's verdict for the lane the factory uses (`RANK_LANE`) onto the reading.
- * What only the server knows stays here: seats per account, one new lead per quota sample on an account whose 5-hour
+ * What only the server knows stays here: the allowance per account, one new lead per quota sample on an account whose 5-hour
  * window is hot (`pacedBySample`), and the age after which a reading admits nothing.
  */
 

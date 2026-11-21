@@ -59,7 +59,7 @@ describe('plain words', () => {
 
   test('a queued Issue names the reason the queue order gives', () => {
     const queued = { state: 'queued', reason: null, outcome: null }
-    expect(stateSentence(queued)).toBe('Ready: waits only for a free seat.')
+    expect(stateSentence(queued)).toBe('Ready: waits only for room in the allowance.')
     expect(
       stateSentence({ ...queued, queue: { kind: 'drain', message: 'the queue is draining: nothing new starts' } }),
     ).toBe('Held: the queue is draining, so no new work starts.')

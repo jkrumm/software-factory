@@ -19,7 +19,7 @@ import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './w
 /** Why each queued Issue stays queued, by Issue id; the capacity use case knows (it reads the host), so the caller passes it. */
 export type QueueReasons = ReadonlyMap<string, z.infer<typeof QueueReasonSchema>>
 
-/** The queue kind of an Issue for `workOf`: null when the capacity read gave none (nothing but a free seat keeps it out, or it is unknown). */
+/** The queue kind of an Issue for `workOf`: null when the capacity read gave none (nothing but room in the allowance keeps it out, or it is unknown). */
 export const queueKindOf =
   (queue: QueueReasons | undefined) =>
   (id: string): string | null =>

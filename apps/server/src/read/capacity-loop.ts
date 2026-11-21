@@ -166,13 +166,13 @@ export async function readCapacityLoop(
         kind,
         queuedHours: queuedByKind.get(kind)?.hours ?? 0,
         issues: queuedByKind.get(kind)?.issues ?? 0,
-        idleSeatHours: idleByKind.get(kind) ?? 0,
+        idleAllowanceHours: idleByKind.get(kind) ?? 0,
         byRepo: (reposByKind.get(kind) ?? []).toSorted(
           (a, b) => b.queuedHours - a.queuedHours || a.repo.localeCompare(b.repo),
         ),
       }))
       .toSorted(
-        (a, b) => b.queuedHours - a.queuedHours || b.idleSeatHours - a.idleSeatHours || a.kind.localeCompare(b.kind),
+        (a, b) => b.queuedHours - a.queuedHours || b.idleAllowanceHours - a.idleAllowanceHours || a.kind.localeCompare(b.kind),
       )
 
     const overDay: unknown[] = await tx`
@@ -292,9 +292,9 @@ export async function readCapacityLoop(
     })
     return {
       throughput: { total: closed, perDay: perDay(closedDay, 0) },
-      idleSeatHours: { total: idle, perDay: perDay(idleDay, 0) },
-      idleSeatHoursMemory: idleMemory,
-      idleSeatHoursDrain: { total: idleByKind.get(DRAIN_KIND) ?? 0, perDay: perDay(drainRows, 0) },
+      idleAllowanceHours: { total: idle, perDay: perDay(idleDay, 0) },
+      idleAllowanceHoursMemory: idleMemory,
+      idleAllowanceHoursDrain: { total: idleByKind.get(DRAIN_KIND) ?? 0, perDay: perDay(drainRows, 0) },
       queueByReason,
       edges: await edgesOf(tx, w),
       minutesOverCeiling: { total: over, perDay: perDay(overDay, 0) },

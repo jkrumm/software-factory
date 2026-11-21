@@ -250,7 +250,7 @@ test('the capacity section reads what the API computed: four cards, then steps, 
   const model = await api<CapacityLoopModel>(apiUrl, '/v1/capacity-loop?days=7')
   // the seed's figures, so a read that drifted from the rows fails here and not only against itself
   expect(model.minutesOverCeiling.total).toBe(2)
-  expect(model.idleSeatHours.total).toBeCloseTo(2, 9)
+  expect(model.idleAllowanceHours.total).toBeCloseTo(2, 9)
   expect(model.slotWait.n).toBe(6)
   expect(model.slotWait.p50Ms).toBeCloseTo(2000, 6)
   expect(model.slotWait.p90Ms).toBeCloseTo(55_000, 6)
@@ -267,20 +267,20 @@ test('the capacity section reads what the API computed: four cards, then steps, 
   const cards = section.getByRole('group', { name: 'Capacity figures' })
   await expect(cards.getByRole('heading')).toHaveText([
     'Issues closed',
-    'Idle seat-hours with work ready',
+    'Idle allowance-hours with work ready',
     'Minutes over the load ceiling',
     'Test slot wait',
   ])
   const cardOf = (title: string) => cards.locator('article').filter({ has: page.getByRole('heading', { name: title }) })
   await expect(cardOf('Issues closed').getByText(perDayWords(model.throughput.total, model.days))).toBeVisible()
   await expect(
-    cardOf('Idle seat-hours with work ready').getByText(hoursWords(2), { exact: true }).first(),
+    cardOf('Idle allowance-hours with work ready').getByText(hoursWords(2), { exact: true }).first(),
   ).toBeVisible()
   await expect(cardOf('Minutes over the load ceiling').getByText('2', { exact: true }).first()).toBeVisible()
   const wait = cardOf('Test slot wait')
   await expect(wait.getByText(msWords(2000), { exact: true }).first()).toBeVisible()
   await expect(wait.getByText(`Median; 90th percentile ${msWords(55_000)}`, { exact: true })).toBeVisible()
-  await expectHint(cardOf('Idle seat-hours with work ready'), 'idle seat-hours')
+  await expectHint(cardOf('Idle allowance-hours with work ready'), 'idle allowance-hours')
   await expectHint(wait, 'test slot wait')
 
   await open(page, /^The capacity loop/)

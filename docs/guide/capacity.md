@@ -112,7 +112,7 @@ A seat is one lead an account may carry at once. An account is a Claude login wi
 - **The package decides.** Whether an account takes a lead, why not, when it opens again and the order of the open ones are `packages/accounts`' rule (`claude-account status`), read in the server's process on every poll: its ceilings, reset timing, Fable, drain and pause modes and weekly pace. The server keeps no limit of its own.
 - **The pick.** Among open accounts below their cap, the first in the package's order for the bulk lane wins. A reading the poll has not renewed for ten minutes admits nothing.
 - **Paced by sample.** An account whose 5-hour window is above 70 % takes one new lead per usage sample, because a lead started after the latest sample is not in it yet.
-- **The idle raise.** When work is queued behind the cap and each of the last five minute samples shows a load of at most a quarter of the ceiling and swap below its ceiling, `seatBonus` lifts every cap by as many typical leads as fit into the free memory. The lift stops at the bonus limit or when no work waits.
+- **The idle raise.** When work is queued behind the cap and each of the last five minute samples shows a load of at most a quarter of the ceiling and swap below its ceiling, `allowanceBonus` lifts every cap by as many typical leads as fit into the free memory. The lift stops at the bonus limit or when no work waits.
 
 The same reading, accounts only (account names changed):
 
@@ -127,7 +127,7 @@ The same reading, accounts only (account names changed):
 **Example files:**
 
 - [`accounts.ts` L77-L107](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/accounts.ts#L77-L107): `pickAccount`.
-- [`seats.ts` L21-L39](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/seats.ts#L21-L39): `seatBonus`, the idle host's raise.
+- [`seats.ts` L21-L39](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/allowance.ts#L21-L39): `allowanceBonus`, the idle host's raise.
 
 ## Claims and lanes
 
@@ -241,7 +241,7 @@ function headFitsBeside(
 
 A learned cost is what a repo's lead takes in memory outside test slots, read from its past attempts.
 
-- **Median of ten.** The cost of a new lead is the median of the newest ten attempts' peak memory. A lead's peak is a burst, not a size it holds: over 2026-11-15 to 17 the lead class held a mean 4.6 GiB across 13 to 22 running leads. Reserving every repo's p80 for each candidate kept leads out for 159 hours. Memory cost the host 0.7 idle seat-hours.
+- **Median of ten.** The cost of a new lead is the median of the newest ten attempts' peak memory. A lead's peak is a burst, not a size it holds: over 2026-11-15 to 17 the lead class held a mean 4.6 GiB across 13 to 22 running leads. Reserving every repo's p80 for each candidate kept leads out for 159 hours. Memory cost the host 0.7 idle allowance-hours.
 - **Three to know.** With fewer than three attempts nothing is learned, and the memory refusal does not apply.
 - **A falling peak is trusted sooner.** When the newest three settled attempts all peak below the median, the largest of them is the cost. Admitting too early is caught by the swap ceilings and the slot grant; admitting too late idles seats.
 - **Young leads still grow.** A lead younger than two minutes counts at its repo's learned size less what it holds, so one pass cannot admit several leads against one reading.

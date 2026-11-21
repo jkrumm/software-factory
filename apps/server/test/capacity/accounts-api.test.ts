@@ -81,7 +81,7 @@ describe('GET /v1/accounts', () => {
       fresh: true,
     })
     expect(a.lanes.bulk).toMatchObject({ open: true })
-    // an account in the package's registry that no poll has stored is listed with its seats and no card fields
+    // an account in the package's registry that no poll has stored is listed with its allowance and no card fields
     expect(body.accounts.find((row: { id: string }) => row.id === 'd')).toMatchObject({
       seats: { cap: 2, taken: 0, free: 2 },
       leads: [],

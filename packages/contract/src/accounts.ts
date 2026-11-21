@@ -1,7 +1,7 @@
 import * as z from 'zod'
 
 // `GET /v1/accounts`: the accounts as `packages/accounts` judges them (`claude-account status --json`), plus what only the
-// factory knows: the seats each account carries and the leads running on it. The fields of the first group are the package's
+// factory knows: the allowance each account carries (the field `seats`, a name the Console reads) and the leads running on it. The fields of the first group are the package's
 // and are named as it names them (snake_case); the second group keeps the names the Console's cards read today.
 
 const nullableString = z.string().nullable()
@@ -85,7 +85,7 @@ export const AccountRow = z
         manual: z.boolean(),
       }),
     ),
-    /** the seats: the most leads it carries at once (an idle host raises it for a pass), the leads that hold one, and what is free */
+    /** the allowance: the most leads it carries at once (an idle host raises it for a pass), the leads that hold one, and what is free */
     seats: z.object({ cap: z.number().int(), taken: z.number().int(), free: z.number().int() }),
     /** the Issues whose leads run on it now (`issue_12`) */
     leads: z.array(z.string()),

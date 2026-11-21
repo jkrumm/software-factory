@@ -48,7 +48,7 @@ const PAUSED_LABEL: Record<PausedSplit, string> = {
 
 /** Ready, by the one limit that holds it (`ReadyLimit`). */
 const READY_LABEL: Record<ReadyLimit, string> = {
-  seat: 'a free seat',
+  seat: 'room in the allowance',
   host: 'the host',
   repo: "the repo's claims",
   account: "the account's window",

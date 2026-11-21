@@ -135,14 +135,14 @@ export function stateSentence(input: {
 
 /**
  * One sentence for a not-started Issue, opening with its word: Held when nothing but another Issue, a line, a drain or a
- * Spec keeps it out, else Ready with the limit that binds it (the queue order's own words, or a free seat).
+ * Spec keeps it out, else Ready with the limit that binds it (the queue order's own words, or room in the allowance).
  */
 function queueSentence(
   queue: { kind: string; message: string; repoName?: string; heldBy?: number | null } | null,
 ): string {
   const work = workOf({ state: 'queued', queueKind: queue?.kind ?? null })
   const word = work?.word === 'held' ? 'Held' : 'Ready'
-  if (!queue) return 'Ready: waits only for a free seat.'
+  if (!queue) return 'Ready: waits only for room in the allowance.'
   switch (queue.kind) {
     case 'drain':
       return 'Held: the queue is draining, so no new work starts.'

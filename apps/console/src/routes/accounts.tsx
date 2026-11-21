@@ -320,7 +320,7 @@ function AccountPanel({ account, lanes, now }: { account: AccountRow; lanes: str
         <Lozenge tone="neutral">{account.plan}</Lozenge>
         <ModeBadge account={account} now={now} />
         <span className="ml-auto text-[length:var(--vx-text-sm)] text-muted-foreground tabular-nums">
-          {account.seats.taken} of {account.seats.cap} seats
+          {account.seats.taken} of {account.seats.cap} leads allowed
           {account.leads.length > 0
             ? ` · Issue ${account.leads.map((lead) => lead.replace('issue_', '')).join(', ')}`
             : ''}

@@ -64,7 +64,7 @@ factory never edits another repo's file. The server also serves the schema it pa
   decide what runs (NL32). State a lower number only for a resource the repo cannot share and the factory does not
   model, with the measured number behind it. Not a reason: a merge window (`factory merge-lock` serialises it and a lead
   that waits holds no seat of its own), a deploy queue (`factory deploy-lock`), disk (admission fits the learned size of a
-  worktree, build output included, against the free disk), "it is a small repo" (an idle seat costs more than a rebase).
+  worktree, build output included, against the free disk), "it is a small repo" (room left idle in the allowance costs more than a rebase).
   `factory project check` warns on those comments (a merge window only where a change lands by `ship: via: pr`) and on "no reason was recorded". A cap is re-checked against
   measurements: while it keeps Issues queued for an hour with account seats idle, the throughput loop files a signal on
   the repo naming it, its comment and the figures (NL48).

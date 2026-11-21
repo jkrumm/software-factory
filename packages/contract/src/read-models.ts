@@ -1157,8 +1157,8 @@ export const CapacityReason = z
     kind: z.string(),
     queuedHours: z.number(),
     issues: z.number().int(),
-    idleSeatHours: z.number(),
-    /** `queuedHours` and `issues` split by the repo the Issues were queued in, most hours first; the idle seat-hours are not split */
+    idleAllowanceHours: z.number(),
+    /** `queuedHours` and `issues` split by the repo the Issues were queued in, most hours first; the idle allowance-hours are not split */
     byRepo: z.array(CapacityReasonRepo),
   })
   .meta({ id: 'CapacityReason' })
@@ -1192,22 +1192,22 @@ export const CapacityLoopModel = z
     /** Issues that closed (any outcome, as the cycle KPI counts them) */
     throughput: CapacityTotal,
     /** seats not held by a lead while Issues were queued, in hours: minutes with queued > 0 of max(seats - leads, 0), over 60 */
-    idleSeatHours: CapacityTotal,
+    idleAllowanceHours: CapacityTotal,
     /**
-     * of `idleSeatHours`, the hours in minutes the memory gate was shut: `total` for either trigger, `swapout` and `swapUsed`
+     * of `idleAllowanceHours`, the hours in minutes the memory gate was shut: `total` for either trigger, `swapout` and `swapUsed`
      * for each alone (a minute can count in both), against the ceilings in `constants`
      */
-    idleSeatHoursMemory: z.strictObject({ total: z.number(), swapout: z.number(), swapUsed: z.number() }),
+    idleAllowanceHoursMemory: z.strictObject({ total: z.number(), swapout: z.number(), swapUsed: z.number() }),
     /**
-     * of `idleSeatHours`, the hours that fell in minutes an Issue was queued behind a drained queue (`queueByReason`'s
+     * of `idleAllowanceHours`, the hours that fell in minutes an Issue was queued behind a drained queue (`queueByReason`'s
      * `drain`, by the same split): the owner or the orchestrator stopped admission, so it is not capacity going unused.
-     * `idleSeatHours` minus this is the figure the tuner reads
+     * `idleAllowanceHours` minus this is the figure the tuner reads
      */
-    idleSeatHoursDrain: CapacityTotal,
+    idleAllowanceHoursDrain: CapacityTotal,
     /**
      * what the queue waited for over the window, by reason kind (`factory.queue_intervals`), the kind with most queued hours
-     * first: the hours Issues were queued for it, how many Issues, and the share of `idleSeatHours` that fell in minutes
-     * when an Issue was queued for it. A minute's idle seat-hours are split equally among the distinct kinds queued in it,
+     * first: the hours Issues were queued for it, how many Issues, and the share of `idleAllowanceHours` that fell in minutes
+     * when an Issue was queued for it. A minute's idle allowance-hours are split equally among the distinct kinds queued in it,
      * leaving out the kinds that are no cost of the factory (an `after` edge, a Spec at the owner) unless only those wait;
      * `unrecorded` is a minute no interval covers. The kinds are the queue's (`memory` is the host's reading, `memory_fit`
      * the learned cost of a repo's lead against the free memory). `byRepo` names the repos behind a kind's queued hours
@@ -1267,7 +1267,7 @@ export const CapacityLoopModel = z
       slots: z.number(),
       slotsMax: z.number(),
       slotExtraLoad: z.number(),
-      seatsMaxBonus: z.number(),
+      allowanceMaxBonus: z.number(),
       reaperGraceMs: z.number(),
       /** the memory gate: swapouts MiB per 300 s, and swap in use as a share of RAM, above which no lead is admitted */
       swapoutCeilingMb: z.number(),
@@ -1937,7 +1937,7 @@ export const RetroCapacityTune = z
   .strictObject({
     constant: z.enum([
       'leadsPerAccount',
-      'seatsMaxBonus',
+      'allowanceMaxBonus',
       'loadCeiling',
       'slots',
       'slotsMax',

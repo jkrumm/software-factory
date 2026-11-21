@@ -318,7 +318,7 @@ export interface WorktreeSizer {
   sizeMib(path: string): Promise<number | null>
 }
 
-/** What `packages/accounts` says of one account: `claude-account status --json` as the contract names it, before the factory adds its seats. */
+/** What `packages/accounts` says of one account: `claude-account status --json` as the contract names it, before the factory adds its allowance. */
 export type AccountStatusRow = Omit<
   AccountRow,
   | 'seats'

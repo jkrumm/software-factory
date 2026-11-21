@@ -1,4 +1,4 @@
-import { SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES } from './seats.ts'
+import { ALLOWANCE_SAMPLE_MAX_AGE_MS, ALLOWANCE_SAMPLES } from './allowance.ts'
 
 /**
  * The boot grace (Issue 1039). Right after the host boots, hc-resume brings every session back at once and the host
@@ -9,8 +9,8 @@ import { SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES } from './seats.ts'
  */
 const BOOT_GRACE_MS = 30 * 60_000
 /** Minute samples, since the boot, that must all be calm: the seats' five, none older than the seats' six minutes. */
-const BOOT_CALM_SAMPLES = SEAT_SAMPLES
-const BOOT_SAMPLE_MAX_AGE_MS = SEAT_SAMPLE_MAX_AGE_MS
+const BOOT_CALM_SAMPLES = ALLOWANCE_SAMPLES
+const BOOT_SAMPLE_MAX_AGE_MS = ALLOWANCE_SAMPLE_MAX_AGE_MS
 /** The newest sample's memory in use must be below this share of RAM, percent. */
 const BOOT_MEMORY_PCT = 80
 /** Once calm, one new lead per this long until the grace ends. */

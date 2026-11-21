@@ -101,7 +101,7 @@ export type ProjectIndexRow = z.infer<typeof ProjectIndexRow>
 export const ProjectIndexModel = z
   .strictObject({
     at,
-    /** the leads the host admits now (its seats, the newest host sample); null: no sample of the last 10 minutes */
+    /** the leads the host admits now (its allowance, the newest host sample); null: no sample of the last 10 minutes */
     seats: z.number().int().nullable(),
     /** the groups in the owner's order (the Herdr groups file), the fallback last; every row's `group` is one of them */
     groups: z.array(z.string()),

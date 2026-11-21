@@ -182,7 +182,7 @@ async function main(env: Environment): Promise<void> {
     endpoint: otelEnv.endpoint,
     key: otelEnv.key,
     version: settings.version,
-    seatCaps: { perAccount: planningEnv.leadsPerAccount, byAccount: Object.fromEntries(planningEnv.accountLeads) },
+    allowanceCaps: { perAccount: planningEnv.leadsPerAccount, byAccount: Object.fromEntries(planningEnv.accountLeads) },
     read: () => readCapacityGauges(sql, { now: clock.now(), windowMs: otelEnv.windowMs }),
   })
   const intake = await composeIntake({
@@ -428,7 +428,7 @@ async function main(env: Environment): Promise<void> {
         slots: planningEnv.slots,
         slotsMax: planningEnv.slotsMax,
         slotExtraLoad: planningEnv.slotExtraLoad,
-        seatsMaxBonus: planningEnv.seatsMaxBonus ?? 0,
+        allowanceMaxBonus: planningEnv.allowanceMaxBonus ?? 0,
         reaperGraceMs: loopSettings.reaperGraceMs,
         swapoutCeilingMb: planningEnv.memoryCeilings.swapoutMbPer300s,
         swapCeilingPct: planningEnv.memoryCeilings.swapUsedPct,

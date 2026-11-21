@@ -361,19 +361,19 @@ function Answers({ model }: { model: Model }) {
 
 const CAPACITY_TITLE = {
   throughput: 'Issues closed',
-  idle: 'Idle seat-hours with work ready',
+  idle: 'Idle allowance-hours with work ready',
   over: 'Minutes over the load ceiling',
   wait: 'Test slot wait',
 } as const
 
-/** The idle seat-hours of each day with the drained queue's share taken out. */
+/** The idle allowance-hours of each day with the drained queue's share taken out. */
 const notDrainPerDay = (model: CapacityLoopModel) =>
-  model.idleSeatHours.perDay.map((d) => ({
+  model.idleAllowanceHours.perDay.map((d) => ({
     day: d.day,
-    value: Math.max(0, (d.value ?? 0) - (model.idleSeatHoursDrain.perDay.find((x) => x.day === d.day)?.value ?? 0)),
+    value: Math.max(0, (d.value ?? 0) - (model.idleAllowanceHoursDrain.perDay.find((x) => x.day === d.day)?.value ?? 0)),
   }))
 
-/** What the capacity loop did over the window: Issues closed, idle seats, minutes over the load ceiling, test slot wait. */
+/** What the capacity loop did over the window: Issues closed, idle allowance, minutes over the load ceiling, test slot wait. */
 function CapacityCards({ model }: { model: CapacityLoopModel }) {
   const { constants } = model
   const subtitle = `${model.days} ${model.days === 1 ? 'day' : 'days'}, UTC days`
@@ -405,15 +405,15 @@ function CapacityCards({ model }: { model: CapacityLoopModel }) {
         <StatCard
           icon={ArmchairIcon}
           title={CAPACITY_TITLE.idle}
-          hint="idle seat-hours"
+          hint="idle allowance-hours"
           subtitle={subtitle}
-          value={hoursWords(Math.max(0, model.idleSeatHours.total - model.idleSeatHoursDrain.total))}
-          sub={`Seats no lead held while Issues waited; ${hoursWords(model.idleSeatHoursDrain.total)} behind a drained queue left out`}
-          chart={spark(notDrain, 'Idle seat-hours per day', hoursWords)}
-          xLabels={dayXLabels(model.idleSeatHours.perDay)}
+          value={hoursWords(Math.max(0, model.idleAllowanceHours.total - model.idleAllowanceHoursDrain.total))}
+          sub={`Allowance no lead used while Issues waited; ${hoursWords(model.idleAllowanceHoursDrain.total)} behind a drained queue left out`}
+          chart={spark(notDrain, 'Idle allowance-hours per day', hoursWords)}
+          xLabels={dayXLabels(model.idleAllowanceHours.perDay)}
           footer={[
             { label: 'Leads per account', value: leadsWords(constants) },
-            { label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
+            { label: 'Allowance bonus at most', value: String(constants.allowanceMaxBonus) },
           ]}
         />
         <StatCard

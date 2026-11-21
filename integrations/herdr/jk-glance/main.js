@@ -567,7 +567,7 @@ function projectRows(projects, base, reasonOf = null) {
     }))
 }
 
-// What each split of Paused, Ready and Held reads as (`seat`: only a free seat holds it).
+// What each split of Paused, Ready and Held reads as (`seat`: only room in the allowance holds it).
 const SPLIT_WORD = {
   paused: {
     you: 'on you',
@@ -576,7 +576,7 @@ const SPLIT_WORD = {
     stalled: 'stalled',
   },
   ready: {
-    seat: 'a free seat',
+    seat: 'room in the allowance',
     host: 'the host',
     repo: "the repo's claims",
     account: "the account's window",

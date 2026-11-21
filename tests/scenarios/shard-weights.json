@@ -4,7 +4,7 @@
   "scenarios/capacity/admission.test.ts": 14,
   "scenarios/capacity/learned.test.ts": 6,
   "scenarios/capacity/loop-closes.test.ts": 15,
-  "scenarios/capacity/seats.test.ts": 5,
+  "scenarios/capacity/allowance.test.ts": 5,
   "scenarios/capacity/slot-costs.test.ts": 12,
   "scenarios/capacity/slot-passing.test.ts": 9,
   "scenarios/capacity/slots.test.ts": 24,
