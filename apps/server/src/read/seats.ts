@@ -116,9 +116,8 @@ export async function readLeadSeats(
     const filed = kinds.get('filed')?.payload
     // A seat that asked for the move-up is spent once it was moved up: the next lead starts on the rule's seat (`seatOf` in `app/leads-start.ts`).
     const spent = (named: unknown): boolean => kinds.has('moved_up') && isRecord(named) && named.moveUp === true
-    const seated = kinds.get('seated')?.payload
     const filedSeat = isRecord(filed) ? filed.seat : null
-    const seat = (spent(seated) ? null : seatOf(seated, true)) ?? (spent(filedSeat) ? null : seatOf(filedSeat, true))
+    const seat = seatOf(kinds.get('seated')?.payload, true) ?? (spent(filedSeat) ? null : seatOf(filedSeat, true))
     if (seat) seats.set(id, seat)
     else unstarted.push(id)
   }

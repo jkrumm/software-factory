@@ -82,7 +82,6 @@ export const PAYLOADS = {
     tier: z.enum(TIERS),
     effort: z.enum(EFFORTS),
     role: text.optional(),
-    moveUp: z.literal(true).optional(),
   }),
   /** an amend or a note reaches the lead */
   noted: z.object({ text, via: z.enum(['orchestrator']).optional() }),
