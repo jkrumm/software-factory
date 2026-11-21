@@ -89,6 +89,17 @@ describe('archive', () => {
     expect(existsSync(join(dir, 'other.jsonl'))).toBe(true)
   })
 
+  test('a project whose subagent transcripts are not archived yet (a crash mid-archive) is kept by tidy', async () => {
+    const { dir } = project(9, 1)
+    // the main transcript's copy is in place, the subagents' are not
+    const attempt = join(archive, '9', '1')
+    mkdirSync(attempt, { recursive: true })
+    writeFileSync(join(attempt, 's1.jsonl.zst'), 'x')
+    const done = await store().tidy()
+    expect(done.ok && done.value?.projectsRemoved).toBe(0)
+    expect(existsSync(join(dir, 's1', 'subagents', 'agent-a.jsonl'))).toBe(true)
+  })
+
   test('the path a reader gets is the archive copy once the Claude copy is gone', async () => {
     const { transcript } = project(7, 1)
     expect(transcriptPathNow(archive, { issue: 7, attempt: 1, path: transcript })).toBe(transcript)

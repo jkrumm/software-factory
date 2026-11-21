@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { constants, createZstdCompress, createZstdDecompress } from 'node:zlib'
 import { ARCHIVE_SUFFIX, type ArchiveTidy, attemptArchiveDir } from '../../kernel/transcript-archive.ts'
@@ -10,6 +10,9 @@ import { ARCHIVE_SUFFIX, type ArchiveTidy, attemptArchiveDir } from '../../kerne
 const LEVEL = 6
 
 const PARTIAL = '.partial'
+
+/** A `.partial` untouched this long is a crash's leftover. */
+const STALE_PARTIAL_MS = 86_400_000
 
 interface Digest {
   bytes: number
@@ -148,7 +151,9 @@ export async function convertAttempt(
   const sum = { files: 0, from: 0, to: 0 }
   for (const file of await filesUnder(dir)) {
     if (file.endsWith(PARTIAL)) {
-      await rm(join(dir, file), { force: true })
+      // one an archive is writing right now is not a leftover: only a day-old one is
+      const written = await stat(join(dir, file)).catch(() => null)
+      if (written && Date.now() - written.mtimeMs > STALE_PARTIAL_MS) await rm(join(dir, file), { force: true })
       continue
     }
     if (file.endsWith(ARCHIVE_SUFFIX)) continue
@@ -166,8 +171,33 @@ export async function convertAttempt(
 const WORKTREE_PROJECT = /--claude-worktrees-factory-(\d+)-(\d+)$/
 
 /**
+ * Whether everything a session left in a Claude project directory has its archived copy: each top-level transcript, and
+ * every file under a session's own directory (subagents, tool results). What else lies there (memory) is not a transcript.
+ * An archive still being written is not full yet, so its project stays.
+ */
+async function fullyArchived(project: string, attemptDir: string): Promise<boolean> {
+  const files = await filesUnder(project).catch(() => [] as string[])
+  const sessions = new Set(
+    files.filter((f) => !f.includes(sep) && f.endsWith('.jsonl')).map((f) => f.slice(0, -'.jsonl'.length)),
+  )
+  for (const file of files) {
+    const [top] = file.split(sep)
+    const owned = file.includes(sep) ? sessions.has(top ?? '') : file.endsWith('.jsonl')
+    if (!owned) continue
+    if (
+      !(await stat(join(attemptDir, `${file}${ARCHIVE_SUFFIX}`)).then(
+        (s) => s.isFile(),
+        () => false,
+      ))
+    )
+      return false
+  }
+  return true
+}
+
+/**
  * The project directories of finished worktrees: `attempts` is the archive's (the ones that have a copy), and a directory
- * goes only when every transcript at its top has an archived copy. Without `only`, every attempt of `attempts` counts.
+ * goes only when every transcript in it, subagents' included, has an archived copy. Without `only`, every attempt of `attempts` counts.
  */
 export async function removeFinishedProjects(options: {
   projectRoots: readonly string[]
@@ -185,12 +215,7 @@ export async function removeFinishedProjects(options: {
       if (!archived.has(`${issue}-${attempt}`)) continue
       if (options.only && (options.only.issue !== issue || options.only.attempt !== attempt)) continue
       const project = join(root, name)
-      const entries = await readdir(project, { withFileTypes: true }).catch(() => [])
-      const kept = new Set(await readdir(attemptArchiveDir(options.archiveDir, issue, attempt)).catch(() => []))
-      const unarchived = entries.some(
-        (e) => e.isFile() && e.name.endsWith('.jsonl') && !kept.has(`${e.name}${ARCHIVE_SUFFIX}`),
-      )
-      if (unarchived) continue
+      if (!(await fullyArchived(project, attemptArchiveDir(options.archiveDir, issue, attempt)))) continue
       await rm(project, { recursive: true, force: true })
       removed++
     }
