@@ -185,7 +185,8 @@ test("a verdict on a submitted Spec arrives as the lead's next turn: one note_le
   // With notes is retired: it was stored as Looks good, and the lead is told to apply the note and the open comment.
   const noted: { text: string }[] = await world.db.sql`
     SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' ORDER BY at DESC LIMIT 1`
-  expect(noted[0]?.text).toContain('Looks good. Good, but name the lock.')
+  expect(noted[0]?.text).toContain('Looks good. Read it with: factory artifact show')
+  expect(noted[0]?.text).toContain('Good, but name the lock.')
   expect(noted[0]?.text).toContain('Apply his open comment')
   expect(noted[0]?.text).toContain('Name the lock.')
 

@@ -1040,8 +1040,8 @@ export async function verdictIn(
               .map((a) => ` on "${clip(a.quote, 80)}": ${clip(a.comment, 300)}`)
               .join(';')}.`
           : ''
-      // the pointer comes before the comments: a note is cut at its length cap, and the cut must never take the pointer
-      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}.${comments}`
+      // the pointer comes first, then his note, then the comments: a lead note is cut at its length cap, and the cut takes only the tail
+      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}. Read it with: factory artifact show ${artifact.id}.${note ? ` ${note}.` : ''}${comments}`
 
       return applied(
         await recordIn(work, deps, {
