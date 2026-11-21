@@ -43,7 +43,7 @@ const LEDGER: Readonly<Record<LedgerJudge, { label: string; rule: string }>> = {
   },
   screen: {
     label: 'The screen (quarantined signals)',
-    rule: 'a dismissed signal came back as its own Issue, or the owner promoted it, within 14 days',
+    rule: 'a dismissed signal came back as an Issue of its own, or was promoted, within 14 days',
   },
   errand: {
     label: 'The Errand screen (turned away)',

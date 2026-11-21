@@ -75,7 +75,7 @@ export function outcomeOf(sql: SQL, judge: LedgerJudge, now: Date) {
     case 'queue':
       return sql`'unknown'`
     case 'screen':
-      // came back as work: its own Issue or the owner's promotion. A repeat that only noted an open Issue (`amended`, `incident`) is
+      // came back as work: its own Issue, or a promotion (by whoever). A repeat that only noted an open Issue (`amended`, `incident`) is
       // the alert firing again, which a dismissal does not say is wrong (on the first live read every repeat of one dismissed alert counted)
       return sql`CASE
         WHEN s.dismissed_by IS DISTINCT FROM 'judge' THEN 'unknown'
