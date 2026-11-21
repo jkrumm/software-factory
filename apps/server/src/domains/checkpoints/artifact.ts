@@ -296,6 +296,8 @@ export function readableText(content: string, format: Format): string {
             // a table's rule row (`|-|:-:|`) shows nothing, and its cell borders are not text: cells read as separate words
             .replace(/^[ \t]*[|:\- \t]*\|[|:\- \t]*$/gm, ' ')
             .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+            // an autolink shows its address as the link text
+            .replace(/<([a-z][a-z0-9+.-]*:[^>\s]+|[^>\s@]+@[^>\s]+)>/gi, '$1')
             // raw HTML in a source is dropped by the page: `a<br>b` reads `ab`
             .replace(/<\/?[a-z][^>\n]*>/gi, '')
             .replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '')

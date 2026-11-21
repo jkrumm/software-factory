@@ -362,6 +362,13 @@ describe('artifacts', () => {
     expect(anchorOf(md, 'markdown', 'Option Redis')).toBe('unanchored')
   })
 
+  test('an autolink keeps its text, a raw tag does not', () => {
+    const md = 'See <https://example.com/wait> or mail <me@example.com>, then a<br>b and <span>kept</span>.'
+    expect(readableText(md, 'markdown')).toBe('See https://example.com/wait or mail me@example.com, then ab and kept.')
+    for (const quote of ['https://example.com/wait', 'mail me@example.com', 'ab and kept.'])
+      expect(anchorOf(md, 'markdown', quote)).toBe('anchored')
+  })
+
   test('a rule row of a table shows nothing, and a plain rule or list marker is not one', () => {
     expect(readableText('| a | b |\n|-|-|\n| c | d |', 'markdown')).toBe('a b c d')
     expect(readableText('above\n\n---\n\n- item - with a dash', 'markdown')).toBe('above --- item - with a dash')
