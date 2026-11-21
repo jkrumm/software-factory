@@ -57,12 +57,14 @@ beforeAll(async () => {
     issue,
     ...body({
       attempt: 1,
+      class: 'direction',
+      whyYours: 'What the product does for its users is his to say.',
       question: 'Which logging library?',
       recommendation: 'pino',
       checked: 'Read the sizes.',
       options: [
-        { label: 'pino', reversible: true, cost: 'small' },
-        { label: 'winston', reversible: true, cost: 'large' },
+        { label: 'pino', leadsTo: 'what follows from it', reversible: true, cost: 'small' },
+        { label: 'winston', leadsTo: 'what follows from it', reversible: true, cost: 'large' },
       ],
       noAnswer: { consequence: 'console until answered' },
     }),

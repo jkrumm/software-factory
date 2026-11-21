@@ -6,7 +6,6 @@ import {
   precedentTerms,
   withSpec,
 } from '../domains/checkpoints/decision.ts'
-import { idOf } from '../kernel/ids.ts'
 import { checkErrandScreen, type ErrandId, errandScreenFields } from '../domains/errands/errand.ts'
 import { type DecisionRecord, statusOf } from '../domains/checkpoints/ports.ts'
 import { type ErrandRecord } from '../domains/errands/ports.ts'
@@ -36,6 +35,7 @@ import {
   type CheckpointStores,
   endJoined,
   formDigest,
+  specBlobOf,
   waitingOn,
 } from './checkpoints.ts'
 import { turnAway } from './checkpoints-errands.ts'
@@ -120,13 +120,11 @@ async function lookDecision(deps: CheckpointLoopDeps, seen: Seen, decision: Deci
     form: decision.form,
     precedents: terms ? await checkpoints.precedents(terms, { excluding: decision.id, limit: 5 }) : [],
   })
-  const spec = decision.form.artifact ? idOf('artifact', decision.form.artifact) : null
-  const revisions = spec ? await checkpoints.revisions(spec) : []
   return {
     action: 'decide',
     decision,
     input: recheckJudgeInput(plain, eventLines(events), deps.recheckAfterMs),
-    specBlob: revisions.toSorted((a, b) => b.n - a.n)[0]?.blob ?? null,
+    specBlob: await specBlobOf(checkpoints, decision.form),
     seen: issue.version,
   }
 }

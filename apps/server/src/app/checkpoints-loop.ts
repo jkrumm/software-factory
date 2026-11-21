@@ -12,7 +12,6 @@ import {
 import type { ArtifactId } from '../domains/checkpoints/artifact.ts'
 import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
-import { idOf } from '../kernel/ids.ts'
 import { specHeadText } from '@software-factory/contract'
 import { type DecisionRecord, type DecisionStatus, type StepClaim, statusOf } from '../domains/checkpoints/ports.ts'
 import { type MacbookVerbPort } from '../domains/errands/ports.ts'
@@ -28,6 +27,7 @@ import {
   issueOf,
   sendBackIn,
   sentBackBefore,
+  specBlobOf,
   waitingOn,
 } from './checkpoints.ts'
 

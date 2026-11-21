@@ -79,6 +79,7 @@ export {
   ShipAnswer,
   ShipBody,
 } from './quality.ts'
+export { decodeEntities } from './html-text.ts'
 export { type SpecHead, specHead, specHeadText } from './spec-head.ts'
 export {
   AnnotateBody,

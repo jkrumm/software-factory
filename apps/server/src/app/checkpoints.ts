@@ -265,6 +265,16 @@ async function checkSpec(deps: CheckpointDeps, issueId: IssueId, form: DecisionF
   })
 }
 
+/** Where the latest revision of the Spec a Decision belongs to is stored (read as a blob, outside any transaction); null when it names none. */
+export async function specBlobOf(
+  checkpoints: CheckpointStores['checkpoints'],
+  form: Pick<DecisionForm, 'artifact'>,
+): Promise<string | null> {
+  const id = form.artifact ? idOf('artifact', form.artifact) : null
+  const revisions = id ? await checkpoints.revisions(id) : []
+  return revisions.toSorted((a, b) => b.n - a.n)[0]?.blob ?? null
+}
+
 export interface Asked {
   result: 'applied' | 'replayed' | 'amended'
   decision: DecisionRecord

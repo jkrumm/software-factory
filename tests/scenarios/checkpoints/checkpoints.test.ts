@@ -306,8 +306,8 @@ test('a Decision is answered by its default after the wait, when the option is r
       FORM('Which cache ttl for the sessions?', {
         recommendation: 'five minutes',
         options: [
-          { label: 'five minutes', reversible: true, cost: 'more refreshes' },
-          { label: 'one hour', reversible: true, cost: 'stale sessions' },
+          { label: 'five minutes', leadsTo: 'what follows from it', reversible: true, cost: 'more refreshes' },
+          { label: 'one hour', leadsTo: 'what follows from it', reversible: true, cost: 'stale sessions' },
         ],
         noAnswer: { consequence: 'Sessions use five minutes.', default: 'five minutes', waitMinutes: 30 },
       }),
@@ -345,8 +345,8 @@ test('a Decision missing a field is refused with the field named, and nothing is
     ...body(
       FORM('Which formatter?', {
         options: [
-          { label: 'pino', cost: 'x' },
-          { label: 'winston', reversible: false, cost: 'y' },
+          { label: 'pino', leadsTo: 'what follows from it', cost: 'x' },
+          { label: 'winston', leadsTo: 'what follows from it', reversible: false, cost: 'y' },
         ],
       }),
     ),

@@ -1,3 +1,5 @@
+import { decodeEntities } from './html-text.ts'
+
 /**
  * The head of a Spec: its Build and Decided sections, the part a reader (the owner on a card, the Judge in its request) needs
  * to see what the question belongs to. A Spec with neither section gives its first `FALLBACK_CHARS` characters.
@@ -29,16 +31,6 @@ function section(lines: readonly string[], name: string): string | null {
   return text === '' ? null : text
 }
 
-const ENTITIES: Record<string, string> = {
-  '&amp;': '&',
-  '&lt;': '<',
-  '&gt;': '>',
-  '&quot;': '"',
-  '&#39;': "'",
-  '&nbsp;': ' ',
-  '&middot;': '·',
-}
-
 /**
  * An HTML Spec (the artifact template) as Markdown-shaped text: its style, script and comments dropped, headings as `#` lines,
  * list items as `-` lines, the rest as plain lines. Enough to find Build and Decided and to read them; never rendered.
@@ -54,14 +46,15 @@ function htmlAsText(html: string): string {
     .replace(/<li\b[^>]*>/gi, '\n- ')
     .replace(/<\/(p|div|section|tr|ul|ol|table|figure|pre|blockquote)>|<br\s*\/?>/gi, '\n')
     .replace(/<[^>]*>/g, '')
-    .replace(/&(?:amp|lt|gt|quot|nbsp|middot|#39);/g, (entity) => ENTITIES[entity] ?? entity)
+    .replace(/&(?:#\d+|#x[0-9a-f]+|[a-z]+);/gi, (entity) => decodeEntities(entity))
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
 
+/** An HTML Spec: the artifact template, or a fragment with a heading or a block tag; a Markdown Spec has its own Build or Decided heading. */
 const isHtml = (content: string): boolean =>
-  /^\s*(?:<!doctype html|<html\b|<!--[\s\S]*?-->\s*<(?:!doctype|html))/i.test(content)
+  !/^#{1,6}[ \t]+(?:build|decided)\b/im.test(content) && /<(?:!doctype|html|h[1-6]|main|style|section)\b/i.test(content)
 
 export function specHead(source: string): SpecHead {
   const content = isHtml(source) ? htmlAsText(source) : source

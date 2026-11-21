@@ -53,3 +53,9 @@ test('an HTML Spec gives its Build and Decided as text, not its template', () =>
   expect(specHeadText(html)).not.toContain('vx-ink')
   expect(specHeadText(html)).not.toContain('The long tail.')
 })
+
+test('an HTML fragment and a named entity read as the page shows them', () => {
+  const fragment =
+    '<style>a { color: red }</style><h2>Build</h2><p>Panel &mdash; closed.</p><h2>Decided</h2><p>Stays shut.</p>'
+  expect(specHead(fragment)).toEqual({ build: 'Panel — closed.', decided: 'Stays shut.' })
+})
