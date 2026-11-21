@@ -100,6 +100,16 @@ describe('archive', () => {
     expect(existsSync(join(dir, 's1', 'subagents', 'agent-a.jsonl'))).toBe(true)
   })
 
+  test('a project holding subagent transcripts of a session whose own transcript is gone is kept until they are archived', async () => {
+    const dir = join(projects, '-work-repo--claude-worktrees-factory-10-1')
+    mkdirSync(join(dir, 's2', 'subagents'), { recursive: true })
+    writeFileSync(join(dir, 's2', 'subagents', 'agent-b.jsonl'), line('sub'))
+    mkdirSync(join(archive, '10', '1'), { recursive: true })
+    const done = await store().tidy()
+    expect(done.ok && done.value?.projectsRemoved).toBe(0)
+    expect(existsSync(join(dir, 's2', 'subagents', 'agent-b.jsonl'))).toBe(true)
+  })
+
   test('the path a reader gets is the archive copy once the Claude copy is gone', async () => {
     const { transcript } = project(7, 1)
     expect(transcriptPathNow(archive, { issue: 7, attempt: 1, path: transcript })).toBe(transcript)

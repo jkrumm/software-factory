@@ -176,13 +176,18 @@ const WORKTREE_PROJECT = /--claude-worktrees-factory-(\d+)-(\d+)$/
  * An archive still being written is not full yet, so its project stays.
  */
 async function fullyArchived(project: string, attemptDir: string): Promise<boolean> {
-  const files = await filesUnder(project).catch(() => [] as string[])
+  // a project that cannot be read whole is kept: an empty list would read as "nothing left to archive"
+  const files = await filesUnder(project)
   const sessions = new Set(
     files.filter((f) => !f.includes(sep) && f.endsWith('.jsonl')).map((f) => f.slice(0, -'.jsonl'.length)),
   )
   for (const file of files) {
     const [top] = file.split(sep)
-    const owned = file.includes(sep) ? sessions.has(top ?? '') : file.endsWith('.jsonl')
+    const segments = file.split(sep)
+    // a session's directory holds its subagents' and tool results' files, whether or not its own transcript is still there
+    const owned = file.includes(sep)
+      ? sessions.has(top ?? '') || segments.includes('subagents') || segments.includes('tool-results')
+      : file.endsWith('.jsonl')
     if (!owned) continue
     if (
       !(await stat(join(attemptDir, `${file}${ARCHIVE_SUFFIX}`)).then(
@@ -215,7 +220,11 @@ export async function removeFinishedProjects(options: {
       if (!archived.has(`${issue}-${attempt}`)) continue
       if (options.only && (options.only.issue !== issue || options.only.attempt !== attempt)) continue
       const project = join(root, name)
-      if (!(await fullyArchived(project, attemptArchiveDir(options.archiveDir, issue, attempt)))) continue
+      // one project that cannot be read does not stop the rest
+      const full = await fullyArchived(project, attemptArchiveDir(options.archiveDir, issue, attempt)).catch(
+        () => false,
+      )
+      if (!full) continue
       await rm(project, { recursive: true, force: true })
       removed++
     }
