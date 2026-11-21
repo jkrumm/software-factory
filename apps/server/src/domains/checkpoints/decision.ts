@@ -1,4 +1,5 @@
 import {
+  specHeadText,
   DECISION_CLASSES,
   DECISION_LIMITS,
   EXHIBIT_KINDS,
@@ -474,6 +475,12 @@ const MAX_JUDGE_TEXT = 2000
 const MAX_JUDGE_SPEC = 20_000
 
 const cut = (value: string): string => scrub(value).slice(0, MAX_JUDGE_TEXT)
+
+/** The request with the head of the Spec the question belongs to (its Build and Decided), scrubbed and cut: the Spec is a blob, read with no transaction open. */
+export const withSpec = (input: JudgeInput, content: string): JudgeInput => ({
+  ...input,
+  spec: scrub(specHeadText(content)).slice(0, MAX_JUDGE_SPEC),
+})
 
 /** A repo as the Judge is told of it: its name, never the path it lives at. */
 const repoName = (repo: string): string => repo.split('/').filter(Boolean).pop() ?? 'repo'

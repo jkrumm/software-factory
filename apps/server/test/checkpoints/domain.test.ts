@@ -18,6 +18,7 @@ import {
   judgeInputOf,
   precedentTerms,
   mermaidNodes,
+  withSpec,
   readDecisionForm,
   refuseNoOpDefault,
   scrub,
@@ -422,6 +423,25 @@ describe('what goes to the Judge', () => {
       precedents: [],
     })
     expect(JSON.stringify(input)).not.toMatch(/hunter2hunter2|sk-abcdefghijklmnop/)
+  })
+
+  test("a Spec's head joins the request scrubbed, from a Markdown or an HTML Spec", () => {
+    const base = judgeInputOf({
+      decision: 'decision_1' as DecisionId,
+      repo: 'example',
+      issue: 't',
+      form: form(),
+      precedents: [],
+    })
+    expect(base.spec).toBeUndefined()
+    const md = withSpec(base, '# T\n\n## Build\n\nA panel. token=abcd1234efgh\n\n## Detail\n\nTail.')
+    expect(md.spec).toContain('## Build\n\nA panel.')
+    expect(md.spec).not.toMatch(/abcd1234efgh|Tail/)
+    const html = withSpec(
+      base,
+      '<!doctype html><html><head><style>a{}</style></head><body><h2>Decided</h2><p>Closed.</p></body></html>',
+    )
+    expect(html.spec).toBe('## Decided\n\nClosed.')
   })
 
   test("the Judge is told the repo's name, never the path it lives at", () => {

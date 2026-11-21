@@ -29,13 +29,49 @@ function section(lines: readonly string[], name: string): string | null {
   return text === '' ? null : text
 }
 
-export function specHead(content: string): SpecHead {
+const ENTITIES: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&nbsp;': ' ',
+  '&middot;': '·',
+}
+
+/**
+ * An HTML Spec (the artifact template) as Markdown-shaped text: its style, script and comments dropped, headings as `#` lines,
+ * list items as `-` lines, the rest as plain lines. Enough to find Build and Decided and to read them; never rendered.
+ */
+function htmlAsText(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(style|script|head|svg)\b[\s\S]*?<\/\1>/gi, '')
+    .replace(
+      /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi,
+      (_, level: string, text: string) => `\n${'#'.repeat(Number(level))} ${text.replace(/<[^>]*>/g, '')}\n`,
+    )
+    .replace(/<li\b[^>]*>/gi, '\n- ')
+    .replace(/<\/(p|div|section|tr|ul|ol|table|figure|pre|blockquote)>|<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:amp|lt|gt|quot|nbsp|middot|#39);/g, (entity) => ENTITIES[entity] ?? entity)
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+const isHtml = (content: string): boolean =>
+  /^\s*(?:<!doctype html|<html\b|<!--[\s\S]*?-->\s*<(?:!doctype|html))/i.test(content)
+
+export function specHead(source: string): SpecHead {
+  const content = isHtml(source) ? htmlAsText(source) : source
   const lines = content.split(/\r?\n/)
   return { build: section(lines, 'build'), decided: section(lines, 'decided') }
 }
 
 /** The head as one text, headings kept: for the Judge's request. */
-export function specHeadText(content: string): string {
+export function specHeadText(source: string): string {
+  const content = isHtml(source) ? htmlAsText(source) : source
   const { build, decided } = specHead(content)
   if (build === null && decided === null) return content.trim().slice(0, FALLBACK_CHARS)
   return [build === null ? '' : `## Build\n\n${build}`, decided === null ? '' : `## Decided\n\n${decided}`]
