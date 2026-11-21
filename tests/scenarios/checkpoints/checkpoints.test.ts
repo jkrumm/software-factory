@@ -30,7 +30,7 @@ let server: ServerProcess
 let dir: string
 let issues = 0
 
-const PROJECTS = ['spec', 'owner', 'judge', 'default', 'refused', 'amend', 'errand', 'annotate', 'down'].map(
+const PROJECTS = ['spec', 'long', 'owner', 'judge', 'default', 'refused', 'amend', 'errand', 'annotate', 'down'].map(
   (name) => `example-${name}`,
 )
 
@@ -607,3 +607,38 @@ for (const [how, question] of [
     expect(await needs()).toHaveLength(1)
   }, 60_000)
 }
+
+test('a long note and many open comments still reach the lead as one line: the pointer, a clipped note, six clipped comments', async () => {
+  const issueId = await workingIssue('example-long')
+  const submitted = await ok(
+    (json) => ArtifactReply.parse(json),
+    'artifact',
+    'submit',
+    issueId,
+    ...body({ attempt: 1, kind: 'spec', title: 'The long spec', content: '# Long\n\nWe keep the queue in Postgres.' }),
+  )
+  for (let n = 0; n < 8; n++) {
+    await ok(
+      (json) => ArtifactReply.parse(json),
+      'artifact',
+      'annotate',
+      submitted.artifact.id,
+      ...body({ quote: 'keep the queue in Postgres', path: 'Long', comment: `Comment ${n}: ${'x'.repeat(600)}` }),
+    )
+  }
+  await ok(
+    (json) => ArtifactReply.parse(json),
+    'artifact',
+    'verdict',
+    submitted.artifact.id,
+    ...body({ verdict: 'looks_good', note: `Start: ${'n'.repeat(3900)}` }),
+  )
+  const noted: { text: string }[] = await world.db.sql`
+    SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' ORDER BY at DESC LIMIT 1`
+  const text = noted[0]?.text ?? ''
+  expect(text).toContain(`factory artifact show ${submitted.artifact.id}`)
+  expect(text).toContain('Apply his 8 open comments')
+  expect(text).toContain('Comment 5:')
+  expect(text).not.toContain('Comment 6:')
+  expect(text.length).toBeLessThan(3900)
+})

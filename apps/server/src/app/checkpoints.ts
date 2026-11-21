@@ -578,6 +578,8 @@ const labelOf: Record<Verdict, string> = {
 
 /** How many open comments a Looks good note quotes; the rest wait in the artifact. */
 const OPEN_COMMENTS_INLINE = 6
+/** How much of the owner's own note a lead note quotes; the artifact holds it in full. */
+const NOTE_INLINE = 1500
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
 async function written(
@@ -1037,11 +1039,12 @@ export async function verdictIn(
         verdict === 'looks_good' && open.length > 0
           ? ` Apply ${open.length === 1 ? 'his open comment' : `his ${open.length} open comments`} as you build and answer each with factory artifact annotation-reply (${Math.min(open.length, OPEN_COMMENTS_INLINE)} quoted here, the rest are in the artifact):${open
               .slice(0, OPEN_COMMENTS_INLINE)
-              .map((a) => ` on "${clip(a.quote, 80)}": ${clip(a.comment, 300)}`)
+              .map((a) => ` on "${clip(a.quote, 60)}": ${clip(a.comment, 200)}`)
               .join(';')}.`
           : ''
-      // the pointer comes first, then his note, then the comments: a lead note is cut at its length cap, and the cut takes only the tail
-      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}. Read it with: factory artifact show ${artifact.id}.${note ? ` ${note}.` : ''}${comments}`
+      // A lead note is cut at 4000 characters. The pointer comes first (it carries everything in full), his note is clipped to
+      // NOTE_INLINE, and six comments of at most 60 + 200 characters follow: the budget always holds all three.
+      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}. Read it with: factory artifact show ${artifact.id}.${note ? ` ${clip(note, NOTE_INLINE)}.` : ''}${comments}`
 
       return applied(
         await recordIn(work, deps, {
