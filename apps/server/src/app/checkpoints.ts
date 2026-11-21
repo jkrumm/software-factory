@@ -571,10 +571,16 @@ export interface ArtifactWritten {
 
 const labelOf: Record<Verdict, string> = {
   looks_good: 'Looks good',
-  with_notes: 'With notes',
+  with_notes: 'Looks good',
   changes: 'Changes',
   no_longer_applies: 'No longer applies',
 }
+
+/** How many open comments a Looks good note quotes; the rest wait in the artifact. */
+const OPEN_COMMENTS_INLINE = 6
+/** How much of the owner's own note a lead note quotes; the artifact holds it in full. */
+const NOTE_INLINE = 1500
+const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
 async function written(
   checkpoints: CheckpointStore,
@@ -977,7 +983,9 @@ export async function verdictIn(
     by: VerdictBy
   },
 ): Promise<CheckpointResult<ArtifactWritten & { verdict: VerdictRecord }>> {
-  const { verdict, by } = input
+  // With notes is retired as a word: the API and the CLI still accept it, and it is stored as Looks good.
+  const verdict: Verdict = input.verdict === 'with_notes' ? 'looks_good' : input.verdict
+  const { by } = input
   {
     const artifact = await checkpoints.artifact(input.artifactId)
     if (!artifact) return err(notFound('artifact', input.artifactId))
@@ -1023,9 +1031,21 @@ export async function verdictIn(
     const heldInQueue = isHeldFiledSpec(artifact, issue)
     const verdictNote = async (): Promise<Result<unknown, CheckpointError | PortError>> => {
       if (!artifact.issueId) return ok(null)
-      if (!reopens && by !== 'orchestrator' && !note && verdict !== 'with_notes' && verdict !== 'changes')
-        return ok(null)
-      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}`
+      const open = (await checkpoints.annotations(artifact.id)).filter(
+        (a) => a.author === 'owner' && a.disposition === null,
+      )
+      if (!reopens && by !== 'orchestrator' && !note && verdict !== 'changes' && open.length === 0) return ok(null)
+      const comments =
+        verdict === 'looks_good' && open.length > 0
+          ? ` Apply ${open.length === 1 ? 'his open comment' : `his ${open.length} open comments`} as you build and answer each with factory artifact annotation-reply (${Math.min(open.length, OPEN_COMMENTS_INLINE)} quoted here, the rest are in the artifact):${open
+              .slice(0, OPEN_COMMENTS_INLINE)
+              .map((a) => ` on "${clip(a.quote, 60)}": ${clip(a.comment, 200)}`)
+              .join(';')}.`
+          : ''
+      // A lead note is cut at 4000 characters. The pointer comes first (it carries everything in full), his note is clipped to
+      // NOTE_INLINE, and six comments of at most 60 + 200 characters follow: the budget always holds all three.
+      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}. Read it with: factory artifact show ${artifact.id}.${note ? ` ${clip(note, NOTE_INLINE)}.` : ''}${comments}`
+
       return applied(
         await recordIn(work, deps, {
           issueId: artifact.issueId,

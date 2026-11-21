@@ -173,10 +173,10 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   // The verdict is given from the header, in a popover.
   await page.getByRole('button', { name: 'Give your verdict' }).click()
   const verdict = page.getByRole('group', { name: 'Verdict' })
-  await verdict.getByRole('button', { name: 'With notes' }).click()
+  await verdict.getByRole('button', { name: 'Looks good' }).click()
   await page.getByRole('textbox', { name: 'Verdict note' }).fill('Good, but name the lock.')
   await page.getByRole('button', { name: 'Send verdict' }).click()
-  await expect(page.locator('main header')).toContainText('With notes')
+  await expect(page.locator('main header')).toContainText('Looks good')
   await expect(page.getByRole('button', { name: 'Give your verdict' })).toHaveCount(0)
   // the form's popover is on its way out as the verdict arrives: open the verdict's own once it is gone
   await expect(page.getByRole('textbox', { name: 'Verdict note' })).toHaveCount(0)
@@ -186,13 +186,8 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   }).toPass()
   await page.keyboard.press('Escape')
 
-  // "Needed me" is one click on the given verdict and survives a reload.
-  const needed = page.getByRole('group', { name: 'Needed me' })
-  await needed.getByRole('button', { name: 'No' }).click()
-  await expect(needed.getByRole('button', { name: 'No' })).toHaveAttribute('aria-pressed', 'true')
-  await page.reload()
-  await expect(needed.getByRole('button', { name: 'No' })).toHaveAttribute('aria-pressed', 'true')
-  await expect(needed.getByRole('button', { name: 'Yes' })).toHaveAttribute('aria-pressed', 'false')
+  // The needed-me mark left the page: the verdict is the whole answer.
+  await expect(page.getByRole('group', { name: 'Needed me' })).toHaveCount(0)
 
   // The API holds both, and the Issue moved on: the verdict ends its wait on the Spec.
   const shown = await detail(apiUrl, spec)
@@ -210,7 +205,7 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
     expect.objectContaining({ quote: shown.artifact.title, path: 'global', comment: 'Overall: good direction.' }),
   )
   expect(shown.verdicts).toEqual([
-    expect.objectContaining({ revision: 1, verdict: 'with_notes', note: 'Good, but name the lock.' }),
+    expect.objectContaining({ revision: 1, verdict: 'looks_good', note: 'Good, but name the lock.' }),
   ])
 
   // The lead hears it: the leads' loop types the owner's verdict into the lead's own terminal, once.
@@ -224,7 +219,8 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   )
   const heard = (lead?.sent ?? []).filter((text) => text.includes('Good, but name the lock.'))
   expect(heard).toHaveLength(1)
-  expect(heard[0]).toContain('With notes')
+  expect(heard[0]).toContain('Looks good')
+  expect(heard[0]).toContain('Apply his 2 open comments')
   // What the lead reads with `factory artifact show` is the detail: the edited words, never the deleted comment.
   const read = await detail(apiUrl, spec)
   const words = [...read.annotations, ...read.unanchored].map((a) => a.comment)

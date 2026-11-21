@@ -118,7 +118,7 @@ export const LANGUAGE = {
   'memory used':
     "The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes. What to do: nothing at normal pressure; read Memory pressure before acting on a high figure",
   'needed me':
-    'The owner\'s one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
+    'The owner\'s mark on a verdict of a Spec or Report: did it need him (set through the API or the CLI; the Console no longer offers it). The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
   needs:
     'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, quarantined signals, long waits',
   'not measured':
@@ -231,7 +231,7 @@ export const LANGUAGE = {
   turns:
     'How many times a lead was prompted and worked until it stopped: the brief, each note, each wake. What to do: many turns on a small Issue means the lead was steered a lot; read the notes in Activity',
   verdict:
-    'The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (by): the owner; the factory for him (the default after 24 hours, a Spec screen pass, a withdrawal); or the orchestrator, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his',
+    'The answer on an artifact: Looks good (with an optional note; the lead applies the note and every open comment), Changes, No longer applies. With notes is retired: the API and the CLI still accept with_notes, store it as looks_good, and a stored one reads as Looks good. Every verdict says who gave it (by): the owner; the factory for him (the default after 24 hours, a Spec screen pass, a withdrawal); or the orchestrator, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his',
   verified:
     'A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue',
   verify: 'The check that ends the watch: make verify, probes',

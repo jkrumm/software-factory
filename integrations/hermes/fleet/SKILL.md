@@ -45,7 +45,7 @@ Speak these. One word per thing; the retired word is the one to avoid.
 | **Decision** | one question to the owner as a form: recommendation, what was checked, cost per option, what happens with no answer. The Judge tries to settle it first; open → answered | ask (noun), question |
 | **Concept / Spec / Report** | artifacts a lead hands over: a direction for a whole product, a larger plan to review, a Report for information (never waits) | document |
 | **Errand** | something only the owner's hands can do: a portal step, a device run, a 1Password prompt | human queue |
-| **Verdict** | the owner's answer on a Concept or Spec: Looks good, With notes, Changes, No longer applies | |
+| **Verdict** | the owner's answer on a Concept or Spec: Looks good (with an optional note), Changes, No longer applies | |
 | **Checkpoint** | where the factory stops for a person: a Decision, a review, an Errand. Never a merge | |
 | **Needs** | what waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands (plus quarantined signals) | |
 | **Ship** | land and deploy. **Watch** = the window after a ship; **Verify** = `make verify` and probes, which end it green | hold, release |

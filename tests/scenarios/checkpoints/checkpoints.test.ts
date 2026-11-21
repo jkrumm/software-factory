@@ -30,7 +30,7 @@ let server: ServerProcess
 let dir: string
 let issues = 0
 
-const PROJECTS = ['spec', 'owner', 'judge', 'default', 'refused', 'amend', 'errand', 'annotate', 'down'].map(
+const PROJECTS = ['spec', 'long', 'owner', 'judge', 'default', 'refused', 'amend', 'errand', 'annotate', 'down'].map(
   (name) => `example-${name}`,
 )
 
@@ -180,17 +180,24 @@ test("a verdict on a submitted Spec arrives as the lead's next turn: one note_le
     artifactId,
     ...body({ verdict: 'with_notes', note: 'Good, but name the lock.' }),
   )
-  expect(verdict).toMatchObject({ result: 'applied', verdict: { verdict: 'with_notes' }, issue: { state: 'working' } })
+  expect(verdict).toMatchObject({ result: 'applied', verdict: { verdict: 'looks_good' }, issue: { state: 'working' } })
   expect(verdict.issue?.effects.map((e) => e.kind)).toEqual(['note_lead'])
+  // With notes is retired: it was stored as Looks good, and the lead is told to apply the note and the open comment.
+  const noted: { text: string }[] = await world.db.sql`
+    SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' ORDER BY at DESC LIMIT 1`
+  expect(noted[0]?.text).toContain('Looks good. Read it with: factory artifact show')
+  expect(noted[0]?.text).toContain('Good, but name the lock.')
+  expect(noted[0]?.text).toContain('Apply his open comment')
+  expect(noted[0]?.text).toContain('Name the lock.')
 
   // The verdict again, and another on the same revision: the first stands, and nothing reaches the lead twice.
   for (const again of [{ verdict: 'with_notes', note: 'Good, but name the lock.' }, { verdict: 'looks_good' }]) {
     const replay = await ok((json) => ArtifactReply.parse(json), 'artifact', 'verdict', artifactId, ...body(again))
-    expect(replay).toMatchObject({ result: 'replayed', verdict: { verdict: 'with_notes' }, issue: { effects: [] } })
+    expect(replay).toMatchObject({ result: 'replayed', verdict: { verdict: 'looks_good' }, issue: { effects: [] } })
   }
 
   const shown = await ok((json) => ArtifactDetail.parse(json), 'artifact', 'show', artifactId)
-  expect(shown.verdicts).toMatchObject([{ revision: 1, verdict: 'with_notes' }])
+  expect(shown.verdicts).toMatchObject([{ revision: 1, verdict: 'looks_good' }])
   expect(shown.annotations).toHaveLength(1)
   expect(shown.unanchored).toEqual([])
 })
@@ -600,3 +607,38 @@ for (const [how, question] of [
     expect(await needs()).toHaveLength(1)
   }, 60_000)
 }
+
+test('a long note and many open comments still reach the lead as one line: the pointer, a clipped note, six clipped comments', async () => {
+  const issueId = await workingIssue('example-long')
+  const submitted = await ok(
+    (json) => ArtifactReply.parse(json),
+    'artifact',
+    'submit',
+    issueId,
+    ...body({ attempt: 1, kind: 'spec', title: 'The long spec', content: '# Long\n\nWe keep the queue in Postgres.' }),
+  )
+  for (let n = 0; n < 8; n++) {
+    await ok(
+      (json) => ArtifactReply.parse(json),
+      'artifact',
+      'annotate',
+      submitted.artifact.id,
+      ...body({ quote: 'keep the queue in Postgres', path: 'Long', comment: `Comment ${n}: ${'x'.repeat(600)}` }),
+    )
+  }
+  await ok(
+    (json) => ArtifactReply.parse(json),
+    'artifact',
+    'verdict',
+    submitted.artifact.id,
+    ...body({ verdict: 'looks_good', note: `Start: ${'n'.repeat(3900)}` }),
+  )
+  const noted: { text: string }[] = await world.db.sql`
+    SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' ORDER BY at DESC LIMIT 1`
+  const text = noted[0]?.text ?? ''
+  expect(text).toContain(`factory artifact show ${submitted.artifact.id}`)
+  expect(text).toContain('Apply his 8 open comments')
+  expect(text).toContain('Comment 5:')
+  expect(text).not.toContain('Comment 6:')
+  expect(text.length).toBeLessThan(3900)
+})

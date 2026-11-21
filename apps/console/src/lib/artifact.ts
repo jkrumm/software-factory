@@ -382,10 +382,15 @@ export const DISPOSITION_WORDS = { applied: 'Applied', deferred: 'Deferred', dec
 export const DISPOSITION_TONE = { applied: 'good', deferred: 'warn', declined: 'neutral' } as const
 export const VERDICT_WORDS = {
   looks_good: 'Looks good',
-  with_notes: 'With notes',
+  /** only ever read: the server stores a With notes verdict as Looks good, so none reaches the screen */
+  with_notes: 'Looks good',
   changes: 'Changes',
   no_longer_applies: 'No longer applies',
 } as const
+/** The verdicts the owner can give, in the order the buttons show them. */
+export const VERDICT_CHOICES = ['looks_good', 'changes', 'no_longer_applies'] as const satisfies ReadonlyArray<
+  keyof typeof VERDICT_WORDS
+>
 
 /**
  * A heading path as a card shows it: the leading segment goes when it is the document's own name (its title, or its first
@@ -489,10 +494,10 @@ export function splitByRevision<T extends RevisionOf>(
   }
 }
 
-/** What each verdict does to the lead, in the words the verdict control shows under its button. */
+/** What each verdict does to the lead, in the words of the button's tooltip and its accessible description. */
 export const VERDICT_CONSEQUENCES = {
-  looks_good: 'The lead builds as written.',
-  with_notes: 'The lead builds and applies your comments.',
+  looks_good: 'The lead builds and applies your note and comments.',
+  with_notes: 'The lead builds and applies your note and comments.',
   changes: 'The lead revises and resubmits before building.',
   no_longer_applies: 'The lead drops this artifact and goes on.',
 } as const satisfies Record<keyof typeof VERDICT_WORDS, string>

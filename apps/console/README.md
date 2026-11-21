@@ -173,7 +173,7 @@ API with the owner token; an extension-less path falls back to `index.html`. So 
 auth header and no base URL, and every response is parsed with the schema from `@software-factory/contract`. The service
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
 invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly fifteen writes, the owner's answers, a collection's pin and unpin and an account's mode set and clear (a Decision's answer, an
-artifact's verdict and its needed-me mark, a comment and the edit or deletion of one, an Errand done, an Errand approved, a quarantined signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
+artifact's verdict and its needed-me mark (the app no longer posts the mark, the route stays), a comment and the edit or deletion of one, an Errand done, an Errand approved, a quarantined signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the queries a change can alter (`affected` in `src/lib/policy.ts`: a frame's `kind`, `ref` and `detail` name them; a frame that does not parse, or has an unknown kind, alters all but the strip's readings); while it is not open the
 queries poll every 15 s and the strip's Live says `Polling`, and while it is open they still poll once a minute, because the
 stream's keepalive is an SSE comment `EventSource` cannot see: a watchdog (`src/lib/live.ts`) also replaces the connection
@@ -333,8 +333,10 @@ name off its heading path. Links: `#anchor` scrolls inside the document, an `htt
 text with its target in the tooltip. The table of contents is the document's headings (the frame posts `factory.headings`
 and `factory.section`, and takes `factory.goto`): from 1800 px the right column is 36 rem, a third contents and two thirds
 comments, the section in view marked as the document scrolls (the last headings at the end of the document count as in view);
-narrower, a collapsible "Contents" bar under the header. Each verdict and Decision button carries a one-line consequence
-(`VERDICT_CONSEQUENCES`) and the verdict control says verdicts and comments feed the retro's taste pass.
+narrower, a collapsible "Contents" bar under the header. The owner gives one of three verdicts: Looks good (with an optional note; the lead applies the note and every open comment),
+Changes (needs a note) and No longer applies. Each verdict button carries its consequence (`VERDICT_CONSEQUENCES`) in a tooltip and as its
+accessible description (`VerdictButton`); nothing is printed under the buttons. The API and the CLI still accept `with_notes`
+and store it as `looks_good`.
 
 ## The Issue page
 

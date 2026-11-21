@@ -117,7 +117,7 @@ A Replan is an Issue whose lead rereads a project's plan against its open and re
 - **Three triggers.** `owner` (`factory planning replan <project>`), `stalled` (a timed wait of `FACTORY_LONG_WAIT_MS` or more has Issues behind it) and `held` (a row with `after_needs: shipped` waits behind a row that closed without shipping).
 - **One at a time.** One Replan is open per project. Asking again adds the words to it as a note.
 - **Decisions before the Spec.** Every non-obvious choice is a Decision raised before the Spec is submitted. The Spec has one section per change, with the row key or Issue and the reason.
-- **A verdict allows the edit.** On Looks good or With notes the lead edits `docs/plan.yaml` through the project's ship path and applies edge changes and cancellations with `factory issue replan`.
+- **A verdict allows the edit.** On Looks good the lead edits `docs/plan.yaml` through the project's ship path and applies edge changes and cancellations with `factory issue replan`.
 - **The server gates that verb.** The Issue must be a Replan its lead works on, its latest Spec must carry one of those verdicts, and every Issue it re-edges or cancels must belong to the Replan's own project. Otherwise nothing is applied.
 
 <!-- snippet: apps/server/src/domains/planning/replan.ts REPLAN_TRIGGERS -->

@@ -291,10 +291,11 @@ test('an Errand done, a quarantined signal promoted and a verdict each move the 
   await expect(spec.getByText('We cache reads for ten seconds.')).toBeVisible()
   await expect(spec.getByRole('link', { name: 'Open the full page' })).toBeVisible()
   expect(await spec.innerText()).not.toContain('<!doctype')
-  await expect(spec.getByRole('button', { name: 'With notes' })).toBeDisabled()
+  await expect(spec.getByRole('button', { name: 'With notes' })).toHaveCount(0)
+  await expect(spec.getByRole('button', { name: 'Looks good' })).toBeEnabled()
   await expect(spec.getByRole('button', { name: 'Changes' })).toBeDisabled()
   await spec.getByLabel('Note for the verdict').fill('Fine as it is')
-  await expect(spec.getByRole('button', { name: 'With notes' })).toBeEnabled()
+  await expect(spec.getByRole('button', { name: 'Changes' })).toBeEnabled()
   await spec.getByRole('button', { name: 'Looks good' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Sent to the lead' })).toBeVisible()
   const detail = await api<{ verdicts: { verdict: string; note: string | null }[] }>(
