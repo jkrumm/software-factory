@@ -571,7 +571,7 @@ export interface ArtifactWritten {
 
 const labelOf: Record<Verdict, string> = {
   looks_good: 'Looks good',
-  with_notes: 'With notes',
+  with_notes: 'Looks good',
   changes: 'Changes',
   no_longer_applies: 'No longer applies',
 }
@@ -977,7 +977,9 @@ export async function verdictIn(
     by: VerdictBy
   },
 ): Promise<CheckpointResult<ArtifactWritten & { verdict: VerdictRecord }>> {
-  const { verdict, by } = input
+  // With notes is retired as a word: the API and the CLI still accept it, and it is stored as Looks good.
+  const verdict: Verdict = input.verdict === 'with_notes' ? 'looks_good' : input.verdict
+  const { by } = input
   {
     const artifact = await checkpoints.artifact(input.artifactId)
     if (!artifact) return err(notFound('artifact', input.artifactId))
@@ -1023,9 +1025,16 @@ export async function verdictIn(
     const heldInQueue = isHeldFiledSpec(artifact, issue)
     const verdictNote = async (): Promise<Result<unknown, CheckpointError | PortError>> => {
       if (!artifact.issueId) return ok(null)
-      if (!reopens && by !== 'orchestrator' && !note && verdict !== 'with_notes' && verdict !== 'changes')
-        return ok(null)
-      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}`
+      const open = (await checkpoints.annotations(artifact.id)).filter(
+        (a) => a.author === 'owner' && a.disposition === null,
+      )
+      if (!reopens && by !== 'orchestrator' && !note && verdict !== 'changes' && open.length === 0) return ok(null)
+      const comments =
+        verdict === 'looks_good' && open.length > 0
+          ? ` Apply ${open.length === 1 ? 'his open comment' : `his ${open.length} open comments`} as you build, and answer each with factory artifact annotation-reply:${open.map((a) => ` on "${a.quote}": ${a.comment}`).join(';')}.`
+          : ''
+      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}.${comments} Read it with: factory artifact show ${artifact.id}`
+
       return applied(
         await recordIn(work, deps, {
           issueId: artifact.issueId,

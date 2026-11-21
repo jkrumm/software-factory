@@ -148,7 +148,6 @@ export const ARTIFACT_KIND_LABEL: Record<string, string> = {
 
 export const VERDICTS = [
   { value: 'looks_good', label: 'Looks good', needsNote: false },
-  { value: 'with_notes', label: 'With notes', needsNote: true },
   { value: 'changes', label: 'Changes', needsNote: true },
   { value: 'no_longer_applies', label: 'No longer applies', needsNote: false },
 ] as const

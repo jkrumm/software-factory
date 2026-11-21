@@ -3,6 +3,7 @@ import { ArrowSquareOutIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
 import { InfoHint, Lozenge, PropertyList } from '@/components/kit'
+import { VerdictButton } from '@/components/verdict-button'
 import { VERDICT_CONSEQUENCES } from '@/lib/artifact'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -363,28 +364,25 @@ function ReviewBody({ item, onSent }: BodyProps) {
       <Labelled label="Your verdict">
         <Textarea
           aria-label="Note for the verdict"
-          placeholder="A note for the lead (needed for With notes and Changes)"
+          placeholder="A note for the lead (needed for Changes)"
           value={note}
           onChange={(event) => setNote(event.target.value)}
         />
         <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-x-3 gap-y-2 pt-1">
           {VERDICTS.map((entry) => (
             <div key={entry.value} className="flex flex-col gap-1">
-              <Button
+              <VerdictButton
+                id={`needs-verdict-${item.id}-${entry.value}`}
+                consequence={VERDICT_CONSEQUENCES[entry.value]}
                 variant={entry.value === 'looks_good' ? 'default' : 'outline'}
                 disabled={verdict.disabled || (entry.needsNote && !note.trim())}
                 onClick={() => verdict.send(entry.value)}
               >
                 {entry.label}
-              </Button>
-              <p className="px-1 text-xs text-muted-foreground">{VERDICT_CONSEQUENCES[entry.value]}</p>
+              </VerdictButton>
             </div>
           ))}
         </div>
-        <p className="flex items-center gap-0.5 text-xs text-muted-foreground">
-          <span>Your verdicts and comments also feed the weekly retro's taste pass.</span>
-          <InfoHint word="taste pass" />
-        </p>
         <Problem words={verdict.error} />
       </Labelled>
       <Labelled label="Comment on a passage">

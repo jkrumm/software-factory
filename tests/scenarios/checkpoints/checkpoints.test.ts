@@ -180,17 +180,23 @@ test("a verdict on a submitted Spec arrives as the lead's next turn: one note_le
     artifactId,
     ...body({ verdict: 'with_notes', note: 'Good, but name the lock.' }),
   )
-  expect(verdict).toMatchObject({ result: 'applied', verdict: { verdict: 'with_notes' }, issue: { state: 'working' } })
+  expect(verdict).toMatchObject({ result: 'applied', verdict: { verdict: 'looks_good' }, issue: { state: 'working' } })
   expect(verdict.issue?.effects.map((e) => e.kind)).toEqual(['note_lead'])
+  // With notes is retired: it was stored as Looks good, and the lead is told to apply the note and the open comment.
+  const noted: { text: string }[] = await world.db.sql`
+    SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' ORDER BY at DESC LIMIT 1`
+  expect(noted[0]?.text).toContain('Looks good. Good, but name the lock.')
+  expect(noted[0]?.text).toContain('Apply his open comment')
+  expect(noted[0]?.text).toContain('Name the lock.')
 
   // The verdict again, and another on the same revision: the first stands, and nothing reaches the lead twice.
   for (const again of [{ verdict: 'with_notes', note: 'Good, but name the lock.' }, { verdict: 'looks_good' }]) {
     const replay = await ok((json) => ArtifactReply.parse(json), 'artifact', 'verdict', artifactId, ...body(again))
-    expect(replay).toMatchObject({ result: 'replayed', verdict: { verdict: 'with_notes' }, issue: { effects: [] } })
+    expect(replay).toMatchObject({ result: 'replayed', verdict: { verdict: 'looks_good' }, issue: { effects: [] } })
   }
 
   const shown = await ok((json) => ArtifactDetail.parse(json), 'artifact', 'show', artifactId)
-  expect(shown.verdicts).toMatchObject([{ revision: 1, verdict: 'with_notes' }])
+  expect(shown.verdicts).toMatchObject([{ revision: 1, verdict: 'looks_good' }])
   expect(shown.annotations).toHaveLength(1)
   expect(shown.unanchored).toEqual([])
 })

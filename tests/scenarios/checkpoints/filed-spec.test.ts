@@ -148,7 +148,7 @@ test('filed with a Spec: stored once, queued behind its verdict, admitted after 
     artifact?.id ?? '',
     ...body({ verdict: 'with_notes', note: 'Name the lock.' }),
   )
-  expect(verdict).toMatchObject({ result: 'applied', verdict: { verdict: 'with_notes' } })
+  expect(verdict).toMatchObject({ result: 'applied', verdict: { verdict: 'looks_good' } })
   expect(await stateOf(world, issue)).toMatchObject({ state: 'queued' })
   expect(await open()).toEqual({ needs: [], asks: [] })
   expect((await look(issue)).admitted || (await stateOf(world, issue)).state === 'working').toBe(true)
@@ -158,7 +158,7 @@ test('filed with a Spec: stored once, queued behind its verdict, admitted after 
     SELECT text FROM factory.lead_deliveries WHERE issue_id = ${issue} AND kind = 'brief'`
   expect(brief?.text).toContain('filed with its Spec')
   expect(brief?.text).toContain(artifact?.id ?? 'missing')
-  expect(brief?.text).toContain('Its verdict: with_notes')
+  expect(brief?.text).toContain('Its verdict: looks_good')
   expect(brief?.text).toContain('Name the lock.')
   expect(brief?.text).not.toContain('submit a one-page Spec (order 3) before you build')
 })

@@ -333,8 +333,10 @@ name off its heading path. Links: `#anchor` scrolls inside the document, an `htt
 text with its target in the tooltip. The table of contents is the document's headings (the frame posts `factory.headings`
 and `factory.section`, and takes `factory.goto`): from 1800 px the right column is 36 rem, a third contents and two thirds
 comments, the section in view marked as the document scrolls (the last headings at the end of the document count as in view);
-narrower, a collapsible "Contents" bar under the header. Each verdict and Decision button carries a one-line consequence
-(`VERDICT_CONSEQUENCES`) and the verdict control says verdicts and comments feed the retro's taste pass.
+narrower, a collapsible "Contents" bar under the header. The owner gives one of three verdicts: Looks good (with an optional note; the lead applies the note and every open comment),
+Changes (needs a note) and No longer applies. Each verdict button carries its consequence (`VERDICT_CONSEQUENCES`) in a tooltip and as its
+accessible description (`VerdictButton`); nothing is printed under the buttons. The API and the CLI still accept `with_notes`
+and store it as `looks_good`.
 
 ## The Issue page
 

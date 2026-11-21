@@ -7,9 +7,9 @@ import { TONE_TINT, type Tone } from '@/components/kit/tone'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
-import { InfoHint } from '@/components/kit/info-hint'
-import { postNeeded, postVerdict } from '@/lib/api'
-import { POPOVER_WIDTH, popoverPosition, VERDICT_CONSEQUENCES, VERDICT_WORDS } from '@/lib/artifact'
+import { VerdictButton } from '@/components/verdict-button'
+import { postVerdict } from '@/lib/api'
+import { POPOVER_WIDTH, popoverPosition, VERDICT_CHOICES, VERDICT_CONSEQUENCES, VERDICT_WORDS } from '@/lib/artifact'
 import type { Review } from '@/lib/review'
 import { cn } from '@/lib/utils'
 import type { Selected } from '@/components/artifact-content'
@@ -151,7 +151,7 @@ export function ScreenLine({ detail }: { detail: ArtifactDetail }) {
 
 const VERDICT_TONE: Record<keyof typeof VERDICT_WORDS, Tone> = {
   looks_good: 'good',
-  with_notes: 'accent',
+  with_notes: 'good',
   changes: 'warn',
   no_longer_applies: 'neutral',
 }
@@ -160,7 +160,7 @@ const verdictOwnerWords = (by: 'owner' | 'factory' | 'orchestrator'): string =>
   by === 'factory' ? "The factory's verdict" : by === 'orchestrator' ? "Your delegate's verdict" : 'Your verdict'
 
 /**
- * The owner's verdict on the revision shown, in the page header: the four words and an optional note behind one button;
+ * The owner's verdict on the revision shown, in the page header: the three words and an optional note behind one button;
  * once given, the verdict as a Lozenge with its note and time behind it.
  */
 export function VerdictControl({ detail, now }: { detail: ArtifactDetail; now: number }) {
@@ -175,49 +175,38 @@ export function VerdictControl({ detail, now }: { detail: ArtifactDetail; now: n
     }),
   )
 
-  const marking = useWrite(detail.artifact.id, (needed: boolean) =>
-    postNeeded(detail.artifact.id, { needed, revision: detail.revision }),
-  )
-
   const verdictForm = (label: string) => (
     <Popover>
       <PopoverTrigger render={<Button type="button" size="sm" />}>{label}</PopoverTrigger>
       <PopoverContent align="end" className="flex w-96 flex-col gap-3">
         <div role="group" aria-label="Verdict" className="flex flex-col gap-2.5">
-          {(Object.keys(VERDICT_WORDS) as Array<keyof typeof VERDICT_WORDS>).map((verdict) => (
-            <div key={verdict} className="flex flex-col gap-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={choice === verdict ? 'default' : 'outline'}
-                aria-pressed={choice === verdict}
-                aria-describedby={`verdict-${verdict}`}
-                onClick={() => setChoice(verdict)}
-              >
-                {VERDICT_WORDS[verdict]}
-              </Button>
-              <p id={`verdict-${verdict}`} className="px-1 text-xs text-muted-foreground">
-                {VERDICT_CONSEQUENCES[verdict]}
-              </p>
-            </div>
+          {VERDICT_CHOICES.map((verdict) => (
+            <VerdictButton
+              key={verdict}
+              id={`verdict-${verdict}`}
+              consequence={VERDICT_CONSEQUENCES[verdict]}
+              type="button"
+              size="sm"
+              variant={choice === verdict ? 'default' : 'outline'}
+              aria-pressed={choice === verdict}
+              onClick={() => setChoice(verdict)}
+            >
+              {VERDICT_WORDS[verdict]}
+            </VerdictButton>
           ))}
         </div>
-        <p className="flex items-start gap-0.5 text-xs text-muted-foreground">
-          <span className="pt-1">Your verdicts and comments also feed the weekly retro's taste pass.</span>
-          <InfoHint word="taste pass" className="shrink-0" />
-        </p>
         <Textarea
           aria-label="Verdict note"
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="A note (optional)"
+          placeholder="A note for the lead (needed for Changes)"
           className="min-h-16 text-[length:var(--vx-text-sm)]"
         />
         <Failure error={write.error} />
         <Button
           type="button"
           size="sm"
-          disabled={choice === null || write.isPending}
+          disabled={choice === null || write.isPending || (choice === 'changes' && !note.trim())}
           onClick={() => choice && write.mutate(choice)}
         >
           Send verdict
@@ -257,28 +246,7 @@ export function VerdictControl({ detail, now }: { detail: ArtifactDetail; now: n
             <p className="text-muted-foreground">{given.note ?? 'No note.'}</p>
           </PopoverContent>
         </Popover>
-        {given.by === 'orchestrator' ? verdictForm('Reopen') : null}
-        <div
-          role="group"
-          aria-label="Needed me"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-        >
-          <span>Needed me</span>
-          {([true, false] as const).map((needed) => (
-            <Button
-              key={String(needed)}
-              type="button"
-              size="xs"
-              variant={given.neededMe === needed ? 'default' : 'outline'}
-              aria-pressed={given.neededMe === needed}
-              disabled={marking.isPending}
-              onClick={() => given.neededMe !== needed && marking.mutate(needed)}
-            >
-              {needed ? 'Yes' : 'No'}
-            </Button>
-          ))}
-        </div>
-        <Failure error={marking.error} what="mark" />
+        {given.by === 'orchestrator' ? verdictForm('Reopen') : null}{' '}
       </div>
     )
   }

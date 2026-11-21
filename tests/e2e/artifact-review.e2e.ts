@@ -263,23 +263,33 @@ test('a card does not repeat the document name, and says what each earlier comme
     expect(text).not.toContain('Weather rollout')
 })
 
-test('every verdict says what it does to the lead, and where verdicts go', async ({ page }) => {
+test('three verdicts, each says what it does to the lead in its tooltip, and nothing is printed under them', async ({
+  page,
+}) => {
   const { review } = seeded()
   await page.goto(`/artifacts/${review}`)
   await page.getByRole('button', { name: 'Give your verdict' }).click()
   const group = page.getByRole('group', { name: 'Verdict' })
   for (const [name, line] of [
-    ['Looks good', 'The lead builds as written.'],
-    ['With notes', 'The lead builds and applies your comments.'],
+    ['Looks good', 'The lead builds and applies your note and comments.'],
     ['Changes', 'The lead revises and resubmits before building.'],
     ['No longer applies', 'The lead drops this artifact and goes on.'],
   ] as const) {
-    await expect(group.getByRole('button', { name })).toBeVisible()
-    await expect(group.getByRole('button', { name })).toHaveAccessibleDescription(line)
-    await expect(group.getByText(line)).toBeVisible()
+    const button = group.getByRole('button', { name })
+    await expect(button).toBeVisible()
+    await expect(button).toHaveAccessibleDescription(line)
+    await button.hover()
+    await expect(page.locator('[data-slot="tooltip-content"]').filter({ hasText: line })).toBeVisible()
+    await page.mouse.move(0, 0)
   }
-  await expect(page.getByText("also feed the weekly retro's taste pass")).toBeVisible()
-  await expect(page.getByRole('button', { name: 'What Taste pass means' })).toBeVisible()
+  await expect(group.getByRole('button')).toHaveCount(3)
+  await expect(group.getByRole('button', { name: 'With notes' })).toHaveCount(0)
+  await expect(page.getByText('taste pass')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'What Taste pass means' })).toHaveCount(0)
+  await expect(page.getByRole('textbox', { name: 'Verdict note' })).toHaveAttribute(
+    'placeholder',
+    'A note for the lead (needed for Changes)',
+  )
 })
 
 test('links in Markdown: an anchor scrolls the document, a web link opens a tab, a Console link opens its page', async ({

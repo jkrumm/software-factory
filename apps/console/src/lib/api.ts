@@ -39,7 +39,6 @@ import {
   SignalDismissed,
   SinceModel,
   ThroughputModel,
-  VerdictView,
 } from '@software-factory/contract'
 import type { ImageTarget, VERDICT_WORDS } from './artifact.ts'
 import { isNetworkError, markFailing, markRecovered } from './restart.ts'
@@ -266,10 +265,6 @@ export const postVerdict = (
   id: string,
   body: { verdict: keyof typeof VERDICT_WORDS; note?: string; revision: number },
 ) => postJson(`/v1/artifacts/${encodeURIComponent(id)}/verdict`, body, ArtifactReply)
-
-/** The owner's mark of whether a verdict needed them; it answers with the verdict. */
-export const postNeeded = (id: string, body: { needed: boolean; revision?: number }) =>
-  postJson(`/v1/artifacts/${encodeURIComponent(id)}/needed`, body, VerdictView)
 
 /** The owner's edit of an annotation's comment, and its removal: both answer with the artifact like a new annotation. */
 export const patchAnnotation = (id: string, annotationId: string, comment: string) =>

@@ -239,7 +239,8 @@ const verdictOf = (raw: unknown): VerdictRecord => {
   return {
     artifactId: row.artifact_id as ArtifactId,
     revision: row.revision,
-    verdict: row.verdict,
+    // a verdict stored as With notes reads as Looks good
+    verdict: row.verdict === 'with_notes' ? 'looks_good' : row.verdict,
     note: row.note,
     at: row.at,
     by: row.by,
