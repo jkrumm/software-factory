@@ -761,7 +761,7 @@ When an Issue of a repo was queued for `claim` or `lane` in at least 60 minutes 
 seat was idle and the cap is below the default, one signal on the repo names the cap, the comment beside it in
 `project.yaml` (`capComment`) and the figures for the resource the comment names (`capReasonOf`). Disk is no cap:
 admission refuses a lead as `disk` when the repo's learned worktree footprint (`factory.worktree_sizes`, p80 of ten
-attempts) does not fit the free disk less headroom (`diskRefusal`).
+attempts) does not fit the free disk less headroom (`diskRefusal`; headroom is 10 GiB or 10 % of the volume, so admission stops at about 90 % used, under the disk alert's 93 %).
 
 `budgets:` in `project.yaml` (`budgetsOf` in `packages/contract/src/project-file.ts`) make a breach a signal the day
 it happens through `selfwatch`, not this pass; `peak` is also the step target of the ranking.

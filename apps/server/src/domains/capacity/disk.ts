@@ -8,9 +8,12 @@
 const GIB = 1024
 const PEAKS_KEPT = 10
 const PEAKS_NEEDED = 3
-/** The disk kept free for the host itself: 10 GiB, or 5 % of the volume when that is more. */
+/**
+ * The disk kept free for the host itself: 10 GiB, or 10 % of the volume when that is more. The share keeps admission under
+ * the disk alert's line (it pages at 93 % used), so the factory queues `disk` before the alert can fire.
+ */
 const HEADROOM_FLOOR_MIB = 10 * GIB
-const HEADROOM_SHARE = 0.05
+const HEADROOM_SHARE = 0.1
 /** A worktree's size is measured at most this often per worktree; the factory restarts forget the last time and measure again. */
 export const SIZE_EVERY_MS = 10 * 60_000
 /** The worktrees measured in one host pass (`du` of a tree with a build output takes seconds): the rest wait for the next minute. */

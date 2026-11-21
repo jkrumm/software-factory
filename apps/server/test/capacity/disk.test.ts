@@ -74,17 +74,32 @@ describe('the learned worktree footprint', () => {
     expect(mibOfDu('du: cannot read')).toBeNull()
   })
 
-  test('the headroom is 10 GiB, or 5 % of a large volume', () => {
+  test('the headroom is 10 GiB, or 10 % of a large volume', () => {
     expect(diskHeadroomMib(null)).toBe(10 * GIB)
     expect(diskHeadroomMib(100 * GIB)).toBe(10 * GIB)
-    expect(diskHeadroomMib(1000 * GIB)).toBe(50 * GIB)
+    expect(diskHeadroomMib(1000 * GIB)).toBe(100 * GIB)
   })
 })
 
 describe('disk admission by fit', () => {
   test('admits a lead whose learned footprint fits the free disk less the headroom', () => {
-    // 130 GiB free, 50 GiB headroom, 2 GiB wanted
+    // 130 GiB free, 100 GiB headroom, 2 GiB wanted
     expect(checkAdmission(inputs({ diskFit: fit() })).admit).toBe(true)
+  })
+
+  test('on a 894 GiB volume, refuses a 15 GiB worktree at 70 GiB free and admits it at 120 GiB free', () => {
+    const headroomMib = diskHeadroomMib(894 * GIB)
+    const at = (freeMib: number) =>
+      checkAdmission(inputs({ diskFit: fit({ candidateMib: 15 * GIB, freeMib, headroomMib }) }))
+    expect(at(70 * GIB)).toMatchObject({
+      admit: false,
+      refusal: {
+        kind: 'disk',
+        message:
+          'disk: a worktree of shutterflow takes ~15 GiB with its build output (p80 of 17 past attempts), the host has 70 GiB free, headroom 89.4 GiB',
+      },
+    })
+    expect(at(120 * GIB).admit).toBe(true)
   })
 
   test('refuses a lead whose learned footprint does not fit, naming the disk and the numbers', () => {
@@ -94,7 +109,7 @@ describe('disk admission by fit', () => {
       refusal: {
         kind: 'disk',
         message:
-          'disk: a worktree of shutterflow takes ~90 GiB with its build output (p80 of 17 past attempts), the host has 130 GiB free, headroom 50 GiB',
+          'disk: a worktree of shutterflow takes ~90 GiB with its build output (p80 of 17 past attempts), the host has 130 GiB free, headroom 100 GiB',
       },
     })
   })
