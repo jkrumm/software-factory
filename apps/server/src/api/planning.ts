@@ -108,7 +108,7 @@ function failureOf(error: PlanningError | PortError): Failure {
       return {
         status: 409,
         body: failure(
-          `${nameOf(error.issue)} has no approved Spec: its latest Spec revision needs a Looks good or With notes verdict`,
+          `${nameOf(error.issue)} has no approved Spec: its latest Spec revision needs a Looks good verdict`,
           'not_approved',
         ),
       }
