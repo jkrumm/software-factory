@@ -5,7 +5,7 @@ import { WORKFLOWS } from '../../kernel/workflows.ts'
 import type { ErrandScreenAnswer, ErrandScreenRequest } from '@software-factory/contract'
 import type { MissingFields } from '../../kernel/missing-fields.ts'
 import { NEED_KEY_RE } from './match.ts'
-import { namesPhysical, namesSecret, type Need, needByRule } from './need.ts'
+import { isApprovalCommand, namesPhysical, namesSecret, type Need, needByRule } from './need.ts'
 import { STATED_NEEDS, type StatedNeed } from './triage.ts'
 
 export type ErrandId = Id<'errand'>
@@ -331,8 +331,9 @@ export function screenByReview(input: ErrandInput): { review: string; reason: st
 
 /**
  * The Errand as the screen is shown it: its own words, and the command, the machine and the need as fields of their own
- * (`ErrandScreenRequest`). `detail` is the Errand's own unless a recheck puts its events beside it. Only the MacBook is a
- * machine the screen is told of: the mini has no way onto it, which the screen's instructions say (agw's `factory-errand`).
+ * (`ErrandScreenRequest`). `detail` is the Errand's own unless a recheck puts its events beside it. The machine is the one
+ * the command runs on: the MacBook (the mini has no way onto it, which the screen's instructions say, agw's
+ * `factory-errand`), or the mini for an approval, whose command the server runs there on the owner's yes.
  */
 export function errandScreenFields(
   errand: {
@@ -350,7 +351,12 @@ export function errandScreenFields(
     summary: errand.summary,
     detail,
     command: errand.command,
-    host: errand.host === 'macbook' ? 'macbook' : null,
+    host:
+      errand.command !== null && isApprovalCommand(errand.command)
+        ? 'mini'
+        : errand.host === 'macbook'
+          ? 'macbook'
+          : null,
     need: errand.need,
   }
 }

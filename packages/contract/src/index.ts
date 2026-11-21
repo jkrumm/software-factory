@@ -273,4 +273,7 @@ export {
   TriageAmendRequest,
   TriageRequest,
   TriageSettleRequest,
+  BACK_KINDS,
+  CHECKOUT_PATH,
 } from './loops.ts'
+export { CASE_MAX_CHARS, CASE_OUTCOMES, caseChars, JudgeCase } from './case-file.ts'

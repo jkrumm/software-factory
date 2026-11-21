@@ -18,7 +18,6 @@
           "question": "Which logging library for the worker?",
           "answer": "pino",
           "settledBy": "owner",
-          "worthAsking": false,
           "repo": "example-worker"
         }
       ]

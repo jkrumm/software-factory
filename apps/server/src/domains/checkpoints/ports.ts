@@ -8,8 +8,11 @@ import type { DecisionForm, DecisionId, Precedent, Answerer, StepName } from './
 import type { Page } from './page.ts'
 import type { Recheck, RecheckCandidate, ReviewWait } from './recheck.ts'
 
-/** A step on a Decision's way to an answer. `open`: it reached the owner. */
-export const STEP_OUTCOMES = ['answered', 'passed', 'rejected', 'failed', 'open'] as const
+/**
+ * A step on a Decision's way to an answer. `open`: it reached the owner. `back`: the Judge sent a lead's Decision back to its
+ * lead (once, on its first look): it stays open, out of Needs you, until the lead settles it or asks again.
+ */
+export const STEP_OUTCOMES = ['answered', 'passed', 'rejected', 'failed', 'open', 'back'] as const
 export type StepOutcome = (typeof STEP_OUTCOMES)[number]
 
 /**

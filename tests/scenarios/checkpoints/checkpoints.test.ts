@@ -281,15 +281,16 @@ test("a Decision is answered by the Judge, who is given the owner's earlier answ
 
   const calls = await askCalls()
   const given = JSON.parse(calls.at(-1)?.stdin ?? '{}') as {
-    precedents: { question: string; answer: string; settledBy: string; worthAsking: boolean | null }[]
+    precedents: { question: string; answer: string; settledBy: string }[]
   }
   // Only the owner's own answers are precedent.
   expect(given.precedents[0]).toMatchObject({
     question: 'Which retention for the audit log rows?',
     answer: 'winston',
     settledBy: 'owner',
-    worthAsking: null,
   })
+  // agw's `factory-ask` dropped the owner's worth-asking mark from its precedents: none is sent.
+  expect(given.precedents[0]).not.toHaveProperty('worthAsking')
   expect(given.precedents.every((p) => p.settledBy === 'owner')).toBe(true)
   expect(decisionPages()).toHaveLength(1)
 })

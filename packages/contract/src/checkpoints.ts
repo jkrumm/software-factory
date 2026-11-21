@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { JudgeCase } from './case-file.ts'
 import { ImageAnchor, ImageAnchorInput } from './image-anchor.ts'
 import { IssueRefInput, MAX_AFTER_IDS } from './issues.ts'
 
@@ -50,7 +51,7 @@ const IssueMove = z.object({
 
 const Step = z.object({
   step: z.enum(STEPS),
-  outcome: z.enum(['answered', 'passed', 'rejected', 'failed', 'open']).nullable(),
+  outcome: z.enum(['answered', 'passed', 'rejected', 'failed', 'open', 'back']).nullable(),
   at: iso.nullable(),
   detail: z.string().nullable(),
 })
@@ -559,6 +560,7 @@ export const ErrandNeededRequest = z
     }),
     /** scrubbed, bounded lines: the same source's other requests, open and lately closed, with how each ended */
     evidence: z.string().max(4000),
+    case: JudgeCase.optional(),
   })
   .meta({ id: 'ErrandNeededRequest' })
 
@@ -583,6 +585,7 @@ export const ErrandScreenRequest = z
       need: z.enum(ERRAND_NEEDS).nullable(),
     }),
     issue: z.object({ id: z.string(), repo: z.string(), title: z.string(), kind: z.string() }),
+    case: JudgeCase.optional(),
   })
   .meta({ id: 'ErrandScreenRequest' })
 export type ErrandScreenRequest = z.infer<typeof ErrandScreenRequest>

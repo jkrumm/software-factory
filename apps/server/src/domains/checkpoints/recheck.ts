@@ -165,7 +165,8 @@ export type RecheckVerdict =
 
 export function recheckVerdict(form: DecisionForm, verdict: Result<JudgeVerdict, PortError>): RecheckVerdict {
   if (!verdict.ok) return { action: 'kept', reason: `${verdict.error.kind}: ${verdict.error.detail}` }
-  if (verdict.value.verdict === 'owner') {
+  // A recheck never allows a back (its request names none): one that comes anyway keeps the Decision with the owner.
+  if (verdict.value.verdict !== 'answer') {
     return { action: 'kept', reason: verdict.value.reason || 'the Judge passed it on' }
   }
   const guarded = guardVerdict(form, verdict.value)

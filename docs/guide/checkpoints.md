@@ -52,8 +52,8 @@ The Judge is the agw workflow `factory-ask` that tries to answer a Decision befo
 
 - **Every Decision, first.** The Judge sees a Decision before the owner does. A failed call is retried after 5 minutes, three tries in all. After the third the Decision goes to the owner unjudged.
 - **It reads what a lead would.** The plan, the docs and the precedents: Decisions the owner answered before. An answer the Judge, a default or the orchestrator gave is never one.
-- **It sees scrubbed text.** Every field is scrubbed and cut at 2000 characters, and the repo is passed as its name, never a path.
-- **It answers or hands on.** The verdict is `answer` or `owner`. The factory checks an answer before acting on it.
+- **It sees scrubbed text and the case file.** Every field is scrubbed and cut at 2000 characters; the repo is passed as its name. Beside the form it gets the case file (the Issue as filed, the owner's notes, the repo's project and AGENTS.md, its open Issues, the plan rows, its own earlier answers in the repo) and the path of the repo's main checkout, which it reads with read, glob and grep.
+- **It answers, hands on, or sends back.** The verdict is `answer`, `owner` or, on a lead's own Decision's first look, `back`: the question returns to the lead with a note (yours to decide, or the owner's but not ready), stays open and out of Needs you. The lead settles it (`take-default` takes its default, or with none its reversible recommendation) or asks again, which amends it; the second look answers or hands it on, never back. The factory checks an answer before acting on it.
 - **Never irreversible.** The answer must be exactly one of the options, must name a source, and must not be an option that cannot be taken back. An irreversible option is the owner's.
 
 <!-- snippet: apps/server/src/domains/checkpoints/decision.ts guardVerdict -->
@@ -89,8 +89,8 @@ Across the 300 newest closed Issues of this repo (2026-11-17), 24 Decisions were
 **Example files:**
 
 - [`decision.ts` L9-L17](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L9-L17): the steps (`policy` is history) and who may settle.
-- [`decision.ts` L203-L217](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L203-L217): `guardVerdict`, the factory's checks on an answer.
-- [`decision.ts` L227-L273](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L227-L273): `JudgeInput`, what the workflow is given.
+- [`decision.ts` L210-L220](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L210-L220): `guardVerdict`, the factory's checks on an answer.
+- [`decision.ts` L234-L281](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L234-L281): `JudgeInput`, what the workflow is given.
 
 ## Specs and artifacts
 

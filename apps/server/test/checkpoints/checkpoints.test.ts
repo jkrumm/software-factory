@@ -68,8 +68,9 @@ let deps: CheckpointLoopDeps & PageDeps
 let judgeCalls: {
   question: string
   precedents: number
-  given: { question: string; answer: string; settledBy: string; worthAsking: null; repo: string }[]
+  given: { question: string; answer: string; settledBy: string; repo: string }[]
   key: string
+  sendBack: boolean | undefined
 }[]
 let judgeAnswer: () => Result<JudgeVerdict>
 let screenCalls: { errand: string; key: string }[]
@@ -84,8 +85,9 @@ const judge: Handler<'judge'> = async (input, key) => {
   judgeCalls.push({
     question: input.question,
     precedents: input.precedents.length,
-    given: input.precedents as never,
+    given: input.precedents,
     key,
+    sendBack: input.sendBack,
   })
   await duringJudge?.()
   return judgeAnswer()
@@ -435,7 +437,6 @@ describe('settling, in turn', () => {
         question: 'Which retention for the audit log rows?',
         answer: 'pino',
         settledBy: 'owner',
-        worthAsking: null,
         repo: 'example',
       },
     ])
@@ -799,6 +800,106 @@ describe('settling, in turn', () => {
     expect(judgeCalls).toEqual([])
     expect(await rows('checkpoint_pages')).toBe(0)
     expect(value(await showDecision(deps, decision.id)).steps.map((s) => s.step)).toEqual(['judge'])
+  })
+})
+
+describe("the Judge's back", () => {
+  const back = () =>
+    ok({
+      verdict: 'back',
+      answer: '',
+      reason: 'the repo settles it',
+      source: 'file: docs/logging.md:3',
+      note: 'docs/logging.md:3 already names pino as the logger; this is yours to decide.',
+      back: 'yours',
+    } as const)
+
+  const issueState = async (issueId: IssueId) =>
+    (await db.sql`SELECT state, wait_reason FROM factory.issues WHERE id = ${issueId}`)[0] as {
+      state: string
+      wait_reason: string | null
+    }
+  const backNotes = async (issueId: IssueId) =>
+    (
+      await db.sql`
+        SELECT payload FROM factory.issue_events
+        WHERE issue_id = ${issueId} AND kind = 'noted' AND result = 'applied' AND payload ? 'back'`
+    ).map((row: { payload: { text: string; back: string } }) => row.payload)
+
+  test('a back keeps the Decision open and out of Needs you, types its note to the lead now, and pages no one', async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId)
+    judgeAnswer = back
+    expect(value(await tryAnswer(deps, decision.id))).toMatchObject({ status: 'open', settledBy: null })
+    expect(judgeCalls.map((call) => call.sendBack)).toEqual([true])
+    expect(value(await showDecision(deps, decision.id)).steps.map((s) => [s.step, s.outcome])).toEqual([
+      ['judge', 'back'],
+    ])
+    expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
+    expect(await rows('checkpoint_pages')).toBe(0)
+    // the Issue still waits on it, and its lead hears the note now, once
+    expect(await issueState(issueId)).toEqual({ state: 'waiting', wait_reason: 'decision' })
+    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+    const [note] = await backNotes(issueId)
+    expect(note?.back).toBe(decision.id)
+    expect(note?.text).toContain('docs/logging.md:3 already names pino')
+    expect(note?.text).toContain(`factory decision take-default ${decision.id} --attempt 1`)
+    // a later pass leaves it with its lead: no second call, no page, no second note
+    value(await tryAnswer(deps, decision.id))
+    expect(judgeCalls).toHaveLength(1)
+    expect(await rows('checkpoint_pages')).toBe(0)
+    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+  })
+
+  test('asked again, the amended Decision gets the second look: never back, an answer or the owner', async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId)
+    judgeAnswer = back
+    value(await tryAnswer(deps, decision.id))
+    expect(await ask(issueId, { checked: 'Read docs/logging.md:3: it names pino for the CLI only.' })).toMatchObject({
+      result: 'amended',
+      decision: { id: decision.id, steps: [] },
+    })
+    // the Judge sends it back again anyway: a back the request did not allow is the owner's
+    value(await tryAnswer(deps, decision.id))
+    expect(judgeCalls.map((call) => call.sendBack)).toEqual([true, undefined])
+    const shown = value(await showDecision(deps, decision.id))
+    expect(shown.steps.map((s) => [s.step, s.outcome])).toEqual([
+      ['judge', 'passed'],
+      ['owner', 'open'],
+    ])
+    expect((await readNeeds(db.sql, clock.now())).items.map((item) => item.id)).toEqual([decision.id])
+    expect(await backNotes(issueId)).toHaveLength(1)
+    // handed to the owner, it is his: the lead's settle no longer takes its recommendation
+    expect(errorOf(await takeDefault(deps, { decisionId: decision.id, attempt: 1 }))).toMatchObject({ kind: 'invalid' })
+  })
+
+  test('the lead settles a sent-back Decision itself: take-default takes its reversible recommendation', async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId)
+    judgeAnswer = back
+    value(await tryAnswer(deps, decision.id))
+    const taken = value(await takeDefault(deps, { decisionId: decision.id, attempt: 1 }))
+    expect(taken.decision).toMatchObject({ answer: 'pino', settledBy: 'default' })
+    expect(taken.decision.source).toBe('the lead settled it after the Judge sent it back')
+    expect(await issueState(issueId)).toEqual({ state: 'working', wait_reason: null })
+  })
+
+  test('a Decision the Judge handed to the owner and the lead amended gets no back: an amend is a second look', async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId)
+    value(await tryAnswer(deps, decision.id))
+    await ask(issueId, { checked: 'Read the package sizes and the plan.' })
+    value(await tryAnswer(deps, decision.id))
+    expect(judgeCalls.map((call) => call.sendBack)).toEqual([true, undefined])
+  })
+
+  test("the steward's Decision and a Decision about an artifact under review are never sent back", async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId)
+    await db.sql`UPDATE factory.decisions SET asked_by = 'steward' WHERE id = ${decision.id}`
+    value(await tryAnswer(deps, decision.id))
+    expect(judgeCalls.map((call) => call.sendBack)).toEqual([undefined])
   })
 })
 
