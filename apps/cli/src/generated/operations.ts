@@ -2083,7 +2083,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/friction',
     summary:
-      'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who settled Decisions, quarantined signals',
+      'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who answered Decisions, quarantined signals',
     pathParams: [],
     queryParams: ['days'],
     body: false,

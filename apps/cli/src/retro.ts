@@ -63,7 +63,7 @@ export async function retroVerb(argv: readonly string[], io: Io): Promise<number
   const { values, positionals } = parsed
   if (values.help) {
     io.out(
-      `${USAGE}\n\nThe weekly retro's bundle: GET /v1/retro (KPIs with history, friction, sessions, samples, the ledger of earlier retro signals) plus a pass over every lead transcript of the window (seconds by tool category, idle gaps, tool-error classes, make check runs). --digests <dir> writes one text digest per sampled Issue. --no-transcripts skips the pass. No model is called.\n`,
+      `${USAGE}\n\nThe weekly retro's bundle: GET /v1/retro (KPIs with history, friction, sessions, samples, the ledger of earlier retro signals) plus a pass over every lead transcript of the window (seconds by tool category, idle gaps, tool-error kinds, make check runs). --digests <dir> writes one text digest per sampled Issue. --no-transcripts skips the pass. No model is called.\n`,
     )
     return EXIT.ok
   }

@@ -310,7 +310,7 @@ test('a Judge answer to hold is a timed wait, and the lead that blocks again on 
     await runLoop(lab, 'planning')
   }
 
-  // the Judge's hold: the Issue waits until a time, the lead is not woken
+  // the Judge's backoff: the Issue waits until a time, the lead is not woken
   expect((await runLoop(lab, 'steward')).summary).toContain('Decisions 1')
   await lab.cli(['checkpoint', 'pass'])
   expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'timer' })

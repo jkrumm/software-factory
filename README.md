@@ -46,7 +46,7 @@ A factory owns the whole lifecycle: intake, admission, supervision, gates, verif
 The position this design takes:
 
 - **Dark for code.** No person reviews a change before production. The agent's own review, gates, a watch window and probes do that job. [Warp](https://www.warp.dev/blog/adapting-for-a-world-of-software-factories) keeps a person at spec, question and merge and calls dark factories "not realistic right now"; this repo exists to show how far past that one person can go.
-- **Lit for decisions.** What reaches the owner is product direction, spend, irreversible data loss, other people, security policy, rare big architecture and taste. The factory settles everything else, and counts a touch it should have avoided as waste.
+- **Lit for decisions.** What reaches the owner is product direction, spend, irreversible data loss, other people, security policy, rare big architecture and taste. The factory handles everything else, and counts a touch it should have avoided as waste.
 
 The two halves depend on each other. Taking the person out of the merge rests on the other half: the stops that remain have to be explicit, rare and counted.
 
@@ -80,7 +80,7 @@ Do not build one for work a command cannot verify, or for a team whose process r
 2. **Capacity admits work.** An Issue starts when the machine, the subscriptions and the repo can take it, and one that waits says why.
 3. **One lead owns one Issue,** from root cause to verification.
 4. **A ship is a change landed and deployed,** and a watch window checks it in production.
-5. **A lead that needs a person raises a checkpoint.** Most are settled before a person sees them, and none is a merge.
+5. **A lead that needs a person raises a checkpoint.** Most are answered before a person sees them, and none is a merge.
 
 The loop is closed twice. A regression goes back to the lead that shipped it. And the factory's own waste comes back in as signals.
 
@@ -105,7 +105,7 @@ Every judgment in the factory has three rungs, tried in this order:
 
 | Judgment | Code decides | A workflow decides | The owner decides |
 |-|-|-|-|
-| What a signal becomes | fingerprint, routes, correlation window | kind, origin, amend or new | whether held outside text becomes work |
+| What a signal becomes | fingerprint, routes, correlation window | kind, origin, amend or new | whether quarantined outside text becomes work |
 | What a stalled Issue needs | wake, re-check, requeue, deliver, break a claim deadlock | what to do when the rules do not say | nothing, unless it becomes a Decision |
 | Whether a question is the owner's | the agent's declared default | whether a person is needed at all, given precedent | product direction, spend, data loss, other people, security policy, taste |
 
@@ -115,7 +115,7 @@ The lifecycle server itself calls no model. Model judgment lives in workflows ou
 
 The scarce resource is the owner's attention, so the factory measures its spending.
 
-- A **touch** is the owner acting on an Issue. A touch the factory should have settled is **friction**.
+- A **touch** is the owner acting on an Issue. A touch the factory should have handled is **friction**.
 - A touch that repeats becomes a rule, a default or a change to what agents are told.
 - A stop the owner wanted (a Spec for a new screen, an Errand only hands can do) is not friction. It is the product working.
 
@@ -134,7 +134,7 @@ flowchart LR
   watch -->|passed: closes| issue
   watch -->|regressed| lead
   lead -->|raises| checkpoint[Checkpoint]
-  checkpoint -->|code, then a workflow| settled((settled))
+  checkpoint -->|code, then a workflow| answered((answered))
   checkpoint -->|only then| owner((Owner))
   loops[Loops] -->|file what they find| signal
   loops -->|end stalls| issue
@@ -142,22 +142,10 @@ flowchart LR
 
 ## The language
 
-One word per thing, in code, CLI, events, screens and docs. This is the ubiquitous language of domain-driven design taken literally: a retired word in the source fails the build. The full table, with what each word retires, is [`docs/language.md`](docs/language.md).
+One word per thing, in code, CLI, events, screens and docs. This is the ubiquitous language of domain-driven design taken literally: a retired word in the source fails the build. The words to learn first are its [core tier](docs/language.md#core-tier); the full table, with what each word retires, is the rest of [`docs/language.md`](docs/language.md). Two lists the build checks against the code are kept here:
 
-| Word | Means |
-|-|-|
-| **Signal** | Anything that arrives and may become work, with a kind, an origin and a trust level |
-| **Issue** | One unit of work: one repo, one branch, one ship |
-| **State** | `settling`, `queued`, `working`, `waiting`, `watching`, `closed`. Only an event moves it. Screens say Running, Paused, Ready, Held, Checking and Planned instead |
-| **Event** | A fact recorded on an Issue. **25 kinds**, among them `filed`, `admitted`, `shipped`, `watch_passed` |
-| **Lead / Attempt** | The agent session that owns an Issue, and its *n*th try |
-| **Gate** | A machine check a lead cannot talk past |
-| **Watch / Verify** | The window after a ship, and the check that ends it |
-| **Wait / Stall** | A pause with a named exit, and a wait whose cause is a machine's to end |
-| **Checkpoint** | Where the factory stops for a person: a Decision, a Concept or Spec, an Errand. Never a merge |
-| **Judge** | The workflow that tries to answer a Decision before the owner sees it |
-| **Steward** | The loop over stalled Issues: wake, re-check, requeue, deliver; it asks a workflow only when the rules run out |
-| **Touch / Friction** | The owner acting on an Issue, and any counted waste, such as a touch the factory should have settled |
+- An **Event** is a fact recorded on an Issue: **25 kinds**, among them `filed`, `admitted`, `shipped`, `watch_passed`.
+- An Issue's **State** is `settling`, `queued`, `working`, `waiting`, `watching` or `closed`, and only an event moves it. Screens say Running, Paused, Ready, Held, Checking and Planned instead.
 
 Each concept below has the same shape: what it is, its rules, why, example files in this repo, and where to read more.
 
@@ -169,7 +157,7 @@ Signals:
 
 - Are the **way in for everything that arrives**. The owner and a plan can file an Issue directly, and it passes the same settling step before it queues: nobody files around the state machine.
 - Carry a **kind** (an alert, a request, a piece of feedback or a remark), an **origin** and a **trust level**.
-- Are **held** when their text comes from outside, until a screening workflow or the owner lets them through. Outside text is data, never an instruction.
+- Are **quarantined** when their text comes from outside, until a screening workflow or the owner lets them through. Outside text is data, never an instruction.
 - Have a **fingerprint**, so the same thing arriving twice is recognised.
 - Never name their own destination when they come from a machine: an alert's repo is looked up in a server-side route registry, never read from the payload.
 
@@ -191,7 +179,7 @@ Triage decides what a signal becomes. It has five outcomes and no others:
 | A new Issue | Nothing open covers it |
 | An amendment | It is a note on an Issue that is already open |
 | Part of an incident | One root cause seen through many alerts: they join one Issue |
-| Held | Its text is from outside and waits for the screening workflow or the owner |
+| Held (quarantined) | Its text is from outside and waits for the screening workflow or the owner |
 | Dropped | It is noise, a probe, or work the factory does not hear |
 
 - Rules decide first: the fingerprint, the route registry, a correlation window. A workflow is asked only where the rules are unsure.
@@ -426,7 +414,7 @@ A ship is not a pull request. It is merged commits on the default branch and a d
 
 A checkpoint is where the factory stops for a person. There are three, and a merge is not one of them.
 
-| Checkpoint | What the lead hands over | Settled before the owner by |
+| Checkpoint | What the lead hands over | Answered before the owner by |
 |-|-|-|
 | **Decision** | a question, its options and the lead's own recommendation | the Judge workflow (which reads the owner's earlier answers), then the lead's declared default |
 | **Concept or Spec** | one page before it builds a new surface, data model or screen | a screening workflow that passes the ones that are not the owner's to read |
@@ -434,7 +422,7 @@ A checkpoint is where the factory stops for a person. There are three, and a mer
 
 - A checkpoint is a **contract**: at most a few open choices, each with a default, and what changing it later costs.
 - **The queue never waits on the owner by accident.** A Spec without a verdict in 24 hours goes ahead on the defaults it named.
-- A Decision passes the steps in order and stops at the first that settles it:
+- A Decision passes the steps in order and stops at the first that answers it:
 
   ```ts
   export const STEPS = ['judge', 'default', 'owner'] as const
@@ -470,7 +458,7 @@ Every loop obeys the same rules: it claims a row and commits before it acts, its
 
 ## Friction
 
-Friction is counted waste: a refusal, a stall, a lost lead, a ship with no review, a touch of the owner the factory should have settled. A loop counts it over a window and files the pattern that repeats, as a signal, through the same triage as everything else.
+Friction is counted waste: a refusal, a stall, a lost lead, a ship with no review, a touch of the owner the factory should have handled. A loop counts it over a window and files the pattern that repeats, as a signal, through the same triage as everything else.
 
 - A finder that is mostly dropped or cancelled **stops filing** until it is asked again.
 - The counted waste is the backlog of the factory's own improvement.
@@ -687,10 +675,10 @@ The 7 days from 2026-11-13 09:38 UTC to 2026-11-20 09:38 UTC, all projects, from
 | Issues closed | 1,604, or 229 a day |
 | Median time from filed to closed | 85 minutes |
 | First verifications that passed | 1,290 of 1,338 (96.4 %; the target is 90 %) |
-| Decisions leads raised | 58: the Judge settled 45, a default 7, the owner 5, his delegate 1 |
+| Decisions leads raised | 58: the Judge answered 45, a default 7, the owner 5, his delegate 1 |
 | Specs, Concepts and Reports the owner judged | 95 |
 | Errands that reached the owner's hands | 77 |
-| Times the owner stepped in where the factory should have settled it | 58, mostly notes to a lead (0.038 per Issue filed; the target is at most 0.07) |
+| Times the owner stepped in where the factory should have handled it | 58, mostly notes to a lead (0.038 per Issue filed; the target is at most 0.07) |
 
 No person reviewed a change before it reached production. What the owner did that week: judge 95 handed-over pages, answer 5 questions, and do 77 things only hands can do, such as a biometric prompt.
 

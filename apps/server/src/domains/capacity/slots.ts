@@ -39,7 +39,7 @@ export type StepHost = 'mini' | 'vps'
 
 /**
  * What a wait waits for: every slot taken, the memory fit, swap growing, the load gate (the tripwire under the aim), a step
- * with no size known, the line ahead, the cores fit, or its host-wide class held by another step.
+ * with no size known, the line ahead, the cores fit, or an exclusive step of its group held by another step.
  */
 // `class`: an exclusive step of the same group holds a slot (a stored `capacity_slots.why_kind` value)
 export const WAIT_KINDS = ['slots', 'memory', 'swap', 'load', 'unsized', 'line', 'cores', 'class'] as const
@@ -136,7 +136,7 @@ interface StepSize {
   cores: number
 }
 
-/** The slots taken: how many, and how many of each host-wide class. */
+/** The slots taken: how many, and how many of each exclusive group. */
 interface Taken {
   count: number
   groups: ReadonlyMap<string, number>
@@ -428,7 +428,7 @@ export function touchSlots(
   // passed for the whole window (then its memory is reserved: the caller passes it only when it still fits beside the caller,
   // `headFitsBeside`, or the caller ends before the reserved start, `reservedStartMs`), and
   // one that fits takes the slot on its own next call. A waiter
-  // whose host-wide class is held never holds the line: the line standing still frees no class.
+  // whose exclusive group is held never holds the line: the line standing still frees no class.
   const passed: SlotRow[] = []
   for (const waiter of line.slice(0, ahead)) {
     const theirs = decide(takenNow, input.slots, input.fit, {
@@ -497,7 +497,7 @@ export function lineOrder(rows: readonly SlotRow[], runMsByName?: ReadonlyMap<st
 
 /**
  * The host's test line for the lead admission (`TestLine` of `admission.ts`): the live waiters and holders, and the median
- * of how long the waiters have waited so far. A waiter its host-wide class holds back waits for that class, not for a
+ * of how long the waiters have waited so far. A waiter its exclusive group holds back waits for that group, not for a
  * slot, and is left out: a queue of Apple builds behind one is no reason to hold leads back.
  */
 export function testLineOf(

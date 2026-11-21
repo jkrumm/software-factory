@@ -4,6 +4,34 @@ One word per thing, in code, CLI, events, screens and docs. Built on Warp's fact
 notes, signed 2026-11-07. A word in a **Retires** cell fails `make check` once the rewrite lands (the retired-word
 check, `docs/architecture.md`).
 
+## Core tier
+
+The words to learn first; every other word in this file builds on them. Each links to its full row below.
+
+| Core word | In one line |
+|-|-|
+| [Signal](#work) | Anything that arrives and may become work |
+| [Issue](#work) | One unit of work: one repo, one branch, one ship |
+| [Event](#events) | A fact recorded on an Issue; state is derived from events |
+| [State](#work) | The stored name of where an Issue is; screens say Running, Paused, Ready, Held, Checking |
+| [Settle](#work) | Triage and the chain finishing for an Issue, so it leaves `settling` |
+| [Lead](#who-works) | The Claude Code session that owns one attempt of one Issue |
+| [Seat](#work) | The tier, effort and role a lead runs on |
+| [Allowance](#work) | How many leads the accounts may run at once |
+| [Wait](#shipping) | A pause with a named exit; a **stall** is one whose cause is a machine's to end |
+| [Checkpoint](#where-the-owner-comes-in) | Where the factory stops for a person: a Decision, a Concept or Spec, an Errand |
+| [Judge](#who-works) | The agw workflow that tries to answer a Decision before the owner sees it |
+| [Steward](#who-works) | The supervisor loop over stalled Issues |
+| [Loop](#who-works) | A named recurring job; one run of it is a pass |
+| [Gate](#shipping) | A machine check a lead cannot talk past |
+| [Ship](#shipping) | Land and deploy; the **watch** follows, and **Verify** ends it |
+
+Four words are easy to stretch, and each keeps one sense: **seat** is what a lead runs on, **hold** is to keep a
+resource (a claim, a slot, a lock), **settle** is an Issue leaving `settling`, **class** is the group a host process
+works for. Their other senses have words of their own (allowance, backoff, bench, quarantined signal, muted finder,
+answer, the checkpoints loop, the heal pass, finder, fix cause, exclusive step, kind, resource), and the old phrases
+fail the build.
+
 ## Work
 
 | Word | Means | Retires |

@@ -102,7 +102,7 @@ export function checkReadme(
     readme,
     'event kinds',
     new RegExp(`\\*\\*(${NUMBER}) kinds\\*\\*`, 'i'),
-    'Write "**N kinds**" in the Event row of the language table.',
+    'Write "**N kinds**" in the Event line of "The language".',
   )
   compare('the event kinds', kinds, facts.eventKinds.length)
   const eventRow = lineWith(readme, /\*\*Event\*\*/)
@@ -124,7 +124,7 @@ export function checkReadme(
     )
 
   const stateLine = lineWith(readme, /\*\*State\*\*/)
-  if (!stateLine) problems.push('README.md: no State row in the language table.')
+  if (!stateLine) problems.push('README.md: no State line under "The language".')
   else
     problems.push(
       ...sameSet(

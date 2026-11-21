@@ -46,7 +46,7 @@ const ANSWERERS: Record<string, string> = {
 const Count = z.object({ n: z.coerce.number().int() })
 const Grouped = Count.extend({ key: z.string().nullable(), detail: z.string().nullable() })
 
-/** Rows of one refusal class summed, most frequent first (ties by class). */
+/** Rows of one refusal kind summed, most frequent first (ties by kind). */
 function byCause(rows: readonly { detail: string | null; n: number }[]): { id: string; words: string; n: number }[] {
   const classes = new Map<string, { id: string; words: string; n: number }>()
   for (const row of rows) {

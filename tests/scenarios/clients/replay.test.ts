@@ -19,7 +19,7 @@ let deciding = ''
 let errand = ''
 let closed = ''
 let workIssue = ''
-let heldSignal = ''
+let quarantinedSignal = ''
 const number = (issue: string) => issue.slice('issue_'.length)
 
 const DECISION = [
@@ -114,7 +114,7 @@ beforeAll(async () => {
     '--text',
     'it does nothing',
   ])
-  heldSignal = String((held.json as { signal: string }).signal)
+  quarantinedSignal = String((held.json as { signal: string }).signal)
   const doorStart = await call(v, ['door', 'report', '--kind', 'start', '--sources', 'kuma'], 'machine')
   if (doorStart.code !== 0) throw new Error(`door start: ${doorStart.err}`)
   // Three refused POSTs and none accepted since: the door's source shows as a health line.
@@ -541,8 +541,8 @@ describe('work-repo redaction', () => {
     const read = (await (await http('/v1/signals', { as: 'read' })).json()) as {
       signals: { id: string; text: string; redacted: boolean }[]
     }
-    expect(owner.signals.find((s) => s.id === heldSignal)).toBeDefined()
-    expect(read.signals.find((s) => s.id === heldSignal)).toMatchObject({ text: '', redacted: true })
+    expect(owner.signals.find((s) => s.id === quarantinedSignal)).toBeDefined()
+    expect(read.signals.find((s) => s.id === quarantinedSignal)).toMatchObject({ text: '', redacted: true })
   })
 })
 
