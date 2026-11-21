@@ -24,7 +24,7 @@ const WEEK: { detail: string; class: string }[] = [
     class: 'commit_older_than_cut',
   })),
   ...Array.from({ length: 8 }, (_, i) => ({
-    detail: `ship refused: deployed ${sha(i + 100)} does not hold ${sha(i + 200)}, where the work landed. Deploy first (\`make deploy\`, inside \`factory deploy-lock --project app -- make deploy\` where leads share the deploy), then ship again with the same commits`,
+    detail: `ship refused: deployed ${sha(i + 100)} does not hold ${sha(i + 200)}, where the work landed. Deploy first (\`make deploy\`, from the main checkout, never a worktree: \`factory deploy-lock --project app -- make -C "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")" deploy\` where leads share the deploy), then ship again with the same commits`,
     class: 'deployed_lacks_commit',
   })),
   {

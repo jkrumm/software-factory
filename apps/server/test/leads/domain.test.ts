@@ -359,7 +359,7 @@ describe('the brief', () => {
       '--repo software-factory',
       '/review <merge-base>..HEAD --thread factory-<issue number>',
       'factory land',
-      'factory deploy-lock --project <repo> -- make deploy',
+      'factory deploy-lock --project <repo> -- make -C "$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")" deploy',
       'make check',
       // The HerdrCore constraint: its source and the commands it forbids or reserves.
       'dotfiles/docs/incident-2026-11-13-mini-panic.md',
@@ -370,7 +370,13 @@ describe('the brief', () => {
     ]) {
       expect(STANDING_ORDERS).toContain(command)
     }
-    for (const gone of ['factory merge-lock', '--attempt <n>', '--commit', '<id> --body']) {
+    for (const gone of [
+      'factory merge-lock',
+      '--attempt <n>',
+      '--commit',
+      '<id> --body',
+      'deploy-lock --project <repo> -- make deploy',
+    ]) {
       expect(STANDING_ORDERS).not.toContain(gone)
     }
   })
