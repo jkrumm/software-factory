@@ -60,7 +60,11 @@ export async function quiesceLeads(deps: LeadDeps): Promise<number> {
   })
   if (!looked.ok) return 0
 
-  for (const { name } of looked.value.unfinished) await deps.terminals.quiesce(name)
+  for (const { row, name } of looked.value.unfinished) {
+    // The claim a Decision wait took goes back first: a release that failed at the mark is tried again here.
+    const released = await deps.claims.release({ issue: row.issueId, attempt: row.attempt })
+    if (released.ok) await deps.terminals.quiesce(name)
+  }
   if (looked.value.waiting.length === 0) return 0
 
   // Read once for all: a table and the slots are the host's, and a pass with nothing waiting never asks.
@@ -94,8 +98,10 @@ export async function quiesceLeads(deps: LeadDeps): Promise<number> {
       return ok(true)
     })
     if (!marked.ok || !marked.value) continue
-    // A lead the Judge's back woke in its Decision wait took a claim for it: asleep again, it has no place to hold.
-    await deps.claims.release({ issue: row.issueId, attempt: row.attempt })
+    // A lead the Judge's back woke in its Decision wait took a claim for it: asleep again, it has no place to hold. A failed
+    // release leaves the process running, which the next pass ends after the release (`unfinished`).
+    const released = await deps.claims.release({ issue: row.issueId, attempt: row.attempt })
+    if (!released.ok) continue
     const ended = await deps.terminals.quiesce(name)
     if (ended.ok) dormant++
   }

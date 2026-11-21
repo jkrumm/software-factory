@@ -39,7 +39,7 @@ type Look =
       done: false
       delivery: Pick<Delivery, 'claimedAt' | 'text'>
       working: boolean
-      /** the Issue waits (a note typed now is the Judge's back on the Decision it waits on) */
+      /** the Issue waits on a Decision (a note typed now is the Judge's back; any other wait has nothing to take) */
       waiting: boolean
       dormant: Dormant | null
       /** what starting the session again needs, dormant or not: a lead moved to another account is started again while it runs */
@@ -65,7 +65,7 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
     const loaded = await loadIssue(work, issue)
     if (!loaded || loaded.issue.state === 'closed' || loaded.issue.attempt !== attempt) return ok({ done: true })
     const working = loaded.issue.state === 'working' || loaded.issue.state === 'watching'
-    const waiting = loaded.issue.state === 'waiting'
+    const waiting = loaded.issue.state === 'waiting' && loaded.issue.wait?.reason === 'decision'
     const row = await leads.attempt(issue, attempt)
     // A lead that never started, or is gone, hears nothing: the next attempt's brief carries the notes.
     if (!row?.terminal || row.goneAt) return ok({ done: true })
