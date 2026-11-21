@@ -20,9 +20,10 @@ export async function resolveSeat(
   roles: SeatRoles,
   seat: Seat,
 ): Promise<Result<ResolvedSeat, SeatRefused | PortError>> {
-  if (!('role' in seat)) return ok({ tier: seat.tier, effort: seat.effort })
+  const keep = seat.moveUp ? { moveUp: true as const } : {}
+  if (!('role' in seat)) return ok({ tier: seat.tier, effort: seat.effort, ...keep })
   const found = await roles.role(seat.role)
-  if (found.ok) return ok({ ...found.value, role: seat.role })
+  if (found.ok) return ok({ ...found.value, role: seat.role, ...keep })
   return err(
     found.error.kind === 'refused'
       ? { kind: 'seat_refused', field: 'seat.role', detail: found.error.detail }

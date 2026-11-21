@@ -26,7 +26,14 @@ export const PAYLOADS = {
     kind: z.enum(KINDS),
     origin: z.enum(ORIGINS),
     /** the seat its lead starts on, resolved at filing (old events carry none: the table's lead row) */
-    seat: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional() }).optional(),
+    seat: z
+      .object({
+        tier: z.enum(TIERS),
+        effort: z.enum(EFFORTS),
+        role: text.optional(),
+        moveUp: z.literal(true).optional(),
+      })
+      .optional(),
     /** the resource it runs in; the project's `lanes:` cap the leads of a lane (old events carry none) */
     lane: LaneName.optional(),
     /** the lead owes a Spec before it builds, and the ship is refused without one (`docs/architecture.md`, "The Spec checkpoint") */
@@ -53,11 +60,17 @@ export const PAYLOADS = {
     terminal: text,
     /**
      * what the lead started on (old events carry none); `role` is the table row it came from (`lead`, `light`), or the
-     * filed seat's role; `rule` is the light rule that chose the seat, set only then: a filed `light` seat has none, so
-     * only a lead the rule put on light is ever moved up
+     * filed seat's role; `rule` is the light rule that chose the seat, set only then: a filed `light` seat has none;
+     * `moveUp` is a filed seat that asked to be moved up as the rule's seat is. Only those two are ever moved up
      */
     seat: z
-      .object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional(), rule: text.optional() })
+      .object({
+        tier: z.enum(TIERS),
+        effort: z.enum(EFFORTS),
+        role: text.optional(),
+        rule: text.optional(),
+        moveUp: z.literal(true).optional(),
+      })
       .optional(),
     /** the reviewer row the lead's reviews were assigned (`reviewer` or `reviewer-cheap`, `domains/leads/reviewer.ts`); old events carry none */
     reviewer: text.optional(),
@@ -65,7 +78,11 @@ export const PAYLOADS = {
   /** the attempt's lead failed to start or ended */
   lead_gone: z.object({ attempt, detail: text }),
   /** the owner set the seat the next lead starts on, resolved (a role is kept beside what it said); only before a lead works */
-  seated: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional() }),
+  seated: z.object({
+    tier: z.enum(TIERS),
+    effort: z.enum(EFFORTS),
+    role: text.optional(),
+  }),
   /** an amend or a note reaches the lead */
   noted: z.object({ text, via: z.enum(['orchestrator']).optional() }),
   /** the lead raised a Decision and waits for its answer (or the steward did, for a stall it cannot end by itself) */

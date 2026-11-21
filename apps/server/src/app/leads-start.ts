@@ -189,6 +189,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       filedSpec,
       ...(previous ? { previous } : {}),
       light: role.value.rule,
+      moveUp: role.value.moveUp === true,
       reviewer: reviewer ? reviewerBrief(reviewer.role, reviewer.cheap) : null,
       movedUp,
     })
@@ -249,6 +250,8 @@ export interface LeadSeat {
   role?: string | undefined
   /** the light seat's rule (`domains/leads/light.ts`); null on any other seat */
   rule: string | null
+  /** a filed seat that asked to be moved up when its lead struggles */
+  moveUp?: true | undefined
 }
 
 /**
@@ -256,7 +259,16 @@ export interface LeadSeat {
  * rule names the Issue (and the table has the row), else its `lead` row.
  */
 export async function seatOf(deps: LeadDeps, issue: Issue, origin: SeatOrigin): Promise<Result<LeadSeat, PortError>> {
-  if (issue.seat) return ok({ tier: issue.seat.tier, effort: issue.seat.effort, role: issue.seat.role, rule: null })
+  // A filed seat that asked for the move-up is a start, not a verdict: once it was moved up, the next lead takes the lead row.
+  if (issue.seat && !(issue.seat.moveUp && issue.movedUp > 0)) {
+    return ok({
+      tier: issue.seat.tier,
+      effort: issue.seat.effort,
+      role: issue.seat.role,
+      rule: null,
+      ...(issue.seat.moveUp ? { moveUp: true as const } : {}),
+    })
+  }
   const rule = lightRule({
     kind: issue.kind,
     size: issue.size ?? null,
@@ -308,7 +320,15 @@ async function recordStarted(
   issue: IssueId,
   attempt: number,
   terminal: string,
-  seat: { tier: Tier; effort: Effort; role?: string | undefined; rule?: string | null | undefined } | undefined,
+  seat:
+    | {
+        tier: Tier
+        effort: Effort
+        role?: string | undefined
+        rule?: string | null | undefined
+        moveUp?: true | undefined
+      }
+    | undefined,
   reviewer: string | null,
 ) {
   const result = await recordIn(work, deps, {
@@ -356,9 +376,11 @@ const seatPayload = (seat: {
   effort: Effort
   role?: string | undefined
   rule?: string | null | undefined
+  moveUp?: true | undefined
 }) => ({
   tier: seat.tier,
   effort: seat.effort,
   ...(seat.role ? { role: seat.role } : {}),
   ...(seat.rule ? { rule: seat.rule } : {}),
+  ...(seat.moveUp ? { moveUp: true as const } : {}),
 })

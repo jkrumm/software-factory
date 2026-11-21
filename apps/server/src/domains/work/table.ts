@@ -5,6 +5,7 @@ import {
   type Issue,
   MAX_REGRESSIONS,
   MAX_RESTARTS,
+  movable,
   type Outcome,
   outstandingDecisions,
   REOPEN_WINDOW_MS,
@@ -546,7 +547,11 @@ const moveUp = (ctx: Ctx<'moved_up'>): Cell => {
   if (ctx.event.payload.attempt !== issue.attempt) {
     return ignore(`moved_up is for attempt ${ctx.event.payload.attempt}; the Issue is on attempt ${issue.attempt}`)
   }
-  if (!issue.ranOn?.rule) return refuse(`only a lead the light rule seated is moved up: ${show(issue)} names its seat`)
+  if (!movable(issue)) {
+    return refuse(
+      `only a lead the light rule seated, or a seat filed with moveUp, is moved up: ${show(issue)} names its seat`,
+    )
+  }
   if (issue.wait && WAITS[issue.wait.reason].exit === 'person') {
     return refuse(
       `it waits for a ${issue.wait.reason}: that ends with its answer first: answer it with ${answerOf(issue.wait)}`,

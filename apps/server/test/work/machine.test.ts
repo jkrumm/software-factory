@@ -520,6 +520,20 @@ test('a filed light seat is never moved up: only a lead the light rule seated is
     ev('lead_started', { attempt: 1, terminal: 't1', seat: filed }, 'factory'),
   ])
   expect(detail(apply(issue, ev('moved_up', { attempt: 1, why: 'x' }, 'factory'), { now: NOW }))).toBe(
-    'refused: only a lead the light rule seated is moved up: `factory issue show issue_7` names its seat',
+    'refused: only a lead the light rule seated, or a seat filed with moveUp, is moved up: `factory issue show issue_7` names its seat',
   )
+})
+
+test('a filed seat with moveUp is moved up, and the next lead starts on the lead row', () => {
+  const filed = { tier: 'haiku' as const, effort: 'high' as const, role: 'light', moveUp: true as const }
+  const { issue } = drive([
+    ...settledAndWorking,
+    ev('lead_started', { attempt: 1, terminal: 't1', seat: filed }, 'factory'),
+  ])
+  const moved = apply(issue, ev('moved_up', { attempt: 1, why: 'x' }, 'factory'), { now: NOW })
+  expect(detail(moved)).not.toContain('refused')
+  expect(drive([ev('moved_up', { attempt: 1, why: 'x' }, 'factory')], issue).issue).toMatchObject({
+    state: 'queued',
+    movedUp: 1,
+  })
 })

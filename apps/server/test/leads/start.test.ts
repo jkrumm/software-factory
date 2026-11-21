@@ -229,6 +229,25 @@ describe('the seat badge (leadSeat)', () => {
     })
   })
 
+  test('a filed light seat with moveUp starts light, is moved up, and the next lead starts on the lead row', async () => {
+    const issue = await w.admitted([], { tier: 'haiku', effort: 'high', role: 'light', moveUp: true })
+    expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
+    expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'haiku', effort: 'high' })
+    expect((await detail(issue))?.ranOn).toMatchObject({ tier: 'haiku', effort: 'high', role: 'light' })
+    expect(w.terminals.started.at(-1)?.prompt).toContain('--out-of-depth')
+
+    await w.event(issue, 'moved_up:1', {
+      kind: 'moved_up',
+      payload: { attempt: 1, why: 'the light lead stalled 2 times' },
+      actor: 'factory',
+    })
+    await w.event(issue, 'admitted:2', { kind: 'admitted', payload: {}, actor: 'factory' })
+    expect(await shown(issue)).toMatchObject({ tier: 'sonnet', effort: 'high', planned: true })
+    expect((await startLead(w.deps, effect(issue, 2))).ok).toBe(true)
+    expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'sonnet', effort: 'high' })
+    expect(w.terminals.started.at(-1)?.prompt).not.toContain('## Your seat')
+  })
+
   test('with no lead row and no filed seat, nothing is shown', async () => {
     const issue = await w.admitted()
     const none = await issueDetail(

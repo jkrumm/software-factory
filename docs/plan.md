@@ -117,13 +117,15 @@ by the same rule. A row whose Issue moved up from the light seat never starts li
 before a lead starts (`leadSeat`, `planned: true`, with the rule's name, or `sizeKnown: false` while triage has not sized it).
 
 Name a `seat` to override that: a row worth a stronger lead (novel hard logic, a design that must hold) or one that should run
-light whatever its size. A filed seat always wins and is never moved up. Two forms, never mixed:
+light whatever its size. A filed seat always wins and is never moved up, unless it says `moveUp: true`. Two forms, never mixed:
 `{tier, effort}` (tier `haiku|sonnet|opus`, effort `low|medium|high|xhigh|max`; never a model id) or `{role}`, a row of
 the role table. A role is looked up when the Issue is filed and the result is kept, so a later table change does not move
 a filed Issue. A tier or effort outside the lists fails the plan's parse and the last valid plan stays; a role the table
 lacks at filing time files nothing, and the planning pass reports `<project>:<row>: seat.role: ...` until it is fixed.
 `factory issue new --seat '{"tier":"opus","effort":"high"}'` sets the same on a hand-filed Issue (422 naming the field
-when refused). `factory issue show` reports the asked-for `seat` (null for the default) and `ranOn`, the tier and effort
+when refused). Either form takes `moveUp: true` (`{role: light, moveUp: true}`): the row starts on that seat and a lead that
+struggles there is moved up as the light rule's seat is (a second stall, a second refused ship, a first-watch regression, or
+`--out-of-depth`), and the next lead starts on the `lead` row. `factory issue show` reports the asked-for `seat` (null for the default) and `ranOn`, the tier and effort
 the latest lead started on.
 
 ## Lanes

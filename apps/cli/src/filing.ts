@@ -72,7 +72,7 @@ export function filingGuide(): string {
 export const filingContract = () => ({ ...FILING, where: WHERE })
 
 const factsHint = `facts is one JSON object: ${factsShape} (markdown is not JSON); print the full contract with: ${POINTER}`
-const seatHint = `seat is one JSON object: {"tier": "opus", "effort": "high"} or {"role": "lead"}; print the full contract with: ${POINTER}`
+const seatHint = `seat is one JSON object: {"tier": "opus", "effort": "high"} or {"role": "lead"}, either with "moveUp": true; print the full contract with: ${POINTER}`
 const pointerHint = `the filing contract (facts keys, flags, example): ${POINTER}`
 
 const planLimitsHelp = `docs/plan.yaml limits: at most ${PLAN_LIMITS.maxBytes / 1024} KiB, at most ${PLAN_LIMITS.maxAliases} YAML aliases, at most ${PLAN_LIMITS.maxAfter} "after" keys per row (a plan over any is broken; format in docs/plan.md)`
