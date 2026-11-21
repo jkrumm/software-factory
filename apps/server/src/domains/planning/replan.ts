@@ -12,16 +12,30 @@ export interface HeldRow {
   by: readonly { row: string; issue: string; outcome: string }[]
 }
 
-/** The chain head a stalled Replan was filed for: a timed wait with Issues behind it. */
+/** How long a head waits on the owner, with work behind it, before the planning pass files a Replan for it. */
+export const OWNER_WAIT_MS = 2 * 3_600_000
+
+/** What an owner wait is: an open Decision, a Spec or Concept under his review (an owner gate's), or an Errand. */
+export type OwnerWaitKind = 'decision' | 'review' | 'errand'
+
+/**
+ * The chain head a stalled Replan was filed for: a timed wait with Issues behind it, or a wait on the owner (a Decision, a
+ * Spec under review, an Errand) with Issues or plan rows behind it.
+ */
 export interface StalledHead {
   issue: string
   title: string
   since: string
-  until: string
+  /** a timed wait: when the clock wakes the head; null for an owner wait */
+  until: string | null
+  /** an owner wait: what the owner is asked, by kind, id and title */
+  owner?: { kind: OwnerWaitKind; id: string; title: string } | undefined
   /** the open Issues that wait behind it, directly or through other Issues */
   held: number
-  /** each of them with the open Issues it waits on directly: the real blockers, which are not always the head */
+  /** each of them with what it waits on directly: the real blockers, which are not always the head */
   heldIssues: readonly { issue: string; after: readonly string[] }[]
+  /** the plan rows not yet filed that wait behind it (`project:key`), each with what it waits on directly */
+  heldRows?: readonly { row: string; after: readonly string[] }[] | undefined
 }
 
 export interface ReplanInput {
@@ -45,8 +59,8 @@ const PLAYBOOK = `Playbook:
 1. Read docs/plan.yaml in your worktree (the format: docs/plan.md in the factory repo; \`factory issue schema\` and \`factory project show <project>\`, which prints every row with its state and why). Run \`factory project show <project>\`, \`factory issue list\` and \`factory issue show\` for the open and recently closed Issues of this repo to see their edges and waits.
 2. Decide what should change: new, changed or dropped plan rows, \`after\` edges to add or remove, Issues to cancel, Issues to re-file (a cancel plus a new plan row).
 3. Raise every non-obvious choice as a Decision with \`factory issue ask\` BEFORE you submit.
-4. Write the proposal as a Spec (\`factory artifact submit <id> --attempt <n> --kind spec --title ... --content @file.md\`): one section per change with the row key or Issue id, the reason and the exact edit. If nothing should change, submit no Spec: close (below). End the Spec with one fenced \`replan\` block that states the changes as data: \`\`\`replan {"plan":["<row key added, changed or dropped>"],"edges":{"add":[...],"remove":[...]},"cancel":[...]} \`\`\` (edges and cancel in the shape of step 5). The Spec screen reads it: a proposal that changes no plan row and cancels nothing (it only adds or removes edges, such as freeing an Issue that waits behind a stalled one) is settled by rule and you apply it at once; anything else is screened for the owner.
-5. When the verdict is Looks good or With notes (it arrives as a note), apply it. Edit docs/plan.yaml through the project's normal ship path (a PR if the project requires one: the standing orders' ship path, \`factory land\`, then deploy). Apply edge changes and cancellations with \`factory issue replan <id> --attempt <n> --body '<json>'\`, shape {"edges":{"add":[{"issue":"issue_7","after":["issue_5"]}],"remove":[{"issue":"issue_7","after":["issue_5"]}]},"cancel":[{"issue":"issue_9","reason":"..."}]}. The server files new plan rows itself once the plan merges.
+4. Write the proposal as a Spec (\`factory artifact submit <id> --attempt <n> --kind spec --title ... --content @file.md\`): one section per change with the row key or Issue id, the reason and the exact edit. If nothing should change, submit no Spec: close (below). End the Spec with one fenced \`replan\` block that states the changes as data: \`\`\`replan {"plan":["<row key added, changed or dropped>"],"free":["<row key whose only change is a removed after>"],"edges":{"add":[...],"remove":[...]},"cancel":[...]} \`\`\` (edges and cancel in the shape of step 5). A row whose only change is an \`after\` entry taken out goes in \`free\`, never in \`plan\`; any other change to it goes in \`plan\`. The Spec screen reads it: a proposal with an empty \`plan\` that cancels nothing (it only frees rows or adds and removes edges, such as freeing an Issue that waits behind a stalled one) is settled by rule and you apply it at once; anything else is screened for the owner.
+5. When the verdict is Looks good or With notes, or the screen settled it (each arrives as a note), apply it. Edit docs/plan.yaml through the project's normal ship path (a PR if the project requires one: the standing orders' ship path, \`factory land\`, then deploy). Apply edge changes and cancellations with \`factory issue replan <id> --attempt <n> --body '<json>'\`, shape {"edges":{"add":[{"issue":"issue_7","after":["issue_5"]}],"remove":[{"issue":"issue_7","after":["issue_5"]}]},"cancel":[{"issue":"issue_9","reason":"..."}]}. The server files new plan rows itself once the plan merges.
 6. Ship: state each acceptance line. A verdict of Changes means revise the Spec.
 Do not touch Issues outside this repo. A proposal with no change is valid: close with \`factory issue close ... --outcome done --reason "no plan change needed"\`.`
 
@@ -93,16 +107,23 @@ export function replanNote(input: ReplanInput): string {
   if (ask) lines.push(`ask: ${ask}`)
   if (input.stalled) {
     const head = input.stalled
+    const rows = head.heldRows ?? []
     lines.push(
       `stalled head: ${head.issue}`,
       `title: ${JSON.stringify(cleanText(head.title).slice(0, TITLE_MAX))}`,
       `wait since: ${head.since}`,
-      `wait until: ${head.until}`,
+      head.owner
+        ? `waits on the owner: ${OWNER_WAIT_WORDS[head.owner.kind]} ${head.owner.id}, ${JSON.stringify(cleanText(head.owner.title).slice(0, TITLE_MAX))}`
+        : `wait until: ${head.until ?? 'not stated'}`,
       `waiting behind it: ${head.held} (directly or through other Issues)`,
     )
+    if (rows.length > 0) lines.push(`plan rows waiting behind it: ${rows.length} (not yet filed)`)
     for (const held of head.heldIssues.slice(0, HELD_LISTED))
       lines.push(`waiting issue: ${held.issue}, waits directly on ${held.after.join(', ') || 'nothing stored'}`)
     if (head.heldIssues.length > HELD_LISTED) lines.push(`(${head.heldIssues.length - HELD_LISTED} more not listed)`)
+    for (const held of rows.slice(0, HELD_LISTED))
+      lines.push(`waiting row: ${held.row}, after ${held.after.join(', ') || 'nothing stored'}`)
+    if (rows.length > HELD_LISTED) lines.push(`(${rows.length - HELD_LISTED} more rows not listed)`)
   }
   for (const held of input.held ?? [])
     lines.push(
@@ -112,5 +133,18 @@ export function replanNote(input: ReplanInput): string {
     lines.push(
       'held rows shipped nothing to build on: decide per row to re-file the dropped row, point the row at a replacement, remove the edge or set after_needs closed, or drop the row.',
     )
-  return [lines.join('\n'), PLAYBOOK].join('\n\n')
+  return [lines.join('\n'), ...(input.stalled?.owner ? [OWNER_PLAYBOOK] : []), PLAYBOOK].join('\n\n')
 }
+
+const OWNER_WAIT_WORDS: Record<OwnerWaitKind, string> = {
+  decision: 'the Decision',
+  review: 'his review of',
+  errand: 'the Errand',
+}
+
+/** Read before the playbook when the head waits on the owner: a gate holds what needs its answer, and only that. */
+const OWNER_PLAYBOOK = `The head waits on the owner. A gate holds what needs its answer; free the rest.
+- For each direct dependent (an Issue or row whose after names the head), write one line in the Spec: whether it needs the owner's answer or the head's output, and why.
+- A dependent is freed when its work stands under every answer the owner can give and a revert undoes it. Everything else stays held: when in doubt, it waits.
+- Free an Issue with an edge removal (\`edges.remove\`); free a plan row by taking the head out of its \`after\` and naming the row in \`free\`. A proposal that only frees is settled by rule and applied at once; the plan edit ships through the project's ship path.
+- Never change the head, its question or a dependent's content in this Replan: that is the owner's answer to give.`

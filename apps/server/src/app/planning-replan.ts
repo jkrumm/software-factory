@@ -122,6 +122,13 @@ export async function fileReplan(
       trigger: input.trigger,
       ask: ask || null,
       at: deps.clock.now(),
+      head: head
+        ? {
+            issue: head.issue,
+            issues: head.heldIssues.map((held) => held.issue),
+            rows: (head.heldRows ?? []).map((held) => held.row),
+          }
+        : undefined,
     })
     return ok({ issue: settled.value.issue, filed: true, existing: false })
   })

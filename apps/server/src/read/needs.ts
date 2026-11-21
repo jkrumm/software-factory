@@ -1,7 +1,9 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { NeedItem, NeedKind, NeedsModel } from '@software-factory/contract'
+import type { ChainModel, NeedItem, NeedKind, NeedsModel } from '@software-factory/contract'
 import { ERRAND_NEEDS } from '@software-factory/contract'
+import { readChain } from './chain.ts'
+import { holdsOf, nodeName } from './holds.ts'
 import { JUDGE_MAX_TRIES } from '../kernel/judge-tries.ts'
 import { CHECK_BROKEN_NOTE, RUN_STATUSES, STILL_NEEDED_NOTE, triedLine } from '../kernel/run.ts'
 import { hostOf } from '../kernel/hands.ts'
@@ -20,7 +22,7 @@ const STALE_MS = 24 * 3_600_000
 /** A need with the scope the redaction needs; the scope never leaves the server. */
 export type ScopedNeed = Omit<NeedItem, 'redacted'> & { work: boolean }
 
-type Unseated = Omit<ScopedNeed, 'seat'>
+type Unseated = Omit<ScopedNeed, 'seat' | 'holds'>
 
 export interface ScopedNeeds {
   at: Date
@@ -175,7 +177,12 @@ const SignalRow = z.object({
 export async function readNeeds(
   sql: SQL,
   now: Date,
-  options: { longWaitMs?: number; seatTable?: SeatTable } = {},
+  options: {
+    longWaitMs?: number
+    seatTable?: SeatTable
+    /** the chain, when the caller read it already; read here otherwise */
+    chain?: ChainModel
+  } = {},
 ): Promise<ScopedNeeds> {
   const open = await loadOpenProjects(sql)
   // A timer that is still running is information, not a request: Flow shows the waiting Issue. It reaches the owner only once
@@ -408,6 +415,98 @@ export async function readNeeds(
     unseated.flatMap((item) => (item.issue ? [item.issue] : [])),
     options.seatTable,
   )
-  const items = unseated.map((item): ScopedNeed => ({ ...item, seat: (item.issue && seats.get(item.issue)) || null }))
-  return { at: now, items: items.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)) }
+  const holding = await readHoldings(
+    sql,
+    unseated.flatMap((item) => (item.issue ? [{ issue: item.issue, since: item.since }] : [])),
+    options.chain ?? (await readChain(sql, now)),
+  )
+  const items = unseated.map((item): ScopedNeed => ({
+    ...item,
+    holds: (item.issue && holding.get(`${item.issue}@${item.since}`)) || NOTHING_HELD,
+    seat: (item.issue && seats.get(item.issue)) || null,
+  }))
+  const weight = (item: ScopedNeed): number => item.holds.issues.length + item.holds.rows
+  // stable: within a kind and an equal weight, the SQL's newest-first order stands
+  return {
+    at: now,
+    items: items.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || weight(b) - weight(a)),
+  }
+}
+
+type Holds = ScopedNeed['holds']
+const NOTHING_HELD: Holds = { issues: [], rows: 0, wentAhead: { issues: [], rows: 0 } }
+
+const SnapshotRow = z.object({
+  head_issue: z.string(),
+  created_at: z.date(),
+  held: z.object({ issues: z.array(z.string()), rows: z.array(z.string()) }),
+})
+const OutcomeRow = z.object({ id: z.string(), state: z.string(), outcome: z.string().nullable() })
+const FiledRowKey = z.object({ row: z.string() })
+/** Same set as `SHIPPED_OUTCOMES` in the planning domain (read/ imports only types from a domain). */
+const SHIPPED = new Set(['done', 'healed'])
+
+/**
+ * What each item's Issue holds now (the chain's open edges), and what went ahead without the answer: what the newest stalled
+ * Replan filed for that Issue, during this wait, found behind it and no longer waits on it. An Issue that went ahead is open
+ * or shipped (a cancelled one went nowhere); a row is still a row of a plan or was filed. Keyed by `issue@since`.
+ */
+async function readHoldings(
+  sql: SQL,
+  heads: readonly { issue: string; since: string }[],
+  chain: ChainModel,
+): Promise<Map<string, Holds>> {
+  if (heads.length === 0) return new Map()
+  const holds = holdsOf(chain)
+  const ids = [...new Set(heads.map((head) => head.issue))]
+  const snapshots = (
+    (await sql`
+      SELECT head_issue, created_at, held FROM factory.replans
+      WHERE head_issue IN ${sql(ids)} AND held IS NOT NULL ORDER BY created_at DESC`) as unknown[]
+  ).map((raw) => SnapshotRow.parse(raw))
+  const named = [...new Set(snapshots.flatMap((s) => s.held.issues))]
+  const outcomes =
+    named.length === 0
+      ? new Map<string, z.infer<typeof OutcomeRow>>()
+      : new Map(
+          ((await sql`SELECT id, state, outcome FROM factory.issues WHERE id IN ${sql(named)}`) as unknown[]).map(
+            (raw) => {
+              const row = OutcomeRow.parse(raw)
+              return [row.id, row] as const
+            },
+          ),
+        )
+  const filed =
+    snapshots.length === 0
+      ? new Set<string>()
+      : new Set(
+          ((await sql`SELECT project || ':' || row_key AS row FROM factory.planning_filed_rows`) as unknown[]).map(
+            (raw) => FiledRowKey.parse(raw).row,
+          ),
+        )
+  const rowsNow = new Set(chain.nodes.filter((node) => node.kind === 'row').map((node) => nodeName(node.id)))
+  const wentOn = (issue: string): boolean => {
+    const row = outcomes.get(issue)
+    return row !== undefined && (row.state !== 'closed' || (row.outcome !== null && SHIPPED.has(row.outcome)))
+  }
+
+  const out = new Map<string, Holds>()
+  for (const head of heads) {
+    const now = holds(head.issue)
+    const issues = new Set(now.issues.map((held) => held.issue))
+    const rows = new Set(now.rows.map((held) => held.row))
+    const snapshot = snapshots.find(
+      (s) => s.head_issue === head.issue && s.created_at.getTime() >= Date.parse(head.since),
+    )
+    out.set(`${head.issue}@${head.since}`, {
+      issues: [...issues],
+      rows: rows.size,
+      wentAhead: {
+        issues: (snapshot?.held.issues ?? []).filter((issue) => !issues.has(issue) && wentOn(issue)),
+        rows: (snapshot?.held.rows ?? []).filter((row) => !rows.has(row) && (rowsNow.has(row) || filed.has(row)))
+          .length,
+      },
+    })
+  }
+  return out
 }

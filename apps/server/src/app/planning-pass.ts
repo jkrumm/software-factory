@@ -11,7 +11,7 @@ import {
   rowStatuses,
   type RowStatus,
 } from '../domains/planning/plan.ts'
-import type { HeldRow } from '../domains/planning/replan.ts'
+import { type HeldRow, OWNER_WAIT_MS } from '../domains/planning/replan.ts'
 import { projectOf, repoTextOf, type StoredProject } from '../domains/planning/sync.ts'
 import type { Kind } from '../domains/work/issue.ts'
 import type { IssueId } from '../kernel/ids.ts'
@@ -301,6 +301,43 @@ async function replanStalled(deps: PlanningDeps, longWaitMs: number): Promise<st
 }
 
 /**
+ * Files a stalled Replan for every head that has waited on the owner (a Decision, a Spec under his review, an Errand) for
+ * `OWNER_WAIT_MS` or more with open Issues or plan rows behind it: its lead frees what does not need the answer. Keyed by
+ * head and wait like a timed one, so each wait files once; while a Replan is open for the project this files nothing.
+ */
+async function replanOwnerWaits(deps: PlanningDeps): Promise<string[]> {
+  const read = await deps.uow.run(async (stores) =>
+    ok({
+      waits: await stores.reads.ownerWaits(OWNER_WAIT_MS, deps.clock.now()),
+      projects: await stores.planning.projects(),
+    }),
+  )
+  if (!read.ok) return [`replan: ${read.error.detail}`]
+  const errors: string[] = []
+  for (const wait of read.value.waits) {
+    const project = projectOf(read.value.projects, wait.repo)
+    if (!project) continue
+    const filed = await fileReplan(deps, {
+      project: project.name,
+      trigger: 'stalled',
+      stalled: {
+        issue: wait.issue,
+        title: wait.title,
+        since: wait.since.toISOString(),
+        until: null,
+        owner: wait.owner,
+        held: wait.heldIssues.length,
+        heldIssues: wait.heldIssues,
+        heldRows: wait.heldRows,
+      },
+      actor: 'owner',
+    })
+    if (!filed.ok) errors.push(`replan ${project.name}: ${JSON.stringify(filed.error)}`)
+  }
+  return errors
+}
+
+/**
  * Files a held Replan for every project with a plan row held behind an `after` row that closed without shipping
  * (`after_needs: shipped`): the Replan's lead proposes the plan change that releases or drops the row. While one is
  * open for the project this files nothing; its key (the first held row and the Issue holding it) makes a replayed pass
@@ -327,7 +364,7 @@ async function replanHeld(deps: PlanningDeps): Promise<string[]> {
 /**
  * The planning part of a tick: read the projects, file the plan rows whose `after` rows have closed, mark the chain's
  * satisfied edges, tell a lead of a row whose facts changed and wake the leads that waited on them or on a time. Every step is replay-safe, so a pass run twice does nothing
- * twice; a long wait with Issues behind it gets a Replan filed for its project. A failing step is an entry in `errors`; the others still go.
+ * twice; a long wait with Issues behind it, and a head held on the owner with work behind it, gets a Replan filed for its project. A failing step is an entry in `errors`; the others still go.
  */
 export async function planningPass(
   deps: SyncDeps,
@@ -362,6 +399,7 @@ export async function planningPass(
     return ok({ satisfied, woken: [...dependents.value, ...timers.value] })
   })
   if (options.longWaitMs !== undefined) errors.push(...(await replanStalled(deps, options.longWaitMs)))
+  errors.push(...(await replanOwnerWaits(deps)))
   errors.push(...(await replanHeld(deps)))
   if (!chain.ok) {
     errors.push(`chain: ${chain.error.detail}`)

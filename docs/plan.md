@@ -317,7 +317,16 @@ Every non-obvious choice is a Decision raised before the Spec is submitted. The 
 `factory planning replan <project> [--ask "..."]`; the planning pass files one when a timed wait of
 `FACTORY_LONG_WAIT_MS` or more has Issues behind it, and when a row with `after_needs: shipped` is held behind a
 dropped or cancelled row (trigger `held`: its note names each held row and the Issue holding it; one Replan covers
-every held row of the project, and a hold that was answered with "no plan change needed" files no second one). One is open per project at a time; asking again while it is open
+every held row of the project, and a hold that was answered with "no plan change needed" files no second one). It also
+files one when a head has waited on the owner for two hours (an open Decision, a Spec under his review such as an owner
+gate's, an Errand) with open Issues or unfiled rows behind it: trigger `stalled`, once per head and wait, its note naming
+what the owner is asked and every Issue and row behind the head. A gate holds what needs its answer, and that Replan frees
+the rest: per direct dependent its Spec says in one line whether it needs the answer or the head's output, and a
+dependent is freed only when its work stands under every answer the owner can give and a revert undoes it. A freed Issue
+is an edge removal; a freed row is the head taken out of its `after`, named in the block's `free` list (`plan` lists every
+other change to a row). A proposal whose `plan` is empty and that cancels nothing is settled by rule and applied at once,
+the plan edit through the ship path; any other change is screened for the owner. Needs you shows on each item what it
+holds, and on the head's card what went ahead without the answer. One is open per project at a time; asking again while it is open
 adds the words to it as a note. On a verdict of Looks good or With notes the lead edits `docs/plan.yaml` through the
 project's ship path and applies edge changes and cancellations with `factory issue replan <id> --attempt <n> --body '<json>'`. The server gates
 that verb: the Issue must be a Replan its lead works on (current attempt), its latest Spec revision must carry a Looks

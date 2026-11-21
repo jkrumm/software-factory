@@ -2,7 +2,7 @@ import type { NeedItem } from '@software-factory/contract'
 import { Link, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 import { InfoHint, Lozenge, SeatBadge } from '@/components/kit'
-import { issueNumber, metaParts, projectOf, summaryLine } from '@/lib/needs'
+import { holdsWords, issueNumber, metaParts, projectOf, summaryLine } from '@/lib/needs'
 import { prefetchDetail } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { BodyOf } from './bodies'
@@ -71,6 +71,7 @@ export function NeedCard({
 
   const summary = summaryLine(item, issueTitle)
   const meta = metaParts(item)
+  const holds = holdsWords(item)
   return (
     <article
       ref={card}
@@ -121,6 +122,8 @@ export function NeedCard({
               <InfoHint word="stale" className="-my-1" />
             </span>
           ) : null}
+          {holds.holds ? <span className="relative z-10 font-medium text-foreground">{holds.holds}</span> : null}
+          {holds.wentAhead ? <span className="relative z-10">{holds.wentAhead}</span> : null}
           {item.issue ? <SeatBadge seat={item.seat} /> : null}
           {item.issue ? (
             <Link to="/issues/$id" params={{ id: issueNumber(item.issue) }} className={cn(LINK, 'min-w-0 truncate')}>

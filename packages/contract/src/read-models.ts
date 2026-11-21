@@ -59,6 +59,16 @@ export const NeedItem = z
     joinedIssues: z.array(z.string()),
     /** a long wait: why the Issue waits, when it ends and how many open Issues wait behind it; null for everything else */
     wait: z.strictObject({ reason: z.literal('timer'), until: at, held: z.number().int().min(1) }).nullable(),
+    /**
+     * What the item's Issue holds: the open Issues and the plan rows not yet filed that wait behind it, directly or through
+     * others (the chain's open edges); empty for an item with no Issue. `wentAhead` is what was behind it when a Replan was
+     * filed for this wait and no longer waits on it: freed, not answered.
+     */
+    holds: z.strictObject({
+      issues: z.array(IssueRef),
+      rows: z.number().int().min(0),
+      wentAhead: z.strictObject({ issues: z.array(IssueRef), rows: z.number().int().min(0) }),
+    }),
     /** the seat of the item's Issue's lead (`LeadSeat`); null for an item with no Issue or none known */
     seat: LeadSeat.nullable(),
     /** the title and summary were replaced: the item is work-repo text and the caller may not read it */
@@ -70,7 +80,7 @@ export type NeedItem = z.infer<typeof NeedItem>
 export const NeedsModel = z
   .strictObject({
     at,
-    /** newest first within a kind; kinds in the order of `counts` */
+    /** within a kind, the item that holds the most first (`holds`: Issues and plan rows), then newest; kinds in the order of `counts` */
     items: z.array(NeedItem),
     counts: z.strictObject({
       decision: z.number().int(),

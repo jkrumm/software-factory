@@ -211,10 +211,11 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
       return row === undefined ? null : idOf(ReplanRow.parse(row).issue_id)
     },
 
-    async recordReplan({ issue, project, trigger, ask, at }) {
+    async recordReplan({ issue, project, trigger, ask, at, head }) {
+      const held = head ? JSON.stringify({ issues: head.issues, rows: head.rows }) : null
       await tx`
-        INSERT INTO factory.replans (issue_id, project, trigger, ask, created_at)
-        VALUES (${issue}, ${project}, ${trigger}, ${ask}, ${at})
+        INSERT INTO factory.replans (issue_id, project, trigger, ask, created_at, head_issue, held)
+        VALUES (${issue}, ${project}, ${trigger}, ${ask}, ${at}, ${head?.issue ?? null}, ${held}::text::jsonb)
         ON CONFLICT (issue_id) DO NOTHING`
     },
 

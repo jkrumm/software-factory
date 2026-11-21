@@ -71,6 +71,7 @@ const need = (id: string, work: boolean, kind: ScopedNeed['kind'] = 'decision'):
   joined: 0,
   joinedIssues: [],
   wait: null,
+  holds: { issues: [], rows: 0, wentAhead: { issues: [], rows: 0 } },
   seat: null,
   work,
 })

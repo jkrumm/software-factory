@@ -12,6 +12,7 @@ import {
   defaultWords,
   errorWords,
   httpLink,
+  holdsWords,
   issueNumber,
   kindCounts,
   metaParts,
@@ -212,5 +213,20 @@ describe('Back at desk', () => {
     expect(needsTitle(0, false)).toBe('Needs you \u00b7 Software Factory')
     expect(originOf({ repo: null, kind: 'errand', source: 'ask-human' })).toBe('Requests')
     expect(originOf({ repo: null, kind: 'held_signal', source: 'GitHub' })).toBe('App feedback')
+  })
+})
+
+describe('holdsWords', () => {
+  const holds = (issues: string[], rows: number, ahead: string[] = [], aheadRows = 0) => ({
+    holds: { issues, rows, wentAhead: { issues: ahead, rows: aheadRows } },
+  })
+  test('what an item holds and what went ahead, in counts; nothing is null', () => {
+    expect(holdsWords(holds([], 0))).toEqual({ holds: null, wentAhead: null })
+    expect(holdsWords(holds(['issue_1'], 0))).toEqual({ holds: 'Holds 1 Issue', wentAhead: null })
+    expect(holdsWords(holds(['issue_1', 'issue_2'], 5, ['issue_3'], 1))).toEqual({
+      holds: 'Holds 2 Issues and 5 plan rows',
+      wentAhead: '1 Issue and 1 plan row went ahead without your answer',
+    })
+    expect(holdsWords(holds([], 3)).holds).toBe('Holds 3 plan rows')
   })
 })
