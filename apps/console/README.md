@@ -256,6 +256,7 @@ risks, proof; tables with the minimum separator `|-|-|`) or `templates/artifact.
 CSS variables with light and dark, semantic classes (`callout`, `table-wrap`, `pre`, `figure`), pictures as inline SVG or
 `data:` URLs. Its token block is generated (`bun run --cwd apps/console templates`, `templates:check` in `make check`).
 An HTML artifact starts from the template and declares `color-scheme`; the CLI's `artifact submit` and `artifact new` help say so.
+A diagram is a figure in an HTML artifact, never ASCII art in a fenced block: `bun apps/console/scripts/diagram.ts <file.mmd> --caption "..." [--width 960]` renders Mermaid to a `<figure>` with Pele (a `devDependency`; its CSS variables are mapped to the tokens by the template's `.pele` rule, so the theme re-colours it), and the frame's wide track gives a figure wider than the column the pane.
 
 **What the frame enforces on an HTML artifact** (`public/frame/frame.js`, `public/frame/lightbox.js`; the template's head lists
 the same rules for the author):

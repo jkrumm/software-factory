@@ -39,6 +39,13 @@
       document with an "n / N" counter and the figcaption, a second click shows it at natural size and a drag pans. Give an
       img an alt and a figure a figcaption: they are the caption. An icon (an img under 200 px wide, an svg under 160 px)
       and a picture inside a link are not part of it.
+    - Diagrams are figures, never ASCII art in a <pre> or a fenced block. Write Mermaid (flowchart, sequence, state, class,
+      ER, gantt ...) and let Pele draw it, themed by the tokens through the .pele rule below:
+        bun <factory repo>/apps/console/scripts/diagram.ts flow.mmd --caption "What it shows" --width 960 > figure.html
+      and paste figure.html where the figure goes (--width scales a narrow drawing up to the pane; leave it off for a wide
+      one). Or draw an SVG by hand with .svg-box, .svg-line and .svg-text (see the example under "How it works"). A figure
+      leaves the text column only when its width attribute (or viewBox) is more than the column: at least 800. Put at most
+      about 12 boxes in one figure and split a bigger system in two.
     - Colours, the page background, tables' own cell styling, callouts and spacing between blocks stay yours.
 -->
     <style>
@@ -278,6 +285,20 @@
         fill: var(--vx-ink);
         font: 14px var(--font-sans);
       }
+      /* a diagram from scripts/diagram.ts (Pele): its variables follow the tokens, so the theme re-colours it */
+      .pele {
+        --pele-bg: var(--vx-surface-panel);
+        --pele-fg: var(--vx-ink);
+        --pele-muted: var(--vx-faint);
+        --pele-line: var(--vx-ink2);
+        --pele-surface: var(--vx-surface-subtle);
+        --pele-surface-alt: var(--vx-surface-bg);
+        --pele-border: var(--vx-surface-border);
+        --pele-accent: var(--vx-accent);
+        --pele-font: var(--font-sans);
+        --pele-font-mono: var(--font-mono);
+        --pele-radius: var(--vx-radius-ctrl);
+      }
     </style>
   </head>
   <body>
@@ -320,14 +341,19 @@
 
       <h2>How it works</h2>
       <figure>
-        <svg viewBox="0 0 420 90" role="img" aria-label="A flows into B">
-          <rect class="svg-box" x="10" y="20" width="150" height="50" rx="8" />
-          <text class="svg-text" x="85" y="50" text-anchor="middle">A</text>
-          <line class="svg-line" x1="160" y1="45" x2="260" y2="45" />
-          <rect class="svg-box" x="260" y="20" width="150" height="50" rx="8" />
-          <text class="svg-text" x="335" y="50" text-anchor="middle">B</text>
+        <svg viewBox="0 0 960 120" role="img" aria-label="A flows into B, then C">
+          <rect class="svg-box" x="10" y="30" width="240" height="60" rx="8" />
+          <text class="svg-text" x="130" y="65" text-anchor="middle">A</text>
+          <line class="svg-line" x1="250" y1="60" x2="360" y2="60" />
+          <rect class="svg-box" x="360" y="30" width="240" height="60" rx="8" />
+          <text class="svg-text" x="480" y="65" text-anchor="middle">B</text>
+          <line class="svg-line" x1="600" y1="60" x2="710" y2="60" />
+          <rect class="svg-box" x="710" y="30" width="240" height="60" rx="8" />
+          <text class="svg-text" x="830" y="65" text-anchor="middle">C</text>
         </svg>
-        <figcaption>What the picture shows, in one line.</figcaption>
+        <figcaption>
+          What the picture shows, in one line. This one is 960 wide, so it takes the pane, not the text column.
+        </figcaption>
       </figure>
       <pre><code>factory artifact show &lt;artifact&gt;</code></pre>
 
