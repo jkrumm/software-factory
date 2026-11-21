@@ -28,6 +28,15 @@ describe('the review screen', () => {
     expect(screen('Open PR #91 in the browser and read it')).toBeNull()
     expect(screen('Merge the feature branch by hand')).toBeNull()
   })
+
+  test('a portal step whose detail only names the pull request to merge afterwards reaches the owner', () => {
+    expect(
+      screen(
+        'Vercel: set Production Branch of free-planning-poker to v1',
+        'Two steps in the Vercel dashboard. Only then merge PR 335.',
+      ),
+    ).toBeNull()
+  })
 })
 
 describe('what wakes a review wait', () => {
