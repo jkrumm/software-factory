@@ -425,6 +425,18 @@ describe('git worktrees', () => {
     expect(existsSync(join(archiveDir, '22', '1', 'worktree', 'target'))).toBe(false)
   })
 
+  test('remove keeps a directory git no longer lists, and says so', async () => {
+    const work = await repo()
+    const tree = await value(trees.create({ repo: work, branch: 'factory/23-1' }))
+    await git(work, 'worktree', 'remove', '--force', tree.path)
+    mkdirSync(tree.path, { recursive: true })
+    writeFileSync(join(tree.path, 'left.txt'), 'x')
+    expect(await value(trees.remove(input(work, 'factory/23-1', tree.path)))).toEqual({
+      kept: 'git no longer lists this worktree, and its directory is still there',
+      path: tree.path,
+    })
+  })
+
   test('remove finds a worktree whose lead detached HEAD or renamed the branch, by the path it was made at', async () => {
     const work = await repo()
     const detached = await value(trees.create({ repo: work, branch: 'factory/6-1' }))

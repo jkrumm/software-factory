@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { leadBranch } from '../domains/leads/names.ts'
 import { ok } from '../kernel/result.ts'
 import { issueNumber } from '../kernel/ids.ts'
@@ -32,6 +33,7 @@ export async function sweepKeptWorktrees(deps: LeadDeps, signal?: AbortSignal): 
   let removed = 0
   for (const kept of read.value) {
     if (signal?.aborted) break
+    if (!existsSync(kept.path)) continue
     const located = await deps.repos.locate(kept.repo)
     if (!located.ok) continue
     looked++
