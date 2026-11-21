@@ -46,18 +46,18 @@ A factory owns the whole lifecycle: intake, admission, supervision, gates, verif
 Read from the factory on the day shown:
 
 <!-- results:start -->
-From 2026-11-15 11:03 UTC (the counting epoch) to 2026-11-21 11:41 UTC, all projects. Read on 2026-11-21 with `factory read kpis` and `factory read friction`; `bun scripts/readme-results.ts --refresh` reads them again.
+From 2026-11-15 11:03 UTC (the counting epoch) to 2026-11-21 12:57 UTC, all projects. Read on 2026-11-21 with `factory read kpis` and `factory read friction`; `bun scripts/readme-results.ts --refresh` reads them again.
 
 | What | Result |
 |-|-|
-| Issues filed | 1,365, of which the factory's own loops filed 266 |
-| Issues closed | 1,434 |
-| Median time from filed to closed | 86 minutes (the target is at most 3.0 h) |
+| Issues filed | 1,388, of which the factory's own loops filed 267 |
+| Issues closed | 1,450 |
+| Median time from filed to closed | 85 minutes (the target is at most 3.0 h) |
 | Queue wait, 90th percentile | 3.7 h (the target is at most 8.0 h) |
-| First verifications that passed | 97.4 % of 1,205 (the target is at least 90 %) |
+| First verifications that passed | 97.3 % of 1,220 (the target is at least 90 %) |
 | Decisions answered | 48: the Judge 36, a default 6, the owner 5, his delegate 1 |
 | Times the owner stepped in where the factory should have settled it | 6 (0.005 per Issue filed by a person, an agent or an alert; the target is at most 0.07) |
-| Answers of the owner that changed nothing | 31.8 % of 85 answers to Specs, Concepts and Decisions (the target is at most 20 %) |
+| Answers of the owner that changed nothing | 43.4 % of 83 answers to Specs, Concepts and Decisions (the target is at most 20 %) |
 | Errands that reached the owner | 3.4 per 100 Issues (47; no target yet) |
 | Quota used at the weekly reset | 97.0 % over 4 resets (the target is at least 90 %) |
 <!-- results:end -->
