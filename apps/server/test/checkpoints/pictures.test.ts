@@ -35,8 +35,10 @@ describe('unloadedPictures (markdown)', () => {
     expect(unloadedPictures('![a](https://x.example.com/a.png)', 'markdown', [], NOW)[0]?.reason).toContain(
       'none is listed',
     )
-    const code = '```md\n![a](https://x.example.com/a.png)\n```\n`![b](https://x.example.com/b.png)`'
+    const code = '```md\nfirst\n![a](https://x.example.com/a.png)\n```\n`![b](https://x.example.com/b.png)`'
     expect(unloadedPictures(code, 'markdown', HOSTS, NOW)).toEqual([])
+    const after = '```\nx\ny\n```\n![c](https://x.example.com/c.png)'
+    expect(unloadedPictures(after, 'markdown', HOSTS, NOW)).toHaveLength(1)
   })
 })
 

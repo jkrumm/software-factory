@@ -10,10 +10,22 @@ export interface UnloadedPicture {
   reason: string
 }
 
-const FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:\n {0,3}\1[`~]*[ \t]*(?=\n|$)|$)/gm
 const INLINE_CODE = /(`+)[^`][\s\S]*?\1(?!`)/g
 const MD_IMAGE = /!\[([^\]]*)\]\(\s*(<[^>\n]*>|[^\s)]*)/g
 const HTML_IMG = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi
+
+/** The text with every fenced code block (and its fences) dropped, line by line. */
+function withoutFences(content: string): string {
+  let fenced = false
+  return content
+    .split('\n')
+    .filter((line) => {
+      if (/^\s{0,3}(?:```|~~~)/.test(line)) fenced = !fenced
+      else if (!fenced) return true
+      return false
+    })
+    .join('\n')
+}
 
 /** `*.example.com` matches a subdomain, `example.com` itself; the way CSP reads a host source. */
 function hostListed(url: URL, hosts: readonly string[]): boolean {
@@ -68,7 +80,7 @@ export function unloadedPictures(
     }
     return found
   }
-  const prose = content.replace(FENCE, '').replace(INLINE_CODE, ' ')
+  const prose = withoutFences(content).replace(INLINE_CODE, ' ')
   for (const match of prose.matchAll(MD_IMAGE)) {
     const src = (match[2] ?? '').replace(/^<|>$/g, '')
     const reason = markdownProblem(src, hosts, now)

@@ -109,8 +109,11 @@ const errandHelp = [
 const htmlHelp =
   'An HTML artifact (--content-format html) starts from apps/console/templates/artifact.html in the factory repo and declares color-scheme: the Console shows it in its own theme (light or dark, set as data-theme on <html>), keeps the text and every heading in one centred column, gives a picture wider than the column the pane and opens it in a lightbox on a click; one that declares no scheme gets a generic dark base. A diagram is a figure: write Mermaid and run `bun <factory repo>/apps/console/scripts/diagram.ts <file.mmd> --caption "..." [--width 960]`, which prints a `<figure>` themed by the tokens (Pele draws it); paste it into the page. The figure leaves the text column for the pane when it is wider than the column. The template lists the rules in its head.'
 
+const refusedPicturesHelp =
+  "`factory artifact submit` and `revise` refuse a Markdown picture from any other host, over http or with an expired presigned link, and an HTML artifact's `<img>` that is not a `data:` URL; the refusal names each one."
+
 const imagesHelp =
-  "Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); a picture from any other host (such as raw.githubusercontent.com), over http, or with an expired presigned link is refused at hand-over, as is an HTML artifact's `<img>` that is not a `data:` URL. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days; it refuses .svg; a diagram is not an image to upload but a figure in an HTML artifact) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL."
+  'Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); any other host, such as raw.githubusercontent.com, shows its alt text. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days; it refuses .svg; a diagram is not an image to upload but a figure in an HTML artifact) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL.'
 
 const specHelp = [
   'A Spec is due before you build when the Issue carries the checkpoint `spec` or `gate` (the ship is refused without one), and when the change is a new public surface (an API route, a CLI verb, a contract or schema others call or read), a new data model or a migration that changes meaning, a new dependency of weight, an architecture or look-and-feel choice that later Issues build on, or a UI screen the owner has not seen. A choice that a look at the repo settles, or that the repo\'s own standards (AGENTS.md, its design guide, its lint and type rules) rank, is yours to take without a Spec or a Decision: the owner\'s standing instruction is "the best outcome and best design".',
@@ -123,6 +126,7 @@ const submitHelp = [
   specHelp,
   'Limits: --title at most 200 characters, --content at most 1000000 characters. A Concept or Spec waits for its verdict (end the turn); a Report never waits.',
   imagesHelp,
+  refusedPicturesHelp,
   htmlHelp,
 ].join(' ')
 
@@ -173,6 +177,7 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
       'A verdict of `changes` is answered by a revision, not only by a push: until you revise, the Issue waits on it. A revision or a second `artifact submit` opens a new verdict wait in which `ship`, `close` and `defer` are refused (409): ship or close what is already done before you revise, and if the revision is needed first, end the turn and ship from the verdict note.',
       'A Concept or Spec a lead submitted needs --attempt (your attempt number); a Spec filed with an Issue that no lead works yet (`issue new --spec`) is revised without one, and the screen then passes the new revision to the owner. A Report never needs it.',
       imagesHelp,
+      refusedPicturesHelp,
       htmlHelp,
     ].join(' '),
   },
