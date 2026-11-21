@@ -82,12 +82,14 @@ test("the Replan's lead raises a Decision and submits a Spec: both reach Needs y
         '--body',
         JSON.stringify({
           attempt: 1,
+          class: 'direction',
+          whyYours: 'Whether the export ships is a product call.',
           question: 'Drop the export row or keep it?',
           recommendation: 'drop',
           checked: 'Read the plan and the open Issues.',
           options: [
-            { label: 'drop', reversible: true, cost: 'the row is gone' },
-            { label: 'keep', reversible: true, cost: 'it stays queued' },
+            { label: 'drop', leadsTo: 'no export', reversible: true, cost: 'the row is gone' },
+            { label: 'keep', leadsTo: 'the export is built', reversible: true, cost: 'it stays queued' },
           ],
           noAnswer: { consequence: 'The Spec keeps the row.' },
         }),

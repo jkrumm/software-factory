@@ -116,7 +116,7 @@ A verb is a plain `factory` command that reports one outcome of an attempt.
 | `factory issue defer` | A wait it can name: until a time, until other Issues close, or on a pull request's review |
 | `factory issue block` | It cannot go on and nobody can answer |
 | `factory issue close` | No commit needed; outcome `done` or `dropped`, with a reason |
-| `factory issue ask` | A Decision, with a recommendation, what it checked, the cost of each option and the no-answer default |
+| `factory issue ask` | A Decision: one question with its class, an optional exhibit, two to four options and what each leads to, a recommendation, what it checked and the no-answer default |
 
 - **Every verb names its attempt.** The CLI fills `--attempt` from `FACTORY_SESSION` (`lead-<issue>-<attempt>`); a flag given wins. `--call <id>` makes a repeated call one event.
 - **`factory --help` shows a lead's verbs.** With `FACTORY_SESSION` set it lists only the verbs the agent caller may call (`apps/server/src/api/policy.ts` decides), grouped by noun; `--all` lists every verb.

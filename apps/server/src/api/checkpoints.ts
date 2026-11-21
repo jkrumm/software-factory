@@ -67,10 +67,14 @@ export const decisionView = (d: DecisionRecord): DecisionView => ({
   issueId: d.issueId,
   repo: d.repo,
   attempt: d.attempt,
+  class: d.form.class,
+  whyYours: d.form.whyYours,
   question: d.form.question,
   recommendation: d.form.recommendation,
   checked: d.form.checked,
   options: d.form.options,
+  exhibit: d.form.exhibit,
+  spec: d.form.artifact,
   noAnswer: d.form.noAnswer,
   askedAt: iso(d.askedAt),
   defaultAt: defaultAt(d.form, d.askedAt)?.toISOString() ?? null,
@@ -260,7 +264,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         detail: {
           operationId: 'issue.ask',
           summary:
-            "the lead raises a Decision: a form with the recommendation, what was checked, each option's cost and whether it is reversible, and what happens with no answer",
+            "the lead raises a Decision: one question with its case (a class that says why it is the owner's, one exhibit, two to four options with what each leads to and costs, what was checked, and what happens with no answer)",
         },
       },
     )
@@ -312,7 +316,12 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       async ({ params, body, request }) => {
         const id = idOf('decision', params.id)
         if (!id) return unknownId('Decision', params.id)
-        const result = await uses.answer({ decisionId: id, answer: body.answer, by: ownerActorOf(request) })
+        const result = await uses.answer({
+          decisionId: id,
+          answer: body.answer,
+          ...(body.note ? { note: body.note } : {}),
+          by: ownerActorOf(request),
+        })
         if (!result.ok) return failed(result.error)
         return Response.json(
           DecisionReply.parse({ decision: decisionView(result.value.decision), issue: result.value.issue }),

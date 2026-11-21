@@ -270,3 +270,18 @@
     font-size: 13px;
   }
 }
+
+/* a Decision's diagram, drawn by Pele: its variables follow the tokens, so the theme re-colours it (the artifact template's .pele rule) */
+.pele {
+  --pele-bg: transparent;
+  --pele-fg: var(--vx-ink);
+  --pele-muted: var(--vx-faint);
+  --pele-line: var(--vx-ink2);
+  --pele-surface: var(--vx-surface-subtle);
+  --pele-surface-alt: var(--vx-surface-bg);
+  --pele-border: var(--vx-surface-border);
+  --pele-accent: var(--vx-accent);
+  --pele-font: var(--font-sans);
+  --pele-font-mono: var(--font-mono);
+  --pele-radius: var(--vx-radius-ctrl);
+}

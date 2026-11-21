@@ -1,5 +1,4 @@
-import type { NeedItem, NeedKind } from '@software-factory/contract'
-import type { LozengeState } from '../components/kit/lozenge.tsx'
+import type { DecisionClass, NeedItem, NeedKind } from '@software-factory/contract'
 import { plainExcerpt } from './plain.ts'
 
 const MINUTE = 60_000
@@ -25,14 +24,27 @@ export function defaultWhen(defaultAt: string, now: number): string {
   return left <= 0 ? 'at the next pass' : `in ${spanWords(left)}`
 }
 
+/** The words of a Decision's class on the card: why the choice is the owner's (the field is called class; no screen says it). */
+export const DECISION_CLASS_LABEL: Record<DecisionClass, string> = {
+  direction: 'Product direction',
+  look: 'A look you have not seen',
+  own_surface: 'A surface of your own',
+  spend: 'Spend',
+  security: 'Who is trusted',
+  people: "Other people's data",
+  irreversible: 'Cannot be undone',
+  owner_fact: 'Only you know',
+}
+
+/** The mark on the option taken with no answer: "Taken on silence in 7 hours", or "at the next pass" once due. */
+export const silenceWords = (defaultAt: string, now: number): string =>
+  `Taken on silence ${defaultWhen(defaultAt, now)}`
+
 /** The default on its option's card, the time first: "In 7 hours, if nobody answers: The lead waits." */
 export function defaultLine(consequence: string, defaultAt: string, now: number): string {
   const when = defaultWhen(defaultAt, now)
   return `${when.charAt(0).toUpperCase()}${when.slice(1)}, if nobody answers: ${consequence}`
 }
-
-/** "Default taken in 40 minutes", or "Default taken at the next pass" once due. */
-export const defaultWords = (defaultAt: string, now: number): string => `Default taken ${defaultWhen(defaultAt, now)}`
 
 /** An age as one phrase everywhere: "3 hours ago", or "just now" under a minute. */
 export function agoWords(ms: number): string {
@@ -119,14 +131,6 @@ export function decisionParts(
   return issueTitle ? { before: `${before}, Issue `, issue: issueTitle, after } : { before, issue: null, after }
 }
 
-/** Whether the question is the card's title already (the title is the question, cut and without ids). */
-export function repeatsTitle(question: string, title: string): boolean {
-  const cut = norm(title)
-    .replace(/(…|\.\.\.)$/, '')
-    .trim()
-  return cut !== '' && norm(question).startsWith(cut)
-}
-
 /** The page note: everything that waits on the owner, or how much of it the filters show. */
 export const needsNote = (shown: number, total: number, filtered: boolean): string =>
   filtered ? `Showing ${shown} of ${total}` : `${total} need you`
@@ -158,10 +162,6 @@ export function errorWords(status: number | null, detail: string | null): string
   if (status === null) return 'Could not reach the factory. Send it again in a moment.'
   return detail ?? 'The factory refused this. Change your answer and send it again.'
 }
-
-/** A Lozenge for an option's reversibility, from an explicit map: reversible is good, not reversible is a warning. */
-export const reversibleLozenge = (reversible: boolean): { state: LozengeState; words: string } =>
-  reversible ? { state: 'done', words: 'Reversible' } : { state: 'paused', words: 'Not reversible' }
 
 const norm = (text: string): string => text.trim().toLowerCase()
 

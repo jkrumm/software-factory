@@ -79,6 +79,8 @@ export {
   ShipAnswer,
   ShipBody,
 } from './quality.ts'
+export { decodeEntities } from './html-text.ts'
+export { type SpecHead, specHead, specHeadText } from './spec-head.ts'
 export {
   AnnotateBody,
   AnnotationReplyBody,
@@ -89,10 +91,17 @@ export {
   ArtifactReply,
   AskBody,
   AskReply,
+  DECISION_CLASSES,
+  type DecisionClass,
+  DECISION_CLASS_WORDS,
+  DECISION_LIMITS,
   DecisionList,
   DecisionReply,
   DecisionView,
   EditAnnotationBody,
+  Exhibit,
+  EXHIBIT_KINDS,
+  type ExhibitKind,
   ERRAND_CLOSED_KINDS,
   ERRAND_HOSTS,
   ErrandBody,

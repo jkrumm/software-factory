@@ -350,7 +350,7 @@ function judgeAnswer(facts: StallFacts, answer: StewardAnswer): { checked: Check
   const checked = checkAnswer(facts, answer)
   if (checked.kind === 'none') return { checked, rejected: checked.why }
   if (checked.kind !== 'decision') return { checked, rejected: null }
-  const form = readDecisionForm(checked.form)
+  const form = readDecisionForm(checked.form, { by: 'steward' })
   if (!form.ok) {
     return { checked: { kind: 'none', why: form.error.detail }, rejected: form.error.detail }
   }

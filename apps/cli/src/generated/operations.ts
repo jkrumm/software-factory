@@ -1756,6 +1756,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [
       { name: 'answer', flag: 'answer', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'note', flag: 'note', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: ['answer'],
     bodySchema: AnswerBody,
@@ -2216,13 +2217,15 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/issues/{id}/ask',
     summary:
-      "the lead raises a Decision: a form with the recommendation, what was checked, each option's cost and whether it is reversible, and what happens with no answer",
+      "the lead raises a Decision: one question with its case (a class that says why it is the owner's, one exhibit, two to four options with what each leads to and costs, what was checked, and what happens with no answer)",
     pathParams: ['id'],
     queryParams: [],
     body: true,
     queryFlags: [],
     bodyFields: [
       { name: 'attempt', flag: 'attempt', kind: 'integer', repeatable: false, required: true, untyped: false },
+      { name: 'class', flag: 'class', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'whyYours', flag: 'why-yours', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'question', flag: 'question', kind: 'string', repeatable: false, required: false, untyped: false },
       {
         name: 'recommendation',
@@ -2234,6 +2237,8 @@ export const OPERATIONS: readonly Operation[] = [
       },
       { name: 'checked', flag: 'checked', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'options', flag: 'options', kind: 'json', repeatable: false, required: false, untyped: false },
+      { name: 'exhibit', flag: 'exhibit', kind: 'json', repeatable: false, required: false, untyped: false },
+      { name: 'artifact', flag: 'artifact', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'noAnswer', flag: 'no-answer', kind: 'json', repeatable: false, required: false, untyped: false },
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
     ],

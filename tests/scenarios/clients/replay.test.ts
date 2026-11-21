@@ -25,6 +25,10 @@ const number = (issue: string) => issue.slice('issue_'.length)
 const DECISION = [
   '--attempt',
   '1',
+  '--class',
+  'direction',
+  '--why-yours',
+  'What the product does for its users is his to say.',
   '--question',
   'Which way do we fix the checkout hang?',
   '--recommendation',
@@ -33,8 +37,8 @@ const DECISION = [
   'the submit handler',
   '--options',
   JSON.stringify([
-    { label: 'Ship the quick fix', reversible: true, cost: 'one hour' },
-    { label: 'Redesign the form', reversible: false, cost: 'two days' },
+    { label: 'Ship the quick fix', leadsTo: 'what follows from it', reversible: true, cost: 'one hour' },
+    { label: 'Redesign the form', leadsTo: 'what follows from it', reversible: false, cost: 'two days' },
   ]),
   '--no-answer',
   JSON.stringify({ consequence: 'the quick fix ships', default: 'Ship the quick fix', waitMinutes: 600 }),

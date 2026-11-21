@@ -76,11 +76,15 @@ test('the list groups what waits and the open cards show everything the owner de
   const decision = card(page, 'Which logging library')
   await expect(decision.getByText('Recommended', { exact: true })).toBeVisible()
   await expect(decision.getByText('pino', { exact: true }).first()).toBeVisible()
-  await expect(decision.getByText('one dependency, fast to swap later')).toBeVisible()
-  await expect(decision.getByText('heavier, with more moving parts')).toBeVisible()
-  await expect(decision.getByText('Not reversible', { exact: true })).toBeVisible()
-  await expect(decision.getByText('The lead logs to the console until someone answers.')).toBeVisible()
-  await expect(decision.getByText(/In \d+ hours?, if nobody answers:/)).toBeVisible()
+  await expect(decision.getByText('one dependency, fast to swap later').first()).toBeVisible()
+  await expect(decision.getByText('heavier, with more moving parts').first()).toBeVisible()
+  await expect(decision.getByText('Cannot be undone', { exact: true })).toBeVisible()
+  await expect(decision.getByText(/Taken on silence in \d+ hours?/)).toBeVisible()
+  // what waits behind the answer is closed until it is clicked
+  await decision.getByRole('button', { name: 'What waits behind this answer' }).click()
+  await expect(
+    decision.getByText(/In \d+ hours?, if nobody answers: The lead logs to the console until someone answers\./),
+  ).toBeVisible()
   await everything()
 
   await open(page, 'The queue spec')
@@ -110,9 +114,7 @@ test('an answer from the Console reaches the lead as its next turn', async ({ pa
   expect(before.status).toBe('open')
 
   await open(page, 'How long should argo keep audit rows')
-  await card(page, 'How long should argo keep audit rows')
-    .getByRole('button', { name: 'Take the recommendation' })
-    .click()
+  await card(page, 'How long should argo keep audit rows').getByRole('button', { name: '90 days', exact: true }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Sent to the lead' })).toBeVisible()
   await expect(card(page, 'How long should argo keep audit rows')).toHaveCount(0)
 
@@ -334,7 +336,7 @@ test.describe('answered elsewhere first', () => {
       await api(apiUrl, `/v1/decisions/${decision.id}/answer`, { answer: 'redis' })
       await route.continue()
     })
-    await card(page, 'Which cache store').getByRole('button', { name: 'Take the recommendation' }).click()
+    await card(page, 'Which cache store').getByRole('button', { name: 'memory', exact: true }).click()
     await expect(page.getByRole('status').filter({ hasText: 'Already answered elsewhere' })).toBeVisible()
     await expect(card(page, 'Which cache store')).toHaveCount(0)
     expect(await api<{ answer: string }>(apiUrl, `/v1/decisions/${decision.id}`)).toMatchObject({ answer: 'redis' })

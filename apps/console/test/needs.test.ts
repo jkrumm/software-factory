@@ -1,15 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import type { NeedItem } from '@software-factory/contract'
+import { DECISION_CLASSES, type NeedItem } from '@software-factory/contract'
 import {
   deskGroups,
   decisionParts,
   needsTitle,
   needsNote,
-  repeatsTitle,
   defaultLine,
   summaryLine,
   defaultWhen,
-  defaultWords,
+  silenceWords,
+  DECISION_CLASS_LABEL,
   errorWords,
   httpLink,
   holdsWords,
@@ -22,7 +22,6 @@ import {
   projectCounts,
   projectOf,
   projectsOfNeeds,
-  reversibleLozenge,
   visibleNeeds,
   spanWords,
   waitingWords,
@@ -40,18 +39,21 @@ test('spanWords and waitingWords name the wait in plain words', () => {
   expect(waitingWords(2 * 60 * MIN)).toBe('Open 2 hours')
 })
 
-test('defaultWords counts down to the default and says so once it is due', () => {
+test('silenceWords marks the option taken with no answer, and says so once it is due', () => {
   const now = Date.parse('2026-01-01T10:00:00Z')
-  expect(defaultWords('2026-01-01T10:40:00Z', now)).toBe('Default taken in 40 minutes')
-  expect(defaultWords('2026-01-01T09:00:00Z', now)).toBe('Default taken at the next pass')
+  expect(silenceWords('2026-01-01T10:40:00Z', now)).toBe('Taken on silence in 40 minutes')
+  expect(silenceWords('2026-01-01T09:00:00Z', now)).toBe('Taken on silence at the next pass')
 })
 
-test('the origin is the repo, or App feedback; reversibility is a lozenge from an explicit map', () => {
+test('every class of a Decision has the words the card shows, and none says the field name', () => {
+  for (const decisionClass of DECISION_CLASSES) expect(DECISION_CLASS_LABEL[decisionClass]).toBeTruthy()
+  expect(Object.values(DECISION_CLASS_LABEL).some((words) => /class/i.test(words))).toBe(false)
+})
+
+test('the origin is the repo, or App feedback', () => {
   expect(originOf({ repo: 'argo' })).toBe('argo')
   expect(originOf({ repo: null })).toBe('App feedback')
   expect(projectOf({ repo: null })).toBe('App feedback')
-  expect(reversibleLozenge(true)).toEqual({ state: 'done', words: 'Reversible' })
-  expect(reversibleLozenge(false)).toEqual({ state: 'paused', words: 'Not reversible' })
 })
 
 test('errorWords: 409 is answered elsewhere, no status is unreachable, the rest says what the API said', () => {
@@ -169,18 +171,6 @@ test('a summary that repeats the title or the Issue title is not shown again', (
 test('the page note says how many need the owner, or how many the filters show', () => {
   expect(needsNote(10, 10, false)).toBe('10 need you')
   expect(needsNote(1, 10, true)).toBe('Showing 1 of 10')
-})
-
-test('a question that is the card title is not repeated', () => {
-  expect(repeatsTitle('Which logging library?', 'Which logging library?')).toBe(true)
-  expect(
-    repeatsTitle(
-      'Which logging library should argo use for the audit trail',
-      'Which logging library should argo use\u2026',
-    ),
-  ).toBe(true)
-  expect(repeatsTitle('Which cache store?', 'Which logging library?')).toBe(false)
-  expect(repeatsTitle('anything', '')).toBe(false)
 })
 
 test('an age is one phrase', () => {

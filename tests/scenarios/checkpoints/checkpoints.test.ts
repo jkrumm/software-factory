@@ -136,12 +136,14 @@ const decisionPages = () => published.filter((p) => p.tags === 'decision')
 
 const FORM = (question: string, patch: Record<string, unknown> = {}) => ({
   attempt: 1,
+  class: 'direction',
+  whyYours: 'What the server logs is what its users can ask support about.',
   question,
   recommendation: 'pino',
   checked: 'Read the package sizes and the Bun notes.',
   options: [
-    { label: 'pino', reversible: true, cost: 'one dependency, fast' },
-    { label: 'winston', reversible: true, cost: 'heavier, more transports' },
+    { label: 'pino', leadsTo: 'JSON lines on stdout', reversible: true, cost: 'one dependency, fast' },
+    { label: 'winston', leadsTo: 'transports to files', reversible: true, cost: 'heavier, more transports' },
   ],
   noAnswer: { consequence: 'The lead logs with console until someone answers.' },
   ...patch,
@@ -233,9 +235,7 @@ test('a Decision no one settles reaches the owner: paged once, with a deep link,
     click: `https://console.example.test/checkpoints/${id}`,
     authorization: 'Bearer scenario-token',
   })
-  expect(decisionPages()[0]?.body).toBe(
-    'Issue 2 (example-owner) asks: “Which retention for the audit log rows?” Recommended: “pino”',
-  )
+  expect(decisionPages()[0]?.body).toBe('Issue 2 (example-owner) asks: “Which retention for the audit log rows?”')
   for (let i = 0; i < 3; i++) await pass()
   expect(decisionPages()).toHaveLength(1)
 
@@ -306,8 +306,8 @@ test('a Decision is answered by its default after the wait, when the option is r
       FORM('Which cache ttl for the sessions?', {
         recommendation: 'five minutes',
         options: [
-          { label: 'five minutes', reversible: true, cost: 'more refreshes' },
-          { label: 'one hour', reversible: true, cost: 'stale sessions' },
+          { label: 'five minutes', leadsTo: 'what follows from it', reversible: true, cost: 'more refreshes' },
+          { label: 'one hour', leadsTo: 'what follows from it', reversible: true, cost: 'stale sessions' },
         ],
         noAnswer: { consequence: 'Sessions use five minutes.', default: 'five minutes', waitMinutes: 30 },
       }),
@@ -345,8 +345,8 @@ test('a Decision missing a field is refused with the field named, and nothing is
     ...body(
       FORM('Which formatter?', {
         options: [
-          { label: 'pino', cost: 'x' },
-          { label: 'winston', reversible: false, cost: 'y' },
+          { label: 'pino', leadsTo: 'what follows from it', cost: 'x' },
+          { label: 'winston', leadsTo: 'what follows from it', reversible: false, cost: 'y' },
         ],
       }),
     ),

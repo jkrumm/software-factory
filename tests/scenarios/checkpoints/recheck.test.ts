@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { AskReply, DecisionView, ErrandReply, PassReply } from '@software-factory/contract'
+import { AskReply, ArtifactReply, DecisionView, ErrandReply, PassReply } from '@software-factory/contract'
 import { admitted, fileIssue, tick } from '../flow.ts'
 import { factory, type ServerProcess, type World } from '../harness.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
@@ -73,22 +73,42 @@ async function askCalls(): Promise<{ stdin: string }[]> {
 
 const pass = () => ok((json) => PassReply.parse(json), 'checkpoint', 'pass')
 
-const FORM = (question: string) => ({
+const FORM = (question: string, extra: Record<string, unknown> = {}) => ({
   attempt: 1,
+  class: 'direction',
+  whyYours: 'What the server logs is what its users can ask support about.',
   question,
   recommendation: 'pino',
   checked: 'Read the package sizes and the Bun notes.',
   options: [
-    { label: 'pino', reversible: true, cost: 'one dependency, fast' },
-    { label: 'winston', reversible: true, cost: 'heavier, more transports' },
+    { label: 'pino', leadsTo: 'JSON lines on stdout', reversible: true, cost: 'one dependency, fast' },
+    { label: 'winston', leadsTo: 'transports to files', reversible: true, cost: 'heavier, more transports' },
   ],
+  ...extra,
   noAnswer: { consequence: 'The lead logs with console until someone answers.' },
 })
 
 /** Asks a Decision the Judge passes on and lets the pass bring it to the owner. */
-async function atOwner(repo: string, question: string): Promise<{ issueId: string; id: string }> {
+async function atOwner(repo: string, question: string, spec?: string): Promise<{ issueId: string; id: string }> {
   const issueId = await workingIssue(repo)
-  const asked = await ok((json) => AskReply.parse(json), 'issue', 'ask', issueId, ...body(FORM(question)))
+  const artifact = spec
+    ? (
+        await ok(
+          (json) => ArtifactReply.parse(json),
+          'artifact',
+          'submit',
+          issueId,
+          ...body({ attempt: 1, kind: 'spec', title: 'The export spec', content: spec }),
+        )
+      ).artifact.id
+    : undefined
+  const asked = await ok(
+    (json) => AskReply.parse(json),
+    'issue',
+    'ask',
+    issueId,
+    ...body(FORM(question, artifact ? { artifact } : {})),
+  )
   const passed = await pass()
   expect(passed.decisions).toContainEqual({ decision: asked.decision.id, status: 'open', settledBy: null })
   return { issueId, id: asked.decision.id }
@@ -178,7 +198,11 @@ test('a stale Decision and a stale Errand whose Issue is closed are withdrawn wi
 })
 
 test('a stale Decision the Judge passed on is settled by it on the recheck once a note arrived, and the lead hears it', async () => {
-  const { issueId, id } = await atOwner('example-recheck-settled', 'Which retention for the export files?')
+  const { issueId, id } = await atOwner(
+    'example-recheck-settled',
+    'Which retention for the export files?',
+    '## Build\n\nExport files are pruned nightly.\n\n## Decided\n\nNightly.\n\n## Detail\n\nThe long tail.',
+  )
   await backdate(issueId, 7)
   const before = (await askCalls()).length
 
@@ -202,7 +226,10 @@ test('a stale Decision the Judge passed on is settled by it on the recheck once 
 
   const calls = await askCalls()
   expect(calls).toHaveLength(before + 1)
-  const given = JSON.parse(calls.at(-1)?.stdin ?? '{}') as { checked: string }
+  const given = JSON.parse(calls.at(-1)?.stdin ?? '{}') as { checked: string; spec?: string }
+  // the recheck carries the head of the Spec the question belongs to, as the first look does
+  expect(given.spec).toContain('Export files are pruned nightly.')
+  expect(given.spec).not.toContain('The long tail.')
   expect(given.checked).toContain('Read the package sizes and the Bun notes.')
   expect(given.checked).toContain('Rechecked after 6 h')
   expect(given.checked).toContain('The export files are tiny')

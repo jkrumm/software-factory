@@ -139,7 +139,7 @@ test('a lead that is gone gets a requeue, never a Decision: an answer cannot sta
 
 test('the Decision the factory raises itself when no answer came is a complete form', () => {
   for (const cause of ['wall', 'unreported', 'blocked', 'lead_gone', 'regressed'] as const) {
-    const form = readDecisionForm(fallbackDecision(stall({ cause })))
+    const form = readDecisionForm(fallbackDecision(stall({ cause })), { by: 'steward' })
     expect(form).toMatchObject({ ok: true })
   }
 })

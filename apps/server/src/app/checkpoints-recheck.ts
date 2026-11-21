@@ -1,5 +1,11 @@
 import type { ErrandScreenRequest } from '@software-factory/contract'
-import { type DecisionId, type JudgeInput, judgeInputOf, precedentTerms } from '../domains/checkpoints/decision.ts'
+import {
+  type DecisionId,
+  type JudgeInput,
+  judgeInputOf,
+  precedentTerms,
+  withSpec,
+} from '../domains/checkpoints/decision.ts'
 import { checkErrandScreen, type ErrandId, errandScreenFields } from '../domains/errands/errand.ts'
 import { type DecisionRecord, statusOf } from '../domains/checkpoints/ports.ts'
 import { type ErrandRecord } from '../domains/errands/ports.ts'
@@ -29,6 +35,7 @@ import {
   type CheckpointStores,
   endJoined,
   formDigest,
+  specBlobOf,
   waitingOn,
 } from './checkpoints.ts'
 import { turnAway } from './checkpoints-errands.ts'
@@ -53,6 +60,8 @@ type Looked =
       action: 'decide'
       decision: DecisionRecord
       input: JudgeInput
+      /** where the latest revision of the Spec the question belongs to is stored: read for the call, never inside the transaction */
+      specBlob: string | null
       seen: number
     }
   | {
@@ -115,6 +124,7 @@ async function lookDecision(deps: CheckpointLoopDeps, seen: Seen, decision: Deci
     action: 'decide',
     decision,
     input: recheckJudgeInput(plain, eventLines(events), deps.recheckAfterMs),
+    specBlob: await specBlobOf(checkpoints, decision.form),
     seen: issue.version,
   }
 }
@@ -303,7 +313,10 @@ async function recheckOne(deps: CheckpointLoopDeps, candidate: RecheckCandidate)
   if (looked.action === 'done') return ok(rechecked(looked.outcome))
 
   if (looked.action === 'decide') {
-    const verdict = await deps.agw.run('judge', looked.input, WORKFLOWS.judge.key('recheck', candidate.id, looked.seen))
+    // The Spec's head is read with no transaction open: a blob is a port.
+    const specText = looked.specBlob ? await deps.blobs.get(looked.specBlob) : null
+    const input = specText?.ok ? withSpec(looked.input, specText.value) : looked.input
+    const verdict = await deps.agw.run('judge', input, WORKFLOWS.judge.key('recheck', candidate.id, looked.seen))
     const done = await recordDecision(deps, candidate, looked, verdict)
     return done.ok ? ok(rechecked(done.value)) : done
   }

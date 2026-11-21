@@ -57,12 +57,19 @@ export async function seedHistory(lab: Lab): Promise<SeededHistory> {
   const askOf = (question: string, recommendation: string, other: string) =>
     api<{ decision: { id: string } }>(url, `/v1/issues/${rich}/ask`, {
       attempt: 2,
+      class: 'direction',
+      whyYours: 'What the probe does for the person on call is his to say.',
       question,
       recommendation,
       checked: 'Read how the other jobs report a full disk.',
       options: [
-        { label: recommendation, reversible: true, cost: 'a full disk goes unnoticed for a run' },
-        { label: other, reversible: true, cost: 'a noisy job when the disk is nearly full' },
+        {
+          label: recommendation,
+          leadsTo: 'a warning line',
+          reversible: true,
+          cost: 'a full disk goes unnoticed for a run',
+        },
+        { label: other, leadsTo: 'a failed job', reversible: true, cost: 'a noisy job when the disk is nearly full' },
       ],
       noAnswer: { consequence: 'The probe only warns until someone answers.' },
     })

@@ -80,12 +80,14 @@ test('an approved Replan Spec lets its lead change the chain and cancel, inside 
         replan,
         ...replanBody({
           attempt: 1,
+          class: 'direction',
+          whyYours: 'What the product does for its users is his to say.',
           question: 'Drop A or keep it?',
           recommendation: 'drop',
           checked: 'Read the plan and the open Issues.',
           options: [
-            { label: 'drop', reversible: true, cost: 'A is gone' },
-            { label: 'keep', reversible: true, cost: 'A stays queued' },
+            { label: 'drop', leadsTo: 'what follows from it', reversible: true, cost: 'A is gone' },
+            { label: 'keep', leadsTo: 'what follows from it', reversible: true, cost: 'A stays queued' },
           ],
           noAnswer: { consequence: 'The Spec keeps A.' },
         }),

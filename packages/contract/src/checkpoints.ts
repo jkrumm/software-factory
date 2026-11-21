@@ -11,7 +11,96 @@ import { IssueRefInput, MAX_AFTER_IDS } from './issues.ts'
 
 const iso = z.iso.datetime({ offset: true })
 
-const Option = z.object({ label: z.string(), reversible: z.boolean(), cost: z.string() })
+/**
+ * What a Decision is: one question with its case. The class says why the choice is the owner's (anything else is the lead's,
+ * the operating contract's order 2); the exhibit shows the change where prose would narrate it. The limits are the form's:
+ * `apps/server/src/domains/checkpoints/decision.ts` refuses each by name, `factory issue ask --help` states them.
+ */
+export const DECISION_CLASSES = [
+  'direction',
+  'look',
+  'own_surface',
+  'spend',
+  'security',
+  'people',
+  'irreversible',
+  'owner_fact',
+] as const
+export type DecisionClass = (typeof DECISION_CLASSES)[number]
+
+/** What each class covers, in the words the help, the refusal and the card use. */
+export const DECISION_CLASS_WORDS: Record<DecisionClass, string> = {
+  direction: 'what a product does for its users where no direction is stated',
+  look: 'a look he has not seen where real variants exist',
+  own_surface: 'a new step or surface for the owner himself',
+  spend: 'money, or a platform that locks in',
+  security: 'who is trusted or let in',
+  people: "other people's or company data",
+  irreversible: 'a change that cannot be undone',
+  owner_fact: 'a fact only he holds',
+}
+
+export const DECISION_LIMITS = {
+  whyYours: 140,
+  question: 200,
+  label: 80,
+  leadsTo: 160,
+  cost: 160,
+  checkedLines: 3,
+  checkedLine: 160,
+  optionsMin: 2,
+  optionsMax: 4,
+  /** the form's own text cap, and the only one a steward's Decision is held to */
+  text: 4000,
+  /** an exhibit's line, cell or caption */
+  exhibitLines: 3,
+  exhibitLine: 160,
+  diagramNodes: 12,
+  diagramChars: 2000,
+  tableCriteria: 4,
+  tableCriterion: 40,
+  tableCell: 80,
+  figures: 3,
+  figureLabel: 40,
+  figureValue: 24,
+  figureUnit: 24,
+} as const
+
+export const EXHIBIT_KINDS = ['before_after', 'pictures', 'diagram', 'table', 'numbers'] as const
+export type ExhibitKind = (typeof EXHIBIT_KINDS)[number]
+
+/**
+ * One exhibit: the change shown, not narrated. `before_after`: today and after, up to three lines each. `pictures`: one picture
+ * per option, each an https link as written in the linked Spec (same viewport and crop). `diagram`: one Mermaid figure of up to
+ * twelve nodes, the one `apps/console/scripts/diagram.ts` draws for an artifact. `table`: the options against up to four
+ * criteria. `numbers`: up to three figures with their units.
+ */
+export const Exhibit = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('before_after'), today: z.array(z.string()), after: z.array(z.string()) }),
+  z.object({
+    kind: z.literal('pictures'),
+    pictures: z.array(z.object({ option: z.string(), image: z.string() })),
+  }),
+  z.object({ kind: z.literal('diagram'), caption: z.string(), mermaid: z.string() }),
+  z.object({
+    kind: z.literal('table'),
+    criteria: z.array(z.string()),
+    rows: z.array(z.object({ option: z.string(), cells: z.array(z.string()) })),
+  }),
+  z.object({
+    kind: z.literal('numbers'),
+    figures: z.array(z.object({ label: z.string(), value: z.string(), unit: z.string() })),
+  }),
+])
+export type Exhibit = z.infer<typeof Exhibit>
+
+const Option = z.object({
+  label: z.string(),
+  reversible: z.boolean(),
+  cost: z.string(),
+  /** what gets built if it is chosen; null on a Decision asked before the form had it */
+  leadsTo: z.string().nullable(),
+})
 const NoAnswer = z.object({
   consequence: z.string(),
   default: z.string().nullable(),
@@ -21,6 +110,7 @@ const NoAnswer = z.object({
 /** The option and no-answer forms of a request: every property optional, so a missing one is named by the use case. */
 const OptionInput = z.object({
   label: z.string().optional(),
+  leadsTo: z.string().optional(),
   reversible: z.boolean().optional(),
   cost: z.string().optional(),
 })
@@ -62,10 +152,17 @@ export const DecisionView = z
     issueId: z.string(),
     repo: z.string(),
     attempt: z.number().int(),
+    /** why the choice is the owner's; null on a Decision asked before the class existed */
+    class: z.enum(DECISION_CLASSES).nullable(),
+    whyYours: z.string().nullable(),
     question: z.string(),
     recommendation: z.string(),
     checked: z.string(),
     options: z.array(Option),
+    /** the change shown, or null */
+    exhibit: Exhibit.nullable(),
+    /** the Spec the question belongs to, or null */
+    spec: z.string().nullable(),
     noAnswer: NoAnswer,
     askedAt: iso,
     /** the time the default is taken; null when the Decision has none */
@@ -90,11 +187,20 @@ export type DecisionView = z.infer<typeof DecisionView>
 export const AskBody = z
   .object({
     attempt: z.number().int().min(1),
+    /** why the choice is the owner's: one of `DECISION_CLASSES` */
+    class: z.string().optional(),
+    /** one line: why this is his and not yours */
+    whyYours: z.string().optional(),
     question: z.string().optional(),
     recommendation: z.string().optional(),
+    /** at most three lines of 160 characters */
     checked: z.string().optional(),
-    /** a JSON array of `{label, reversible, cost}` */
+    /** a JSON array of 2 to 4 `{label, leadsTo, cost, reversible}` */
     options: z.array(OptionInput).optional(),
+    /** one optional exhibit, a JSON object whose `kind` is one of `EXHIBIT_KINDS` */
+    exhibit: z.record(z.string(), z.unknown()).optional(),
+    /** the Spec the question belongs to (an artifact id) */
+    artifact: z.string().optional(),
     /** a JSON object `{consequence, default, waitMinutes}` */
     noAnswer: NoAnswerInput.optional(),
     /** makes a repeated call one event, as on `ship` and `defer` */
@@ -106,7 +212,13 @@ export const AskReply = z
   .object({ result: z.enum(['applied', 'replayed', 'amended']), decision: DecisionView, issue: IssueMove })
   .meta({ id: 'AskReply' })
 
-export const AnswerBody = z.object({ answer: z.string().optional() }).meta({ id: 'AnswerBody' })
+export const AnswerBody = z
+  .object({
+    answer: z.string().optional(),
+    /** the owner's words beside the option he chose: the lead hears them as a note of his, before the answer */
+    note: z.string().max(4000).optional(),
+  })
+  .meta({ id: 'AnswerBody' })
 
 /** `issue` is null when the Decision was withdrawn: the Issue no longer waited for it. */
 export const DecisionReply = z

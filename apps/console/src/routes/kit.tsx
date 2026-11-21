@@ -34,8 +34,10 @@ import {
   StatCard,
   StepRail,
 } from '@/components/kit'
+import { DecisionCase } from '@/components/needs/decision-case'
 import { Button } from '@/components/ui/button'
 import {
+  KIT_DECISIONS,
   KIT_FIX_BARS,
   KIT_FIX_SERIES,
   KIT_ISSUES,
@@ -86,6 +88,41 @@ function Kit() {
           The Console's components on fixtures, built on Basalt tokens only. Reachable by this address.
         </p>
       </header>
+
+      <Section title="Decision">
+        <Note>
+          A Decision as the owner reads it: the question, why it is his, one exhibit that shows the change, and the
+          options as buttons that each say what they lead to. What the lead checked, the Spec, what each choice costs
+          and what waits behind the answer are closed under them. Five asks of the week, one per exhibit.
+        </Note>
+        <div className="grid gap-8">
+          {KIT_DECISIONS.map((decision) => (
+            <article
+              key={decision.id}
+              data-shot={decision.id}
+              className="grid max-w-5xl gap-4 rounded-2xl bg-card p-5 shadow-sm"
+            >
+              <DecisionCase
+                data={decision}
+                open
+                disabled={false}
+                error={null}
+                now={KIT_NOW}
+                spec={
+                  decision.spec
+                    ? {
+                        build: 'A docked panel at the end edge of the shell.',
+                        decided: '- Width 26 rem, fixed.\n- A click while docked swaps the panel.',
+                      }
+                    : null
+                }
+                behind={['Holds 1 Issue', 'With no answer: the lead builds the recommended option.']}
+                onAnswer={() => undefined}
+              />
+            </article>
+          ))}
+        </div>
+      </Section>
 
       <Section title="StatCard">
         <Note>

@@ -6,9 +6,12 @@ A checkpoint is where the factory stops for a person. Each kind has a contract t
 
 ## Decisions
 
-A Decision is one question as a form. The lead raises it with `factory issue ask`, and the form is refused unless every field is filled.
+A Decision is one question with its case, and the only way a lead asks the owner. The lead raises it with `factory issue ask`, and the form is refused unless every field is filled and every limit holds.
 
-- **Required fields.** `question`, `recommendation`, `checked` (what the lead looked at), at least two `options` each with a `label`, a `cost` and a `reversible` flag, and `noAnswer.consequence`. A form with a missing field is refused with every missing field named, and nothing is stored.
+- **Why it is his.** A `class` (one of `direction`, `look`, `own_surface`, `spend`, `security`, `people`, `irreversible`, `owner_fact`) and `whyYours`, one line of at most 140 characters. A choice in none of the eight classes is the lead's: the form is refused with that sentence, and the lead takes the default a revert undoes and writes it under Decided in its Spec.
+- **One question.** `question` is one sentence of at most 200 characters that ends in a question mark. Two to four `options`, each with a `label` (80), `leadsTo` (what gets built if it is chosen, 160), a `cost` (what changing it later costs, 160) and a `reversible` flag. `checked` is at most three lines of 160 characters, and `noAnswer.consequence` says what happens with no answer. An optional `artifact` names the Spec the question belongs to.
+- **The exhibit.** One optional, typed figure shows the change where prose would narrate it: `before_after` (today and after, up to three lines each), `pictures` (one per option, from the linked Spec), `diagram` (one Mermaid figure of up to twelve nodes), `table` (the options against up to four criteria) or `numbers` (up to three figures with their units). Prose is not an exhibit.
+- **Every violation at once.** A form that breaks a rule is refused with every violation named, and nothing is stored.
 - **A recommendation is an option.** It must be the label of one of the options.
 - **A default is reversible.** `noAnswer.default` names a reversible option and comes with `waitMinutes` (1 to 10080). Both are given or neither is. When the wait runs out, the default is taken; a lead that already went on with it takes it sooner with `factory decision take-default <id> --attempt <n>`.
 - **Waiting is not a choice.** A recommendation or default of "Keep waiting", "Wait for review", "Do nothing" or "Hold" is refused. What it waits for is a person's chore, and a chore is an Errand. The steward's own asks are exempt: a hold is a real answer to a stall.
@@ -42,9 +45,9 @@ The wait was 24 hours. The default is not the recommendation: the lead recommend
 
 **Example files:**
 
-- [`decision.ts` L62-L146](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L62-L146): `readDecisionForm`, every required field and the reversible default.
-- [`decision.ts` L153-L172](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L153-L172): the labels that are no choice, and the refusal that points to an Errand.
-- [`decision.ts` L176-L180](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L176-L180): `defaultDue`, when the default is due.
+- [`decision.ts` L233-L350](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L233-L350): `readDecisionForm`, every required field and the reversible default.
+- [`decision.ts` L368-L387](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L368-L387): the labels that are no choice, and the refusal that points to an Errand.
+- [`decision.ts` L395-L400](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L395-L400): `defaultDue`, when the default is due.
 
 ## The Judge
 
@@ -52,7 +55,7 @@ The Judge is the agw workflow `factory-ask` that tries to answer a Decision befo
 
 - **Every Decision, first.** The Judge sees a Decision before the owner does. A failed call is retried after 5 minutes, three tries in all. After the third the Decision goes to the owner unjudged.
 - **It reads what a lead would.** The plan, the docs and the precedents: Decisions the owner answered before. An answer the Judge, a default or the orchestrator gave is never one.
-- **It sees scrubbed text and the case file.** Every field is scrubbed and cut at 2000 characters; the repo is passed as its name. Beside the form it gets the case file (the Issue as filed, the owner's notes, the repo's project and AGENTS.md, its open Issues, the plan rows, its own earlier answers in the repo) and the path of the repo's main checkout, which it reads with read, glob and grep.
+- **It sees scrubbed text and the case file.** Every field is scrubbed and cut at 2000 characters; the repo is passed as its name. Beside the form (its class too) and the head of the Spec the question belongs to (its Build and Decided, up to 20000 characters) it gets the case file (the Issue as filed, the owner's notes, the repo's project and AGENTS.md, its open Issues, the plan rows, its own earlier answers in the repo) and the path of the repo's main checkout, which it reads with read, glob and grep.
 - **It answers, hands on, or sends back.** The verdict is `answer`, `owner` or, on a lead's own Decision's first look, `back`: the question returns to the lead with a note (yours to decide, or the owner's but not ready), stays open and out of Needs you. The lead settles it (`take-default` takes its default, or with none its reversible recommendation) or asks again, which amends it; the second look answers or hands it on, never back. The factory checks an answer before acting on it.
 - **Never irreversible.** The answer must be exactly one of the options, must name a source, and must not be an option that cannot be taken back. An irreversible option is the owner's.
 
@@ -88,9 +91,9 @@ Across the 300 newest closed Issues of this repo (2026-11-17), 24 Decisions were
 
 **Example files:**
 
-- [`decision.ts` L9-L17](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L9-L17): the steps (`policy` is history) and who may settle.
-- [`decision.ts` L210-L220](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L210-L220): `guardVerdict`, the factory's checks on an answer.
-- [`decision.ts` L234-L281](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L234-L281): `JudgeInput`, what the workflow is given.
+- [`decision.ts` L19-L28](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L19-L28): the steps (`policy` is history) and who may settle.
+- [`decision.ts` L426-L440](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L426-L440): `guardVerdict`, the factory's checks on an answer.
+- [`decision.ts` L450-L521](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L450-L521): `JudgeInput`, what the workflow is given.
 
 ## Specs and artifacts
 
@@ -146,8 +149,8 @@ The other two were the address, applied, and Markdown that renders the same on G
 
 **Example files:**
 
-- [`artifact.ts` L28-L33](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L28-L33): the verdicts, and which kinds wait for review.
-- [`artifact.ts` L102-L125](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L102-L125): the three dispositions and the note a deferral or a decline cannot go without.
+- [`artifact.ts` L30-L36](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L30-L36): the verdicts, and which kinds wait for review.
+- [`artifact.ts` L104-L128](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L104-L128): the three dispositions and the note a deferral or a decline cannot go without.
 - [`checkpoints-reviews.ts` L23-L41](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints-reviews.ts#L23-L41): what a Spec that waited its 24 hours becomes.
 
 ## Errands
@@ -223,7 +226,7 @@ An avoidable touch is a touch the factory should have settled. A verdict on a Co
 
 - [`spec-screen.ts` L6-L10](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L6-L10): why the screen exists, and why it is rules only.
 - [`spec-screen.ts` L93-L142](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L93-L142): `specPathOf`, where a Spec goes: the owner, a settle by rule, or the lead's plan.
-- [`checkpoints.ts` L694-L739](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints.ts#L694-L739): `planRefused` and `recordedAsPlan`, how a lead's Spec is handed over without a wait.
+- [`checkpoints.ts` L748-L793](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints.ts#L748-L793): `planRefused` and `recordedAsPlan`, how a lead's Spec is handed over without a wait.
 
 **Read more:**
 

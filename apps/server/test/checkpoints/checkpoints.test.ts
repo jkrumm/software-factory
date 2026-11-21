@@ -71,6 +71,9 @@ let judgeCalls: {
   given: { question: string; answer: string; settledBy: string; repo: string }[]
   key: string
   sendBack: boolean | undefined
+  class: string | undefined
+  spec: string | undefined
+  options: { label: string; cost: string }[]
 }[]
 let judgeAnswer: () => Result<JudgeVerdict>
 let screenCalls: { errand: string; key: string }[]
@@ -88,6 +91,9 @@ const judge: Handler<'judge'> = async (input, key) => {
     given: input.precedents,
     key,
     sendBack: input.sendBack,
+    class: input.class,
+    spec: input.spec,
+    options: input.options,
   })
   await duringJudge?.()
   return judgeAnswer()
@@ -191,13 +197,15 @@ async function replanIssue(extra: { checkpoint?: 'spec' | 'gate' } = {}): Promis
 }
 
 const FORM = {
+  class: 'direction',
+  whyYours: 'What the server logs is what its users can ask support about.',
   question: 'Which logging library should the server use?',
   recommendation: 'pino',
   checked: 'Read the package sizes.',
   options: [
-    { label: 'pino', reversible: true, cost: 'one dependency' },
-    { label: 'winston', reversible: true, cost: 'heavier' },
-    { label: 'wipe the table', reversible: false, cost: 'the rows are gone' },
+    { label: 'pino', leadsTo: 'JSON lines on stdout', reversible: true, cost: 'one dependency' },
+    { label: 'winston', leadsTo: 'transports to files', reversible: true, cost: 'heavier' },
+    { label: 'wipe the table', leadsTo: 'no log table', reversible: false, cost: 'the rows are gone' },
   ],
   noAnswer: { consequence: 'The lead logs with console.' },
 }
@@ -250,15 +258,83 @@ describe('asking', () => {
     expect(await eventsOf(issueId)).toEqual(['filed', 'settled', 'admitted', 'lead_started'])
   })
 
+  test('the Judge is sent the class and the head of the Spec the question belongs to', async () => {
+    const issueId = await workingIssue()
+    const spec = value(
+      await submitArtifact(deps, {
+        issueId,
+        attempt: 1,
+        raw: {
+          kind: 'spec',
+          title: 'Panel',
+          content:
+            '## Build\n\nA closed panel.\n\n## Decided\n\n- It stays closed: his words.\n\n## Detail\n\nLong tail that the Judge does not need.\n',
+        },
+      }),
+    )
+    const { decision } = await ask(issueId, { artifact: spec.artifact.id })
+    value(await tryAnswer(deps, decision.id))
+    expect(judgeCalls).toHaveLength(1)
+    expect(judgeCalls[0]).toMatchObject({ class: 'direction' })
+    expect(judgeCalls[0]?.spec).toContain('## Build\n\nA closed panel.')
+    expect(judgeCalls[0]?.spec).toContain('It stays closed: his words.')
+    expect(judgeCalls[0]?.spec).not.toContain('Long tail')
+    expect(judgeCalls[0]?.options[0]?.cost).toBe('leads to: JSON lines on stdout. Changing it later: one dependency')
+  })
+
+  test('a Decision names a Spec of its own Issue, and its pictures must be ones that Spec holds', async () => {
+    const issueId = await workingIssue()
+    const other = await workingIssue()
+    const image = 'https://img.example.com/a.png'
+    const spec = value(
+      await submitArtifact(deps, {
+        issueId,
+        attempt: 1,
+        raw: {
+          kind: 'spec',
+          title: 'Panel',
+          content: `## Build\n\n![a](${image})\n\n## Decided\n\nIt stays closed.\n`,
+        },
+      }),
+    )
+    const pictures = (src: string) => ({
+      kind: 'pictures',
+      pictures: FORM.options.map((option) => ({ option: option.label, image: src })),
+    })
+    expect(
+      errorOf(await askDecision(deps, { issueId: other, attempt: 1, form: { ...FORM, artifact: spec.artifact.id } })),
+    ).toMatchObject({ kind: 'invalid' })
+    expect(
+      errorOf(await askDecision(deps, { issueId, attempt: 1, form: { ...FORM, artifact: 'artifact_none' } })),
+    ).toMatchObject({ kind: 'not_found' })
+    const absent = errorOf(
+      await askDecision(deps, {
+        issueId,
+        attempt: 1,
+        form: { ...FORM, artifact: spec.artifact.id, exhibit: pictures('https://img.example.com/other.png') },
+      }),
+    )
+    expect(absent.kind === 'invalid' && absent.detail).toContain('is not in the latest revision')
+    expect(await rows('decisions')).toBe(0)
+    const asked = value(
+      await askDecision(deps, {
+        issueId,
+        attempt: 1,
+        form: { ...FORM, artifact: spec.artifact.id, exhibit: pictures(image) },
+      }),
+    )
+    expect(asked.decision.form).toMatchObject({ artifact: spec.artifact.id, exhibit: { kind: 'pictures' } })
+  })
+
   test('a lead Decision whose recommended default is to keep waiting is refused with the Errand hint, nothing stored', async () => {
     const issueId = await workingIssue()
     const waiting = {
       ...FORM,
-      question: 'PR #102 is green but needs an approving review',
+      question: 'PR #102 is green but needs an approving review: wait or merge around it?',
       recommendation: 'Keep waiting',
       options: [
-        { label: 'Keep waiting', reversible: true, cost: 'nothing moves until someone approves' },
-        { label: 'Merge around it', reversible: false, cost: 'bypasses the review rule' },
+        { label: 'Keep waiting', leadsTo: 'nothing', reversible: true, cost: 'nothing moves until someone approves' },
+        { label: 'Merge around it', leadsTo: 'a merge', reversible: false, cost: 'bypasses the review rule' },
       ],
       noAnswer: { consequence: 'The PR stays open', default: 'Keep waiting', waitMinutes: 60 },
     }
