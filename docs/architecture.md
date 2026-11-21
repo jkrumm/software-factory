@@ -369,8 +369,9 @@ request's review by someone else. Each rule is one line with the symbol that hol
 **Specs and Concepts** (`domains/checkpoints/spec-screen.ts`, `app/checkpoints-specs.ts`)
 - A Spec flag (`checkpoint: spec`, or `gate` for one only the owner's verdict ends) owes a Spec. `shipIssue`
   (`app/quality-ship.ts`) refuses the ship until one exists.
-- The screen is `screenSpecByRule`, then `factory-spec-screen`. A failed call is retried; after the third it passes
-  unscreened.
+- A Spec goes where `specPathOf` says, by rule alone (NL53): a lead's Spec is its plan, recorded at `artifact submit`
+  (`recordedAsPlan`) as settled with no wait and no page; an owner gate's, a filed one, a revision after Changes and a
+  Replan that changes a plan row wait and are passed to the owner by `screenSpecs`. `factory-spec-screen` is not called.
 - No verdict within `SPEC_WAIT_HOURS` (24 h, `packages/contract/src/lane.ts`): `recheckReviews`
   (`app/checkpoints-reviews.ts`) defaults it to `looks_good` by the factory, or `no_longer_applies` when its Issue
   closed.
@@ -416,7 +417,7 @@ docs-check` fails when it is stale):
 | `leads` | 10 s | none |
 | `planning` | 10 s | none |
 | `watch` | 10 s | none |
-| `checkpoints` | 10 s | `factory-ask`, `factory-errand`, `factory-spec-screen` |
+| `checkpoints` | 10 s | `factory-ask`, `factory-errand` |
 | `send` | 10 s | none |
 | `steward` | 10 s | `factory-steward` |
 | `triage` | 10 s | `factory-triage` |
@@ -445,7 +446,7 @@ What each decides in code and what it files:
   long wait or has waited on the owner for two hours with work behind it (`read/owner-waits.ts`). `watch`: verify and probes (Quality).
 - `checkpoints`, `send` (`app/checkpoints-loop.ts`, `app/checkpoints-pages.ts`): rechecks of checkpoints at the owner
   past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps (the Judge, `factory-ask`), unscreened Errands
-  (`factory-errand`) and Spec revisions (`factory-spec-screen`), and the owner's pages.
+  (`factory-errand`) and Spec revisions that wait (by rule), and the owner's pages.
 - `steward` (`app/loops/steward.ts`, `domains/planning/stall.ts`): wake, re-check, requeue, deliver, nudge a quiet
   lead, note a watch whose checkout stays blocked, break a claim deadlock; `factory-steward` says what a stalled Issue
   needs when the rules do not. While a project has a live lead it reads the main checkout once a pass from local refs

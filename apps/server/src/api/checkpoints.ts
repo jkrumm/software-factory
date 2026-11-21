@@ -35,7 +35,7 @@ import {
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
-import type { CheckpointError, ErrandWritten } from '../app/checkpoints.ts'
+import { type CheckpointError, type ErrandWritten, PLAN_ANSWER } from '../app/checkpoints.ts'
 import type { CheckpointUses } from '../app/checkpoints-uses.ts'
 import { specScreenView } from '../app/checkpoints-specs.ts'
 import { ARTIFACT_KINDS, type ArtifactId } from '../domains/checkpoints/artifact.ts'
@@ -386,6 +386,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
             artifact: summaryOf(artifact, revisions, result.value.links),
             verdict: null,
             issue,
+            ...(result.value.plan ? { next: PLAN_ANSWER } : {}),
           }),
         )
       },
@@ -396,7 +397,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         detail: {
           operationId: 'artifact.submit',
           summary:
-            'the lead (or the owner, for his own Issue) hands over a Concept or Spec (the Issue waits for the verdict) or a Report (it never waits); a Report no Issue owns is `artifact new`',
+            "the lead (or the owner, for his own Issue) hands over a Concept (the Issue waits for the verdict), a Spec (the lead's plan: it does not wait, and `next` says so; an owner gate or a Replan that changes a plan row waits for the owner's verdict) or a Report (it never waits); a Report no Issue owns is `artifact new`",
         },
       },
     )
@@ -485,6 +486,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
             artifact: summaryOf(artifact, revisions, result.value.links),
             verdict: null,
             issue,
+            ...(result.value.plan ? { next: PLAN_ANSWER } : {}),
           }),
         )
       },
@@ -696,7 +698,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         detail: {
           operationId: 'artifact.screen',
           summary:
-            "the Spec screen's look at the latest revision, and the rule or the workflow request (with the owner's newest marks) its next look would use; writes nothing",
+            "the Spec screen's look at the latest revision, and the rule its next look would come to (no workflow reads a Spec, so `request` is null); writes nothing",
         },
       },
     )

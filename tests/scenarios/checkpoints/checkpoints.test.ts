@@ -147,7 +147,7 @@ const FORM = (question: string, patch: Record<string, unknown> = {}) => ({
   ...patch,
 })
 
-test("a verdict on a submitted Spec arrives as the lead's next turn: one note_lead, once", async () => {
+test("a lead's Spec is its plan: no wait, no page; the owner's comment and verdict reach the lead as notes, once", async () => {
   const issueId = await workingIssue('example-spec')
   const submitted = await ok(
     (json) => ArtifactReply.parse(json),
@@ -161,8 +161,14 @@ test("a verdict on a submitted Spec arrives as the lead's next turn: one note_le
       content: '# Queue\n\nWe keep the queue in Postgres.',
     }),
   )
-  expect(submitted).toMatchObject({ result: 'applied', issue: { state: 'waiting', waitReason: 'review' } })
+  expect(submitted).toMatchObject({ result: 'applied', issue: null })
+  expect(submitted.next).toContain('Recorded as your plan')
   const artifactId = submitted.artifact.id
+  const notes = async () =>
+    (
+      await world.db.sql`SELECT payload->>'text' AS text FROM factory.issue_events
+        WHERE issue_id = ${issueId} AND kind = 'noted' AND result = 'applied' ORDER BY version`
+    ).map((row: { text: string }) => row.text)
 
   await ok(
     (json) => ArtifactReply.parse(json),
@@ -171,7 +177,12 @@ test("a verdict on a submitted Spec arrives as the lead's next turn: one note_le
     artifactId,
     ...body({ quote: 'keep the queue in Postgres', path: 'Queue', comment: 'Name the lock.' }),
   )
-  expect(await pass()).toMatchObject({ pages: { sent: [expect.stringContaining('page:review')] } })
+  expect(await notes()).toEqual([expect.stringContaining('Name the lock.')])
+  const passed = await pass()
+  expect(passed.specs).toEqual([])
+  expect(passed.pages.sent.filter((page) => page.includes('page:review'))).toEqual([])
+  const needs = await ok((json) => NeedsModel.parse(json), 'read', 'needs')
+  expect(needs.items.filter((item) => item.id === artifactId)).toEqual([])
 
   const verdict = await ok(
     (json) => ArtifactReply.parse(json),
@@ -180,15 +191,15 @@ test("a verdict on a submitted Spec arrives as the lead's next turn: one note_le
     artifactId,
     ...body({ verdict: 'with_notes', note: 'Good, but name the lock.' }),
   )
-  expect(verdict).toMatchObject({ result: 'applied', verdict: { verdict: 'looks_good' }, issue: { state: 'working' } })
-  expect(verdict.issue?.effects.map((e) => e.kind)).toEqual(['note_lead'])
+  // the plan has no wait to end: the verdict reaches the lead as a note, the Issue works on
+  expect(verdict).toMatchObject({ result: 'applied', verdict: { verdict: 'looks_good' }, issue: null })
   // With notes is retired: it was stored as Looks good, and the lead is told to apply the note and the open comment.
-  const noted: { text: string }[] = await world.db.sql`
-    SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' ORDER BY at DESC LIMIT 1`
-  expect(noted[0]?.text).toContain('Looks good. Read it with: factory artifact show')
-  expect(noted[0]?.text).toContain('Good, but name the lock.')
-  expect(noted[0]?.text).toContain('Apply his open comment')
-  expect(noted[0]?.text).toContain('Name the lock.')
+  const noted = await notes()
+  expect(noted).toHaveLength(2)
+  expect(noted[1]).toContain('Looks good. Read it with: factory artifact show')
+  expect(noted[1]).toContain('Good, but name the lock.')
+  expect(noted[1]).toContain('Apply his open comment')
+  expect(noted[1]).toContain('Name the lock.')
 
   // The verdict again, and another on the same revision: the first stands, and nothing reaches the lead twice.
   for (const again of [{ verdict: 'with_notes', note: 'Good, but name the lock.' }, { verdict: 'looks_good' }]) {
@@ -491,9 +502,9 @@ test('a replayed outbox pages once: the same asks and passes again send nothing'
   expect(published).toHaveLength(sentBefore)
   expect((await pages()).length).toBe(listed.length)
 
-  // One page per checkpoint that reached the owner: the Spec, one Decision, two Errands (the second was joined by another Issue,
-  // which paged nothing). Nothing the factory settled paged.
-  expect(published.map((p) => p.tags).sort()).toEqual(['decision', 'errand', 'errand', 'review'])
+  // One page per checkpoint that reached the owner: one Decision, two Errands (the second was joined by another Issue, which
+  // paged nothing). Nothing the factory settled paged, and the lead's Spec, its plan, reached no one.
+  expect(published.map((p) => p.tags).sort()).toEqual(['decision', 'errand', 'errand'])
 })
 
 test('a Decision reaches Needs you only after the Judge saw it, and is amended by a second ask on the open question', async () => {
@@ -555,10 +566,9 @@ test('a Decision reaches Needs you only after the Judge saw it, and is amended b
   expect(next.decision.id).not.toBe(id)
 })
 
-test('only the Spec screen, the Judge and the Errand screen called agw', async () => {
+test('only the Judge and the Errand screen called agw: no workflow reads a Spec', async () => {
   const calls = (await world.calls()).filter((call) => call.tool === 'agw')
   expect(calls.map((call) => call.args[0])).toEqual([
-    'factory-spec-screen',
     'factory-ask',
     'factory-ask',
     'factory-ask',

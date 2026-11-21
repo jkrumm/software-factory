@@ -61,10 +61,11 @@ let filings = 0
 /** The owner files an Issue (`issue new`); it begins `settling`. */
 export async function fileIssue(
   flow: Flow,
-  input: { repo: string; title: string; text?: string; key?: string; after?: string[] },
+  input: { repo: string; title: string; text?: string; key?: string; after?: string[]; checkpoint?: 'spec' | 'gate' },
 ): Promise<string> {
   const args = ['issue', 'new', '--repo', input.repo, '--title', input.title, '--key', input.key ?? `flow-${++filings}`]
   if (input.text) args.push('--text', input.text)
+  if (input.checkpoint) args.push('--checkpoint', input.checkpoint)
   for (const after of input.after ?? []) args.push('--after', after)
   return issueOf((await must(flow, args)).json)
 }

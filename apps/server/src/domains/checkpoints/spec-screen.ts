@@ -1,20 +1,12 @@
-import {
-  SPEC_SCREEN_CONTENT_MAX,
-  type SpecPrecedent,
-  type SpecScreenAnswer,
-  type SpecScreenRequest,
-  type SpecSource,
-} from '@software-factory/contract'
+import type { SpecScreenAnswer, SpecSource } from '@software-factory/contract'
 import * as z from 'zod'
-import { scrub } from '../../kernel/scrub.ts'
 import { WORKFLOWS } from '../../kernel/workflows.ts'
-import type { Format, Verdict } from './artifact.ts'
+import type { Verdict } from './artifact.ts'
 
 /**
- * The Spec screen (Issue 1096): a Spec revision reaches the owner only when it is his to read. The owner said on 2026-11-14
- * that most Specs reaching him could have been decided by their lead (12 looks_good and 16 with_notes against 3 changes in
- * 14 days). The rules decide what they can, the `factory-spec-screen` workflow the rest; a screen that cannot be reached
- * passes the Spec to him after its last try, so a broken screen costs him a read, never a Spec he should have seen.
+ * The Spec screen (Issue 1096, made rules-only by Issue 2732): a Spec revision reaches the owner only when it is his to read.
+ * A lead's Spec is its plan and never waits; four kinds wait for him by rule (`specPathOf`). The `factory-spec-screen`
+ * workflow is no longer called; its answer check below leaves with it in a later change.
  */
 
 /** Failed calls before the Spec reaches the owner unscreened; the wait between them. */
@@ -49,7 +41,7 @@ export function specSourceOf(origin: SpecOrigin): SpecSource {
 /**
  * The changes a Replan's Spec proposes, as its fenced `replan` block states them (the Replan playbook, step 4). Strict and
  * with every key required bar `free` (added later; a block without it frees no row): a block that leaves one out or
- * misnames one says nothing a rule may settle on, so it goes to the workflow instead.
+ * misnames one says nothing a rule may settle on, so it goes to the owner instead.
  */
 const ReplanBlock = z.strictObject({
   /** the plan rows the proposal adds, changes or drops, by key: every change to a row but a removed `after` */
@@ -88,23 +80,35 @@ export interface RuleInput {
 export type RuleOutcome = { outcome: 'passed' | 'settled'; reason: string }
 
 /**
- * The deterministic first look; null leaves the Spec to the workflow.
- * - A revision after the owner asked for changes is his to read again: he asked for it.
- * - A Spec of an owner gate (`checkpoint: gate`) is always his to read: no rule and no workflow settles it.
- * - A Spec its filer attached is handed over for the owner's review on purpose.
- * - A Replan whose block changes no plan row and cancels nothing only reorders (it frees Issues or rows from a stalled
- *   head, or adds an edge): the lead applies it on its defaults. An edge is reversible with one call, a freed row's `after`
- *   with one plan edit.
+ * Where a Spec revision goes, by rule alone (Issue 2732: no workflow reads a Spec):
+ * - `owner`: it waits for the owner's verdict, and he is paged;
+ * - `settled`: it waits, and the factory settles it by rule with its own looks_good;
+ * - `plan`: the lead's plan. It does not wait and pages no one; the owner may still comment on it at any time.
  */
-export function screenSpecByRule(input: RuleInput): RuleOutcome | null {
+export type SpecPath = { path: 'owner' | 'settled' | 'plan'; reason: string }
+
+/** The reason a lead's Spec carries: what `artifact submit` answers and the screen row records. */
+export const PLAN_REASON = "a lead's Spec is its plan: it does not wait for the owner"
+
+/**
+ * Four Specs wait for the owner, everything else is the lead's plan:
+ * - a revision after the owner asked for changes is his to read again: he asked for it;
+ * - a Spec of an owner gate (`checkpoint: gate`): only his own verdict ends it;
+ * - a Spec its filer attached is handed over for his review on purpose;
+ * - a Replan whose block changes a plan row or cancels an Issue (or whose block does not parse, so no rule reads a guess).
+ * A Replan whose block does neither only reorders (it frees Issues or rows from a stalled head, or adds an edge): it is
+ * settled by rule, and the lead applies it on its defaults. An edge is reversible with one call, a freed row's `after`
+ * with one plan edit.
+ */
+export function specPathOf(input: RuleInput): SpecPath {
   if (input.revision > 1 && input.earlier.includes('changes')) {
-    return { outcome: 'passed', reason: 'a revision the owner asked for with his verdict of changes' }
+    return { path: 'owner', reason: 'a revision the owner asked for with his verdict of changes' }
   }
   if (input.origin.gate) {
-    return { outcome: 'passed', reason: 'an owner gate: only the owner gives its verdict' }
+    return { path: 'owner', reason: 'an owner gate: only the owner gives its verdict' }
   }
   if (input.origin.filedSpec) {
-    return { outcome: 'passed', reason: 'its filer attached it with the Issue for the owner to review' }
+    return { path: 'owner', reason: 'its filer attached it with the Issue for the owner to review' }
   }
   if (input.origin.replan) {
     const block = replanBlockOf(input.content)
@@ -120,15 +124,30 @@ export function screenSpecByRule(input: RuleInput): RuleOutcome | null {
           ? 'a Replan that changes a plan row only by a removed after and cancels nothing'
           : 'a Replan that changes no plan row and cancels nothing'
       return {
-        outcome: 'settled',
+        path: 'settled',
         reason:
           freed.length > 0
             ? `${what}: it only frees ${freed.join(' and ')} from ${issues + rows === 1 ? 'a wait' : 'their waits'}`
             : what,
       }
     }
+    return {
+      path: 'owner',
+      reason: block
+        ? 'a Replan that changes a plan row or cancels an Issue'
+        : 'a Replan whose replan block is missing or does not parse',
+    }
   }
-  return null
+  return { path: 'plan', reason: PLAN_REASON }
+}
+
+/**
+ * The screen's look at a revision that waits: the owner's pass, or the factory's settle. A lead's plan that waits all the
+ * same (handed over before Issue 2732, or revised while its Issue still waited on it) is settled, so its Issue works again.
+ */
+export function screenSpecByRule(input: RuleInput): RuleOutcome {
+  const { path, reason } = specPathOf(input)
+  return { outcome: path === 'owner' ? 'passed' : 'settled', reason }
 }
 
 export type SpecScreenChecked =
@@ -144,39 +163,6 @@ export function checkSpecScreen(answer: SpecScreenAnswer): SpecScreenChecked {
   if (reason !== '') return { action: 'settle', reason }
   return { action: 'refused', why: 'a settle without a reason' }
 }
-
-/** The Spec's content as the screen reads it: scrubbed, and cut with the cut said. */
-function screenedContent(content: string): string {
-  const clean = scrub(content)
-  if (clean.length <= SPEC_SCREEN_CONTENT_MAX) return clean
-  return `${clean.slice(0, SPEC_SCREEN_CONTENT_MAX)}\n[cut: ${clean.length - SPEC_SCREEN_CONTENT_MAX} more characters]`
-}
-
-/** The request the workflow is shown: the Spec, its Issue and the owner's newest marks, every text scrubbed. */
-export function specScreenRequest(input: {
-  spec: { id: string; revision: number; title: string; format: Format; content: string; source: SpecSource }
-  issue: { id: string; repo: string; title: string; kind: string }
-  precedents: readonly SpecPrecedent[]
-}): SpecScreenRequest {
-  return {
-    spec: {
-      id: input.spec.id,
-      revision: input.spec.revision,
-      title: scrub(input.spec.title).slice(0, 200),
-      source: input.spec.source,
-      content: screenedContent(input.spec.content),
-      format: input.spec.format,
-    },
-    issue: { ...input.issue, title: scrub(input.issue.title) },
-    precedents: input.precedents.map(scrubPrecedent),
-  }
-}
-
-const scrubPrecedent = (precedent: SpecPrecedent): SpecPrecedent => ({
-  ...precedent,
-  title: scrub(precedent.title).slice(0, 200),
-  note: precedent.note === null ? null : scrub(precedent.note).slice(0, 2000),
-})
 
 /** The note the lead hears when the screen settles its Spec. */
 export const settledNote = (reason: string): string =>

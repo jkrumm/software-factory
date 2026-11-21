@@ -268,13 +268,17 @@ export const SpecScreenView = z.object({
   at: iso,
 })
 
-/** A write on an artifact; `issue` is null when no event touched the Issue (a Report, an annotation). */
+/**
+ * A write on an artifact; `issue` is null when no event touched the Issue (a Report, an annotation, a Spec recorded as the
+ * lead's plan). `next` tells the lead what follows when the write does not make the Issue wait (a Spec that is its plan).
+ */
 export const ArtifactReply = z
   .object({
     result: z.enum(['applied', 'replayed']),
     artifact: ArtifactSummary,
     verdict: VerdictView.nullable(),
     issue: IssueMove.nullable(),
+    next: z.string().optional(),
   })
   .meta({ id: 'ArtifactReply' })
 
@@ -557,7 +561,6 @@ export const ErrandNeededRequest = z
     evidence: z.string().max(4000),
   })
   .meta({ id: 'ErrandNeededRequest' })
-export type ErrandNeededRequest = z.infer<typeof ErrandNeededRequest>
 
 /** `not_needed` closes the request; `needed` and `unsure` keep it. Only `not_needed` needs a reason on which the owner can act. */
 export const ErrandNeededAnswer = z
@@ -629,7 +632,6 @@ export const SpecScreenRequest = z
     precedents: z.array(SpecPrecedent).max(SPEC_SCREEN_PRECEDENTS),
   })
   .meta({ id: 'SpecScreenRequest' })
-export type SpecScreenRequest = z.infer<typeof SpecScreenRequest>
 
 /**
  * What `factory-spec-screen` says: the Spec is the owner's to read (`pass`: a screen or look he has not seen, product
@@ -642,8 +644,8 @@ export const SpecScreenAnswer = z
 export type SpecScreenAnswer = z.infer<typeof SpecScreenAnswer>
 
 /**
- * `factory artifact screen <id>`: the screen's look at the latest revision, and what the next look would decide by rule or
- * send to the workflow (the precedents as they stand now). `request` is null when a rule decides or nothing is left to screen.
+ * `factory artifact screen <id>`: the screen's look at the latest revision, and what the next look would decide by rule.
+ * `request` is always null since Issue 2732 (no workflow reads a Spec); the field leaves with the workflow's code.
  */
 export const SpecScreenPreview = z
   .object({

@@ -132,7 +132,7 @@ issue_1197, `factory issue show issue_1197`, 2026-11-17: filed on 2026-11-14 at 
 **Example files:**
 
 - [`replan.ts` L1-L50](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/replan.ts#L1-L50): triggers, inputs and the lead's playbook.
-- [`spec-screen.ts` L88-L120](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L88-L120): the rule that settles a Replan which only frees Issues.
+- [`spec-screen.ts` L93-L142](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L93-L142): the rule that settles a Replan which only frees Issues.
 
 ## Defer
 

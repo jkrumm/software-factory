@@ -442,11 +442,12 @@ A checkpoint is where the factory stops for a person. There are three, and a mer
 | Checkpoint | What the lead hands over | Answered before the owner by |
 |-|-|-|
 | **Decision** | a question, its options and the lead's own recommendation | the Judge workflow (which reads the owner's earlier answers), then the lead's declared default |
-| **Concept or Spec** | one page before it builds a new surface, data model or screen | a screening workflow that passes the ones that are not the owner's to read |
+| **Concept or Spec** | a Concept before a product's direction; a Spec is the lead's plan before it builds a new surface or data model | a Spec is no stop: the lead's plan builds at once, and rules send only an owner gate, a filed Spec, a revision after Changes and a Replan that changes the plan to the owner |
 | **Errand** | something only the owner's hands can do: a secret, a device, a portal | rules that turn away what a command or a token could do |
 
 - A checkpoint is a **contract**: at most a few open choices, each with a default, and what changing it later costs.
-- **The queue never waits on the owner by accident.** A Spec without a verdict in 24 hours goes ahead on the defaults it named.
+- **The one who knows most decides.** The lead has read the code: a Spec is its plan, never a question. What is the owner's (product direction, an unseen look, spend, security policy, other people's data, a change that cannot be undone) is a Decision raised beside it.
+- **The queue never waits on the owner by accident.** A Spec or Concept that waits, bar an owner gate, goes ahead on the defaults it named after 24 hours without a verdict.
 - A Decision passes the steps in order and stops at the first that answers it. `policy` is history: no step of that name runs any more, but old rows still hold it.
 
   ```ts

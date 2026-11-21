@@ -60,13 +60,12 @@ export const FILING = {
   },
   checkpoint: {
     shape:
-      "optional; `spec` makes the lead hand over a one-page Spec before it builds, and the ship is refused without one; `gate` is an owner gate: the same Spec, but only the owner's own verdict ends the wait",
+      "optional; `spec` makes the lead write its plan as a Spec before it builds, and the ship is refused without one; nobody waits on it. `gate` is an owner gate, the one way a filer makes the owner read: the same Spec, and only the owner's own verdict ends the wait",
     notes: [
-      "Set it for a new public surface (an API, a CLI verb, a contract), a new data model or a migration that changes meaning, a new dependency of weight, or a UI screen the owner has not seen, and only for work of a session or more. Never for an hour's change (a constant, a limit, a config line) or a change inside an existing surface: its lead decides those.",
-      "It is not Spec material, so never set it for these: research and then build (the lead researches, then builds, with no page between); a name, a file path, a subpath or an export layout; a direction the owner already stated (quote him in the facts, and the lead builds on it); a choice the repo's own standards rank. Each costs the owner a read and holds the Issue for as long as it waits.",
-      "A Spec passes the Spec screen before it reaches the owner: one that is not his to read (no unseen screen or look, product direction, spend, security policy, other people or company data, irreversible change, or defaults that lead to materially different work) gets the factory's looks_good and its lead builds at once.",
-      `The Spec has at most three open choices, each with the lead's default; with no verdict in ${SPEC_WAIT_HOURS} hours the lead goes on with its defaults, so the queue never waits on the owner.`,
-      '`gate` is for an Issue whose rows must not start until the owner has said so (a product gate): no default is taken, the Spec screen never settles it, and every Issue `after` it waits for his own verdict. It costs a waiting lead and a held chain for as long as he takes: never use it for a choice the lead can make.',
+      "Set `spec` for a new public surface (an API, a CLI verb, a contract), a new data model or a migration that changes meaning, or a new dependency of weight, and only for work of a session or more. Never for an hour's change (a constant, a limit, a config line) or a change inside an existing surface: its lead decides those.",
+      "The lead's Spec is its plan: it opens with Build and Decided, the lead submits it and builds at once, and it reaches no one's Needs you. The owner may comment on it at any time, and the comment reaches the lead as a note. What in it is the owner's (product direction, an unseen look with real variants, spend, security policy, other people's data, a change that cannot be undone) the lead raises beside it as a Decision.",
+      "It is not Spec material, so never set it for these: research and then build (the lead researches, then builds, with no page between); a name, a file path, a subpath or an export layout; a direction the owner already stated (quote him in the facts, and the lead builds on it); a choice the repo's own standards rank.",
+      '`gate` is for an Issue whose rows must not start until the owner has said so (a product gate): no default is taken, no rule settles it, and every Issue `after` it waits for his own verdict. It costs a waiting lead and a held chain for as long as he takes: never use it for a choice the lead can make.',
     ],
     example: 'spec',
   },
@@ -93,7 +92,7 @@ export const FILING = {
     {
       flag: '--checkpoint',
       meaning:
-        'optional: `spec` makes the lead submit a one-page Spec before it builds; `gate` the same, with no default after 24 hours',
+        "optional: `spec` makes the lead submit its plan as a Spec before it builds, and nobody waits on it; `gate` the same, and the Issue waits for the owner's own verdict with no default",
     },
     {
       flag: '--spec',

@@ -172,6 +172,21 @@ async function workingIssue(repo = 'example', extra: { checkpoint?: 'spec' | 'ga
   return id
 }
 
+/** A Spec that waits for the owner by rule and is no gate: a Replan whose block changes a plan row (Issue 2732). */
+const REPLAN_SPEC = {
+  kind: 'spec',
+  title: 'The queue spec',
+  content: '# Queue\n\n```replan\n{"plan":["queue"],"edges":{"add":[],"remove":[]},"cancel":[]}\n```\n',
+}
+
+/** A working Issue that is a project's Replan. */
+async function replanIssue(extra: { checkpoint?: 'spec' | 'gate' } = {}): Promise<IssueId> {
+  const id = await workingIssue('example', extra)
+  await db.sql`INSERT INTO factory.replans (issue_id, project, trigger, created_at)
+    VALUES (${id}, 'example', 'stalled', ${clock.now()})`
+  return id
+}
+
 const FORM = {
   question: 'Which logging library should the server use?',
   recommendation: 'pino',
@@ -808,8 +823,8 @@ describe('the ledger', () => {
 describe('artifacts', () => {
   const SPEC = { kind: 'spec', title: 'The queue spec', content: '# Queue\n\nWe keep the queue in Postgres.' }
 
-  test("a Spec makes the Issue wait; a verdict is the lead's next turn, in one note_lead, once", async () => {
-    const issueId = await workingIssue()
+  test("an owner gate's Spec makes the Issue wait; a verdict is the lead's next turn, in one note_lead, once", async () => {
+    const issueId = await workingIssue('example', { checkpoint: 'gate' })
     const submitted = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
     expect(submitted).toMatchObject({ result: 'applied', issue: { state: 'waiting', waitReason: 'review' } })
     const artifactId = submitted.artifact.id
@@ -841,8 +856,8 @@ describe('artifacts', () => {
   })
 
   test("the owner's delegate gives a Spec's verdict for him; his own verdict replaces it and the lead hears so", async () => {
-    const issueId = await workingIssue()
-    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    const issueId = await replanIssue()
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: REPLAN_SPEC }))
     const given = value(
       await giveVerdict(deps, {
         artifactId: artifact.id,
@@ -951,12 +966,19 @@ describe('artifacts', () => {
     expect(given).toMatchObject({ n: 0 })
   })
 
-  test('a revision after Changes waits again and pages for the new revision; a stale verdict is refused', async () => {
+  test("a revision after the owner's Changes on a lead's plan waits and pages for it; a stale verdict is refused", async () => {
     const issueId = await workingIssue()
-    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
-    // a Spec is paged once the screen passes it: the first revision by the workflow
-    expect(value(await screenSpecs(deps))).toMatchObject([{ revision: 1, outcome: 'passed' }])
-    value(await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: null, revision: null }))
+    const submitted = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    const { artifact } = submitted
+    // the lead's plan does not wait and is never screened or paged
+    expect(submitted).toMatchObject({ issue: null, plan: true })
+    expect(value(await screenSpecs(deps))).toEqual([])
+    // his Changes reaches the lead as a note; with no wait to end, the Issue works on
+    const changes = value(
+      await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: 'Name the lock.', revision: null }),
+    )
+    expect(changes.issue).toBeNull()
+    expect(await eventsOf(issueId)).toEqual(['filed', 'settled', 'admitted', 'lead_started', 'noted'])
     const revised = value(
       await reviseArtifact(deps, {
         artifactId: artifact.id,
@@ -965,12 +987,13 @@ describe('artifacts', () => {
         note: 'named it',
       }),
     )
-    // the screen passes both revisions: the first by the workflow, the second by rule (the owner asked for it)
-    expect(value(await screenSpecs(deps))).toMatchObject([{ revision: 2, outcome: 'passed' }])
+    // the revision he asked for is his to read: it waits, and the screen passes it to him by rule
     expect(revised).toMatchObject({ issue: { state: 'waiting', waitReason: 'review' } })
+    expect(revised.plan).toBe(false)
+    expect(value(await screenSpecs(deps))).toMatchObject([{ revision: 2, outcome: 'passed' }])
     expect(revised.artifact.id).toBe(artifact.id)
     expect(await rows('artifact_revisions')).toBe(2)
-    expect(await rows('checkpoint_pages')).toBe(2)
+    expect(await rows('checkpoint_pages')).toBe(1)
     expect(
       errorOf(await giveVerdict(deps, { artifactId: artifact.id, verdict: 'looks_good', note: null, revision: 1 })),
     ).toMatchObject({
@@ -991,7 +1014,7 @@ describe('artifacts', () => {
   })
 
   test('submitting the same hand-over twice is one artifact, one page', async () => {
-    const issueId = await workingIssue()
+    const issueId = await workingIssue('example', { checkpoint: 'gate' })
     value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
     expect(value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))).toMatchObject({ result: 'replayed' })
     value(await screenSpecs(deps))
@@ -1538,7 +1561,7 @@ describe('a Decision raised during a review', () => {
   const SPEC = { kind: 'spec', title: 'The queue spec', content: '# Queue\n\nWe keep the queue in Postgres.' }
 
   async function reviewed() {
-    const issueId = await workingIssue()
+    const issueId = await workingIssue('example', { checkpoint: 'gate' })
     const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
     value(await screenSpecs(deps))
     return { issueId, artifactId: artifact.id }
@@ -2071,8 +2094,8 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
     await db.sql`SELECT checkpoint_id, kind, outcome, by, through_version FROM factory.checkpoint_rechecks ORDER BY at, checkpoint_id`
 
   test('a flagged Issue takes its lead its defaults after the wait: a verdict by the factory, one note, the lead goes on', async () => {
-    const issueId = await workingIssue('example', { checkpoint: 'spec' })
-    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    const issueId = await replanIssue({ checkpoint: 'spec' })
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: REPLAN_SPEC }))
     later(23)
     expect(value(await recheckReviews(deps))).toEqual([])
     later(2)
@@ -2108,8 +2131,9 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
   test.each(['spec', 'concept'] as const)(
     'an unflagged Issue takes its defaults for a %s after the wait too, and the lead goes on',
     async (kind) => {
-      const issueId = await workingIssue()
-      const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: { ...SPEC, kind } }))
+      // a Spec that waits and is no gate: a Replan that changes a plan row
+      const issueId = await replanIssue()
+      const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: { ...REPLAN_SPEC, kind } }))
       later(23)
       expect(value(await recheckReviews(deps))).toEqual([])
       later(2)
@@ -2169,8 +2193,8 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
   })
 
   test('a Spec whose Issue closed meanwhile is withdrawn, and its pages are never sent', async () => {
-    const issueId = await workingIssue('example', { checkpoint: 'spec' })
-    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    const issueId = await replanIssue({ checkpoint: 'spec' })
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: REPLAN_SPEC }))
     await record(issueId, 'cancelled', { kind: 'cancelled', payload: { reason: 'not needed' }, actor: 'owner' })
     later(25)
     expect(value(await recheckReviews(deps))).toEqual([{ artifact: artifact.id, outcome: 'withdrawn' }])

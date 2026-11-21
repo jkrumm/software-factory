@@ -1,4 +1,4 @@
-import { type Effort, SPEC_WAIT_HOURS, type Tier } from '@software-factory/contract'
+import { type Effort, type Tier } from '@software-factory/contract'
 import { repoNameOf } from '../domains/planning/sync.ts'
 import { reviewSeat } from '../domains/leads/reviewer.ts'
 import { type CiOutcome, judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
@@ -73,10 +73,10 @@ export interface ShipAnswer {
 
 /** What a flagged Issue's ship is refused with until its lead has submitted a Spec. */
 const specOwedMessage = (checkpoint: 'spec' | 'gate'): string =>
-  `ship refused: this Issue carries the checkpoint \`${checkpoint}\` and no Spec was submitted: hand over a one-page Spec with \`factory artifact submit --kind spec\` (at most three open choices, each with your default); ${
+  `ship refused: this Issue carries the checkpoint \`${checkpoint}\` and no Spec was submitted: ${
     checkpoint === 'gate'
-      ? "only the owner's own verdict ends the wait: there is no default after the hours, so do not build before it"
-      : `with no verdict in ${SPEC_WAIT_HOURS} hours you go on with your defaults`
+      ? "hand over a one-page Spec with `factory artifact submit --kind spec`; only the owner's own verdict ends the wait: there is no default after the hours, so do not build before it"
+      : 'write your plan as a Spec (Build, then Decided) and submit it with `factory artifact submit --kind spec`; it does not wait, and it is the Spec this checkpoint owes'
   }`
 
 /**

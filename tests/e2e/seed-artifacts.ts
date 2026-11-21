@@ -235,8 +235,9 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
   const url = lab.server.url
   const synced = await lab.cli(['project', 'sync'])
   if (synced.code !== 0) throw new Error(`project sync exited ${synced.code}: ${synced.err}`)
-  const lead = async (repo: string, title: string): Promise<string> => {
-    const issue = await fileIssue(lab, { repo, title })
+  // a lead's Spec is its plan and waits for no one (Issue 2732): the Issues whose Spec waits for a verdict are owner gates
+  const lead = async (repo: string, title: string, checkpoint?: 'gate'): Promise<string> => {
+    const issue = await fileIssue(lab, { repo, title, ...(checkpoint ? { checkpoint } : {}) })
     await admitted(lab, issue)
     await tick(lab)
     return issue
@@ -244,7 +245,7 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
   const submit = async (issue: string, body: Record<string, unknown>): Promise<string> =>
     (await api<{ artifact: { id: string } }>(url, `/v1/issues/${issue}/artifacts`, { attempt: 1, ...body })).artifact.id
   const [specIssue, reportIssue] = [
-    await lead('ember', 'Write the storage spec'),
+    await lead('ember', 'Write the storage spec', 'gate'),
     await lead('flint', 'Ship the launch'),
   ]
 
@@ -267,7 +268,7 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
   await annotate(DROPPED, 'Why a minute?')
   await api(url, `/v1/artifacts/${revised}/revisions`, { content: REVISED_MD, note: 'Retries are immediate now' })
 
-  const shotSpecIssue = await lead('forge', 'Write the queue options spec')
+  const shotSpecIssue = await lead('forge', 'Write the queue options spec', 'gate')
   const shotSpec = await submit(shotSpecIssue, {
     kind: 'spec',
     title: 'Queue storage, the options',
@@ -295,10 +296,10 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
   if (!risky) throw new Error('the Report comment was not stored')
   const edit = { comment: 'Which risk would we not take, and why?' }
   await api(url, `/v1/artifacts/${shotReport}/annotations/${risky.id}`, edit, 'PATCH')
-  const closedIssue = await lead('haven', 'Retire the old queue')
+  const closedIssue = await lead('haven', 'Retire the old queue', 'gate')
   const closedSpec = await submit(closedIssue, { kind: 'spec', title: CLOSED_SPEC, content: SPEC_MD })
   await api(url, `/issues/${closedIssue}/cancel`, { reason: 'the queue is gone' })
-  const reviewIssue = await lead('gable', 'Roll out the weather tile')
+  const reviewIssue = await lead('gable', 'Roll out the weather tile', 'gate')
   const review = await submit(reviewIssue, { kind: 'spec', title: 'Weather rollout', content: reviewMd(spec) })
   const links = await submit(reportIssue, {
     kind: 'report',
@@ -333,7 +334,7 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
   }
   const pinnedId = await collection(PINNED_COLLECTION, overview, [notes], true)
   const unpinnedId = await collection(UNPINNED_COLLECTION, storage, [], false)
-  // a Spec reaches the owner once the Spec screen passes it (the fake agw passes it)
+  // an owner gate's Spec reaches the owner once the screen passes it by rule
   await api(url, '/v1/checkpoints/pass', {})
   return {
     spec,

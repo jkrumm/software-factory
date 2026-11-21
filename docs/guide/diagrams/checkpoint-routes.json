@@ -84,15 +84,15 @@
       "col": 0,
       "type": "frontend",
       "label": "artifact submit",
-      "sublabel": "a Spec, before building"
+      "sublabel": "the lead's plan, before building"
     },
     {
       "id": "screen-s",
       "lane": "spec",
       "col": 1,
       "type": "backend",
-      "label": "Spec screen",
-      "sublabel": "a rule passes or holds"
+      "label": "Spec rules",
+      "sublabel": "a plan builds at once"
     },
     {
       "id": "owner-s",
@@ -174,7 +174,7 @@
       "id": "screen-owner",
       "from": "screen-s",
       "to": "owner-s",
-      "label": "reaches him",
+      "label": "only four reach him",
       "variant": "emphasis"
     },
     {

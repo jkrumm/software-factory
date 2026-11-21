@@ -205,13 +205,20 @@ describe('the filing contract', () => {
   test("the rules a lead's brief left to its verbs are in the help of each verb", async () => {
     const help = async (...words: string[]) => (await cli([...words, '--help'])).out
     for (const word of [
-      'one page',
-      'at most three open choices',
+      'A Spec is your plan, not a question',
+      'Build (what you will build, at most eight lines) and Decided',
       'field standard tools',
-      'hours you go on with your defaults',
+      'build at once: it does not wait',
+      'Four Specs wait for his verdict',
     ])
       expect(await help('artifact', 'submit')).toContain(word)
-    for (const word of ['product direction', 'is a Spec', 'amends the open Decision', 'factory decision take-default'])
+    for (const word of [
+      'what a product does for its users',
+      'under Decided in your Spec, never as a Decision',
+      '"Is this plan right?" is not a question',
+      'amends the open Decision',
+      'factory decision take-default',
+    ])
       expect(await help('issue', 'ask')).toContain(word)
     for (const word of ['approve or merge a pull request', 'never `op`', 'make -C <worktree> <target>'])
       expect(await help('errand', 'raise')).toContain(word)

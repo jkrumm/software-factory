@@ -22,6 +22,7 @@ import {
   type Answerer,
 } from '../domains/checkpoints/decision.ts'
 import { picturesRefusal } from '../domains/checkpoints/pictures.ts'
+import { PLAN_REASON, specPathOf, specSourceOf } from '../domains/checkpoints/spec-screen.ts'
 import {
   type ErrandId,
   type ErrandRaised,
@@ -567,6 +568,8 @@ export interface ArtifactWritten {
   links: IssueId[]
   /** null when no event touched the Issue (a Report, an annotation) */
   issue: IssueMove | null
+  /** a Spec recorded as the lead's plan: it does not wait and paged no one (set by `artifact submit` and `revise` only) */
+  plan?: boolean
 }
 
 const labelOf: Record<Verdict, string> = {
@@ -594,10 +597,67 @@ async function written(
   return { result, artifact, revisions: await checkpoints.revisions(id), links, issue }
 }
 
+/** What `artifact submit` and `artifact revise` tell the lead about a Spec that does not wait. */
+export const PLAN_ANSWER =
+  "Recorded as your plan: the Issue keeps working and nobody is paged, so build now. The owner may comment on it at any time; a comment reaches you as a note, and you apply it. Raise what in it is the owner's as a Decision (`factory issue ask`)."
+
 /**
- * `factory artifact submit`: the lead hands over a Concept, a Spec or a Report. A Concept or Spec records `submitted`,
- * which makes the Issue wait for the owner's verdict, and pages him once; a Report never waits and pages no one. The
- * same hand-over again is the same artifact.
+ * Why the machine would refuse a lead's `submitted` here, or null: a plan records no event, so its hand-over holds the same
+ * rule itself (the lead of the current attempt, while the Issue works or waits on its own timer).
+ */
+function planRefused(issue: Issue, attempt: number, verb: 'artifact submit' | 'artifact revise'): string | null {
+  const show = `\`factory issue show ${issue.id}\``
+  if (attempt !== issue.attempt) {
+    return `${verb} was filed for attempt ${attempt}; the Issue is on attempt ${issue.attempt}: read what is current with ${show}`
+  }
+  if (issue.state === 'working' || (issue.state === 'waiting' && issue.wait?.reason === 'timer')) return null
+  return `a lead hands over its plan while the Issue works, and it is ${issue.state}${issue.wait ? ` on a ${issue.wait.reason}` : ''}: ${show} says where it stands`
+}
+
+/**
+ * Whether a Spec revision just stored is the lead's plan (Issue 2732), decided by rule (`specPathOf`) inside the transaction
+ * that stored it. A plan records its screen row at once, settled by rule with its reason, so the screen pass and Needs you
+ * skip it: nothing waits, nobody is paged. Anything else (and a revision of a Spec its Issue still waits on) is left to
+ * `submitted` and the screen pass, as before. A plan from a lead the machine would not hear is refused, and rolls back.
+ */
+async function recordedAsPlan(
+  checkpoints: CheckpointStore,
+  deps: CheckpointDeps,
+  input: { issue: Issue; attempt: number; artifactId: ArtifactId; revision: number; content: string },
+): Promise<Result<boolean, CheckpointError>> {
+  const spec = await checkpoints.lockSpecRevision(input.artifactId, input.revision)
+  if (!spec) return ok(false)
+  const { path, reason } = specPathOf({
+    revision: input.revision,
+    earlier: spec.earlier,
+    origin: spec.origin,
+    content: input.content,
+  })
+  if (path !== 'plan') return ok(false)
+  // a submit stores revision 1, a revise every later one
+  const refused = planRefused(input.issue, input.attempt, input.revision === 1 ? 'artifact submit' : 'artifact revise')
+  if (refused) return err({ kind: 'machine_refused', detail: refused })
+  return ok(
+    await checkpoints.recordSpecScreen({
+      artifactId: input.artifactId,
+      revision: input.revision,
+      outcome: 'settled',
+      by: 'rule',
+      source: specSourceOf(spec.origin),
+      note: reason,
+      tries: 0,
+      retryAt: null,
+      at: deps.clock.now(),
+    }),
+  )
+}
+
+/**
+ * `factory artifact submit`: the lead hands over a Concept, a Spec or a Report. A Concept records `submitted`, which makes
+ * the Issue wait for the owner's verdict, and pages him once; a Report never waits and pages no one. A Spec is the lead's
+ * plan and does not wait either (Issue 2732), unless a rule makes it the owner's (`specPathOf`: an owner gate, a Replan that
+ * changes a plan row or cancels an Issue); then it waits like a Concept and the screen pass pages him. The same hand-over
+ * again is the same artifact.
  */
 export async function submitArtifact(
   deps: CheckpointDeps,
@@ -623,27 +683,13 @@ export async function submitArtifact(
     const issue = await issueOf(work, input.issueId)
     if (!issue) return err({ kind: 'unknown_issue', issueId: input.issueId })
     const existing = await checkpoints.artifactByKey(submitKey)
-    if (existing) return ok(await written(checkpoints, existing.id, 'replayed', moveOf(issue)))
+    if (existing) {
+      const plan = existing.kind === 'spec' && (await checkpoints.specScreen(existing.id, 1))?.note === PLAN_REASON
+      return ok({ ...(await written(checkpoints, existing.id, 'replayed', moveOf(issue))), plan })
+    }
 
     const id = deps.ids.next('artifact')
     const at = deps.clock.now()
-    let move: IssueMove | null = null
-    if (waitsForReview(submission.kind)) {
-      const recorded = applied(
-        await recordIn(work, deps, {
-          issueId: input.issueId,
-          key: key('submitted', id, 1),
-          event: {
-            kind: 'submitted',
-            payload: { attempt: input.attempt, artifact: { id, summary: submission.title } },
-            actor: 'lead',
-          },
-        }),
-        'submitted',
-      )
-      if (!recorded.ok) return recorded
-      move = moveOf(recorded.value.issue, recorded.value.effects)
-    }
     const stored = await checkpoints.insertArtifact({
       id,
       key: submitKey,
@@ -665,6 +711,35 @@ export async function submitArtifact(
       note: null,
       createdAt: at,
     })
+    const recorded =
+      submission.kind === 'spec'
+        ? await recordedAsPlan(checkpoints, deps, {
+            issue,
+            attempt: input.attempt,
+            artifactId: id,
+            revision: 1,
+            content: submission.content,
+          })
+        : ok(false)
+    if (!recorded.ok) return recorded
+    const plan = recorded.value
+    let move: IssueMove | null = null
+    if (waitsForReview(submission.kind) && !plan) {
+      const recorded = applied(
+        await recordIn(work, deps, {
+          issueId: input.issueId,
+          key: key('submitted', id, 1),
+          event: {
+            kind: 'submitted',
+            payload: { attempt: input.attempt, artifact: { id, summary: submission.title } },
+            actor: 'lead',
+          },
+        }),
+        'submitted',
+      )
+      if (!recorded.ok) return recorded
+      move = moveOf(recorded.value.issue, recorded.value.effects)
+    }
     // A Spec is paged by the screen once it passes it to the owner (`checkpoints-specs.ts`); a Concept at once.
     if (submission.kind === 'concept') {
       await checkpoints.planPage(
@@ -679,7 +754,7 @@ export async function submitArtifact(
         at,
       )
     }
-    return ok(await written(checkpoints, id, 'applied', move))
+    return ok({ ...(await written(checkpoints, id, 'applied', move)), plan })
   })
 }
 
@@ -721,31 +796,15 @@ export async function reviseArtifact(
       return ok(await written(checkpoints, artifact.id, 'replayed', issue ? moveOf(issue) : null))
     }
     const n = (revisions.at(-1)?.n ?? 0) + 1
-    let move: IssueMove | null = null
     // The Spec its filer attached sits in the queue with no lead: it is revised like a Report, by whoever filed it.
-    if (waitsForReview(artifact.kind) && issue && !isHeldFiledSpec(artifact, issue)) {
-      if (input.attempt === null) {
-        return err({
-          kind: 'missing_field',
-          fields: ['attempt'],
-          detail:
-            'a revision of a Concept or Spec needs: attempt (its number is in the brief); a Spec filed with an Issue that no lead works yet is revised without one',
-        })
-      }
-      const recorded = applied(
-        await recordIn(work, deps, {
-          issueId: issue.id,
-          key: key('submitted', artifact.id, n),
-          event: {
-            kind: 'submitted',
-            payload: { attempt: input.attempt, artifact: { id: artifact.id, summary: artifact.title } },
-            actor: 'lead',
-          },
-        }),
-        'submitted',
-      )
-      if (!recorded.ok) return recorded
-      move = moveOf(recorded.value.issue, recorded.value.effects)
+    const reviewed = waitsForReview(artifact.kind) && issue !== null && !isHeldFiledSpec(artifact, issue)
+    if (reviewed && input.attempt === null) {
+      return err({
+        kind: 'missing_field',
+        fields: ['attempt'],
+        detail:
+          'a revision of a Concept or Spec needs: attempt (its number is in the brief); a Spec filed with an Issue that no lead works yet is revised without one',
+      })
     }
     const at = deps.clock.now()
     const stored = await checkpoints.insertRevision({
@@ -763,6 +822,41 @@ export async function reviseArtifact(
         ? err({ kind: 'version_conflict', issueId: issue.id, expected: issue.version })
         : err({ kind: 'invalid', detail: `revision ${n} of ${artifact.id} was written by a concurrent request` })
     }
+    // A revision of the lead's plan does not wait either, unless it answers the owner's Changes; one of a Spec its Issue
+    // still waits on keeps the wait, and the screen pass settles or passes it.
+    const recorded =
+      reviewed &&
+      artifact.kind === 'spec' &&
+      issue &&
+      input.attempt !== null &&
+      !waitingOn(issue, 'review', artifact.id)
+        ? await recordedAsPlan(checkpoints, deps, {
+            issue,
+            attempt: input.attempt,
+            artifactId: artifact.id,
+            revision: n,
+            content,
+          })
+        : ok(false)
+    if (!recorded.ok) return recorded
+    const plan = recorded.value
+    let move: IssueMove | null = null
+    if (reviewed && issue && input.attempt !== null && !plan) {
+      const recorded = applied(
+        await recordIn(work, deps, {
+          issueId: issue.id,
+          key: key('submitted', artifact.id, n),
+          event: {
+            kind: 'submitted',
+            payload: { attempt: input.attempt, artifact: { id: artifact.id, summary: artifact.title } },
+            actor: 'lead',
+          },
+        }),
+        'submitted',
+      )
+      if (!recorded.ok) return recorded
+      move = moveOf(recorded.value.issue, recorded.value.effects)
+    }
     // A Spec revision is paged by the screen once it passes it to the owner (`checkpoints-specs.ts`); a Concept at once.
     if (artifact.kind === 'concept' && issue) {
       await checkpoints.planPage(
@@ -777,11 +871,15 @@ export async function reviseArtifact(
         at,
       )
     }
-    return ok(await written(checkpoints, artifact.id, 'applied', move))
+    return ok({ ...(await written(checkpoints, artifact.id, 'applied', move)), plan })
   })
 }
 
-/** Anyone with the artifact open may annotate: the owner, or a lead answering a note. No event reaches the Issue. */
+/**
+ * Anyone with the artifact open may annotate: the owner, or a lead answering a note. The owner's comment on a Spec its open
+ * Issue does not wait on (the lead's plan, Issue 2732) reaches the lead at once as a note; on a Spec under review it comes
+ * with his verdict, and every other annotation touches no Issue.
+ */
 export function annotateArtifact(
   deps: CheckpointDeps,
   input: { artifactId: ArtifactId; revision: number | null; author: 'owner' | 'lead'; raw: unknown },
@@ -789,7 +887,7 @@ export function annotateArtifact(
   const read = readAnnotation(input.raw)
   if (!read.ok) return Promise.resolve(read)
   const annotation: AnnotationInput = read.value
-  return deps.uow.run(async ({ checkpoints }) => {
+  return deps.uow.run(async ({ work, checkpoints }) => {
     const artifact = await checkpoints.artifact(input.artifactId)
     if (!artifact) return err(notFound('artifact', input.artifactId))
     const revisions = await checkpoints.revisions(artifact.id)
@@ -814,8 +912,9 @@ export function annotateArtifact(
     if (await checkpoints.annotationByKey(annotateKey)) {
       return ok(await written(checkpoints, artifact.id, 'replayed', null))
     }
+    const annotationId = deps.ids.next('annotation')
     await checkpoints.insertAnnotation({
-      id: deps.ids.next('annotation'),
+      id: annotationId,
       key: annotateKey,
       artifactId: artifact.id,
       revision,
@@ -833,6 +932,25 @@ export function annotateArtifact(
       dispositionNote: null,
       disposedAt: null,
     })
+    const issue = artifact.issueId && artifact.kind === 'spec' ? await issueOf(work, artifact.issueId) : null
+    if (input.author === 'owner' && issue && issue.state !== 'closed' && !waitingOn(issue, 'review', artifact.id)) {
+      const comment = annotation.comment.length > 600 ? `${annotation.comment.slice(0, 600)}…` : annotation.comment
+      const noted = applied(
+        await recordIn(work, deps, {
+          issueId: issue.id,
+          key: key('noted', 'annotation', annotationId),
+          event: {
+            kind: 'noted',
+            payload: {
+              text: `The owner commented on "${artifact.title}" (revision ${revision}): ${comment}. Apply it, then answer it with: factory artifact annotation-reply ${artifact.id} ${annotationId} --disposition applied|deferred|declined --note "..."`,
+            },
+            actor: 'owner',
+          },
+        }),
+        'noted',
+      )
+      if (!noted.ok) return noted
+    }
     return ok(await written(checkpoints, artifact.id, 'applied', null))
   })
 }
@@ -1077,6 +1195,11 @@ export async function verdictIn(
       )
       if (!recorded.ok) return recorded
       move = moveOf(recorded.value.issue, recorded.value.effects)
+    } else if (issue && artifact.kind === 'spec' && issue.state !== 'closed' && by !== 'factory') {
+      // the lead's plan (Issue 2732): no wait to end, but his (or his delegate's) verdict reaches the lead as a note all the
+      // same; the factory's own withdrawal of a wait the Issue moved past tells a working lead nothing
+      const noted = await verdictNote()
+      if (!noted.ok) return noted
     }
     await checkpoints.cancelPages(artifact.id, at)
     return ok({ ...(await written(checkpoints, artifact.id, 'applied', move)), verdict: record })
