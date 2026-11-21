@@ -75,6 +75,7 @@ fail the build.
 | **Test slot** | A lease on the host's test capacity that `factory slot run` takes for a `make check`, test or e2e step; it waits while the host is busy and records what the step cost | |
 | **Bench** | A step kept on the mini after a run off it was red where the mini was green: an hour, doubling with each repeat within a week up to seven days, halved by a green run off the mini (`kernel/remote-bench.ts`) | Hold, for this place (remote hold) |
 | **Reaper** | The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind | |
+| **Class** | The group a host process works for: `lead`, `step`, `tenant`, `factory`, `system`, `owner`, `other` (Memory by class on Throughput). The word's one sense | Class, for a kind of finding (finder), why a fix was needed (fix cause), a step one at a time host-wide (exclusive step), a refusal, error or heartbeat (kind), a lane (resource) |
 
 ## Where work stands
 
@@ -194,7 +195,6 @@ The figures Throughput leads with, read once a minute from the host (`top`, `vm_
 | **Memory pressure** | The kernel's own verdict on memory: normal, warning or critical. It is the one memory figure that says the host is struggling now: a host can hold 90 % of its RAM at normal pressure. What to do: at warning or critical, read Memory by class on Throughput to see what holds the memory; no new lead is admitted until it is normal again | |
 | **Load** | The number of threads that wanted a core, averaged over the last minute (the 1-minute load average). It is a count, not a percentage, and it is not CPU busy: on 12 cores load 4 is a third of the cores' worth of threads, load 12 is one thread for every core, and above that threads wait. It also counts threads waiting on the disk, so it can be high with the CPU quiet. Admission uses load because a storm of waiting processes (git, tests) starves everything on the host whatever the CPU percent says. What to do: above the load ceiling nothing new starts, so wait it out; read CPU busy to tell real work from threads stuck on the disk | |
 | **Load ceiling** | The load above which no new lead is admitted, stored with every minute so the page reads the ceiling that was in force. Under the throughput rule it is 3 per core. What to do: minutes above it are minutes Ready Issues waited; a ceiling that is crossed every day is the next improvement to file | |
-| **Class** | The group a host process works for: `lead`, `step`, `tenant`, `factory`, `system`, `owner`, `other` (Memory by class on Throughput). The word's one sense | Class, for a kind of finding (finder), why a fix was needed (fix cause), a step one at a time host-wide (exclusive step), a refusal, error or heartbeat (kind), a lane (resource) |
 
 ## The figures on a card
 
