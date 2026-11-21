@@ -78,7 +78,7 @@ export interface OpenIssue {
   state: string
 }
 
-/** An Issue closed recently, with how it closed: what a restated ask is checked against ("already settled"). */
+/** An Issue closed recently, with how it closed: what a restated ask is checked against ("already covered"). */
 export interface ClosedIssue {
   id: IssueId
   title: string

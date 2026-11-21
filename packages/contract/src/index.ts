@@ -241,9 +241,9 @@ export {
   UnafterBody,
 } from './planning.ts'
 export {
-  FIX_CLASS_KEYS,
-  FIX_CLASSES,
-  type FixClassKey,
+  FIX_CAUSE_KEYS,
+  FIX_CAUSES,
+  type FixCauseKey,
   JudgeInputWire,
   JudgeVerdictWire,
   LOOP_NAMES,

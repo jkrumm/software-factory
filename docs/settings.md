@@ -72,7 +72,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_ROLES_FILE` | `DEFAULT_ROLES_FILE` | the role table; config/roles.json of this checkout when unset | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_SEATS_MAX_BONUS` | `2` | the most extra leads per account while the host idles with work queued; 0 turns it off | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_SELFWATCH_GRACE_MS` | `DEFAULT_WAIT_GRACE_MS` | a timer or dependency wait is overdue this long after its exit | `apps/server/src/app/loops/settings.ts` |
-| `FACTORY_SETTLE_POLL` | `10s` | how often the intake's settle pass runs; off disables it | `apps/server/src/adapters/intake/settings.ts` |
+| `FACTORY_SETTLE_POLL` | `10s` | how often the intake's heal pass runs; off disables it | `apps/server/src/adapters/intake/settings.ts` |
 | `FACTORY_SETTLE_TIMEOUT_MS` | `15 * 60_000` | an Issue still settling this long after it was filed is settled with no edges by the steward | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_SIGNAL_TOKEN` | unset | the token signals are filed with | `apps/server/src/settings.ts` |
 | `FACTORY_SLOT_EXTRA_LOAD` | `12` | accepted for compatibility and no longer read: the load tripwire decides whether a step beyond the base slots runs | `apps/server/src/app/planning-settings.ts` |
@@ -100,7 +100,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_UPTIME_URL` | `null` | the Uptime Kuma push URL; unset, the feature is off | `apps/server/src/adapters/uptime/settings.ts` |
 | `FACTORY_VERIFY_RECHECK_MS` | `DEFAULT_RECHECK_MS` | the gap between two verify checks of a shipped change | `apps/server/src/settings.ts` |
 | `FACTORY_VERIFY_RETRY_MS` | `DEFAULT_RETRY_MS` | the wait before a failed verify is tried again | `apps/server/src/settings.ts` |
-| `FACTORY_VERIFY_SETTLE_MS` | `DEFAULT_SETTLE_MS` | how long a verify result must hold before it counts as settled | `apps/server/src/settings.ts` |
+| `FACTORY_VERIFY_SETTLE_MS` | `DEFAULT_GRACE_MS` | the watch's grace: how long after a ship its first check waits | `apps/server/src/settings.ts` |
 | `FACTORY_VERSION` | `'dev'` | the version the server reports; dev when unset | `apps/server/src/settings.ts` |
 | `FACTORY_VM_STAT_BIN` | unset | the vm_stat binary the host probe calls | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_VM_VOLUME` | `'/System/Volumes/VM'` | the volume whose use is the host's swap | `apps/server/src/app/planning-settings.ts` |

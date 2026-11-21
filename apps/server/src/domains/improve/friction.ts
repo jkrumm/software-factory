@@ -38,7 +38,7 @@ export const volumeDue = (closedSince: number): boolean => closedSince >= FRICTI
 /** Evidence Issue refs shown in one signal. */
 const MAX_EVIDENCE = 5
 
-/** The groups whose counts are findings: `decision_settled` and `api_transient` are informational and have no rule. */
+/** The groups whose counts are findings: `decision_answered` and `api_transient` are informational and have no rule. */
 type Judged = JudgedFrictionGroup
 
 /** What makes a count a finding (`THRESHOLDS.friction` in the contract holds every one). */
@@ -58,7 +58,7 @@ export const isRetired = (key: string): boolean => RETIRED.some((pattern) => pat
 
 const ruleOf = (key: string, group: Judged): Rule => BY_KEY[key] ?? GROUP_RULES[group]
 
-/** Groups whose events map to Issues; the others (an undelivered note, a held signal) carry no Issue refs. */
+/** Groups whose events map to Issues; the others (an undelivered note, a quarantined signal) carry no Issue refs. */
 const WITHOUT_ISSUES = new Set<PatternGroup>(['undelivered_note', 'signal', 'kpi'])
 
 /** A friction count's group, or `kpi`: one of the seven KPIs off its target. */
@@ -88,7 +88,7 @@ const isAggregate = (key: string): boolean => key.endsWith(':total')
 export function patternsOver(counts: readonly FrictionCount[], closed: number): Pattern[] {
   const over: Pattern[] = []
   for (const c of counts) {
-    if (c.group === 'decision_settled' || c.group === 'api_transient' || isAggregate(c.key) || isRetired(c.key))
+    if (c.group === 'decision_answered' || c.group === 'api_transient' || isAggregate(c.key) || isRetired(c.key))
       continue
     const rule = ruleOf(c.key, c.group)
     if (c.count < rule.min) continue
@@ -194,7 +194,7 @@ export function signalText(
 ): string {
   if (pattern.kpi) return kpiSignalText(pattern, pattern.kpi, facts, last)
   const evidence = !hasIssueRefs(pattern)
-    ? 'Evidence: this count has no Issue behind it (it counts notes or held signals, not Issue events), so there are no refs.'
+    ? 'Evidence: this count has no Issue behind it (it counts notes or quarantined signals, not Issue events), so there are no refs.'
     : refs.length === 0
       ? 'Evidence: no Issue ref could be read for this count.'
       : `Evidence (the most recent Issues, up to ${MAX_EVIDENCE}): ${refs.slice(0, MAX_EVIDENCE).join(', ')}`

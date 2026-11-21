@@ -54,7 +54,7 @@ describe('project.yaml', () => {
     expect(ProjectFile.parse({ apiVersion: 'factory/v2', name: 'lab' }).checks).toBeNull()
   })
 
-  test('lanes cap the leads of a resource class: none by default, a lane name and a cap of 1 to 64', () => {
+  test('lanes cap the leads of a resource: none by default, a lane name and a cap of 1 to 64', () => {
     const parse = (lanes: string) => parseProject(yaml(`apiVersion: factory/v2\nname: lab\nlanes: ${lanes}`), 'lab')
     expect(defaultProject('lab').lanes).toEqual({})
     const ok = parse('{ apple: 1, web-ui: 3 }')

@@ -24,7 +24,7 @@ import { type Alerts } from './intake-alerts.ts'
 export function createSignals(d: { deps: IntakeDeps; ledger: Ledger; alerts: Alerts }) {
   const { uow, clock, ids, settings } = d.deps
   const { note, store } = d.ledger
-  const { fileNew, settledIn } = d.alerts
+  const { fileNew, coveredBy } = d.alerts
 
   /** A signal whose fingerprint an Issue still carries: not closed, or filed in the window. */
   async function repeatIn(
@@ -82,7 +82,7 @@ export function createSignals(d: { deps: IntakeDeps; ledger: Ledger; alerts: Ale
       null,
     )
     if (repeat) return repeat
-    if (decision.settled) return settledIn(s, r, decision, null)
+    if (decision.settled) return coveredBy(s, r, decision, null)
     if (decision.amend) {
       const issue = await loadIssue(s.work, decision.amend)
       if (isOpen(issue)) {

@@ -397,7 +397,7 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       })
     },
 
-    async holdEvents(name, since) {
+    async benchEvents(name, since) {
       const rows = await tx`
         SELECT at, coalesce(disagreed, false) AS disagreed FROM factory.step_costs
         WHERE name = ${name} AND at >= ${since} AND (disagreed OR (host = 'vps' AND exit_code = 0))`

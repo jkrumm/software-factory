@@ -83,7 +83,7 @@ export function composePlanning(input: {
     accountLeads: settings.accountLeads,
     ...hostRule(settings),
     memoryCeilings: settings.memoryCeilings,
-    seatsMaxBonus: settings.seatsMaxBonus,
+    allowanceMaxBonus: settings.allowanceMaxBonus,
   }
   const desk = packageAccountDesk()
   const host = hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs })

@@ -241,7 +241,7 @@ export interface ClassRow {
 
 /** The classes largest first, then by the fixed order; a class with no footprint stays in the list as zeros. */
 export function classRows(model: ThroughputModel): ClassRow[] {
-  return [...model.host.byClass]
+  return [...model.host.byCause]
     .sort(
       (a, b) =>
         b.footprintMib - a.footprintMib ||
@@ -389,7 +389,7 @@ export function constantRows(
 ): { key: string; label: string; value: string }[] {
   return [
     { key: 'leadsPerAccount', label: 'Leads per account', value: leadsWords(constants) },
-    { key: 'seatsMaxBonus', label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
+    { key: 'allowanceMaxBonus', label: 'Allowance bonus at most', value: String(constants.allowanceMaxBonus) },
     { key: 'loadCeiling', label: 'Load ceiling', value: String(constants.loadCeiling) },
     { key: 'slots', label: 'Test slots', value: String(constants.slots) },
     { key: 'slotsMax', label: 'Test slots at most', value: String(constants.slotsMax) },

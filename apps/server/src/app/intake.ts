@@ -6,7 +6,7 @@ import { createPollers } from './intake-pollers.ts'
 import { createQuarantine } from './intake-quarantine.ts'
 import { createReceive } from './intake-receive.ts'
 import { createRoutes } from './intake-routes.ts'
-import { createSettle } from './intake-settle.ts'
+import { createHeal } from './intake-heal.ts'
 import { createSignals } from './intake-signals.ts'
 
 export { envelopeOfRequest } from './intake-envelope.ts'
@@ -25,7 +25,7 @@ export function createIntake(deps: IntakeDeps) {
   const routes = createRoutes({ deps, alerts })
   const held = createHeld({ deps, routes })
   const entry = createEntry({ deps, receive })
-  const settle = createSettle({ deps, alerts, routes, quarantine })
+  const heal = createHeal({ deps, alerts, routes, quarantine })
   const pollers = createPollers({ deps, receive })
 
   return {
@@ -40,7 +40,7 @@ export function createIntake(deps: IntakeDeps) {
     routes: routes.routes,
     setRoute: routes.setRoute,
     removeRoute: routes.removeRoute,
-    settle: settle.settle,
+    heal: heal.heal,
     healthLines: routes.healthLines,
     sink: pollers.sink,
   }

@@ -64,7 +64,7 @@ factory never edits another repo's file. The server also serves the schema it pa
   decide what runs (NL32). State a lower number only for a resource the repo cannot share and the factory does not
   model, with the measured number behind it. Not a reason: a merge window (`factory merge-lock` serialises it and a lead
   that waits holds no seat of its own), a deploy queue (`factory deploy-lock`), disk (admission fits the learned size of a
-  worktree, build output included, against the free disk), "it is a small repo" (an idle seat costs more than a rebase).
+  worktree, build output included, against the free disk), "it is a small repo" (room left idle in the allowance costs more than a rebase).
   `factory project check` warns on those comments (a merge window only where a change lands by `ship: via: pr`) and on "no reason was recorded". A cap is re-checked against
   measurements: while it keeps Issues queued for an hour with account seats idle, the throughput loop files a signal on
   the repo naming it, its comment and the figures (NL48).
@@ -154,7 +154,7 @@ list's entry, `<name>` a map's key.
 | `ship[].via` | `push`, `pr` | required | the Watch (apps/server/src/app/quality-projects.ts) | `pr`: changes land through a pull request, so the Watch expects CI on the head; `push`: straight to the default branch |
 | `work` | boolean | `false` | read redaction and intake (apps/server/src/domains/planning/signals.ts, apps/server/src/api/planning.ts) | `true`: the repo stays a work repo though it has a project.yaml: the read token never sees its words and it hears the owner only. For a repo of another organisation the factory builds in |
 | `leads` | integer 1–64 | `64` | admission (apps/server/src/app/capacity-admit.ts) | how many leads may work in the repo at once (one more for a fix while the line is stopped). Unset: 64, no cap beyond the host's memory, load and accounts; a value above 64 is clamped with a warning. A lower cap is an exception the file gives its reason for (NL32) |
-| `lanes` | map of integer 1–64 or object | `{}` | admission (apps/server/src/app/capacity-admit.ts) | resource classes inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory: 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and this does not declare is unlimited within `leads` |
+| `lanes` | map of integer 1–64 or object | `{}` | admission (apps/server/src/app/capacity-admit.ts) | resources inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory: 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and this does not declare is unlimited within `leads` |
 | `lanes.<name>.leads` | integer 1–64 | required | admission (apps/server/src/app/capacity-admit.ts) | how many leads of the lane run at once |
 | `lanes.<name>.memory` | size | — | admission (apps/server/src/app/capacity-admit.ts) | the host memory each running lead of the lane reserves (`18GiB`, at most 1 TiB) |
 | `env` | map of string | `{}` | the lead's start (apps/server/src/app/leads-start.ts, apps/server/src/adapters/hc/terminals.ts) | variables exported into every lead's session in this repo (`ORB_FORMAT: json`), at start and when a dormant lead is resumed; values are strings of one line, at most 500 characters, and this file is public: never a secret. A name the factory or the host owns (`FACTORY_*`, `CLAUDE*`, `ANTHROPIC_*`, `USAGE_*`, `PATH`, `HOME`, ...) is refused |

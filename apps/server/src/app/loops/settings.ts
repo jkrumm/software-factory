@@ -109,7 +109,7 @@ const CADENCE: Partial<Record<LoopName, readonly [fixed: number | null, least: n
   friction: [15 * 60_000, 0],
   screen: [null, 10 * 60_000],
   selfwatch: [null, 5 * 60_000],
-  'fix-classes': [6 * 3_600_000, 0],
+  'fix-causes': [6 * 3_600_000, 0],
   'ci-ledger': [15 * 60_000, 0],
   host: [60_000, 0],
   reaper: [5 * 60_000, 0],

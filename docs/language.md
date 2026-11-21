@@ -4,6 +4,34 @@ One word per thing, in code, CLI, events, screens and docs. Built on Warp's fact
 notes, signed 2026-11-07. A word in a **Retires** cell fails `make check` once the rewrite lands (the retired-word
 check, `docs/architecture.md`).
 
+## Core tier
+
+The words to learn first; every other word in this file builds on them. Each links to its full row below.
+
+| Core word | In one line |
+|-|-|
+| [Signal](#work) | Anything that arrives and may become work |
+| [Issue](#work) | One unit of work: one repo, one branch, one ship |
+| [Event](#events) | A fact recorded on an Issue; state is derived from events |
+| [State](#work) | The stored name of where an Issue is; screens say Running, Paused, Ready, Held, Checking |
+| [Settle](#work) | Triage and the chain finishing for an Issue, so it leaves `settling` |
+| [Lead](#who-works) | The Claude Code session that owns one attempt of one Issue |
+| [Seat](#work) | The tier, effort and role a lead runs on |
+| [Allowance](#work) | How many leads the accounts may run at once |
+| [Wait](#shipping) | A pause with a named exit; a **stall** is one whose cause is a machine's to end |
+| [Checkpoint](#where-the-owner-comes-in) | Where the factory stops for a person: a Decision, a Concept or Spec, an Errand |
+| [Judge](#who-works) | The agw workflow that tries to answer a Decision before the owner sees it |
+| [Steward](#who-works) | The supervisor loop over stalled Issues |
+| [Loop](#who-works) | A named recurring job; one run of it is a pass |
+| [Gate](#shipping) | A machine check a lead cannot talk past |
+| [Ship](#shipping) | Land and deploy; the **watch** follows, and **Verify** ends it |
+
+Four words are easy to stretch, and each keeps one sense: **seat** is what a lead runs on, **hold** is to keep a
+resource (a claim, a slot, a lock), **settle** is an Issue leaving `settling`, **class** is the group a host process
+works for. Their other senses have words of their own (allowance, backoff, bench, quarantined signal, muted finder,
+answer, the checkpoints loop, the heal pass, finder, fix cause, exclusive step, kind, resource), and the old phrases
+fail the build.
+
 ## Work
 
 | Word | Means | Retires |
@@ -12,11 +40,12 @@ check, `docs/architecture.md`).
 | **Triage** | Deciding what a signal becomes: a new Issue, an amendment to an open one, part of an incident, held, or dropped | Classify and dedup, as words a person meets |
 | **Incident** | One root cause seen through many signals: the VPS is down, so HyperDX and Kuma all fire. Triage groups them under one Issue | An Issue per alert |
 | **Amend** | Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note | |
-| **Triage outcome** | What triage did with a signal: `filed`, `amended`, `incident`, `held` (quarantined, or a `down` waiting out its heal grace), `dropped`. Its detail says why: `new`, `matched`, `replayed`, `repeat`, `joined`, `regression`, `healed`, `quiet`, `unrouted`, `quarantined`, `promoted`; for a drop `work_repo`, `no_project`, `not_listened`, `loop_guard`, `no_repo`, `probe`, `settled` (the workflow found an Issue closed in the last day already settles it) | |
-| **Held signal** | Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two held signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there | |
-| **Promote** | A held signal becomes work: the owner's or the Judge's call | |
-| **Dismiss** | A held signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as `dismissed` | |
-| **Screen** | The Judge looks at a held signal (bar a work repo's; the `screen` loop, `factory-screen`) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most | |
+| **Triage outcome** | What triage did with a signal: `filed`, `amended`, `incident`, `held` (quarantined, or a `down` waiting out its heal grace), `dropped`. Its detail says why: `new`, `matched`, `replayed`, `repeat`, `joined`, `regression`, `healed`, `quiet`, `unrouted`, `quarantined`, `promoted`; for a drop `work_repo`, `no_project`, `not_listened`, `loop_guard`, `no_repo`, `probe`, `settled` (the workflow found an Issue closed in the last day already covers it) | |
+| **Settle** | Triage and the chain finishing for an Issue: it leaves `settling` (the event `settled`, `factory planning settle`). The word's one sense | Settle, for a Decision (answer), the loop that runs the Decision steps (the checkpoints loop), intake's pass that waits out a `down`'s grace (the heal pass), an ask a closed Issue already covers (covered), the watch's wait before its first check (grace) |
+| **Quarantined signal** | Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two quarantined signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there | |
+| **Promote** | A quarantined signal becomes work: the owner's or the Judge's call | |
+| **Dismiss** | A quarantined signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as `dismissed` | |
+| **Screen** | The Judge looks at a quarantined signal (bar a work repo's; the `screen` loop, `factory-screen`) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it quarantined (stored as `held`) with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most | |
 | **Probe** | A test signal a lead marks (`probe: true`) so it is stored dismissed and never held; its ack is `dropped`, detail `probe` | |
 | **Door route** | The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git | |
 | **Work repo** | A repo no `project.yaml` describes, or whose `project.yaml` says `work: true`. The read token never sees its words | |
@@ -35,15 +64,18 @@ check, `docs/architecture.md`).
 | **Queue state** | `run` (admission decides), `pace` (one lead per project), `drain` (no new lead), for the whole queue or one project. The more restrictive of the two applies | |
 | **Queue reason** | Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: `chain`, `line`, `finalizing`, `spec`, `unknown_project`, `drain`, `doctor`, `boot`, `load`, `memory`, `disk` (the repo's worktree, build output included, is learned to take more than the free disk less the headroom), `tests` (the test line is long: more steps wait for a slot than run, for longer than a step takes), `lane`, `claim`, `window`, `cap` | Hold (the memory and load hold) |
 | **Claim** | A lead's place in its repo: `leads: N` (64 when the project states none: the host's fit is the limit, NL32) plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over | |
-| **Lane** | A resource class inside a repo (`apple`) that an Issue or plan row names; `lanes: {apple: 1}` in the repo's `project.yaml` caps how many leads of the lane run at once, within `leads`. An undeclared lane is unlimited (`docs/plan.md` "Lanes") | |
+| **Lane** | A resource inside a repo (`apple`) that an Issue or plan row names; `lanes: {apple: 1}` in the repo's `project.yaml` caps how many leads of the lane run at once, within `leads`. An undeclared lane is unlimited (`docs/plan.md` "Lanes") | |
 | **Owed** | Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. An owed lead counts in the leads of the account it resumes on, and the account cap never refuses its resume. A note refused for a claim for 15 minutes while a claim would be granted to that lead now is a steward stall; a herd waiting its turn is not | |
 | **Window** | An account's 5-hour or weekly reset | |
-| **Account** | One Claude Code subscription the factory runs leads on. Whether it takes work, why not, when it opens again and the order of the open ones are `packages/accounts`' to decide (`claude-account status`, `GET /v1/accounts`); the factory adds only its seats and the leads running on it. A mode (normal, drain, reserve, paused) can be set on it for a time | |
+| **Account** | One Claude Code subscription the factory runs leads on. Whether it takes work, why not, when it opens again and the order of the open ones are `packages/accounts`' to decide (`claude-account status`, `GET /v1/accounts`); the factory adds only its allowance and the leads running on it. A mode (normal, drain, reserve, paused) can be set on it for a time | |
 | **Quota used at reset** | The capacity-weighted mean of the weekly percent each account stood at when its weekly window reset, per week, from the reset ledger. What the accounts left unused shows as the rest | |
 | **Line** | Stop the line: while a repo's alert is unsolved, only its fix is admitted | |
-| **Seat** | One lead the accounts may hold at once (`leads` per account, plus the bonus the host's idle minutes earn). A seat is idle when work is queued and no lead holds it | |
+| **Allowance** | How many leads the accounts may run at once: `leads` per account, plus the bonus the host's idle minutes earn (`domains/capacity/allowance.ts`). It is idle while work is queued and fewer leads run than it allows | Seat, for this sense (seat bonus, idle seat, seat-hours, a free seat) |
+| **Seat** | The tier, effort and role a lead runs on: the role table's row, or the one a filer or the owner set (`factory issue seat`, the event `seated`) | |
 | **Test slot** | A lease on the host's test capacity that `factory slot run` takes for a `make check`, test or e2e step; it waits while the host is busy and records what the step cost | |
+| **Bench** | A step kept on the mini after a run off it was red where the mini was green: an hour, doubling with each repeat within a week up to seven days, halved by a green run off the mini (`kernel/remote-bench.ts`) | Hold, for this place (remote hold) |
 | **Reaper** | The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind | |
+| **Class** | The group a host process works for: `lead`, `step`, `tenant`, `factory`, `system`, `owner`, `other` (Memory by class on Throughput). The word's one sense | Class, for a kind of finding (finder), why a fix was needed (fix cause), a step one at a time host-wide (exclusive step), a refusal, error or heartbeat (kind), a lane (resource) |
 
 ## Where work stands
 
@@ -53,10 +85,10 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 |-|-|-|
 | **Started** | The Issues a lead began: Running and Paused | |
 | **Not started** | The Issues no lead has begun: Ready and Held. The trend shows them as one line | |
-| **Running** | A lead works on it now: the Issue is in the working state and holds a seat. A lead standing in line for a test slot is still Running. The count is of Issues, not sessions: one Running Issue may have no session open for an instant between two sessions, and a Checking Issue's session is open without being counted here | |
+| **Running** | A lead works on it now: the Issue is in the working state and counts against the allowance. A lead standing in line for a test slot is still Running. The count is of Issues, not sessions: one Running Issue may have no session open for an instant between two sessions, and a Checking Issue's session is open without being counted here | |
 | **Paused** | A lead began it and it waits on a named wait, no session running. Its split: on you (a Decision, a review, an Errand, or your own pause), on a timer, on another Issue (a dependency, or someone else's review of its pull request), stalled (the account's window, a lead that stopped without reporting, a block, a lost lead, a regression) | |
-| **Ready** | No lead has begun it and nothing but capacity keeps it out: it starts when its turn and a seat come. Its limit names what binds it: a free seat, the host (load, memory, boot, doctor), the repo's claims, the lane or the cap, or the account's window | |
-| **Held** | No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a held signal | |
+| **Ready** | No lead has begun it and nothing but capacity keeps it out: it starts when its turn and room in the allowance come. Its limit names what binds it: room in the allowance, the host (load, memory, boot, doctor), the repo's claims, the lane or the cap, or the account's window | |
+| **Held** | No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a quarantined signal | |
 | **Checking** | Shipped and deployed: the watch is on, the factory runs Verify and the probes, and the Issue closes when they pass. Its own small count, in no other word | |
 | **Planned** | A plan row not yet filed as an Issue: due to be filed, after another Issue, or not before a date. Never an Issue, so never part of the five | |
 
@@ -70,8 +102,10 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Delivery** | What was typed into a lead: its brief, or a note. Keyed, so a replay types nothing twice | |
 | **Defer** | The lead's verb for a wait it can name: until a time, until other Issues close, or on the review of its pull request (`--review`, which is the `external` wait) (`factory issue defer`). The event is `deferred` | The old verb `wait` |
 | **Steward** | The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment | "Never a model" |
-| **Judge** | The agw workflow that tries to settle a Decision before the owner sees it | Ask judge |
+| **Judge** | The agw workflow that tries to answer a Decision before the owner sees it | Ask judge |
+| **Backoff** | The Judge's answer to a stall the steward asked about that says "wait for it": a timed wait instead of a wake, one hour, doubling per backoff of the attempt, at most twelve (`kernel/backoff.ts`) | Hold, for this answer (judge hold) |
 | **Loop** | A named recurring job with a trigger, a budget and one way to act. Its judgment is an agw workflow with its own prompt, tools and skills | Scorer, babysitter |
+| **Finder** | A kind of finding a loop files Issues for: the loop plus the finding's first key segment (a probe, a kind of judgment, a friction pattern group; stored as `loop_findings.class`). Mostly dropped or cancelled Issues **mute** it for 14 days, then it is on probation, one Issue at a time (`GET /v1/finders`, Improve) | Finding class, held class |
 | **Pass** | One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored | |
 | **Round** | The *n*th ask of a workflow about one subject. A subject has a limited number of rounds | |
 | **Review** | The lead's own check of its change, once per ship range, standard or deep. Part of the lead's work, never a factory step | Light review, per-commit coverage |
@@ -96,20 +130,20 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Turn back** | The owner's or the orchestrator's verb that ends an Errand wait without doing it (`factory errand turn-back <id> --note ...`, the Console's Turn back button): the Errand closes `turned_back` and the lead hears the note as its next turn | |
 | **Review wait** | The `external` wait: the Issue's pull request waits on a required review by someone else (a lead's `defer --review`, or an Errand that asks the owner to approve or merge a pull request, which the screen turns away). The `reviews` loop reads it every 15 minutes through `gh` or `glab` and wakes the lead on an approval, a request for changes, a new review comment, a merge or a close. It is never in Needs you | An Errand to approve one's own pull request |
 | **Desk pass** | The `desk` loop's one pass over every open Errand when the owner returns (a Console read after two hours or more away, the MacBook answering after it was unreachable, or his button "Push what waits to my MacBook"; each starts it at once) and every six hours otherwise: each check runs (the resolved ones close and wake their lead), the rest are screened again, and the MacBook commands are pushed through `ask-human.sh push`, every pending one oldest first on a return and one while he is away | |
-| **Verdict** | The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (`by`): the `owner`; the `factory` for him (the default after 24 hours, a Spec screen settle, a withdrawal); or the `orchestrator`, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his | |
-| **Owner gate** | An Issue filed with the checkpoint `gate`: it owes the same Spec as `spec`, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen settle, so what is `after` it is released by him alone. Only a filer sets it, never triage | |
+| **Verdict** | The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (`by`): the `owner`; the `factory` for him (the default after 24 hours, a Spec screen pass, a withdrawal); or the `orchestrator`, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his | |
+| **Owner gate** | An Issue filed with the checkpoint `gate`: it owes the same Spec as `spec`, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen pass, so what is `after` it is released by him alone. Only a filer sets it, never triage | |
 | **Taste pass** | The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's `AGENTS.md` or `DESIGN.md` | |
 | **Worth asking** | The owner's flag on an answered Decision. Feeds the ledger; the Judge's precedent does not read it | |
-| **Spec screen** | The look a Spec revision passes before it reaches the owner: rules, then `factory-spec-screen` with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and settles the rest with the factory's looks_good and its reason, so the lead builds at once | |
+| **Spec screen** | The look a Spec revision passes before it reaches the owner: rules, then `factory-spec-screen` with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and answers the rest with the factory's looks_good and its reason (stored as the outcome `settled`), so the lead builds at once | |
 | **Needed me** | The owner's one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no's | |
 | **Ask** | The lead's verb that raises a Decision (`factory issue ask`) | |
-| **Take the default** | The lead's verb that settles its own open Decision with the default it named, once it went on with that option (`factory decision take-default <id> --attempt <n>`). Recorded as settled by `default`, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it) | |
-| **Settler** | Who settled a Decision, in the order tried: `judge`, `default`, `owner`; or `orchestrator`, answering for the owner | |
+| **Take the default** | The lead's verb that answers its own open Decision with the default it named, once it went on with that option (`factory decision take-default <id> --attempt <n>`). Recorded as answered by `default`, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it) | |
+| **Answerer** | Who answered a Decision, in the order tried: `judge`, `default`, `owner`; or `orchestrator`, answering for the owner. Stored as `settled_by`, a column name kept | Settler |
 | **Decision status** | `open`, `answered`, or `withdrawn` (the Issue no longer waits for it: it closed or was cancelled) | |
 | **Revision** | One version of an artifact's content. A Decision has one; a Concept or Spec gains one with each `revise` | |
 | **Annotation** | A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored" | |
-| **Page** | One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is settled | |
-| **Needs** | What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, held signals, long waits | Needs you, as a page title only |
+| **Page** | One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is answered | |
+| **Needs** | What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, quarantined signals, long waits | Needs you, as a page title only |
 
 ## Shipping
 
@@ -118,7 +152,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Gate** | A machine check a lead cannot talk past. **Evidence** is what a gate reads | |
 | **Ship** | Land and deploy | |
 | **Ship refused** | The gate's answer to a ship that does not hold; recorded, and counted as friction. A review never refuses a ship: it is recorded as evidence | |
-| **Watch** | The window after a ship | Hold, in all three meanings |
+| **Watch** | The window after a ship (its length is the `project.yaml` key `deploy.hold`, a name kept) | Hold, for the watch |
 | **Review status** | Of a ship's review: `covered`, `not_required`, `uncovered`, `unknown`. Recorded with its reason, never a refusal | |
 | **Verify** | The check that ends the watch: `make verify`, probes | |
 | **Wait** | A pause with a named exit | |
@@ -126,7 +160,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Pause** | The owner's verb for a started Issue that is to wait: the `paused` wait, which only his word (`factory issue note <id> --wake`) or the time he gave (`factory issue pause <id> --reason "..." [--until <iso>]`) ends. The steward, the Judge and the lead leave it alone; the lead hears it once. A stall or a timer is replaced by it; a dependency, a review of its pull request or a person's wait is not, and an Issue no lead has started cannot be paused. Shown as Paused, on you, and not as a need. The event is `paused` | A note that says "keep paused" |
 | **Dormant** | A lead whose Issue waits for a person, a timer or another Issue and whose `claude` the factory **quiesced** (ended); its attempt, worktree and session stay, and the wake **revives** the session. Not a stall: nothing is wrong | |
 | **Touch** | The owner acting on an Issue | Zero-touch |
-| **Avoidable touch** | A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand | |
+| **Avoidable touch** | A touch the factory should have handled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand | |
 | **Friction** | Any counted waste: an avoidable touch, a refusal, an undelivered note | |
 | **Not measured** | A KPI with no figure: nothing was counted in the window, fewer samples than the floor of three stand under a share or a duration, or the source is not there (the usage schema). It never reads as zero, and its card says which. A friction count is read against the window of the same length just before it | |
 | **Refusal** | An Issue event the state machine refused, or a ship the gate refused. Counted as friction | |
@@ -136,7 +170,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Closed without you** | An Errand that ended with no action from the owner: its check found it no longer needed, it expired, a newer request replaced it, the factory ran its MacBook command through a fixed verb, or his MacBook ran it by itself from a class he granted (an auto-run). Nothing to do, and its title says which | |
 | **Visit** | The owner's run of Console reads with no gap of 30 minutes. The "Since you were here" band counts what happened since the visit before it ended (the first ever looks back 24 hours), so a page reload inside a visit shows the same band | |
 | **First verification pass** | A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI | |
-| **Fix commit** | A commit that fixes something that went wrong, classed by rule by the fix-classes loop and counted per week | |
+| **Fix commit** | A commit that fixes something that went wrong, sorted by its **fix cause** (`docs/product.md` "Fix causes") by rule by the fix-causes loop and counted per week | Fix class |
 | **Cycle** | The time from an Issue filed to closed | |
 | **Queue wait** | The time from an Issue filed or reopened to admitted (a lead started); settling and the chain are part of it | |
 | **Window point** | A point of the five-hour Max window that an Issue's sessions used, per Issue | |
@@ -175,8 +209,8 @@ Every number on a Console card has a word here or in a table above, and its defi
 | **Issues per hour** | How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each | |
 | **Shipped this week** | How many Issues closed done in the last 7 days across all projects, against the 7 days before. What to do: a fall while Issues are Ready means something holds them; open Throughput and read what keeps Issues from starting | |
 | **Binding reason** | The queue reason that kept Issues waiting for the most hours in the window, with how many Issues it held. What to do: it is the limit worth lifting; open the Issues it names and read their reason | |
-| **Issues closed** | How many Issues closed in the window, whatever the outcome, as the cycle KPI counts them, with the mean per UTC day. What to do: a fall while Issues are Ready means something holds them; read Idle seat-hours and Binding reason next. | |
-| **Idle seat-hours** | The hours a seat stood empty while Issues were queued: per minute the seats less the leads running, counted only where an Issue waited, over 60. The hours behind a drained queue are left out, because the owner stopped admission. What to do: many hours with the load low mean a limit is too tight; Binding reason names which, and the settings in force show its value. | |
+| **Issues closed** | How many Issues closed in the window, whatever the outcome, as the cycle KPI counts them, with the mean per UTC day. What to do: a fall while Issues are Ready means something holds them; read Idle allowance-hours and Binding reason next. | |
+| **Idle allowance-hours** | The hours the allowance stood unused while Issues were queued: per minute the allowance less the leads running, counted only where an Issue waited, over 60. The hours behind a drained queue are left out, because the owner stopped admission. What to do: many hours with the load low mean a limit is too tight; Binding reason names which, and the settings in force show its value. | |
 | **Test slot wait** | How long a step waited for a test slot before it ran: the median over the window and its 90th percentile. What to do: a 90th percentile past 10 minutes with the load low means the base slots are too few; raise them in the settings in force. | |
 | **Avoidable cost** | The open improvement that costs the factory most, in minutes of queue wait or MiB over the memory budget; without one, the standing tenants' memory against its budget. What to do: it is the next thing worth fixing; open the improvement's Issue | |
 
@@ -195,13 +229,13 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `seated` | The owner set the seat (tier and effort, or a role of the table, resolved now) the next lead starts on; taken while the Issue is `settling` or `queued`, refused once a lead has started | owner, orchestrator |
 | `noted` | An amend or a note reaches the lead | owner, factory, steward, judge |
 | `asked` | A Decision is raised and the Issue waits for its answer; during a review wait the lead's ask is added to that wait (same `since`, same `told`) | lead, steward (from a stall only) |
-| `answered` | A Decision got its answer; one raised during a review wait leaves the wait's list, and the wait ends with the last item. The Judge's answer to a steward's Decision that reads as a hold carries `hold`, a time: the Issue then waits for it (a `timer` wait) instead of going back to its lead | owner, judge, factory |
+| `answered` | A Decision got its answer; one raised during a review wait leaves the wait's list, and the wait ends with the last item. The Judge's answer to a steward's Decision that reads as a backoff carries the time it ends (stored under the key `hold`): the Issue then waits for it (a `timer` wait) instead of going back to its lead | owner, judge, factory |
 | `submitted` | A Concept or Spec is handed over for review | lead |
 | `verdict_given` | The owner's Verdict on it; with Decisions still open the wait goes on until the last answer, and the lead hears verdict and answers in one note. The factory sends it for a Concept or Spec nobody answered in 24 hours, flagged Issue or not (the lead goes on with its defaults) and to withdraw a review its Issue moved past; his delegate sends it for a Spec that is no owner gate | owner, orchestrator, factory |
 | `errand_raised` | The lead needs the owner's hands | lead |
 | `errand_done` | The owner did the Errand (or his delegate, the orchestrator, closed it on its operator's confirmation: `confirmedBy`, never an approval Errand), or something ended its wait without his hands: the screen turned it away (`turnedAway`: the reason; with `awaits` the Issue then waits on that pull request's review), or the desk pass found its check no longer needed (`resolved`) | owner, orchestrator, judge, factory |
 | `errand_turned_back` | The owner or the orchestrator turned the Errand back: not done, and `note` says what to do instead; the lead hears it as its next turn | owner, orchestrator |
-| `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only; until a time only for a repeated `blocked` stall after a hold) |
+| `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only; until a time only for a repeated `blocked` stall after a backoff) |
 | `stalled` | A machine cause stopped the work: `wall`, `unreported`, `blocked`; a lead's block may say it is out of its depth (`depth`) | factory, lead (`blocked`) |
 | `moved_up` | A light lead struggled (a second stall, a block out of its depth, a second refused ship, a regression of its first watch): its attempt ends and the Issue queues again for a lead on the `lead` row; never twice | factory |
 | `woken` | A wait that needs no person ended; it names the wait | factory, steward, owner |
@@ -216,8 +250,8 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 
 - **Cancel** is the owner's stop of an Issue; **withdraw** is the filer's take-back of an Issue only its own signals made, while no lead has it. "Stop" stays Claude Code's hook.
 - **Review level** (standard, deep) is not **model tier** (haiku, sonnet, opus).
-- **Owner class** (product direction, spend, irreversible data loss, other people, security policy, big architecture)
-  is not a classification field.
+- **The owner's call** (product direction, spend, irreversible data loss, other people, security policy, big architecture)
+  is not a triage field.
 - Deleting code in git is not irreversible data loss.
 
 ## Warp, mapped
@@ -265,7 +299,7 @@ stateDiagram-v2
 
 | Wait | Exit | Stall | Ends |
 |-|-|-|-|
-| `timer` | no person | no | woken by the clock at the time the lead deferred to, or the factory held it to |
+| `timer` | no person | no | woken by the clock at the time the lead deferred to, or the end of a backoff the factory gave it |
 | `dependency` | no person | no | woken by the chain once every Issue it is after has closed |
 | `wall` | no person | yes | woken when the account's window opens again |
 | `unreported` | no person | yes | woken by the lead's next turn or the steward |

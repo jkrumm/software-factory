@@ -126,7 +126,7 @@ export interface AdmissionInputs {
   /** an account's own cap (`FACTORY_ACCOUNT_LEADS`), before the idle host's raise */
   accountLeads?: ReadonlyMap<string, number>
   /** extra leads per account the idle host allows this pass (already in `leadsPerAccount`, added to `accountLeads`); named in a `cap` refusal */
-  seatBonus?: number
+  allowanceBonus?: number
 }
 
 export type Admission = { admit: true; account: AccountReading } | { admit: false; refusal: Refusal }
@@ -147,7 +147,7 @@ const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, par
  * Whether a new lead may start now, in the order of the rules: the queue state (`drain` starts nothing), the host's
  * boot grace, its load (the tripwire: sustained minutes over the ceiling), its memory (the reading, then the learned fit
  * of the candidate's lead), its disk (the learned worktree footprint of the candidate's repo against the free disk), the host's test line (`lineRefusal`), the candidate's lane (the repo's
- * cap on a resource class), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an account with room.
+ * cap on a resource), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an account with room.
  * Never spills: with every account closed the answer is to wait for the first opening. Pure: the readings are passed
  * in, and the caller decides again at every claim, inside one transaction.
  */
@@ -186,7 +186,7 @@ export function checkAdmission(input: AdmissionInputs): Admission {
     candidate: input.candidate,
   })
   if (!room.granted) return no('claim', `no claim free in the repo: ${room.message}`)
-  const raise = input.seatBonus ?? 0
+  const raise = input.allowanceBonus ?? 0
   const pick = pickAccount({
     readings: input.accounts,
     loaded: input.loaded,
@@ -226,7 +226,7 @@ const minutes = (ms: number): string => `${Math.round(ms / 6000) / 10} min`
 
 /**
  * No new lead while the test line is long: more steps wait than run, and half of them have already waited longer than a
- * step takes. Then the slots, not the seats, are the bottleneck, and another lead only adds to the line. It opens again
+ * step takes. Then the slots, not the allowance, are the bottleneck, and another lead only adds to the line. It opens again
  * as soon as the line drains (fewer waiting than running, or the waits shorter than a step). Not a constant: both sides
  * are measured, the line now and the steps of the last day. A fix (`urgent`) is never kept out by it.
  */

@@ -18,7 +18,7 @@ import { checkForUpdate } from './update.ts'
 const INVALIDATE_DEBOUNCE_MS = 250
 /** A steady stream still refetches the lists this often. */
 const INVALIDATE_MAX_WAIT_MS = 1_000
-/** The aggregates (KPIs, friction, finding classes, fix commits) move slowly: they wait for a longer pause. */
+/** The aggregates (KPIs, friction, finders, fix commits) move slowly: they wait for a longer pause. */
 const AGGREGATE_DEBOUNCE_MS = 2_000
 const AGGREGATE_MAX_WAIT_MS = 10_000
 const STREAM_PATH = '/v1/stream'

@@ -13,7 +13,7 @@ export interface Dismissal {
   at: Date
 }
 
-/** What the Judge's screening made of a held signal (`factory-screen`). */
+/** What the Judge's screening made of a quarantined signal (`factory-screen`). */
 export interface Screening {
   /** what it left to the owner, or why it was left; null before it was screened */
   note: string | null
@@ -139,7 +139,7 @@ export interface IntakeStore {
   ): Promise<void>
   signals(state: SignalState | null, limit: number): Promise<SignalRow[]>
   /**
-   * held signals whose retry is due, oldest first: those not screened yet with failed calls under `maxAttempts`, and those
+   * quarantined signals whose retry is due, oldest first: those not screened yet with failed calls under `maxAttempts`, and those
    * held `finalAfterMs` that have not been screened since they got that old (their failed calls are not capped)
    */
   screenable(now: Date, maxAttempts: number, limit: number, finalAfterMs: number): Promise<SignalRow[]>

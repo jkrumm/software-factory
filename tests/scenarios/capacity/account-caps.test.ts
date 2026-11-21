@@ -3,7 +3,7 @@ import { AdmitAnswer, CapacityView } from '@software-factory/contract'
 import { type Lab, startLab } from '../planning/lab.ts'
 
 /**
- * Seats per account and the package's windows: an account with no 5-hour window takes leads up to its
+ * The allowance per account and the package's windows: an account with no 5-hour window takes leads up to its
  * own cap in one pass, one with a window above 70 % takes one per sample, and whether an account is open at all is the
  * package's verdict (its weekly ceiling, not a limit of the factory). The caps are `FACTORY_ACCOUNT_LEADS`.
  */

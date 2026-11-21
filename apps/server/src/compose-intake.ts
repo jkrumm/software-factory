@@ -18,7 +18,7 @@ export interface ComposedIntake {
   api: IntakeApi
   /** the door's health lines (a refused or silent source, an unrouted monitor that stays down); what the read API shows */
   doorLines(finishedMs: number): Promise<string[]>
-  /** starts the pollers and the settle pass on their schedules */
+  /** starts the pollers and the heal pass on their schedules */
   start(): void
   /** stops them and waits for the pass in flight, `graceMs` at most */
   stop(graceMs?: number): Promise<void>
@@ -88,12 +88,12 @@ export async function composeIntake(input: {
       return lines.value
     },
     start() {
-      const settle = async () => {
-        const out = await intake.settle()
-        if (!out.ok) throw new Error(`settle failed: ${JSON.stringify(out.error)}`)
+      const heal = async () => {
+        const out = await intake.heal()
+        if (!out.ok) throw new Error(`heal failed: ${JSON.stringify(out.error)}`)
       }
       const jobs: [string, number | null, boolean, () => Promise<void>][] = [
-        ['settle', env.settleEveryMs, true, settle],
+        ['heal', env.healEveryMs, true, heal],
         ['github intake', env.github.everyMs, github.enabled, () => github.pass()],
         ['launchd intake', env.launchd.everyMs, launchd.enabled, () => launchd.pass()],
       ]

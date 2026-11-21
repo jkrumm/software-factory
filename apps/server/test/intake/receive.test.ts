@@ -390,7 +390,7 @@ describe('settle and heal', () => {
     // a late retry of the down that healed opens no second row
     expect(done(await intake.receive(kumaDown('e1')))).toMatchObject({ outcome: 'dropped', detail: 'replayed' })
     clock.advance(600_000)
-    expect(ok(await intake.settle())).toBeTruthy()
+    expect(ok(await intake.heal())).toBeTruthy()
     expect(runbooks).toEqual([])
     expect(await issues()).toEqual([])
   })
@@ -403,11 +403,11 @@ describe('settle and heal', () => {
       void intake.receive(up('kuma', 'web', 'e2', 'argo'))
       return ok({ ran: true, exit: 0, tail: 'restarted' })
     }
-    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
     expect(runbooks).toEqual([{ repo: 'argo' }])
     await Bun.sleep(100)
     clock.advance(301_000)
-    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
     expect(await issues()).toEqual([])
     expect(runbooks).toHaveLength(1)
   })
@@ -416,7 +416,7 @@ describe('settle and heal', () => {
     done(await intake.receive(kumaDown('e1')))
     for (let pass = 0; pass < 3; pass++) {
       clock.advance(301_000)
-      expect((await intake.settle()).ok).toBe(true)
+      expect((await intake.heal()).ok).toBe(true)
     }
     expect(runbooks).toHaveLength(2)
     expect(await issues()).toEqual([{ id: 'issue_1', repo: 'argo', state: 'settling', outcome: null }])
@@ -428,9 +428,9 @@ describe('settle and heal', () => {
     runbookAnswer = () => ok({ ran: false, reason: 'no restart target' })
     done(await intake.receive(kumaDown('e1')))
     clock.advance(301_000)
-    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
     clock.advance(1_000)
-    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
     expect(await issues()).toHaveLength(1)
   })
 })
@@ -628,7 +628,7 @@ describe("a person's or an agent's signal", () => {
     const stored =
       await db.sql`SELECT state, dismissed_reason, dismissed_by FROM factory.intake_signals WHERE id = ${out.signal}`
     expect(stored[0]).toMatchObject({ state: 'dismissed', dismissed_by: 'judge' })
-    expect(String(stored[0]?.dismissed_reason)).toContain('already settled: issue_1')
+    expect(String(stored[0]?.dismissed_reason)).toContain('already covered by issue_1')
 
     // two days on, the closed Issue is no longer shown
     clock.advance(48 * 3_600_000)
@@ -903,7 +903,7 @@ describe('the door', () => {
     done(await intake.alert(alert({ monitor: 'WeatherOrb Watchdog', status: 'up', event: 'u1' })))
     done(await intake.alert(alert({ monitor: 'weatherorb heartbeat', event: 'd1' })))
     done(await intake.alert(alert({ monitor: 'mystery', event: 'd2' })))
-    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
     expect(await db.sql`SELECT monitor, repo, set_by FROM factory.intake_door_routes ORDER BY monitor`).toEqual([
       { monitor: 'WeatherOrb Watchdog', repo: 'weather-orb', set_by: 'factory:name' },
       { monitor: 'weatherorb heartbeat', repo: 'weather-orb', set_by: 'factory:name' },
@@ -914,7 +914,7 @@ describe('the door', () => {
     expect(listed.ok && listed.value.unrouted.map((row) => row.monitor)).toEqual(['mystery'])
   })
 
-  test('a down monitor nobody can place becomes a held signal after hours, once, and a route answers it', async () => {
+  test('a down monitor nobody can place becomes a quarantined signal after hours, once, and a route answers it', async () => {
     intake = createIntake({
       uow,
       clock,
@@ -928,12 +928,12 @@ describe('the door', () => {
     })
     done(await intake.alert(alert({ monitor: 'mystery', event: 'd1' })))
     clock.advance(DEFAULT_INTAKE_SETTINGS.unroutedHeldMs - 60_000)
-    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
     expect(await db.sql`SELECT id FROM factory.intake_signals`).toEqual([])
 
     clock.advance(120_000)
-    expect((await intake.settle()).ok).toBe(true)
-    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
     const held = await db.sql`SELECT id, state, repo, title FROM factory.intake_signals`
     expect(held).toEqual([
       { id: expect.any(String), state: 'held', repo: null, title: expect.stringContaining('pick its repo') },
@@ -964,7 +964,7 @@ describe('the door', () => {
     })
     done(await intake.alert(alert({ monitor: 'mystery', event: 'd1' })))
     clock.advance(DEFAULT_INTAKE_SETTINGS.unroutedHeldMs + 60_000)
-    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
     const [held] = await db.sql`SELECT id, text FROM factory.intake_signals WHERE state = 'held'`
     expect(String(held?.text)).toContain('no repo is assigned to mystery')
     const promoted = await intake.promote(String(held?.id), { repo: 'vps' })
@@ -992,8 +992,8 @@ describe('the door', () => {
   test('a monitor that stays down with no route is filed once in the home repo, asking for a route', async () => {
     done(await intake.alert(alert({ monitor: 'mystery' })))
     clock.advance(DEFAULT_INTAKE_SETTINGS.unroutedGraceMs + 1_000)
-    expect((await intake.settle()).ok).toBe(true)
-    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
+    expect((await intake.heal()).ok).toBe(true)
     const rows = await db.sql`SELECT repo FROM factory.issues`
     expect(rows).toEqual([{ repo: 'vps' }])
     const [filed] = await db.sql`SELECT payload->>'title' AS title FROM factory.issue_events WHERE kind = 'filed'`
@@ -1061,7 +1061,7 @@ describe('app feedback through the door', () => {
     })
   })
 
-  test('the fingerprint ignores version and route: the same complaint from two builds is one held signal', async () => {
+  test('the fingerprint ignores version and route: the same complaint from two builds is one quarantined signal', async () => {
     const first = done(await intake.feedback(feedback()))
     const again = done(await intake.feedback(feedback({ version: '1.3.0', route: '/settings', text: 'more' })))
     expect(again).toMatchObject({ outcome: 'held', detail: 'replayed', signal: first.signal })
@@ -1271,7 +1271,7 @@ describe("a lead's follow-up for a work repo", () => {
   })
   const owned = (title: string) => intake.file({ ...request('owner:hermes', title), repo: 'argo' }, 'owner')
 
-  test('an owner-filed Issue’s lead gets a held signal for the owner, never an Issue', async () => {
+  test('an owner-filed Issue’s lead gets a quarantined signal for the owner, never an Issue', async () => {
     done(await owned('Consolidate the databases'))
     const held = done(await intake.file(request('agent:argo', 'Move the chat database', 'issue_1'), 'agent'))
     expect(held).toMatchObject({ outcome: 'held', detail: 'quarantined' })

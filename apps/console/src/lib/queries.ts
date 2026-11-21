@@ -14,7 +14,7 @@ import {
   fetchErrands,
   fetchFlow,
   fetchFlowTrend,
-  fetchFindingClasses,
+  fetchFinders,
   fetchLoopYield,
   fetchFixCommits,
   fetchFriction,
@@ -290,12 +290,12 @@ export function useFriction(days: number) {
   })
 }
 
-/** The finding classes the friction and hygiene loops file, held ones first. */
-export function useFindingClasses() {
+/** The finders the friction and hygiene loops file for, muted ones first. */
+export function useFinders() {
   const live = useLive()
   return useQuery({
-    queryKey: ['finding-classes'],
-    queryFn: ({ signal }) => fetchFindingClasses(signal),
+    queryKey: ['finders'],
+    queryFn: ({ signal }) => fetchFinders(signal),
     refetchInterval: pollEvery(live),
   })
 }
@@ -310,7 +310,7 @@ export function useLoopYield() {
   })
 }
 
-/** Fix commits by class over the last four weeks. */
+/** Fix commits by cause over the last four weeks. */
 export function useFixCommits() {
   const live = useLive()
   return useQuery({

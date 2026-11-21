@@ -6,7 +6,7 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { annotationsOwed } from '../../src/app/quality-ship.ts'
 import { patternsOver } from '../../src/domains/improve/friction.ts'
 import { alertStillDown, ciStillRed, notDeployed } from '../../src/domains/quality/watch.ts'
-import { refusalClass } from '../../src/read/refusal-class.ts'
+import { refusalKind } from '../../src/read/refusal-kind.ts'
 import { readFriction } from '../../src/read/friction.ts'
 import { readFrictionEvidence } from '../../src/read/friction-evidence.ts'
 
@@ -84,30 +84,30 @@ const WEEK: { detail: string; class: string }[] = [
 ]
 
 test('every refusal text of the week has the class its producer means', () => {
-  for (const row of WEEK) expect(refusalClass(row.detail).id, row.detail).toBe(row.class)
+  for (const row of WEEK) expect(refusalKind(row.detail).id, row.detail).toBe(row.class)
 })
 
 test('the texts the producers export keep their class', () => {
   expect(
-    refusalClass(notDeployed('deployed 6d29bc382201 does not hold e3b8d5ceb6d8, where the work landed', 'app')).id,
+    refusalKind(notDeployed('deployed 6d29bc382201 does not hold e3b8d5ceb6d8, where the work landed', 'app')).id,
   ).toBe('deployed_lacks_commit')
-  expect(refusalClass(alertStillDown(['api down'])).id).toBe('alert_still_down')
+  expect(refusalKind(alertStillDown(['api down'])).id).toBe('alert_still_down')
   expect(
-    refusalClass(String(ciStillRed({ status: 'red', reason: 'tests', url: null } as never, 'abcdef0123456'))).id,
+    refusalKind(String(ciStillRed({ status: 'red', reason: 'tests', url: null } as never, 'abcdef0123456'))).id,
   ).toBe('ci_still_red')
   const owed = annotationsOwed([{ id: 'annotation_1', artifact: 'artifact_1', revision: 1, quote: 'why' }])
-  expect(refusalClass(owed).id).toBe('annotations_undisposed')
-  expect(refusalClass(annotationsOwed([{ id: 'a', artifact: 'b', revision: 2, quote: 'x' }], 'close')).id).toBe(
+  expect(refusalKind(owed).id).toBe('annotations_undisposed')
+  expect(refusalKind(annotationsOwed([{ id: 'a', artifact: 'b', revision: 2, quote: 'x' }], 'close')).id).toBe(
     'annotations_undisposed',
   )
 })
 
 test('a text no rule knows is a class by its wording, never by the shas, paths and numbers it names', () => {
-  const a = refusalClass('something new about commit 0123456789abcdef in /srv/x/y after 12 tries')
-  const b = refusalClass('something new about commit fedcba98765432 in /srv/z/w after 7 tries')
+  const a = refusalKind('something new about commit 0123456789abcdef in /srv/x/y after 12 tries')
+  const b = refusalKind('something new about commit fedcba98765432 in /srv/z/w after 7 tries')
   expect(a.id).toBe(b.id)
   expect(a.id).not.toMatch(HEX_RUN)
-  expect(refusalClass(null).id).toBe('no_reason_given')
+  expect(refusalKind(null).id).toBe('no_reason_given')
 })
 
 let db: TestCluster

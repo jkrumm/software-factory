@@ -74,7 +74,7 @@ test('the wording the lead gives its first block after the answer is far from th
 test('a block straight after the answer is the same stall, whatever its words', () => {
   const records = log([...START, block(REWORDED, 5 * MIN + 15_000)])
   const since = records.at(-1)?.version ?? 0
-  expect(repeatedStall(ID, records, 'blocked', REWORDED, since)).toEqual({ answeredAt: 7, held: false })
+  expect(repeatedStall(ID, records, 'blocked', REWORDED, since)).toEqual({ answeredAt: 7, backedOff: false })
 })
 
 test('a block long after the answer, in other words, is a new question', () => {

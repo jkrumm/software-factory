@@ -5,7 +5,7 @@ import { PROCESS_LOCK_WAIT_MS } from './adapters/postgres/process-lock.ts'
 import { DEFAULT_RECHECK_MS, DEFAULT_RETRY_MS } from './domains/quality/watch.ts'
 import { parseEnv, type Environment } from './kernel/env.ts'
 
-const DEFAULT_SETTLE_MS = 2 * 60_000
+const DEFAULT_GRACE_MS = 2 * 60_000
 
 const MIN_TOKEN_CHARS = 16
 const token = z.string().min(MIN_TOKEN_CHARS, `must be at least ${MIN_TOKEN_CHARS} characters`)
@@ -49,7 +49,7 @@ const Env = z.object({
   FACTORY_VERIFY_RETRY_MS: z.coerce.number().int().min(1).optional(),
   /** the gap between two verify checks of a shipped change */
   FACTORY_VERIFY_RECHECK_MS: z.coerce.number().int().min(1).optional(),
-  /** how long a verify result must hold before it counts as settled */
+  /** the watch's grace: how long after a ship its first check waits */
   FACTORY_VERIFY_SETTLE_MS: z.coerce.number().int().min(0).optional(),
 })
 
@@ -90,7 +90,7 @@ export interface Settings {
     /** how long after a blocked check (a checkout not ours to move, CI still running) verify looks again */
     recheckMs: number
     /** how long after the server starts no check runs: a restart is a deploy */
-    settleMs: number
+    graceMs: number
   }
 }
 
@@ -138,7 +138,7 @@ export function loadSettings(env: Environment): Settings {
       windowMs: data.FACTORY_WATCH_WINDOW_MS ?? 0,
       retryMs: data.FACTORY_VERIFY_RETRY_MS ?? DEFAULT_RETRY_MS,
       recheckMs: data.FACTORY_VERIFY_RECHECK_MS ?? DEFAULT_RECHECK_MS,
-      settleMs: data.FACTORY_VERIFY_SETTLE_MS ?? DEFAULT_SETTLE_MS,
+      graceMs: data.FACTORY_VERIFY_SETTLE_MS ?? DEFAULT_GRACE_MS,
     },
   }
 }

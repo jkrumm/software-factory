@@ -21,7 +21,7 @@ export type NeedKind = (typeof NEED_KINDS)[number]
 export const NeedItem = z
   .strictObject({
     kind: z.enum(NEED_KINDS),
-    /** the checkpoint's own id: the Decision, the artifact under review, the Errand, the held signal */
+    /** the checkpoint's own id: the Decision, the artifact under review, the Errand, the quarantined signal */
     id: z.string(),
     issue: IssueRef.nullable(),
     repo: z.string().nullable(),
@@ -38,16 +38,16 @@ export const NeedItem = z
     link: z.strictObject({ type: z.enum(['decision', 'artifact', 'errand', 'signal', 'issue']), id: z.string() }),
     /** the artifact under review a Decision was raised about; null for everything else */
     artifact: z.string().nullable(),
-    /** where it came from, in the words of `SIGNAL_ORIGINS`: a held signal's own origin, else the Issue's; null when unknown */
+    /** where it came from, in the words of `SIGNAL_ORIGINS`: a quarantined signal's own origin, else the Issue's; null when unknown */
     origin: z.string().nullable(),
-    /** a held signal's source in a person's word (never a tool name); a request's asker (`ask-human`); null for everything else */
+    /** a quarantined signal's source in a person's word (never a tool name); a request's asker (`ask-human`); null for everything else */
     source: z.string().nullable(),
     /** a request's command to copy, and where the hands must be; null for everything else and for a work-repo item the caller may not read */
     command: z.string().nullable(),
     host: z.enum(['macbook', 'iphone', 'portal', 'any']).nullable(),
-    /** a held signal that is a monitor down with no route: its source in a person's word, its name and the repo the screen's note names (the one promoting it routes to); null for everything else */
+    /** a quarantined signal that is a monitor down with no route: its source in a person's word, its name and the repo the screen's note names (the one promoting it routes to); null for everything else */
     unrouted: z.strictObject({ source: z.string(), monitor: z.string(), proposal: z.string().nullable() }).nullable(),
-    /** a held signal's link to the thing it is about; null for everything else and for a work-repo item the caller may not read */
+    /** a quarantined signal's link to the thing it is about; null for everything else and for a work-repo item the caller may not read */
     sourceLink: z.string().nullable(),
     /** an Errand whose last run failed or whose check overruled a done: "tried, failed: <first error line>" or the check's note; null for everything else and for a work-repo item the caller may not read */
     tried: z.string().nullable(),
@@ -676,7 +676,7 @@ export const FrictionCount = z
       'unstated_acceptance',
       'unproven_ci',
       'regression',
-      'decision_settled',
+      'decision_answered',
       'signal',
       'api_transient',
       'spec_unneeded',
@@ -803,14 +803,15 @@ export const RetroTaste = z
   .meta({ id: 'RetroTaste' })
 export type RetroTaste = z.infer<typeof RetroTaste>
 
-// -- finding classes -----------------------------------------------------------------------------------------------------
+// -- finders ---------------------------------------------------------------------------------------------------------------
 
-export const FindingClass = z
+export const Finder = z
   .strictObject({
     loop: z.enum(['friction', 'hygiene', 'selfwatch']),
-    class: z.string(),
-    status: z.enum(['open', 'probation', 'held']),
-    /** every Issue the class filed */
+    /** the kind of finding (stored as `loop_findings.class`) */
+    finder: z.string(),
+    status: z.enum(['open', 'probation', 'muted']),
+    /** every Issue the finder filed */
     issues: z.number().int(),
     /** decided Issues in the judged window */
     decided: z.number().int(),
@@ -818,38 +819,38 @@ export const FindingClass = z
     noise: z.number().int(),
     /** noise / decided; null with nothing decided */
     share: z.number().nullable(),
-    /** Issues of the class not closed yet */
+    /** Issues of the finder not closed yet */
     open: z.number().int(),
-    /** when a held class is asked again; null unless the window is over the share */
-    heldUntil: at.nullable(),
+    /** when a muted finder is asked again; null unless the window is over the share */
+    mutedUntil: at.nullable(),
   })
-  .meta({ id: 'FindingClass' })
-export type FindingClass = z.infer<typeof FindingClass>
+  .meta({ id: 'Finder' })
+export type Finder = z.infer<typeof Finder>
 
-export const FindingClassesModel = z
+export const FindersModel = z
   .strictObject({
     at,
-    /** held first, then probation, then open; then by loop and class */
-    classes: z.array(FindingClass),
+    /** muted first, then probation, then open; then by loop and finder */
+    finders: z.array(Finder),
   })
-  .meta({ id: 'FindingClassesModel' })
-export type FindingClassesModel = z.infer<typeof FindingClassesModel>
+  .meta({ id: 'FindersModel' })
+export type FindersModel = z.infer<typeof FindersModel>
 
 // -- what the loops yield ----------------------------------------------------------------------------------------------
 
 /** The loops that file signals; the others (leads, steward, host, ...) judge or sample and file none. */
 export const YIELD_LOOPS = ['friction', 'hygiene', 'selfwatch', 'throughput'] as const
 
-export const LoopYieldClass = z
+export const LoopYieldFinder = z
   .strictObject({
-    /** the pattern group, probe, finding kind or KPI the loop filed under */
-    class: z.string(),
+    /** the finder: the pattern group, probe, finding kind or KPI the loop filed under */
+    finder: z.string(),
     issues: z.number().int(),
     /** of those, dropped or cancelled */
     noise: z.number().int(),
   })
-  .meta({ id: 'LoopYieldClass' })
-export type LoopYieldClass = z.infer<typeof LoopYieldClass>
+  .meta({ id: 'LoopYieldFinder' })
+export type LoopYieldFinder = z.infer<typeof LoopYieldFinder>
 
 /** One loop over one window: what it filed and how it ended. Issues are counted by the day they were filed. */
 export const LoopYieldWindow = z
@@ -873,8 +874,8 @@ export const LoopYieldWindow = z
     open: z.number().int(),
     /** median seconds from the Issue's filing to its close, over the closed ones; null with none */
     medianCloseSeconds: z.number().nullable(),
-    /** the three kinds of finding with the most Issues, then by name */
-    classes: z.array(LoopYieldClass),
+    /** the three finders with the most Issues, then by name */
+    finders: z.array(LoopYieldFinder),
   })
   .meta({ id: 'LoopYieldWindow' })
 export type LoopYieldWindow = z.infer<typeof LoopYieldWindow>
@@ -898,8 +899,8 @@ export const FixWeek = z
     from: at,
     to: at,
     total: z.number().int().min(0),
-    /** every class key, 0 included */
-    byClass: z.record(z.string(), z.number().int().min(0)),
+    /** every cause key, 0 included */
+    byCause: z.record(z.string(), z.number().int().min(0)),
   })
   .meta({ id: 'FixWeek' })
 export type FixWeek = z.infer<typeof FixWeek>
@@ -908,8 +909,8 @@ export const FixCommitsModel = z
   .strictObject({
     /** at least one fix commit is stored */
     measured: z.boolean(),
-    /** the classes in the order they are shown, with what each means (`docs/product.md` "Fix classes") */
-    classes: z.array(z.strictObject({ key: z.string(), meaning: z.string() })),
+    /** the causes in the order they are shown, with what each means (`docs/product.md` "Fix causes") */
+    causes: z.array(z.strictObject({ key: z.string(), meaning: z.string() })),
     /** four trailing 7-day windows, the newest first: week i is [now - 7(i+1) days, now - 7i days) */
     weeks: z.array(FixWeek),
     /** repos with a stored fix commit in those four weeks */
@@ -1157,8 +1158,8 @@ export const CapacityReason = z
     kind: z.string(),
     queuedHours: z.number(),
     issues: z.number().int(),
-    idleSeatHours: z.number(),
-    /** `queuedHours` and `issues` split by the repo the Issues were queued in, most hours first; the idle seat-hours are not split */
+    idleAllowanceHours: z.number(),
+    /** `queuedHours` and `issues` split by the repo the Issues were queued in, most hours first; the idle allowance-hours are not split */
     byRepo: z.array(CapacityReasonRepo),
   })
   .meta({ id: 'CapacityReason' })
@@ -1192,22 +1193,22 @@ export const CapacityLoopModel = z
     /** Issues that closed (any outcome, as the cycle KPI counts them) */
     throughput: CapacityTotal,
     /** seats not held by a lead while Issues were queued, in hours: minutes with queued > 0 of max(seats - leads, 0), over 60 */
-    idleSeatHours: CapacityTotal,
+    idleAllowanceHours: CapacityTotal,
     /**
-     * of `idleSeatHours`, the hours in minutes the memory gate was shut: `total` for either trigger, `swapout` and `swapUsed`
+     * of `idleAllowanceHours`, the hours in minutes the memory gate was shut: `total` for either trigger, `swapout` and `swapUsed`
      * for each alone (a minute can count in both), against the ceilings in `constants`
      */
-    idleSeatHoursMemory: z.strictObject({ total: z.number(), swapout: z.number(), swapUsed: z.number() }),
+    idleAllowanceHoursMemory: z.strictObject({ total: z.number(), swapout: z.number(), swapUsed: z.number() }),
     /**
-     * of `idleSeatHours`, the hours that fell in minutes an Issue was queued behind a drained queue (`queueByReason`'s
+     * of `idleAllowanceHours`, the hours that fell in minutes an Issue was queued behind a drained queue (`queueByReason`'s
      * `drain`, by the same split): the owner or the orchestrator stopped admission, so it is not capacity going unused.
-     * `idleSeatHours` minus this is the figure the tuner reads
+     * `idleAllowanceHours` minus this is the figure the tuner reads
      */
-    idleSeatHoursDrain: CapacityTotal,
+    idleAllowanceHoursDrain: CapacityTotal,
     /**
      * what the queue waited for over the window, by reason kind (`factory.queue_intervals`), the kind with most queued hours
-     * first: the hours Issues were queued for it, how many Issues, and the share of `idleSeatHours` that fell in minutes
-     * when an Issue was queued for it. A minute's idle seat-hours are split equally among the distinct kinds queued in it,
+     * first: the hours Issues were queued for it, how many Issues, and the share of `idleAllowanceHours` that fell in minutes
+     * when an Issue was queued for it. A minute's idle allowance-hours are split equally among the distinct kinds queued in it,
      * leaving out the kinds that are no cost of the factory (an `after` edge, a Spec at the owner) unless only those wait;
      * `unrecorded` is a minute no interval covers. The kinds are the queue's (`memory` is the host's reading, `memory_fit`
      * the learned cost of a repo's lead against the free memory). `byRepo` names the repos behind a kind's queued hours
@@ -1267,7 +1268,7 @@ export const CapacityLoopModel = z
       slots: z.number(),
       slotsMax: z.number(),
       slotExtraLoad: z.number(),
-      seatsMaxBonus: z.number(),
+      allowanceMaxBonus: z.number(),
       reaperGraceMs: z.number(),
       /** the memory gate: swapouts MiB per 300 s, and swap in use as a share of RAM, above which no lead is admitted */
       swapoutCeilingMb: z.number(),
@@ -1451,7 +1452,7 @@ export const ThroughputModel = z
         coreShare: nullableNumber,
       }),
       /** all seven classes (lead, step, tenant, factory, system, owner, other), zeros when absent, largest footprint first then by name */
-      byClass: z.array(
+      byCause: z.array(
         z.strictObject({
           class: z.string(),
           /** mean MiB per minute, over `host.minutes`, an integer */
@@ -1639,19 +1640,19 @@ export const ThroughputModel = z
             /** runs of the window per host */
             miniRuns: z.number().int(),
             vpsRuns: z.number().int(),
-            /** placements of the window: on the step host, or on the mini because a slot was free, the VPS had no room, would not finish sooner, or the step was held */
+            /** placements of the window: on the step host, or on the mini because a slot was free, the VPS had no room, would not finish sooner, or the step was benched (stored as the placement reason `held`) */
             placed: z.strictObject({
               vps: z.number().int(),
               free: z.number().int(),
               noRoom: z.number().int(),
               notSooner: z.number().int(),
-              held: z.number().int(),
+              benched: z.number().int(),
             }),
-            /** the hold now (or the last one, ended): its length, when it ends, the disagreements in its chain; null: none in the ledger */
-            hold: z
+            /** the bench now (or the last one, ended): its length, when it ends, the disagreements in its chain; null: none in the ledger */
+            bench: z
               .strictObject({
                 active: z.boolean(),
-                holdMs: z.number().int(),
+                benchMs: z.number().int(),
                 until: at,
                 disagreements: z.number().int(),
               })
@@ -1937,7 +1938,7 @@ export const RetroCapacityTune = z
   .strictObject({
     constant: z.enum([
       'leadsPerAccount',
-      'seatsMaxBonus',
+      'allowanceMaxBonus',
       'loadCeiling',
       'slots',
       'slotsMax',
@@ -1970,7 +1971,7 @@ export const RetroThroughput = z
     hours: z.number().int(),
     epoch: ThroughputEpoch.nullable(),
     answers: ThroughputAnswers,
-    host: ThroughputModel.shape.host.pick({ minutes: true, signals: true, byClass: true }),
+    host: ThroughputModel.shape.host.pick({ minutes: true, signals: true, byCause: true }),
     lead: ThroughputModel.shape.lead.omit({ issues: true }),
     project: ThroughputModel.shape.project,
     improvements: ThroughputModel.shape.improvements,

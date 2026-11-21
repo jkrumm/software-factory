@@ -49,6 +49,37 @@ const FIXTURES: Record<string, { failing: string; passing: string }> = {
   classify: { failing: 'classifier.run()', passing: 'triage.run() // classification of nothing' },
   board: { failing: '// the board of Issues', passing: '// the Flow screen // dashboard, keyboard' },
   dedup: { failing: 'dedupe(signals)', passing: 'triage(signals)' },
+  'seat bonus': { failing: 'seatBonus(input)', passing: 'allowanceBonus(input) // the seat a lead runs on' },
+  'idle seat': { failing: 'idleSeatHours', passing: 'idleAllowanceHours' },
+  'seat-hours': { failing: "'Idle seat-hours'", passing: "'Idle allowance-hours' // seat: tier and effort" },
+  'free seat': {
+    failing: "'Ready: waits only for a free seat.'",
+    passing: "'Ready: waits only for room in the allowance.'",
+  },
+  'judge hold': {
+    failing: "// the Judge's hold on a stall",
+    passing: '// a lead holds a claim; the Judge gave a backoff',
+  },
+  'remote hold': {
+    failing: "import { holdOf } from './remote-hold.ts'",
+    passing: "import { benchOf } from './remote-bench.ts'",
+  },
+  'held signal': { failing: '// a held signal waits in Needs you', passing: '// a quarantined signal; a Held Issue' },
+  'held class': { failing: "'Held finding classes'", passing: "'Muted finders' // held back by the cap" },
+  settler: { failing: 'type Settler = string', passing: 'type Answerer = string // settled_by' },
+  'settle decision': { failing: 'settleDecision(deps, id)', passing: 'tryAnswer(deps, id) // the Issue settled' },
+  'settle loop': {
+    failing: "import { settle } from './intake-settle.ts' // the settle pass",
+    passing: '// the heal pass; the Issue is settling',
+  },
+  'finding class': { failing: 'FindingClassesModel', passing: 'FindersModel // a finding' },
+  'fix class': { failing: 'FIX_CLASSES', passing: 'FIX_CAUSES // fix the class name' },
+  'step class': { failing: 'stepClassOf(name)', passing: 'exclusiveStepOf(name) // the step: class lead' },
+  'refusal class': { failing: 'refusalClass(detail)', passing: 'refusalKind(detail)' },
+  'resource class': {
+    failing: '// a resource class inside a repo',
+    passing: '// a resource inside a repo; memory by class',
+  },
 }
 
 describe('every retired term has a failing and a passing fixture', () => {

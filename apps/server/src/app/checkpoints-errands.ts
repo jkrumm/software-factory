@@ -30,7 +30,7 @@ import {
   turnBackErrandWith,
   waitingOn,
 } from './checkpoints.ts'
-import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
+import { PASS_LIMIT, type CheckpointLoopDeps } from './checkpoints-loop.ts'
 import { recordIn } from './issues.ts'
 
 /** the composition passes it to the health lines, which import no domain code */
@@ -60,7 +60,7 @@ const STANDALONE_KIND = 'request'
  */
 async function openUnder(
   stores: CheckpointStores,
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   id: ErrandId,
   /** the desk pass looks again at an Errand that reached the owner already */
   reached = false,
@@ -93,7 +93,7 @@ async function openUnder(
 /** The Errand reaches the owner: recorded and paged (the page's key is the Errand's) in one transaction. */
 async function reachOwner(
   stores: CheckpointStores,
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   found: { errand: ErrandRecord; issueId: IssueId | null; repo: string },
   by: 'rule' | 'judge' | 'failed',
   note: string,
@@ -125,7 +125,7 @@ async function reachOwner(
 /** The Errand is turned away: the wait ends and the lead hears why. */
 export async function turnAway(
   stores: CheckpointStores,
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   errand: ErrandRecord,
   by: 'rule' | 'judge',
   reason: string,
@@ -159,7 +159,7 @@ export async function turnAway(
 }
 
 /** Records what the screen came to, in a new transaction that re-reads the Errand and the Issue under the lock. */
-function record(deps: SettleDeps, id: ErrandId, verdict: Verdict, reached = false): Step<Outcome> {
+function record(deps: CheckpointLoopDeps, id: ErrandId, verdict: Verdict, reached = false): Step<Outcome> {
   return deps.uow.run<Outcome, CheckpointError>(async (stores) => {
     const found = await openUnder(stores, deps, id, reached)
     if (found === 'finished' || found === 'dropped') return ok('dropped')
@@ -198,7 +198,7 @@ function record(deps: SettleDeps, id: ErrandId, verdict: Verdict, reached = fals
  * A screen that cannot be reached is tried again after a backoff, and after the last try the Errand reaches the owner
  * unscreened.
  */
-async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened> {
+async function screenErrand(deps: CheckpointLoopDeps, id: ErrandId): Step<ErrandScreened> {
   const first = await deps.uow.run<
     | { request: ErrandScreenRequest; errand: ErrandRecord }
     | 'dropped'
@@ -270,7 +270,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
  * answer, git refused the pull) leaves the command with the owner, as a `place` Errand, with the reason in its note.
  */
 async function viaMacbook(
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   port: MacbookVerbPort,
   id: ErrandId,
   verb: MacbookVerb,
@@ -310,7 +310,7 @@ async function viaMacbook(
  * An Errand the factory ran itself through a fixed MacBook verb ends `done` (closed by the loop, never by the owner): the Issue
  * that waits on it, and every Issue that joined it, hear what the verb printed. False when it closed under the call.
  */
-async function finishRan(deps: SettleDeps, id: ErrandId, ran: string): Step<boolean> {
+async function finishRan(deps: CheckpointLoopDeps, id: ErrandId, ran: string): Step<boolean> {
   return deps.uow.run<boolean, CheckpointError>(async (stores) => {
     const found = await openUnder(stores, deps, id)
     if (found === 'dropped' || found === 'finished') return ok(false)
@@ -338,7 +338,7 @@ async function finishRan(deps: SettleDeps, id: ErrandId, ran: string): Step<bool
 }
 
 /** One pass over the Errands the screen holds, oldest first. */
-export async function screenErrands(deps: SettleDeps, limit = PASS_LIMIT): Step<ErrandScreened[]> {
+export async function screenErrands(deps: CheckpointLoopDeps, limit = PASS_LIMIT): Step<ErrandScreened[]> {
   const held = await deps.uow.run(async ({ errands }) => ok(await errands.unscreenedErrands(deps.clock.now(), limit)))
   if (!held.ok) return held
   const screened: ErrandScreened[] = []
@@ -359,7 +359,7 @@ export type Rescreened = 'turned_away' | 'kept' | 'dropped'
  * a turn-away changes anything, and it ends the wait exactly as the first screen's does; a pass, or a screen that cannot be
  * reached, leaves the Errand where it was and is not counted as a try.
  */
-export async function rescreenErrand(deps: SettleDeps, id: ErrandId): Step<Rescreened> {
+export async function rescreenErrand(deps: CheckpointLoopDeps, id: ErrandId): Step<Rescreened> {
   const first = await deps.uow.run<
     { request: ErrandScreenRequest } | { rule: string; awaits?: string } | 'dropped',
     CheckpointError
@@ -421,7 +421,7 @@ export async function rescreenErrand(deps: SettleDeps, id: ErrandId): Step<Rescr
  * with `errand_done` (`resolved`: what the check said), so the lead hears that nothing is left to do; a request has no one
  * to tell. False when the Errand closed under the call (the owner acted first).
  */
-export async function resolveErrand(deps: SettleDeps, id: ErrandId, why: string): Step<boolean> {
+export async function resolveErrand(deps: CheckpointLoopDeps, id: ErrandId, why: string): Step<boolean> {
   return deps.uow.run<boolean, CheckpointError>(async ({ work, checkpoints, errands }) => {
     const errand = await errands.lockErrand(id)
     if (!errand || errand.doneAt) return ok(false)
@@ -455,7 +455,7 @@ export async function resolveErrand(deps: SettleDeps, id: ErrandId, why: string)
  * joined it, get it once as a note on their record (a waiting lead reads it at its next turn; it does not wake it), so the check is fixed or the Errand raised again without one. The owner reads the same
  * words as the Errand's check note on Needs you. A request has no lead; its note is its asker's.
  */
-export async function tellCheckBroken(deps: SettleDeps, errand: ErrandRecord, line: string): Step<null> {
+export async function tellCheckBroken(deps: CheckpointLoopDeps, errand: ErrandRecord, line: string): Step<null> {
   return deps.uow.run<null, CheckpointError>(async (stores) => {
     const said = `The check of your Errand "${errand.summary}" is broken (${line || 'a command was not found'}): it cannot say whether the Errand is still needed, so it stays open until the owner marks it done. Raise it again with a working check if you can.`
     const tell = async (issueId: IssueId): Promise<Result<unknown, CheckpointError>> =>
@@ -484,7 +484,7 @@ export async function tellCheckBroken(deps: SettleDeps, errand: ErrandRecord, li
  * ended it, or one the desk pass finds): it ends, and its lead or asker is told to correct the command. False when it closed
  * under the call or its runs are not that many.
  */
-export async function retireErrand(deps: SettleDeps, id: ErrandId): Step<boolean> {
+export async function retireErrand(deps: CheckpointLoopDeps, id: ErrandId): Step<boolean> {
   return deps.uow.run<boolean, CheckpointError>(async (stores) => {
     const errand = await stores.errands.lockErrand(id)
     if (
@@ -506,7 +506,7 @@ export async function retireErrand(deps: SettleDeps, id: ErrandId): Step<boolean
  * lead or asker is told with the check's words to raise it again with a command that is safe to repeat. False when it closed
  * under the call or has no such run, so a repeat of the call tells nobody twice.
  */
-export async function turnBackRan(deps: SettleDeps, id: ErrandId, checkLine: string): Step<boolean> {
+export async function turnBackRan(deps: CheckpointLoopDeps, id: ErrandId, checkLine: string): Step<boolean> {
   return deps.uow.run<boolean, CheckpointError>(async (stores) => {
     const errand = await stores.errands.lockErrand(id)
     if (!errand || errand.doneAt || errand.runStatus !== 'done') return ok(false)
@@ -519,7 +519,7 @@ export async function turnBackRan(deps: SettleDeps, id: ErrandId, checkLine: str
  * Gives an open Errand that reached the owner with no `need` the one its shape says (`needOf`): the Errands that were
  * open when the field arrived. A pass over a few at a time; the screen sets it for every Errand after.
  */
-export async function assignNeeds(deps: SettleDeps, limit = PASS_LIMIT): Step<number> {
+export async function assignNeeds(deps: CheckpointLoopDeps, limit = PASS_LIMIT): Step<number> {
   return deps.uow.run<number, CheckpointError>(async ({ errands }) => {
     let assigned = 0
     for (const errand of await errands.needlessErrands(limit)) {
@@ -535,7 +535,7 @@ export async function assignNeeds(deps: SettleDeps, limit = PASS_LIMIT): Step<nu
  * the call.
  */
 export async function endRequest(
-  deps: SettleDeps,
+  deps: CheckpointLoopDeps,
   id: ErrandId,
   how: { kind: 'not_needed' | 'expired'; by: 'check' | 'judge' | 'loop'; why: string },
 ): Step<boolean> {

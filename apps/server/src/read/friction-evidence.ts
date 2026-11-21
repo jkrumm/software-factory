@@ -3,7 +3,7 @@ import * as z from 'zod'
 import { orchestratorSteer, ownerTouch, ownerVerdict, TOUCH_EVENTS, type Window } from './kpis.ts'
 import { frictionWindow } from './friction.ts'
 import { specSourceSql } from './spec-screen.ts'
-import { refusalClass } from './refusal-class.ts'
+import { refusalKind } from './refusal-kind.ts'
 
 /** Refs shown per pattern. */
 const LIMIT = 5
@@ -46,7 +46,7 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
     return recent(
       rows
         .map((raw) => Row.parse(raw))
-        .filter((row) => refusalClass(row.detail).id === tail)
+        .filter((row) => refusalKind(row.detail).id === tail)
         .map((row) => row.issue_id),
     )
   }
@@ -57,7 +57,7 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
     return recent(
       rows
         .map((raw) => Row.parse(raw))
-        .filter((row) => refusalClass(row.detail).id === tail)
+        .filter((row) => refusalKind(row.detail).id === tail)
         .map((row) => row.issue_id),
     )
   }

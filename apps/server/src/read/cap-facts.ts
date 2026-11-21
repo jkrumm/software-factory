@@ -66,7 +66,7 @@ export async function readCapFacts(
           comment: null,
           bindingMinutes: row.minutes,
           issues: row.issues,
-          idleSeats: Math.round(row.idle),
+          idleAllowance: Math.round(row.idle),
           hours: CAP_WINDOW_HOURS,
           figures,
         })

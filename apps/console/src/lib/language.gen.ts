@@ -1,12 +1,16 @@
 // Generated from docs/language.md by scripts/language.ts: do not edit (`bun run --cwd apps/console language`).
 export const LANGUAGE = {
   account:
-    "One Claude Code subscription the factory runs leads on. Whether it takes work, why not, when it opens again and the order of the open ones are packages/accounts' to decide (claude-account status, GET /v1/accounts); the factory adds only its seats and the leads running on it. A mode (normal, drain, reserve, paused) can be set on it for a time",
+    "One Claude Code subscription the factory runs leads on. Whether it takes work, why not, when it opens again and the order of the open ones are packages/accounts' to decide (claude-account status, GET /v1/accounts); the factory adds only its allowance and the leads running on it. A mode (normal, drain, reserve, paused) can be set on it for a time",
   'active time':
     'How long a lead worked on this Issue, summed over its attempts. Time spent waiting on a person, a timer or another Issue is not in it. What to do: when elapsed time is far above active time, read the Activity tab to see what it waited on',
+  allowance:
+    "How many leads the accounts may run at once: leads per account, plus the bonus the host's idle minutes earn (domains/capacity/allowance.ts). It is idle while work is queued and fewer leads run than it allows",
   amend: "Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note",
   annotation:
     'A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored"',
+  answerer:
+    'Who answered a Decision, in the order tried: judge, default, owner; or orchestrator, answering for the owner. Stored as settled_by, a column name kept',
   artifact:
     'What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report. An Issue owns it, or none does (a standalone Report, artifact new); links name the other Issues it concerns; it may belong to one collection (a named set with one lead page, pinned or not)',
   ask: "The lead's verb that raises a Decision (factory issue ask)",
@@ -16,9 +20,13 @@ export const LANGUAGE = {
   'avoidable cost':
     "The open improvement that costs the factory most, in minutes of queue wait or MiB over the memory budget; without one, the standing tenants' memory against its budget. What to do: it is the next thing worth fixing; open the improvement's Issue",
   'avoidable touch':
-    'A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand',
+    'A touch the factory should have handled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand',
   'back at desk':
     'The Needs-you view (?mode=desk) of the open Errands by where the hands must be, each with its command to copy and Done and Not needed buttons',
+  backoff:
+    'The Judge\'s answer to a stall the steward asked about that says "wait for it": a timed wait instead of a wake, one hour, doubling per backoff of the attempt, at most twelve (kernel/backoff.ts)',
+  bench:
+    'A step kept on the mini after a run off it was red where the mini was green: an hour, doubling with each repeat within a week up to seven days, halved by a green run off the mini (kernel/remote-bench.ts)',
   'binding reason':
     'The queue reason that kept Issues waiting for the most hours in the window, with how many Issues it held. What to do: it is the limit worth lifting; open the Issues it names and read their reason',
   'cache read share':
@@ -38,6 +46,8 @@ export const LANGUAGE = {
     'Where the factory stops for a person: a Decision, a review of a Concept or Spec, an Errand. Never a merge',
   claim:
     "A lead's place in its repo: leads: N (64 when the project states none: the host's fit is the limit, NL32) plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over",
+  class:
+    "The group a host process works for: lead, step, tenant, factory, system, owner, other (Memory by class on Throughput). The word's one sense",
   'closed without you':
     'An Errand that ended with no action from the owner: its check found it no longer needed, it expired, a newer request replaced it, the factory ran its MacBook command through a fixed verb, or his MacBook ran it by itself from a class he granted (an auto-run). Nothing to do, and its title says which',
   compacted: 'Session state: its context was just compacted, no turn since',
@@ -56,7 +66,7 @@ export const LANGUAGE = {
   'desk pass':
     'The desk loop\'s one pass over every open Errand when the owner returns (a Console read after two hours or more away, the MacBook answering after it was unreachable, or his button "Push what waits to my MacBook"; each starts it at once) and every six hours otherwise: each check runs (the resolved ones close and wake their lead), the rest are screened again, and the MacBook commands are pushed through ask-human.sh push, every pending one oldest first on a return and one while he is away',
   dismiss:
-    'A held signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as dismissed',
+    'A quarantined signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as dismissed',
   'door route':
     "The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git",
   dormant:
@@ -68,31 +78,31 @@ export const LANGUAGE = {
     'A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way',
   filed:
     "An Issue that came into being: the owner's request, an agent's, or a signal triage turned into one. The band's New Issues counts them once each and names where they came from",
+  finder:
+    "A kind of finding a loop files Issues for: the loop plus the finding's first key segment (a probe, a kind of judgment, a friction pattern group; stored as loop_findings.class). Mostly dropped or cancelled Issues mute it for 14 days, then it is on probation, one Issue at a time (GET /v1/finders, Improve)",
   'first verification pass':
     "A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI",
   'fix commit':
-    'A commit that fixes something that went wrong, classed by rule by the fix-classes loop and counted per week',
+    'A commit that fixes something that went wrong, sorted by its fix cause (docs/product.md "Fix causes") by rule by the fix-causes loop and counted per week',
   flow: 'The read model of Issues by state over time (GET /v1/flow), shown on the Overview; Chain is its graph',
   friction: 'Any counted waste: an avoidable touch, a refusal, an undelivered note',
   gate: 'A machine check a lead cannot talk past. Evidence is what a gate reads',
   gone: 'Session state: its session ended or its terminal is gone',
   healed: 'Outcome: an incident that went away before a lead started',
-  held: "No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a held signal",
-  'held signal':
-    "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two held signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there",
+  held: "No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a quarantined signal",
   idle: 'Session state: its last turn ended',
-  'idle seat-hours':
-    'The hours a seat stood empty while Issues were queued: per minute the seats less the leads running, counted only where an Issue waited, over 60. The hours behind a drained queue are left out, because the owner stopped admission. What to do: many hours with the load low mean a limit is too tight; Binding reason names which, and the settings in force show its value.',
+  'idle allowance-hours':
+    'The hours the allowance stood unused while Issues were queued: per minute the allowance less the leads running, counted only where an Issue waited, over 60. The hours behind a drained queue are left out, because the owner stopped admission. What to do: many hours with the load low mean a limit is too tight; Binding reason names which, and the settings in force show its value.',
   incident:
     'One root cause seen through many signals: the VPS is down, so HyperDX and Kuma all fire. Triage groups them under one Issue',
   issue: "One unit of work: one repo, one branch, one ship. Warp's work item",
   'issues closed':
-    'How many Issues closed in the window, whatever the outcome, as the cycle KPI counts them, with the mean per UTC day. What to do: a fall while Issues are Ready means something holds them; read Idle seat-hours and Binding reason next.',
+    'How many Issues closed in the window, whatever the outcome, as the cycle KPI counts them, with the mean per UTC day. What to do: a fall while Issues are Ready means something holds them; read Idle allowance-hours and Binding reason next.',
   'issues per hour':
     'How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each',
-  judge: 'The agw workflow that tries to settle a Decision before the owner sees it',
+  judge: 'The agw workflow that tries to answer a Decision before the owner sees it',
   kind: "What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue. A failing check of a project's default branch is an incident, never a bug",
-  lane: 'A resource class inside a repo (apple) that an Issue or plan row names; lanes: {apple: 1} in the repo\'s project.yaml caps how many leads of the lane run at once, within leads. An undeclared lane is unlimited (docs/plan.md "Lanes")',
+  lane: 'A resource inside a repo (apple) that an Issue or plan row names; lanes: {apple: 1} in the repo\'s project.yaml caps how many leads of the lane run at once, within leads. An undeclared lane is unlimited (docs/plan.md "Lanes")',
   lead: 'The Claude Code session that owns one attempt of one Issue: understand, build, review, ship, verify',
   'light seat':
     "The role table's light row, the cheap seat a lead starts on when the Issue is mechanical: every hygiene finding, kind docs, a monitor with no route, and while the delivery tripwire is met, triage's small with no design choice, migration, security word or new surface. The filer's seat always wins. A light lead that struggles is moved up: the next lead starts on the lead row (apps/server/src/domains/leads/light.ts)",
@@ -110,7 +120,7 @@ export const LANGUAGE = {
   'needed me':
     'The owner\'s one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
   needs:
-    'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, held signals, long waits',
+    'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, quarantined signals, long waits',
   'not measured':
     'A KPI with no figure: nothing was counted in the window, fewer samples than the floor of three stand under a share or a duration, or the source is not there (the usage schema). It never reads as zero, and its card says which. A friction count is read against the window of the same length just before it',
   'not started': 'The Issues no lead has begun: Ready and Held. The trend shows them as one line',
@@ -121,8 +131,8 @@ export const LANGUAGE = {
     "The Console's home screen (/): what needs the owner, production, what shipped in a day, the host and the queue's binding reason, then the flow's counts and trend. It was the Flow screen",
   owed: 'Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. An owed lead counts in the leads of the account it resumes on, and the account cap never refuses its resume. A note refused for a claim for 15 minutes while a claim would be granted to that lead now is a steward stall; a herd waiting its turn is not',
   'owner gate':
-    "An Issue filed with the checkpoint gate: it owes the same Spec as spec, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen settle, so what is after it is released by him alone. Only a filer sets it, never triage",
-  page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is settled",
+    "An Issue filed with the checkpoint gate: it owes the same Spec as spec, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen pass, so what is after it is released by him alone. Only a filer sets it, never triage",
+  page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is answered",
   pass: 'One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored',
   pause:
     'The owner\'s verb for a started Issue that is to wait: the paused wait, which only his word (factory issue note <id> --wake) or the time he gave (factory issue pause <id> --reason "..." [--until <iso>]) ends. The steward, the Judge and the lead leave it alone; the lead hears it once. A stall or a timer is replaced by it; a dependency, a review of its pull request or a person\'s wait is not, and an Issue no lead has started cannot be paused. Shown as Paused, on you, and not as a need. The event is paused',
@@ -135,7 +145,9 @@ export const LANGUAGE = {
     'A test signal a lead marks (probe: true) so it is stored dismissed and never held; its ack is dropped, detail probe',
   project:
     "A repo the factory knows, described by its project.yaml (every key: docs/project.md). signals: says which automatic sources it listens to; a work repo listens to the owner only. host: names the host its alerts sit on (a key of config/infra.json's hosts), so its Kuma and HyperDX alerts join that host's incident. doctor: make doctor is the project saying whether this host can run it: a read-only command of seconds that exits non-zero with one line per missing prerequisite and its fix; while it is red the project's Issues stay queued (kind doctor, with those lines) and hygiene skips its check probe",
-  promote: "A held signal becomes work: the owner's or the Judge's call",
+  promote: "A quarantined signal becomes work: the owner's or the Judge's call",
+  'quarantined signal':
+    "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two quarantined signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there",
   'queue reason':
     "Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, spec, unknown_project, drain, doctor, boot, load, memory, disk (the repo's worktree, build output included, is learned to take more than the free disk less the headroom), tests (the test line is long: more steps wait for a slot than run, for longer than a step takes), lane, claim, window, cap",
   'queue state':
@@ -146,7 +158,7 @@ export const LANGUAGE = {
   'quota used at reset':
     'The capacity-weighted mean of the weekly percent each account stood at when its weekly window reset, per week, from the reset ledger. What the accounts left unused shows as the rest',
   ready:
-    "No lead has begun it and nothing but capacity keeps it out: it starts when its turn and a seat come. Its limit names what binds it: a free seat, the host (load, memory, boot, doctor), the repo's claims, the lane or the cap, or the account's window",
+    "No lead has begun it and nothing but capacity keeps it out: it starts when its turn and room in the allowance come. Its limit names what binds it: room in the allowance, the host (load, memory, boot, doctor), the repo's claims, the lane or the cap, or the account's window",
   reaper: 'The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind',
   refusal: 'An Issue event the state machine refused, or a ship the gate refused. Counted as friction',
   regressed:
@@ -165,14 +177,14 @@ export const LANGUAGE = {
   revision: "One version of an artifact's content. A Decision has one; a Concept or Spec gains one with each revise",
   round: 'The nth ask of a workflow about one subject. A subject has a limited number of rounds',
   running:
-    "A lead works on it now: the Issue is in the working state and holds a seat. A lead standing in line for a test slot is still Running. The count is of Issues, not sessions: one Running Issue may have no session open for an instant between two sessions, and a Checking Issue's session is open without being counted here",
+    "A lead works on it now: the Issue is in the working state and counts against the allowance. A lead standing in line for a test slot is still Running. The count is of Issues, not sessions: one Running Issue may have no session open for an instant between two sessions, and a Checking Issue's session is open without being counted here",
   screen:
-    "The Judge looks at a held signal (bar a work repo's; the screen loop, factory-screen) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most",
-  seat: "One lead the accounts may hold at once (leads per account, plus the bonus the host's idle minutes earn). A seat is idle when work is queued and no lead holds it",
+    "The Judge looks at a quarantined signal (bar a work repo's; the screen loop, factory-screen) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it quarantined (stored as held) with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most",
+  seat: "The tier, effort and role a lead runs on: the role table's row, or the one a filer or the owner set (factory issue seat, the event seated)",
   'session state':
     "What a lead's session is, derived from its hook events: starting (no hook yet), working (a turn is running), idle (its last turn ended), compacted (its context was just compacted, no turn since), walled (its account hit a limit), gone (its session ended or its terminal is gone)",
-  settler:
-    'Who settled a Decision, in the order tried: judge, default, owner; or orchestrator, answering for the owner',
+  settle:
+    "Triage and the chain finishing for an Issue: it leaves settling (the event settled, factory planning settle). The word's one sense",
   settling: 'State: triage is not done; shown as Held',
   ship: 'Land and deploy',
   'ship refused':
@@ -183,7 +195,7 @@ export const LANGUAGE = {
   size: "Triage's judgment of how much work an Issue is: small, medium, large. Kept on the Issue when triage settles it; none for an Issue the rules settled",
   spec: 'A larger plan to review',
   'spec screen':
-    "The look a Spec revision passes before it reaches the owner: rules, then factory-spec-screen with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and settles the rest with the factory's looks_good and its reason, so the lead builds at once",
+    "The look a Spec revision passes before it reaches the owner: rules, then factory-spec-screen with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and answers the rest with the factory's looks_good and its reason (stored as the outcome settled), so the lead builds at once",
   stale: 'A Needs you item that has waited more than 24 hours',
   stall: "A wait with a machine cause, the steward's to end",
   started: 'The Issues a lead began: Running and Paused',
@@ -198,7 +210,7 @@ export const LANGUAGE = {
   'swap used':
     "The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts. What to do: if it keeps growing, read Memory by class on Throughput to find what writes memory out; a full but steady swap needs nothing",
   'take the default':
-    "The lead's verb that settles its own open Decision with the default it named, once it went on with that option (factory decision take-default <id> --attempt <n>). Recorded as settled by default, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it)",
+    "The lead's verb that answers its own open Decision with the default it named, once it went on with that option (factory decision take-default <id> --attempt <n>). Recorded as answered by default, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it)",
   'taste pass':
     "The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
   'test slot':
@@ -211,7 +223,7 @@ export const LANGUAGE = {
   triage:
     'Deciding what a signal becomes: a new Issue, an amendment to an open one, part of an incident, held, or dropped',
   'triage outcome':
-    'What triage did with a signal: filed, amended, incident, held (quarantined, or a down waiting out its heal grace), dropped. Its detail says why: new, matched, replayed, repeat, joined, regression, healed, quiet, unrouted, quarantined, promoted; for a drop work_repo, no_project, not_listened, loop_guard, no_repo, probe, settled (the workflow found an Issue closed in the last day already settles it)',
+    'What triage did with a signal: filed, amended, incident, held (quarantined, or a down waiting out its heal grace), dropped. Its detail says why: new, matched, replayed, repeat, joined, regression, healed, quiet, unrouted, quarantined, promoted; for a drop work_repo, no_project, not_listened, loop_guard, no_repo, probe, settled (the workflow found an Issue closed in the last day already covers it)',
   'turn away':
     "An Errand the screen refuses because a token or CLI could do it: the Issue's errand wait ends and the lead hears the reason",
   'turn back':
@@ -219,7 +231,7 @@ export const LANGUAGE = {
   turns:
     'How many times a lead was prompted and worked until it stopped: the brief, each note, each wake. What to do: many turns on a small Issue means the lead was steered a lot; read the notes in Activity',
   verdict:
-    'The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (by): the owner; the factory for him (the default after 24 hours, a Spec screen settle, a withdrawal); or the orchestrator, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his',
+    'The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (by): the owner; the factory for him (the default after 24 hours, a Spec screen pass, a withdrawal); or the orchestrator, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his',
   verified:
     'A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue',
   verify: 'The check that ends the watch: make verify, probes',
@@ -228,7 +240,7 @@ export const LANGUAGE = {
   wait: 'A pause with a named exit',
   waiting: 'State: a lead started and the Issue is paused on a named wait; shown as Paused',
   walled: 'Session state: its account hit a limit',
-  watch: 'The window after a ship',
+  watch: 'The window after a ship (its length is the project.yaml key deploy.hold, a name kept)',
   watching:
     'State: shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass; shown as Checking',
   window: "An account's 5-hour or weekly reset",

@@ -98,13 +98,13 @@ const MOVE_UP_AFTER = 2
 ```
 
 > [!NOTE]
-> `domains/capacity/seats.ts` is a different seat: how many extra leads an account may run while the host idles. It does not choose a tier.
+> `domains/capacity/allowance.ts` is a different seat: how many extra leads an account may run while the host idles. It does not choose a tier.
 
 **Example files:**
 
 - [`roles.json`](https://github.com/jkrumm/software-factory/blob/master/config/roles.json#L1-L10): the role table, one tier and effort per role
 - [`light.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/light.ts#L47-L85): `lightRule` picks the seat, `moveUpWhy` moves a struggling light lead up
-- [`seats.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/seats.ts#L21-L39): the extra leads an idle host can take
+- [`seats.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/allowance.ts#L21-L39): the extra leads an idle host can take
 
 ## Verbs
 

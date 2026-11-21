@@ -140,7 +140,7 @@ export function Composer({
 export function ScreenLine({ detail }: { detail: ArtifactDetail }) {
   const { screen } = detail
   if (!screen || screen.outcome === 'passed') return null
-  const lead = screen.outcome === 'settled' ? 'Settled by the Spec screen' : 'The Spec screen holds it'
+  const lead = screen.outcome === 'settled' ? 'Answered by the Spec screen' : 'The Spec screen holds it'
   return (
     <p className="basis-full text-xs text-muted-foreground">
       {lead}

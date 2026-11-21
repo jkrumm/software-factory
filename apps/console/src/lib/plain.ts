@@ -178,7 +178,7 @@ export function artifactPreview(format: 'markdown' | 'html', content: string): s
   return text ? cutAtWord(text) : null
 }
 
-/** A held signal's text without markdown fences, inline code ticks, heading, quote and list markers or emphasis. */
+/** A quarantined signal's text without markdown fences, inline code ticks, heading, quote and list markers or emphasis. */
 export function plainExcerpt(text: string): string {
   return text
     .replace(/^[ \t]*(```|~~~).*$/gm, '')

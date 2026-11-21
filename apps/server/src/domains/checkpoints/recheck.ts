@@ -158,7 +158,7 @@ export function recheckErrandDetail(errand: { detail: string | null }, events: s
   return `${scrub(errand.detail ?? '').slice(0, 600)}\n\n${recheckPreface(afterMs)}${events}`.trim()
 }
 
-/** What a recheck makes of the Judge's call: the Decision stays (`kept`, with why), or the Judge settles it. */
+/** What a recheck makes of the Judge's call: the Decision stays (`kept`, with why), or the Judge answers it. */
 export type RecheckVerdict =
   | { action: 'kept'; reason: string }
   | { action: 'settle'; answer: string; source: string; reason: string }

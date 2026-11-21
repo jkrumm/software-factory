@@ -243,13 +243,13 @@ async function throughputOf(
 ): Promise<RetroThroughput> {
   const hours = Math.min(THROUGHPUT_MAX_HOURS, options.days * 24)
   const model = await readThroughput(sql, { now: options.now, hours, epoch: options.epoch, queue: options.queue })
-  const { minutes, signals, byClass } = model.host
+  const { minutes, signals, byCause } = model.host
   const { issues: _issues, ...lead } = model.lead
   return {
     hours,
     epoch: model.epoch,
     answers: model.answers,
-    host: { minutes, signals, byClass },
+    host: { minutes, signals, byCause },
     lead,
     project: model.project,
     improvements: model.improvements,
@@ -278,12 +278,13 @@ async function capacityOf(
   }
   const figures = [...capacityFigures(loop), apiBlocked, ...options.build]
   const heaviest = loop.leadCosts[0] ?? null
-  const memoryShare = loop.idleSeatHours.total > 0 ? loop.idleSeatHoursMemory.total / loop.idleSeatHours.total : 0
+  const memoryShare =
+    loop.idleAllowanceHours.total > 0 ? loop.idleAllowanceHoursMemory.total / loop.idleAllowanceHours.total : 0
   return {
     figures,
     tune: tuneConstant(figures, loop.constants, {
       memoryShare,
-      trigger: loop.idleSeatHoursMemory.swapUsed > loop.idleSeatHoursMemory.swapout ? 'swapUsed' : 'swapout',
+      trigger: loop.idleAllowanceHoursMemory.swapUsed > loop.idleAllowanceHoursMemory.swapout ? 'swapUsed' : 'swapout',
       heaviest: heaviest && { repo: heaviest.repo, peakMibP80: heaviest.peakMibP80 },
     }),
     loop,

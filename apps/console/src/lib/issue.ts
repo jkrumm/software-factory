@@ -32,7 +32,7 @@ const TRUST_WORDS: Record<string, string> = {
   outside: 'outside text, not trusted',
 }
 
-const SETTLED_BY_WORDS: Record<string, string> = {
+const ANSWERED_BY_WORDS: Record<string, string> = {
   owner: 'by you',
   orchestrator: 'by the orchestrator, for you',
   policy: 'by policy',
@@ -52,7 +52,7 @@ const word = (words: Record<string, string>, key: string): string => words[key] 
 export const originWords = (origin: string): string => word(ORIGIN_WORDS, origin)
 export const trustWords = (trust: string): string => word(TRUST_WORDS, trust)
 export const triageKindWords = (kind: string): string => word(KIND_WORDS, kind)
-export const settledByWords = (by: string | null): string => (by === null ? '' : word(SETTLED_BY_WORDS, by))
+export const answeredByWords = (by: string | null): string => (by === null ? '' : word(ANSWERED_BY_WORDS, by))
 
 /**
  * A latest verdict, in the artifact page's words; "No verdict yet" while none. One the factory gave (the default after the

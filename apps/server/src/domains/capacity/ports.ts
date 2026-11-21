@@ -9,7 +9,7 @@ import type { AttemptPeak, ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
 import type { PressureBaseline } from '../../kernel/remote-pressure.ts'
 import type { RemoteReading } from './remote.ts'
-import type { HoldEvent } from '../../kernel/remote-hold.ts'
+import type { BenchEvent } from '../../kernel/remote-bench.ts'
 import type { AimState, LeadAim } from './slot-aim.ts'
 import type { SlotRow, StepHost, WaitKind } from './slots.ts'
 import type { OpenWait, WaitPlan } from './waits.ts'
@@ -78,7 +78,7 @@ export interface CapacityStore {
     legacy?: { repo: string; words: string },
   ): Promise<StepRun[]>
   /** the step's disagreements (a run on the mini that found a red off the mini green) and its green runs off the mini since `since`, any order */
-  holdEvents(name: string, since: Date): Promise<HoldEvent[]>
+  benchEvents(name: string, since: Date): Promise<BenchEvent[]>
   /** how many runs of the step (by its stored name) found the named test red off the mini and green on it */
   disagreementsOfTest(name: string, test: string): Promise<number>
   /** appends one reading of the step host's pressure: how many step containers ran at the time (`remote_samples`) */
@@ -318,7 +318,7 @@ export interface WorktreeSizer {
   sizeMib(path: string): Promise<number | null>
 }
 
-/** What `packages/accounts` says of one account: `claude-account status --json` as the contract names it, before the factory adds its seats. */
+/** What `packages/accounts` says of one account: `claude-account status --json` as the contract names it, before the factory adds its allowance. */
 export type AccountStatusRow = Omit<
   AccountRow,
   | 'seats'

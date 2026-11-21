@@ -105,7 +105,7 @@ beforeAll(async () => {
   await signal('signal_b', 'owner', ago(3))
   await db.sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, turned_away_at)
     VALUES ('errand_a', 'ea', 'issue_2', 1, 'Screened errand', ${ago(5)}, ${ago(2)})`
-  // a held signal for the needs additions
+  // a quarantined signal for the needs additions
   await db.sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, link, received_at, state)
     VALUES ('signal_h', 'hyperdx', 'alert', 'application', 'machine', 'open-app', 'h', 'Held', 't', 'https://example.com/a', ${ago(1)}, 'held'),
       ('signal_w', 'hyperdx', 'alert', 'application', 'machine', 'work-app', 'w', 'Held work', 't', 'https://example.com/w', ${ago(1)}, 'held')`

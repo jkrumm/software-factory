@@ -6,14 +6,14 @@ const HOUR = 60 * MINUTE
 /**
  * What the capacity loop leaves behind, for Throughput's capacity cards: host minutes with capacity facts (older than the
  * 24 hours `seedHost` fills, so no minute is shared), test-slot steps, lead samples of two repos and the reaper's rows,
- * all inside the 7-day window. Over the ceiling: 2 minutes. Idle seat-hours with work queued: 120 seat-minutes, 2 hours.
+ * all inside the 7-day window. Over the ceiling: 2 minutes. Idle allowance-hours with work queued: 120 allowance-minutes, 2 hours.
  * Slot wait over 6 steps: median 2 s, 90th percentile 55 s. The reaper ended 3 processes; one more row was a dry decision.
  */
 export async function seedCapacity(sql: SQL, now = Date.now()): Promise<void> {
   const minute = (hoursAgo: number, plus = 0) => new Date(now - hoursAgo * HOUR + plus * MINUTE)
   const host: Array<[Date, number | null, number | null, number | null, number | null]> = [
-    [minute(26), 9, 1, 2, 3], // over; 2 idle seats
-    [minute(26, 1), 9, 2, 1, 3], // over; 1 idle seat
+    [minute(26), 9, 1, 2, 3], // over; 2 leads of allowance idle
+    [minute(26, 1), 9, 2, 1, 3], // over; 1 lead of allowance idle
     [minute(26, 2), 3, 3, 1, 3], // seats all held
     [minute(26, 3), 3, 0, 0, 4], // nothing queued
     [minute(26, 4), null, null, null, null], // a minute that could not be read
@@ -23,7 +23,7 @@ export async function seedCapacity(sql: SQL, now = Date.now()): Promise<void> {
       1,
       2,
       4,
-    ]), // 3 idle seats each
+    ]), // 3 leads of allowance idle each
   ]
   for (const [at, load, leads, queued, seats] of host)
     await sql`INSERT INTO factory.host_samples (at, load, leads, queued, seats, load_ceiling)

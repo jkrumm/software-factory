@@ -39,21 +39,22 @@ export type StepHost = 'mini' | 'vps'
 
 /**
  * What a wait waits for: every slot taken, the memory fit, swap growing, the load gate (the tripwire under the aim), a step
- * with no size known, the line ahead, the cores fit, or its host-wide class held by another step.
+ * with no size known, the line ahead, the cores fit, or an exclusive step of its group held by another step.
  */
+// `class`: an exclusive step of the same group holds a slot (a stored `capacity_slots.why_kind` value)
 export const WAIT_KINDS = ['slots', 'memory', 'swap', 'load', 'unsized', 'line', 'cores', 'class'] as const
 export type WaitKind = (typeof WAIT_KINDS)[number]
 
 /**
- * The host-wide class of a step, or null: at most one step of a class holds a slot at a time, whichever repo runs it.
+ * The exclusive group of a step, or null: at most one step of a group holds a slot at a time, whichever repo runs it.
  * `apple` is every step named `<repo>-apple` or `<project> apple`, the name dotfiles `docs/apple-signing.md` gives every
  * xcodebuild, devicectl, archive and notarisation (iris, ntfy-mac, shutterflow and any later Xcode user). One at a time
  * not for memory (the 14 days to 2026-11-16: iris-apple peaked at 2.8 GiB, ntfy-mac-apple 2.7, shutterflow-apple 2.1, so
  * two would fit beside the leads on 32 GiB) but because the simulators and the signing keychain are the host's: iris's
- * `scripts/apple-slot --sim` shuts every simulator down when its job ends. Cargo builds are no class: measured at 5.6 GiB
+ * `scripts/apple-slot --sim` shuts every simulator down when its job ends. Cargo builds are not exclusive: measured at 5.6 GiB
  * and 3 cores (shutterflow cargo test, p80), they are packed by the memory and cores fit like any other step.
  */
-export function stepClassOf(name: string): string | null {
+export function exclusiveStepOf(name: string): string | null {
   return /(^|[\s-])apple$/.test(name) ? 'apple' : null
 }
 
@@ -135,10 +136,10 @@ interface StepSize {
   cores: number
 }
 
-/** The slots taken: how many, and how many of each host-wide class. */
+/** The slots taken: how many, and how many of each exclusive group. */
 interface Taken {
   count: number
-  classes: ReadonlyMap<string, number>
+  groups: ReadonlyMap<string, number>
 }
 
 /** What a granted step waited for: its whole wait and the split of it by reason (the time between two calls counts to the reason given at the first). */
@@ -177,12 +178,12 @@ function decide(
   const holders = taken.count
   const max = Math.max(base, fit.max)
   if (holders >= max) return { grant: false, kind: 'slots', why: `all ${max} slots are busy` }
-  const cls = stepClassOf(step.name)
-  if (cls !== null && (taken.classes.get(cls) ?? 0) > 0)
+  const group = exclusiveStepOf(step.name)
+  if (group !== null && (taken.groups.get(group) ?? 0) > 0)
     return {
       grant: false,
       kind: 'class',
-      why: `a step of the host-wide class ${cls} holds a slot: one at a time, whichever repo runs it`,
+      why: `an exclusive ${group} step holds a slot: one at a time, whichever repo runs it`,
     }
   if (holders === 0) return { grant: true }
   if (fit.swapGrowing)
@@ -406,12 +407,12 @@ export function touchSlots(
       ? ''
       : ` (passed by "${row.passedBy ?? '?'}" since ${Math.floor((now.getTime() - row.passedAt.getTime()) / 60_000)} min; after ${Math.round(passAfterMs / 60_000)} min its memory is reserved and only a step that ends before its start passes it)`
   const held = others.filter((row) => row.slot !== null)
-  const classes = new Map<string, number>()
+  const groups = new Map<string, number>()
   for (const row of held) {
-    const cls = stepClassOf(row.name)
-    if (cls !== null) classes.set(cls, (classes.get(cls) ?? 0) + 1)
+    const group = exclusiveStepOf(row.name)
+    if (group !== null) groups.set(group, (groups.get(group) ?? 0) + 1)
   }
-  const takenNow: Taken = { count: taken.size, classes }
+  const takenNow: Taken = { count: taken.size, groups }
   const verdict = decide(takenNow, input.slots, input.fit, {
     name: input.name,
     peakMib: input.fit.peakMib,
@@ -427,7 +428,7 @@ export function touchSlots(
   // passed for the whole window (then its memory is reserved: the caller passes it only when it still fits beside the caller,
   // `headFitsBeside`, or the caller ends before the reserved start, `reservedStartMs`), and
   // one that fits takes the slot on its own next call. A waiter
-  // whose host-wide class is held never holds the line: the line standing still frees no class.
+  // whose exclusive group is held never holds the line: the line standing still frees no class.
   const passed: SlotRow[] = []
   for (const waiter of line.slice(0, ahead)) {
     const theirs = decide(takenNow, input.slots, input.fit, {
@@ -496,7 +497,7 @@ export function lineOrder(rows: readonly SlotRow[], runMsByName?: ReadonlyMap<st
 
 /**
  * The host's test line for the lead admission (`TestLine` of `admission.ts`): the live waiters and holders, and the median
- * of how long the waiters have waited so far. A waiter its host-wide class holds back waits for that class, not for a
+ * of how long the waiters have waited so far. A waiter its exclusive group holds back waits for that group, not for a
  * slot, and is left out: a queue of Apple builds behind one is no reason to hold leads back.
  */
 export function testLineOf(

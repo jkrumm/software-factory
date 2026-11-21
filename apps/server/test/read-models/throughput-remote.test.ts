@@ -5,7 +5,7 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { readThroughput } from '../../src/read/throughput.ts'
 
 /**
- * `tests.remote`: the steps declared remote with their runs per host and placements, the hold a disagreement put them
+ * `tests.remote`: the steps declared remote with their runs per host and placements, the bench a disagreement put them
  * under (with its end), what the red run failed on, and the pressure line with the baseline it comes from.
  */
 let db: TestCluster
@@ -39,7 +39,7 @@ describe('the remote steps of the Throughput read', () => {
     expect(tests.remote).toEqual({ pressure: { memoryPct: 1, ioPct: 1, from: 'default', baseline: null }, steps: [] })
   })
 
-  test('a step with a disagreement: runs, placements, the hold with its end, and the failing test', async () => {
+  test('a step with a disagreement: runs, placements, the bench with its end, and the failing test', async () => {
     await cost(at('13:00'), 'vps', 1)
     await cost(at('13:20'), 'mini', 0, {
       disagreed: true,
@@ -56,8 +56,8 @@ describe('the remote steps of the Throughput read', () => {
         step: 'basalt-ui unit',
         miniRuns: 1,
         vpsRuns: 2,
-        placed: { vps: 1, free: 1, noRoom: 1, notSooner: 0, held: 1 },
-        hold: { active: false, holdMs: 3_600_000, until: '2026-11-17T14:20:00.000Z', disagreements: 1 },
+        placed: { vps: 1, free: 1, noRoom: 1, notSooner: 0, benched: 1 },
+        bench: { active: false, benchMs: 3_600_000, until: '2026-11-17T14:20:00.000Z', disagreements: 1 },
         lastDisagreement: {
           at: '2026-11-17T13:20:00.000Z',
           tests: [{ name: 'a.test.ts > slow one', durationMs: 5200, timeoutMs: 5000 }],
@@ -67,7 +67,7 @@ describe('the remote steps of the Throughput read', () => {
     ])
     // while it runs, the read says so
     const during = await readThroughput(sql, { now: at('13:50'), hours: 24 })
-    expect(during.tests.remote.steps[0]?.hold).toMatchObject({ active: true, until: '2026-11-17T14:20:00.000Z' })
+    expect(during.tests.remote.steps[0]?.bench).toMatchObject({ active: true, until: '2026-11-17T14:20:00.000Z' })
   })
 
   test('with a day of samples and no step running the line is just above their p99, and the baseline is shown', async () => {

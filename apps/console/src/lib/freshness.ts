@@ -27,7 +27,7 @@ const LABELS: Record<string, string> = {
   chain: 'Chain',
   kpis: 'KPIs',
   friction: 'Friction',
-  'finding-classes': 'Finding classes',
+  finders: 'Finders',
   'fix-commits': 'Fix commits',
   'capacity-loop': 'Capacity loop',
   throughput: 'Throughput',

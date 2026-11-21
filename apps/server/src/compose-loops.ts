@@ -27,7 +27,7 @@ import { MakeAndProbes } from './adapters/quality/proof.ts'
 import type { loadEpoch } from './adapters/throughput-epoch.ts'
 import { slotAimPass } from './app/capacity-aim.ts'
 import { endRequest, tellCheckBroken } from './app/checkpoints-errands.ts'
-import type { SettleDeps } from './app/checkpoints-settle.ts'
+import type { CheckpointLoopDeps } from './app/checkpoints-loop.ts'
 import type { checkpointUses } from './app/checkpoints-uses.ts'
 import { resumeRulesOf } from './app/leads-api-errors.ts'
 import { ciLedgerLoop } from './app/loops/ci-ledger.ts'
@@ -35,7 +35,7 @@ import type { MainCheckoutLines } from './app/loops/checkout-lines.ts'
 import { deskLoop, hasUnpushed } from './app/loops/desk.ts'
 import { digestLoop } from './app/loops/digest.ts'
 import { errandsLoop } from './app/loops/errands.ts'
-import { fixClassesLoop } from './app/loops/fix-classes.ts'
+import { fixCausesLoop } from './app/loops/fix-causes.ts'
 import { frictionLoop, RETRO_SUBJECT } from './app/loops/friction.ts'
 import { freshHostMemory, hostLoop } from './app/loops/host.ts'
 import { hygieneLoop } from './app/loops/hygiene.ts'
@@ -99,7 +99,7 @@ export interface LoopContext {
   intake: Awaited<ReturnType<typeof composeIntake>>
   github: { token: string | null; apiUrl: string }
   checkpoints: ReturnType<typeof checkpointUses>
-  checkpointDeps: SettleDeps
+  checkpointDeps: CheckpointLoopDeps
   checkpointSettings: ReturnType<typeof loadCheckpointSettings>
   repos: ReturnType<typeof rootedRepos>
   projects: ReturnType<typeof projectFileProjects>
@@ -169,7 +169,7 @@ export function composeLoops(ctx: LoopContext) {
   const diskHost = hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 })
 
   const desk = deskLoop(wiring('desk'), {
-    settle: checkpointDeps,
+    checkpoints: checkpointDeps,
     desk: uow,
     push: askHumanPush({ bin: loopSettings.askHumanBin, home: leadSettings.home, host: loopSettings.askHumanHost }),
     sync: askHumanSync({ host: loopSettings.askHumanHost }),
@@ -203,21 +203,21 @@ export function composeLoops(ctx: LoopContext) {
           checkout,
           proof: new MakeAndProbes({ ci }),
           timing: { ...DEFAULT_TIMING, retryMs: settings.quality.retryMs, recheckMs: settings.quality.recheckMs },
-          settledAt: new Date(ctx.startedAt.getTime() + settings.quality.settleMs),
+          checksFrom: new Date(ctx.startedAt.getTime() + settings.quality.graceMs),
           signal: ctx.draining,
         }),
       summary: (w) => `checked ${w.checked}, passed ${w.passed}, regressed ${w.regressed}`,
     }),
     {
-      name: 'settle',
-      intervalMs: loopSettings.intervalMs.settle,
+      name: 'checkpoints',
+      intervalMs: loopSettings.intervalMs.checkpoints,
       onChange: true,
       run: async () => {
-        const settled = await passOf(() => checkpoints.settle(), 'the settle pass')
+        const looked = await passOf(() => checkpoints.look(), 'the checkpoints pass')
         // an Errand this pass let through to the owner has its dialog pushed now: the desk pass is due for a command never pushed
         const open = await uow.run(async ({ errands: store }) => ok(await store.openErrands(500)))
         if (open.ok && hasUnpushed(open.value)) deskOnReturn()
-        return settled
+        return looked
       },
     },
     passLoop(wiring('send'), {
@@ -358,7 +358,7 @@ export function composeLoops(ctx: LoopContext) {
       promote: intake.api.promote,
       dismiss: intake.api.dismiss,
     }),
-    fixClassesLoop(wiring('fix-classes'), {
+    fixCausesLoop(wiring('fix-causes'), {
       ...writes,
       reader: createFixCommitReader({ repos }),
       repos: null,

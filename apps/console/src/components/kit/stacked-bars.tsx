@@ -20,7 +20,7 @@ export interface StackedBarsProps {
   bars: StackedBar[]
   /** What a total is called in the tooltip and the table ("fix commits"). */
   unit?: string
-  /** What the chart shows, for the accessible name ("Fix commits per week by class"). */
+  /** What the chart shows, for the accessible name ("Fix commits per week by cause"). */
   name?: string
   /** Whether the legend (each present series with its total) shows under the bars. Default yes: two or more series need it. */
   legend?: boolean

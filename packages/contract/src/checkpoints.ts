@@ -30,7 +30,7 @@ const NoAnswerInput = z.object({
 })
 
 const STEPS = ['policy', 'judge', 'default', 'owner'] as const
-const SETTLERS = [...STEPS, 'orchestrator'] as const
+const ANSWERERS = [...STEPS, 'orchestrator'] as const
 const ARTIFACT_KINDS = ['concept', 'spec', 'decision', 'report'] as const
 export const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_applies'] as const
 
@@ -71,7 +71,7 @@ export const DecisionView = z
     defaultAt: iso.nullable(),
     status: z.enum(['open', 'answered', 'withdrawn']),
     answer: z.string().nullable(),
-    settledBy: z.enum(SETTLERS).nullable(),
+    settledBy: z.enum(ANSWERERS).nullable(),
     source: z.string().nullable(),
     answeredAt: iso.nullable(),
     withdrawnReason: z.string().nullable(),
@@ -112,7 +112,7 @@ export const DecisionReply = z
   .object({ decision: DecisionView, issue: IssueMove.nullable() })
   .meta({ id: 'DecisionReply' })
 
-/** `decision take-default`: the lead settles its own open Decision with the default it named, once it built on it. */
+/** `decision take-default`: the lead answers its own open Decision with the default it named, once it built on it. */
 export const TakeDefaultBody = z.object({ attempt: z.number().int().min(1) }).meta({ id: 'TakeDefaultBody' })
 
 export const WorthBody = z.object({ worth: z.boolean() }).meta({ id: 'WorthBody' })
@@ -712,7 +712,7 @@ export const PassReply = z
       z.object({
         decision: z.string(),
         status: z.enum(['open', 'answered', 'withdrawn']),
-        settledBy: z.enum(SETTLERS).nullable(),
+        settledBy: z.enum(ANSWERERS).nullable(),
       }),
     ),
     errands: z.array(

@@ -1,6 +1,6 @@
 import type { StewardAnswer, StewardStall } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
-import { holdUntil } from '../../kernel/hold.ts'
+import { backoffUntil } from '../../kernel/backoff.ts'
 import { WORKFLOWS } from '../../kernel/workflows.ts'
 
 /** Why an Issue stalled (`docs/language.md`, Stall): a wait with a machine cause, the steward's to end. */
@@ -26,8 +26,8 @@ export interface StallFacts {
   episode: number
   /** the same stall as one a Decision of the steward already answered, nothing new since: asking again changes nothing */
   repeatOf: RepeatedStall | null
-  /** the holds this attempt had (timed waits that answered a stall): the next one waits longer */
-  holds: number
+  /** the backoffs this attempt had (timed waits that answered a stall): the next one waits longer */
+  backoffs: number
   /** notes recorded while it waited that the lead has not heard */
   notes: string[]
   /** the Issue's latest events, one line each */
@@ -36,11 +36,11 @@ export interface StallFacts {
   windowOpen: boolean | null
 }
 
-/** The earlier stall of an Issue that the steward's Decision settled, and the version of that Decision's answer. */
+/** The earlier stall of an Issue that the steward's Decision answered, and the version of that Decision's answer. */
 export interface RepeatedStall {
   answeredAt: number
-  /** the answer was a hold ("wait for it"): the repeat is held until a time, not left stalled */
-  held: boolean
+  /** the answer was a backoff ("wait for it"): the repeat waits until a time, not left stalled */
+  backedOff: boolean
 }
 
 export interface StewardRules {
@@ -78,8 +78,8 @@ export type StallAction =
   | { kind: 'requeue'; detail: string }
   /** a `wall` stall whose window is closed: another open account may take the lead (`seats.move`); no room is a wait */
   | { kind: 'move' }
-  /** a lead's repeated block after a Decision answered "hold": a timed wait with a longer backoff, no new Decision */
-  | { kind: 'hold'; until: string; detail: string }
+  /** a lead's repeated block after a Decision answered as a backoff: a timed wait, longer each time, no new Decision */
+  | { kind: 'backoff'; until: string; detail: string }
   | { kind: 'ask' }
 
 /** The wake detail the steward's own wakes begin with: how a later pass counts them from the events alone. */
@@ -107,15 +107,15 @@ export function decideStall(facts: StallFacts, now: Date, rules: StewardRules): 
   if (facts.cause === 'unreported' && facts.stewardWakes < rules.maxWakes) {
     return { kind: 'wake', detail: `${STEWARD_DETAIL}it stopped without reporting: it is asked to report` }
   }
-  // The same cause, the same words, no news from a person since a Decision settled it: a second Decision would be the same
+  // The same cause, the same words, no news from a person since a Decision answered it: a second Decision would be the same
   // question with the same answer. The Issue stays stalled, which the Console shows; a changed cause or a note ends it.
   if (facts.repeatOf) {
-    if (facts.repeatOf.held && facts.cause === 'blocked') {
-      const until = holdUntil(now, facts.holds)
+    if (facts.repeatOf.backedOff && facts.cause === 'blocked') {
+      const until = backoffUntil(now, facts.backoffs)
       return {
-        kind: 'hold',
+        kind: 'backoff',
         until,
-        detail: `${STEWARD_DETAIL}the same block as the Decision answered at v${facts.repeatOf.answeredAt} (hold ${facts.holds + 1}): held until ${until}`,
+        detail: `${STEWARD_DETAIL}the same block as the Decision answered at v${facts.repeatOf.answeredAt} (backoff ${facts.backoffs + 1}): waits until ${until}`,
       }
     }
     return {

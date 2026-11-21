@@ -12,7 +12,7 @@ import {
   releaseSlot,
   type SlotFit,
   type SlotRow,
-  stepClassOf,
+  exclusiveStepOf,
   testLineOf,
   touchSlots,
 } from '../../src/domains/capacity/slots.ts'
@@ -144,7 +144,7 @@ describe('the lead admission follows the test line', () => {
     expect(verdicts).toEqual([false, false, false, false, false, false, true, true])
   })
 
-  test('steps held back by their host-wide class are not the test line', () => {
+  test('steps held back by their exclusive group are not the test line', () => {
     const apple = [
       holder('iris-apple', 1),
       ...['shutterflow-apple', 'ntfy-mac-apple', 'weatherorb apple'].map((name) => ({
@@ -315,7 +315,7 @@ describe('the slot grant packs by measured cores and memory', () => {
   })
 })
 
-describe('the Apple build is one host-wide class', () => {
+describe('the Apple build is one exclusive group', () => {
   const call = (list: SlotRow[], name: string, cwd: string, at = T) =>
     touchSlots(
       list,
@@ -331,13 +331,13 @@ describe('the Apple build is one host-wide class', () => {
     )
 
   test('the names the Apple slot gives every xcodebuild are the class; nothing else is', () => {
-    expect(['iris-apple', 'shutterflow-apple', 'ntfy-mac-apple', 'weatherorb apple'].map(stepClassOf)).toEqual([
+    expect(['iris-apple', 'shutterflow-apple', 'ntfy-mac-apple', 'weatherorb apple'].map(exclusiveStepOf)).toEqual([
       'apple',
       'apple',
       'apple',
       'apple',
     ])
-    expect(['shutterflow cargo test', 'pineapple', 'basalt-ui unit'].map(stepClassOf)).toEqual([null, null, null])
+    expect(['shutterflow cargo test', 'pineapple', 'basalt-ui unit'].map(exclusiveStepOf)).toEqual([null, null, null])
   })
 
   test("iris's and shutterflow's Apple builds draw from one class: the second waits while others pass it, and runs once the first ends", () => {
@@ -345,9 +345,7 @@ describe('the Apple build is one host-wide class', () => {
     expect(iris.view.granted).toBe(true)
     const shutterflow = call(iris.rows, 'shutterflow-apple', '/src/shutterflow')
     expect(shutterflow.view).toMatchObject({ granted: false })
-    expect(shutterflow.view.why).toBe(
-      'a step of the host-wide class apple holds a slot: one at a time, whichever repo runs it',
-    )
+    expect(shutterflow.view.why).toBe('an exclusive apple step holds a slot: one at a time, whichever repo runs it')
     // a slot is free: a step that asked after it passes it
     const unit = call(shutterflow.rows, 'basalt-ui unit', '/src/basalt-ui', new Date(T.getTime() + 1000))
     expect(unit.view.granted).toBe(true)

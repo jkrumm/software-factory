@@ -1,5 +1,5 @@
 import {
-  type FindingClass,
+  type Finder,
   type FixCommitsModel,
   type FrictionCount,
   type Kpi,
@@ -210,14 +210,14 @@ export function frictionRanking(
 export const windowWords = (window: { from: string; to: string }): string =>
   `${window.from.slice(0, 10)} to ${window.to.slice(0, 10)}`
 
-/** Whether a finding class is held or on probation: the classes the Improve page lists. */
-export const classIsQuiet = (cls: FindingClass): boolean => cls.status !== 'open'
+/** Whether a finder is muted or on probation: the finders the Improve page lists. */
+export const finderIsQuiet = (finder: Finder): boolean => finder.status !== 'open'
 
-/** What a held or probation class says about itself, in the owner's words. */
-export function classWords(cls: FindingClass): string {
-  const outcomes = `${cls.noise} of ${cls.decided} dropped or cancelled`
-  if (cls.status === 'held')
-    return `${outcomes}, asked again ${cls.heldUntil === null ? 'later' : cls.heldUntil.slice(0, 10)}`
+/** What a muted or probation finder says about itself, in the owner's words. */
+export function finderWords(finder: Finder): string {
+  const outcomes = `${finder.noise} of ${finder.decided} dropped or cancelled`
+  if (finder.status === 'muted')
+    return `${outcomes}, asked again ${finder.mutedUntil === null ? 'later' : finder.mutedUntil.slice(0, 10)}`
   return `${outcomes}, one Issue at a time until one closes done`
 }
 
@@ -496,13 +496,13 @@ export interface FixCard {
   change: Change
   /** fewer is better: a rise is bad, a fall good */
   tone: Tone
-  /** every class in the API's order with its slot (the colour follows the class, not its rank), its total and weekly counts */
-  classes: { key: string; meaning: string; slot: number; total: number; counts: number[] }[]
-  /** the weeks, oldest first, each with a count per class (same order as `classes`) */
+  /** every cause in the API's order with its slot (the colour follows the cause, not its rank), its total and weekly counts */
+  causes: { key: string; meaning: string; slot: number; total: number; counts: number[] }[]
+  /** the weeks, oldest first, each with a count per cause (same order as `causes`) */
   weeks: { label: string; total: number; counts: number[] }[]
   /** fix commits in the shown weeks */
   total: number
-  /** the class with the most fix commits, null when there are none */
+  /** the cause with the most fix commits, null when there are none */
   busiest: { key: string; total: number } | null
 }
 
@@ -519,17 +519,17 @@ function countChange(latest: number, previous: number | null): Change {
 }
 
 /** The fix-commit card's figures, all from the API's weeks; the page adds only the difference to the week before. */
-export function fixCard(model: Pick<FixCommitsModel, 'classes' | 'weeks'>): FixCard {
+export function fixCard(model: Pick<FixCommitsModel, 'causes' | 'weeks'>): FixCard {
   const weeks = fixWeeksOldestFirst(model)
-  const classes = model.classes.map((c, slot) => {
-    const counts = weeks.map((w) => w.byClass[c.key] ?? 0)
+  const causes = model.causes.map((c, slot) => {
+    const counts = weeks.map((w) => w.byCause[c.key] ?? 0)
     return { key: c.key, meaning: c.meaning, slot, total: counts.reduce((a, b) => a + b, 0), counts }
   })
   const totals = weeks.map((w) => w.total)
   const latest = totals.at(-1) ?? 0
   const previous = totals.length > 1 ? (totals.at(-2) ?? null) : null
   const change = countChange(latest, previous)
-  const busiest = classes.reduce<FixCard['busiest']>(
+  const busiest = causes.reduce<FixCard['busiest']>(
     (best, c) => (c.total > (best?.total ?? 0) ? { key: c.key, total: c.total } : best),
     null,
   )
@@ -537,11 +537,11 @@ export function fixCard(model: Pick<FixCommitsModel, 'classes' | 'weeks'>): FixC
     latest,
     change,
     tone: change.difference === null || change.difference === 0 ? 'neutral' : change.difference > 0 ? 'bad' : 'good',
-    classes,
+    causes,
     weeks: weeks.map((w, i) => ({
       label: fixWeekLabel(w),
       total: w.total,
-      counts: classes.map((c) => c.counts[i] ?? 0),
+      counts: causes.map((c) => c.counts[i] ?? 0),
     })),
     total: totals.reduce((a, b) => a + b, 0),
     busiest,

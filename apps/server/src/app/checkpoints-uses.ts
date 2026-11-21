@@ -30,10 +30,10 @@ import { assignNeeds, screenErrands } from './checkpoints-errands.ts'
 import { previewSpecScreen, screenSpecs } from './checkpoints-specs.ts'
 import { recheckOpen } from './checkpoints-recheck.ts'
 import { recheckReviews } from './checkpoints-reviews.ts'
-import { type SettleDeps, settleOpen } from './checkpoints-settle.ts'
+import { type CheckpointLoopDeps, tryAnswerOpen } from './checkpoints-loop.ts'
 
 /** The checkpoints use cases bound to their dependencies: what the routes call. `main.ts` builds it once. */
-export function checkpointUses(deps: SettleDeps & PageDeps) {
+export function checkpointUses(deps: CheckpointLoopDeps & PageDeps) {
   return {
     ask: (input: Parameters<typeof askDecision>[1]) => askDecision(deps, input),
     answer: (input: Parameters<typeof answerDecision>[1]) => answerDecision(deps, input),
@@ -62,13 +62,13 @@ export function checkpointUses(deps: SettleDeps & PageDeps) {
     pages: (limit: number) => listPages(deps, limit),
     pass: () => runCheckpointPass(deps),
     /** the two halves of a pass, for timers of their own: a slow Judge call never holds the owner's line */
-    settle: async () => {
+    look: async () => {
       // The second look first: it owns the reason for anything older than the threshold.
       const rechecks = await recheckOpen(deps)
       if (!rechecks.ok) return rechecks
       const reviews = await recheckReviews(deps)
       if (!reviews.ok) return reviews
-      const decisions = await settleOpen(deps)
+      const decisions = await tryAnswerOpen(deps)
       const errands = await screenErrands(deps)
       await assignNeeds(deps)
       const specs = await screenSpecs(deps)

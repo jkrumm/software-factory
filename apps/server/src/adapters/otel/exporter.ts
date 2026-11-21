@@ -20,7 +20,7 @@ export interface OtelExporterDeps {
   /** the deployed commit: `service.version` is its short form */
   version: string
   /** the settings in force the load is read against (seat caps per account) */
-  seatCaps: { perAccount: number; byAccount: Record<string, number> }
+  allowanceCaps: { perAccount: number; byAccount: Record<string, number> }
   read: () => Promise<CapacityGauges>
   fetch?: typeof fetch
   log?: (line: string) => void
@@ -36,7 +36,7 @@ const PLACEMENTS: readonly (readonly [host: string, reason: string])[] = [
 ]
 
 /** The series, named under the `factory.` prefix the telemetry contract asks for (the product's namespace). */
-export function gaugesOf(figures: CapacityGauges, caps: OtelExporterDeps['seatCaps']): Gauge[] {
+export function gaugesOf(figures: CapacityGauges, caps: OtelExporterDeps['allowanceCaps']): Gauge[] {
   // every queue kind is a series, 0 when nothing waits for it, so a chart falls to 0 instead of leaving a gap
   const kinds = [...new Set<string>([...QUEUE_REASONS, ...figures.queue.map((q) => q.reason)])]
   const queued = new Map(figures.queue.map((q) => [q.reason, q.issues]))
@@ -135,7 +135,7 @@ export function otelExporter(deps: OtelExporterDeps): { enabled: boolean; pass()
         },
         scope: 'factory.capacity',
         at,
-        gauges: gaugesOf(await deps.read(), deps.seatCaps),
+        gauges: gaugesOf(await deps.read(), deps.allowanceCaps),
       })
       const response = await doFetch(`${endpoint}/v1/metrics`, {
         method: 'POST',

@@ -29,7 +29,7 @@ import type {
   ProbeRun,
   Scope,
 } from '../../src/domains/hygiene/hygiene-model.ts'
-import type { ClassIssue } from '../../src/domains/improve/classes.ts'
+import type { FinderIssue } from '../../src/domains/improve/finders.ts'
 import type { ClosedFinding, Judged } from '../../src/domains/improve/ledger.ts'
 import type { FindingIssue, LifecycleStep } from '../../src/domains/hygiene/hygiene-lifecycle.ts'
 import type { HygienePassRecord } from '../../src/domains/hygiene/ports.ts'
@@ -267,7 +267,7 @@ const project = (
 
 interface Extra {
   findings?: ProbeFinding[]
-  classes?: Record<string, ClassIssue[]>
+  classes?: Record<string, FinderIssue[]>
   /** the newest Issue of each finding key the project filed before (`LoopReads.findingIssues`) */
   issues?: FindingIssue[]
   /** the closed findings of the repo the ledger judges (`LoopReads.closedFindings`) */
@@ -486,9 +486,9 @@ test('the loop ticks every 15 minutes at most, is off with the tick, and a setti
   expect(loadLoopSettings({ FACTORY_LOOP_HYGIENE_MS: '60000' }).intervalMs.hygiene).toBe(60_000)
 })
 
-// ---- finding classes ------------------------------------------------------------------------------------------------------
+// ---- finders ------------------------------------------------------------------------------------------------------
 
-const noisy = (n: number): ClassIssue[] =>
+const noisy = (n: number): FinderIssue[] =>
   Array.from({ length: n }, (_, i) => ({
     issue: `issue_${i + 100}`,
     filedAt: ago(40 * DAY + i * DAY),
@@ -496,7 +496,7 @@ const noisy = (n: number): ClassIssue[] =>
     outcome: 'dropped' as const,
   }))
 
-test('a held class files nothing and is named; the rest of the budget is still used; filed findings are recorded once', async () => {
+test('a muted finder files nothing and is named; the rest of the budget is still used; filed findings are recorded once', async () => {
   const findings = [
     finding('deadcode', 'deadcode:a|b', 9),
     finding('deadcode', 'deadcode:c|d', 8),
@@ -509,7 +509,7 @@ test('a held class files nothing and is named; the rest of the budget is still u
   const w = world(['a'], new Set(), undefined, { findings, classes: { deadcode: held } })
   const pass = await hygienePass(w.deps)
   expect(pass.ok).toBe(true)
-  // the three links fill the three probe slots; the held class does not take one
+  // the three links fill the three probe slots; the muted finder does not take one
   // and they are one signal: one Issue, a section each
   expect(w.filedBodies).toHaveLength(1)
   expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:x.md', 'links:y.md', 'links:z.md'])

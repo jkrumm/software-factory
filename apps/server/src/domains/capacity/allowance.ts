@@ -1,12 +1,12 @@
 /** How many host samples (one per minute) must all say the machine idles. */
-export const SEAT_SAMPLES = 5
+export const ALLOWANCE_SAMPLES = 5
 /** The newest of them may not be older than this, nor the oldest: a gap in the minute samples says nothing. */
-export const SEAT_SAMPLE_MAX_AGE_MS = 6 * 60_000
+export const ALLOWANCE_SAMPLE_MAX_AGE_MS = 6 * 60_000
 /** What one extra lead is taken to cost when no queued repo has a learned figure. */
 export const DEFAULT_TYPICAL_LEAD_MIB = 4096
 
-export interface SeatInputs {
-  /** the newest host samples, newest first; fewer than `SEAT_SAMPLES` (or an old one) is passed as what exists and gives 0 */
+export interface AllowanceInputs {
+  /** the newest host samples, newest first; fewer than `ALLOWANCE_SAMPLES` (or an old one) is passed as what exists and gives 0 */
   recent: readonly { load: number | null; swapUsedPct: number | null }[]
   loadCeiling: number
   swapCeilingPct: number
@@ -23,9 +23,9 @@ export interface SeatInputs {
  * newest five minute samples shows a load of at most a quarter of the ceiling and swap below its ceiling; then as many
  * leads of the typical size as fit into the free memory beyond the headroom, never more than the bonus allows or work waits.
  */
-export function seatBonus(input: SeatInputs): number {
+export function allowanceBonus(input: AllowanceInputs): number {
   if (input.maxBonus <= 0 || input.queued <= 0 || input.freeMib === null) return 0
-  if (input.recent.length < SEAT_SAMPLES) return 0
+  if (input.recent.length < ALLOWANCE_SAMPLES) return 0
   const idle = input.recent.every(
     (s) =>
       s.load !== null &&

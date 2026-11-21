@@ -10,7 +10,7 @@ import {
   tripwireFrom,
 } from '@software-factory/contract'
 import {
-  hygieneClass,
+  hygieneFinder,
   type LightFacts,
   lightRule,
   moveUpWhy,
@@ -73,9 +73,9 @@ describe('lightRule', () => {
     expect(lightRule(facts({ kind: 'docs', movedUp: 1 }))).toBeNull()
   })
 
-  test('hygieneClass reads the class a key names', () => {
-    expect(hygieneClass('retired:docs/a.md')).toBe('retired')
-    expect(hygieneClass('probe:agentsmd')).toBe('agentsmd')
+  test('hygieneFinder reads the class a key names', () => {
+    expect(hygieneFinder('retired:docs/a.md')).toBe('retired')
+    expect(hygieneFinder('probe:agentsmd')).toBe('agentsmd')
   })
 })
 

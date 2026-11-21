@@ -56,7 +56,7 @@ export function createQuarantine(d: { deps: IntakeDeps; ledger: Ledger }) {
   /**
    * Outside text: held until promoted. The one exception is a complaint already promoted to an Issue that is still open,
    * which amends it (the note is fenced data); one whose Issue is closed is held again as new, under a key of that Issue
-   * so a replay finds it. A duplicate of a still-held signal is the held one (a replay, no second row).
+   * so a replay finds it. A duplicate of a still-quarantined signal is the held one (a replay, no second row).
    */
   async function outsideIn(s: Stores, r: Received): Out<Triaged> {
     const { signal } = r

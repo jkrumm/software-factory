@@ -86,7 +86,7 @@ leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSp
 ## Needs you
 
 `/needs-you` opens with the **Since you were here** band, then the checkpoints. The band is `GET /v1/since`: one figure and
-label per category (Shipped and verified, Regressed, Dropped, Settled by the Judge, Turned away, New Issues
+label per category (Shipped and verified, Regressed, Dropped, Answered by the Judge, Turned away, New Issues
 with its by-origin words, Incidents), a quiet figure when a category is empty, the newest three items of each as compact `SinceRow`s (an
 icon for what happened, the number, the title clamped to one line, the project, the age; no card) and a Fold for the rest
 the server sent. A row is a button: hovering it, focusing it with the keyboard or tapping it opens a popover to its side
@@ -98,14 +98,14 @@ quiet minutes; inside a visit every read returns the same band), so only this sc
 never polls, is never refetched by the stream (an open tab would keep the visit alive) and never enters the persisted snapshot, and it loads when the screen opens and when the window gets focus, and only while the tab is on screen (a hidden tab that reloads after a deploy waits until it is shown). A
 loading band is a skeleton of its height, and an error leaves the band out while the checkpoints show.
 
-The checkpoints are grouped by kind (Decisions, Reviews, Errands, Held signals, each with its count and an InfoHint). Every
+The checkpoints are grouped by kind (Decisions, Reviews, Errands, Quarantined signals, each with its count and an InfoHint). Every
 card leads with its project, a chip that opens `/projects/<repo>` (the word "App feedback" when it names none), then the
 title, the age in the verb of its kind (open, raised, received; the absolute time on hover), a Stale lozenge, and the
 Issue's title as a link. Closed, the whole card opens it (the title button is stretched over the card, the links sit above it).
 Opened, a Decision says what it is, shows the Judge's note when it passed it on, and lays its options out as cards with the
 reversible lozenge, the cost, the reason on the recommended one and the default-if-nobody-answers on the option that is the
 default; a recommendation that is a sentence matching no option is a block above the cards with a "Take the recommendation"
-button. An Errand says what it is, then its summary, Issue, project, when it was raised and the screen's note. A held signal
+button. An Errand says what it is, then its summary, Issue, project, when it was raised and the screen's note. A quarantined signal
 says what it is, its source in a person's word and origin, a link to the source (only `http(s)`, `target=_blank`), when it was
 received and the screen's note, then Promote and Dismiss.
 
@@ -150,7 +150,7 @@ at a window with nothing counted and toned good, bad or quiet by the current ver
 with no figure (`measured` false: nothing counted in the window, fewer than three samples under a share or a duration, or the source is not there, as quota used at reset without the accounts' ledger) shows "Not measured", no chart, and
 says why in the sub line (`Kpi.reason`); it is never a zero. A KPI that is a breakdown and named on the card (`PARTS_ON_CARD`: avoidable touches by kind, Errands by what they needed, the queue wait by capacity, an after edge, a draining queue, production red) lists its `parts` as bars under the sentence, the largest named first. The ⋯ menu opens "What is counted", the KPI's `definition` and, for a breakdown (`Kpi.parts`: queued time by reason, time by state, regressions by cause), one line per part in the KPI's unit, then the figures read beside it (`Kpi.beside`: the asks, the Spec rate, the working share, the dollars per Issue), each in its own unit. The fix-commit card shows the newest
 week's total with the change against the week before (fewer is better), `StackedBars` by week (oldest left) with the legend
-of class totals, and "Total in the shown weeks" and "Busiest class"; the chart's own table holds the weeks by class. Friction is a ranked list of the kinds that counted anything, most first: the top five in words with a bar, the count and the change against the window just before (`FrictionCount.previous`), the rest in a `Fold`. "What the loops yielded" follows (a row per signal-filing loop and window of 7 and 30 days: passes, signals, Issues and how they ended, median time to close, the kinds filed most; `/v1/loop-yield`), then the held finding classes. Capacity (Issues closed, idle seats, the load ceiling, the test slot wait, the steps by peak memory, the edges) is on Throughput, from `/v1/capacity-loop`. Every other number comes from `/v1/kpis`, `/v1/seats` (By seat, the light seat's delivery, Reviewers) and `/v1/fix-commits`; the page only subtracts. The
+of cause totals, and "Total in the shown weeks" and "Busiest cause"; the chart's own table holds the weeks by cause. Friction is a ranked list of the kinds that counted anything, most first: the top five in words with a bar, the count and the change against the window just before (`FrictionCount.previous`), the rest in a `Fold`. "What the loops yielded" follows (a row per signal-filing loop and window of 7 and 30 days: passes, signals, Issues and how they ended, median time to close, the kinds filed most; `/v1/loop-yield`), then the muted finders. Capacity (Issues closed, idle allowance, the load ceiling, the test slot wait, the steps by peak memory, the edges) is on Throughput, from `/v1/capacity-loop`. Every other number comes from `/v1/kpis`, `/v1/seats` (By seat, the light seat's delivery, Reviewers) and `/v1/fix-commits`; the page only subtracts. The
 words and the arithmetic are `src/lib/improve.ts`, unit-tested in `test/improve.test.ts`; `tests/e2e/improve.e2e.ts` compares
 every card with the API at 7 and 30 days.
 
@@ -173,7 +173,7 @@ API with the owner token; an extension-less path falls back to `index.html`. So 
 auth header and no base URL, and every response is parsed with the schema from `@software-factory/contract`. The service
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
 invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly fifteen writes, the owner's answers, a collection's pin and unpin and an account's mode set and clear (a Decision's answer, an
-artifact's verdict and its needed-me mark, a comment and the edit or deletion of one, an Errand done, an Errand approved, a held signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
+artifact's verdict and its needed-me mark, a comment and the edit or deletion of one, an Errand done, an Errand approved, a quarantined signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the queries a change can alter (`affected` in `src/lib/policy.ts`: a frame's `kind`, `ref` and `detail` name them; a frame that does not parse, or has an unknown kind, alters all but the strip's readings); while it is not open the
 queries poll every 15 s and the strip's Live says `Polling`, and while it is open they still poll once a minute, because the
 stream's keepalive is an SSE comment `EventSource` cannot see: a watchdog (`src/lib/live.ts`) also replaces the connection

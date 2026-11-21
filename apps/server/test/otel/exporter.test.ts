@@ -104,7 +104,7 @@ function setup(respond: () => Response | Promise<Response>, read = async () => f
     endpoint: 'https://otel.example',
     key: 'ingest-key',
     version: '0123456789abcdef',
-    seatCaps: caps,
+    allowanceCaps: caps,
     read,
     fetch: (async (url: string, init: RequestInit = {}) => {
       calls.push({ url, init })
@@ -173,7 +173,7 @@ describe('the export pass', () => {
       endpoint: null,
       key: null,
       version: 'dev',
-      seatCaps: caps,
+      allowanceCaps: caps,
       read: async () => figures,
       fetch: (async () => calls.push(1)) as unknown as typeof fetch,
     })

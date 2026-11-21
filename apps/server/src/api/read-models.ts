@@ -4,7 +4,7 @@ import {
   DEFAULT_DAYS,
   DEFAULT_HOURS,
   ErrorBody,
-  FindingClassesModel,
+  FindersModel,
   LoopYieldModel,
   FixCommitsModel,
   FlowModel,
@@ -40,7 +40,7 @@ import type { UnitOfWork } from '../app/unit-of-work.ts'
 import { PROJECT_SCHEMA } from '../app/project-schema.ts'
 import { registerVisit, type VisitStore } from '../app/visit.ts'
 import type { CiTimes } from '../domains/improve/ports.ts'
-import { findingClasses } from '../app/loops/finding-classes.ts'
+import { finders } from '../app/loops/finders.ts'
 import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.ts'
 import { readChain } from '../read/chain.ts'
 import { readProjectDigests } from '../read/digests.ts'
@@ -167,7 +167,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.needs',
           summary:
-            'everything that waits on the owner: open Decisions, artifacts awaiting a verdict, open Errands and held signals, newest first within a kind',
+            'everything that waits on the owner: open Decisions, artifacts awaiting a verdict, open Errands and quarantined signals, newest first within a kind',
         },
       },
     )
@@ -508,7 +508,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.friction',
           summary:
-            'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who settled Decisions, held signals',
+            'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who answered Decisions, quarantined signals',
         },
       },
     )
@@ -533,7 +533,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.capacity-loop',
           summary:
-            'what the capacity loop did over the last days (1 to 90, default 7): Issues closed, idle seat-hours with work queued, minutes over the load ceiling, test-slot wait, the steps and repos that take most memory, processes the reaper ended, and the settings in force that tune it',
+            'what the capacity loop did over the last days (1 to 90, default 7): Issues closed, idle allowance-hours with work queued, minutes over the load ceiling, test-slot wait, the steps and repos that take most memory, processes the reaper ended, and the settings in force that tune it',
         },
       },
     )
@@ -569,18 +569,18 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       },
     )
     .get(
-      '/finding-classes',
+      '/finders',
       async () => {
         if (!deps) return unavailable
         const at = now()
-        return Response.json(FindingClassesModel.parse(await findingClasses(loopReads(deps.sql), at)))
+        return Response.json(FindersModel.parse(await finders(loopReads(deps.sql), at)))
       },
       {
-        response: { 200: FindingClassesModel, ...errorResponses(503) },
+        response: { 200: FindersModel, ...errorResponses(503) },
         detail: {
-          operationId: 'read.finding-classes',
+          operationId: 'read.finders',
           summary:
-            'the kinds of finding the friction and hygiene loops file, each open, on probation or held for mostly dropped or cancelled Issues, with its counts and when a held class is asked again',
+            'the kinds of finding the friction and hygiene loops file, each open, on probation or muted for mostly dropped or cancelled Issues, with its counts and when a muted finder is asked again',
         },
       },
     )

@@ -59,7 +59,7 @@ describe('reading an API error', () => {
     ['a plain 403', { status: 403, text: 'API Error: 403 forbidden' }, 'other'],
     ['a bad request', { error: 'invalid_request', text: 'API Error: 400 invalid' }, 'other'],
   ] as const)('%s', (_name, facts, expected) => {
-    expect(kindOfApiError(facts).class).toBe(expected)
+    expect(kindOfApiError(facts).name).toBe(expected)
   })
 
   test('a response cut off mid-way says so, and its resume note tells the lead to re-check what it did', () => {
@@ -68,7 +68,7 @@ describe('reading an API error', () => {
       status: null,
       text: 'API Error: Server error mid-response. The response above may be incomplete.',
     })
-    expect(kind).toEqual({ class: 'transient', label: 'server error mid-response', partial: true })
+    expect(kind).toEqual({ name: 'transient', label: 'server error mid-response', partial: true })
     expect(resumeText(kind, 1, 5)).toContain('may be cut off: re-check what you actually did')
     expect(resumeText(kindOfApiError({ text: CLOUDFLARE }), 1, 5)).not.toContain('cut off')
   })
@@ -100,7 +100,7 @@ describe('a session whose turn ended on an API error', () => {
     expect(view.idleSince).toEqual(new Date(T0 + 30_000))
     expect(view.apiIncident).toMatchObject({
       errors: 1,
-      kind: { class: 'transient', label: 'Cloudflare challenge 403' },
+      kind: { name: 'transient', label: 'Cloudflare challenge 403' },
     })
   })
 

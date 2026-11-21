@@ -71,7 +71,7 @@ export const screenKey = (id: string, attempt: number, final: boolean): Key =>
 
 async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass: ScreenPass): Promise<void> {
   const signal = row.received.signal
-  // A work repo's held signal (a lead's follow-up for an owner-filed Issue) is the owner's alone: no workflow reads it
+  // A work repo's quarantined signal (a lead's follow-up for an owner-filed Issue) is the owner's alone: no workflow reads it
   // and the last look never dismisses it.
   const home = signal.repo ? await deps.projects.find(signal.repo) : ok(null)
   if (!home.ok) {
@@ -129,7 +129,7 @@ async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass
   }
   const screened = checkScreen({ signalRepo: signal.repo, openIssues: open.value, repoKnown }, answered.value)
   if (screened.action === 'refused') return fail(screened.why)
-  // the last look after 72 hours decides: the held signal leaves Needs you
+  // the last look after 72 hours decides: the quarantined signal leaves Needs you
   const checked = final ? decideFinal(screened, { target, repoKnown }) : screened
 
   if (checked.action === 'leave') {
@@ -167,7 +167,7 @@ async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass
 }
 
 /**
- * One pass of the screen loop: the Judge looks at up to ten held signals it has not screened (oldest first), one
+ * One pass of the screen loop: the Judge looks at up to ten quarantined signals it has not screened (oldest first), one
  * `factory-screen` call each, and the answer is checked against what it was shown before the signal is promoted, dismissed or
  * left. The list is read and committed first, the call is made outside any transaction, and promote and dismiss open their
  * own and look at the state again, so a replayed pass cannot act twice (the call's key is `screen:<signal>:<attempt>`, and `:final` more on the last look).
@@ -199,7 +199,7 @@ export async function screenPass(deps: ScreenDeps): Out<ScreenPass> {
 }
 
 export function screenSummary(pass: ScreenPass): string {
-  if (pass.looked === 0) return 'no held signal to screen'
+  if (pass.looked === 0) return 'no quarantined signal to screen'
   const done = `looked at ${pass.looked} held; promoted ${pass.promoted}, dismissed ${pass.dismissed}, left ${pass.left}, owner first ${pass.notHeld}`
   if (pass.failed === pass.looked) {
     const what = pass.actFailed === pass.failed ? 'acting failed' : 'screen workflow unavailable'
@@ -211,7 +211,7 @@ export function screenSummary(pass: ScreenPass): string {
   return `${done}${pass.failed ? `, failed ${pass.failed}` : ''}${problems}`
 }
 
-/** The Judge looks at held signals: promote, dismiss or leave with a recommendation. Interval only: a newly held signal waits for the next pass. */
+/** The Judge looks at quarantined signals: promote, dismiss or leave with a recommendation. Interval only: a newly quarantined signal waits for the next pass. */
 export const screenLoop = (wiring: LoopWiring, deps: ScreenDeps): LoopSpec =>
   passLoop(wiring, {
     name: 'screen',

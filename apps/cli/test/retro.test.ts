@@ -101,7 +101,7 @@ beforeAll(() => {
           processes: { p50: null, max: null },
           vmFreeGib: { min: null, last: null },
         },
-        byClass: [],
+        byCause: [],
       },
       lead: {
         closed: 0,

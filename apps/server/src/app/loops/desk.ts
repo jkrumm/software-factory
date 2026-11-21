@@ -15,7 +15,7 @@ import type { DeskStore, ErrandRecord, PushPort } from '../../domains/errands/po
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { rescreenErrand, resolveErrand, retireErrand, tellCheckBroken, turnBackRan } from '../checkpoints-errands.ts'
 import { runCheck } from './errands.ts'
-import type { SettleDeps } from '../checkpoints-settle.ts'
+import type { CheckpointLoopDeps } from '../checkpoints-loop.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 import { syncPlaceErrands, syncSummary } from '../checkpoints-sync.ts'
 import type { SyncPort } from '../../domains/errands/ports.ts'
@@ -25,7 +25,7 @@ import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 export { hasUnpushed }
 
 export interface DeskDeps {
-  settle: SettleDeps
+  checkpoints: CheckpointLoopDeps
   desk: UnitOfWork<{ desk: DeskStore }>
   push: PushPort
   /** the owner asked for it (the Needs you button): the pass runs now, as if he had just come back */
@@ -72,8 +72,8 @@ type Out<T> = Promise<Result<T, PortError>>
  * Before any of it, a MacBook known to be down is probed; the probe answering counts as his return.
  */
 export async function deskPass(deps: DeskDeps): Out<DeskPass> {
-  const { settle } = deps
-  const now = settle.clock.now()
+  const { checkpoints } = deps
+  const now = checkpoints.clock.now()
   const pass: DeskPass = {
     ran: false,
     looked: 0,
@@ -97,7 +97,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   )
   if (!state.ok) return state
   const force = deps.force === true
-  const read = await settle.uow.run(async ({ errands }) => ok(await errands.openErrands(500)))
+  const read = await checkpoints.uow.run(async ({ errands }) => ok(await errands.openErrands(500)))
   if (!read.ok) return read
   // a command Errand never pushed goes at once; not to a MacBook known to be down, which the probe above asks again each tick
   const fresh = !macbookDown && hasUnpushed(read.value)
@@ -116,16 +116,16 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   const stillNeeded = new Map<string, CheckRun>()
   const checkDeps = {
     stillNeeded: (errand: ErrandRecord, run: CheckRun) => void stillNeeded.set(errand.id, run),
-    uow: settle.uow,
-    clock: settle.clock,
-    checks: settle.checks,
+    uow: checkpoints.uow,
+    clock: checkpoints.clock,
+    checks: checkpoints.checks,
     resolve: async (errand: { id: ErrandId }, why: string) => {
-      const closed = await resolveErrand(settle, errand.id, why)
+      const closed = await resolveErrand(checkpoints, errand.id, why)
       if (!closed.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(closed.error)}`.slice(0, 300))
       return closed.ok && closed.value
     },
     broken: async (errand: ErrandRecord, line: string) => {
-      const told = await tellCheckBroken(settle, errand, line)
+      const told = await tellCheckBroken(checkpoints, errand, line)
       if (!told.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(told.error)}`.slice(0, 300))
     },
   }
@@ -149,7 +149,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
     // and whoever raised it is told once with what the check printed
     const seen = stillNeeded.get(errand.id)
     if (errand.runStatus === 'done' && seen) {
-      const back = await turnBackRan(settle, errand.id, exitedNote(seen.exit, seen.output))
+      const back = await turnBackRan(checkpoints, errand.id, exitedNote(seen.exit, seen.output))
       if (!back.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(back.error)}`.slice(0, 300))
       else if (back.value) {
         pass.ranBack++
@@ -162,7 +162,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
       errand.runStatus !== 'running' &&
       errand.runStatus !== 'done'
     ) {
-      const retired = await retireErrand(settle, errand.id)
+      const retired = await retireErrand(checkpoints, errand.id)
       if (!retired.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(retired.error)}`.slice(0, 300))
       else if (retired.value) {
         pass.retired++
@@ -171,7 +171,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
     }
     if (errand.reachedOwnerAt !== null && rescreens < DESK_RESCREENS) {
       rescreens++
-      const screened = await rescreenErrand(settle, errand.id)
+      const screened = await rescreenErrand(checkpoints, errand.id)
       if (!screened.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(screened.error)}`.slice(0, 300))
       else if (screened.value === 'turned_away') {
         pass.turnedAway++
@@ -181,8 +181,8 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
     stillOpen.push(errand)
   }
 
-  for (const next of pushQueue(stillOpen, settle.clock.now(), pass.returned, { includePlace: force })) {
-    await settle.uow.run(async ({ errands }) => ok(await errands.recordPush(next.id, settle.clock.now())))
+  for (const next of pushQueue(stillOpen, checkpoints.clock.now(), pass.returned, { includePlace: force })) {
+    await checkpoints.uow.run(async ({ errands }) => ok(await errands.recordPush(next.id, checkpoints.clock.now())))
     const pushed = await deps.push.push(next.id)
     if (!pushed.ok) {
       pass.problems.push(`${next.id}: push: ${pushed.error.detail}`.slice(0, 300))
@@ -212,7 +212,7 @@ const deskSummary = (pass: DeskPass): string =>
  * The desk pass over the open Errands, when the owner is back after two hours or more (his Console read starts it at once;
  * so does the MacBook answering after it was down, or his button) and every six hours: checks, a second screen, and the
  * MacBook commands pushed, every pending one when he is back, one per pass while he is away, and a command that reached him
- * and was never pushed makes one due (the settle loop starts it). The loop asks every 15 minutes whether one is due.
+ * and was never pushed makes one due (the checkpoints loop starts it). The loop asks every 15 minutes whether one is due.
  * `force()` is the owner's button: the next pass runs as if he had just come back.
  */
 export function deskLoop(
@@ -226,9 +226,9 @@ export function deskLoop(
       const force = forced
       forced = false
       // a `place` Errand that is exactly the dotfiles sync is run through the MacBook's verb on every tick, not only when the pass is due
-      const synced = await syncPlaceErrands(deps.settle, deps.sync)
+      const synced = await syncPlaceErrands(deps.checkpoints, deps.sync)
       if (synced.ok) wiring.said('desk sync', synced.value.problems)
-      const pass = await deskPass({ settle: deps.settle, desk: deps.desk, push: deps.push, force })
+      const pass = await deskPass({ checkpoints: deps.checkpoints, desk: deps.desk, push: deps.push, force })
       return pass.ok ? ok({ pass: pass.value, sync: synced.ok ? syncSummary(synced.value) : '' }) : pass
     },
     problems: ({ pass }) => pass.problems,

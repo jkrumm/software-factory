@@ -16,7 +16,7 @@ export const WORK_GROUPS = { started: ['running', 'paused'], notStarted: ['ready
 export const PAUSED_SPLITS = ['you', 'timer', 'issue', 'stalled'] as const
 export type PausedSplit = (typeof PAUSED_SPLITS)[number]
 
-/** Ready, by the one limit that holds it: a free seat, the host, the repo's claims, the account's window. */
+/** Ready, by the one limit that holds it: room in the allowance, the host, the repo's claims, the account's window. */
 export const READY_LIMITS = ['seat', 'host', 'repo', 'account'] as const
 export type ReadyLimit = (typeof READY_LIMITS)[number]
 
@@ -59,7 +59,7 @@ export interface WorkInput {
   state: string
   /** the wait of a `waiting` Issue */
   waitReason?: string | null
-  /** the kind of the queue reason of a `queued` Issue; null or absent: nothing but a free seat keeps it out */
+  /** the kind of the queue reason of a `queued` Issue; null or absent: nothing but room in the allowance keeps it out */
   queueKind?: string | null
 }
 
@@ -73,7 +73,7 @@ export type Work =
 /**
  * The word an open Issue stands under, and its split; null for a closed one. `settling` is Held (it cannot start until
  * triage settles it); a queued Issue is Held when its queue reason is one capacity cannot lift, else Ready with the limit
- * that binds it (`seat` when nothing but a free seat does). A stall (`wall`, `unreported`, `blocked`, `lead_gone`,
+ * that binds it (`seat` when nothing but room in the allowance does). A stall (`wall`, `unreported`, `blocked`, `lead_gone`,
  * `regressed`) is a Paused split of its own.
  */
 export function workOf(input: WorkInput): Work | null {

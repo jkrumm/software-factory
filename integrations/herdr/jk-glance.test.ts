@@ -546,7 +546,7 @@ test('parseMachine: load, swap and their ceilings; null when a figure is missing
 
 test('parseFlow: the work counts of the columns and which projects are red', () => {
   const f = lib.parseFlow(JSON.stringify(flowBoard))
-  // two working; of seven queued, a chain, a line and a drain are Held and no kind at all is Ready (a free seat)
+  // two working; of seven queued, a chain, a line and a drain are Held and no kind at all is Ready (room in the allowance)
   expect(f.work).toEqual({
     ...zeroWork,
     running: 2,
@@ -759,7 +759,7 @@ test('the popovers: a row per project with its count, each a link to the Console
   // Ready: the limit that binds it; Held: what keeps it from starting; the trend of both is Not started
   expect(m.details.ready.link).toBe(`${base}/flow?state=ready`)
   expect(rowsOf(m, 'ready').map((r: any) => [r.text, r.right])).toEqual([
-    ['a free seat', '2'],
+    ['room in the allowance', '2'],
     ['dotfiles', '1'],
     ['home', '1'],
     ['Not started, change in 7 days', '▲ +9'],
@@ -938,7 +938,7 @@ test('the model degrades per part', () => {
   expect(noFlow.details.production.title).toBe('Production · –')
   expect(itemOf(noFlow, 'shipped').value).toBe('–')
   // the split comes from the overview's counts; the trend row needs the board
-  expect(rowsOf(noFlow, 'ready').map((r: any) => r.text)).toEqual(['a free seat', 'dotfiles', 'home'])
+  expect(rowsOf(noFlow, 'ready').map((r: any) => r.text)).toEqual(['room in the allowance', 'dotfiles', 'home'])
   // a trend older than 10 min is dropped with the board
   expect(itemOf(lib.glanceModel({ ...essentials(), flowAt: NOW - 11 * 60000 }), 'production').dot).toBe('dim')
   // no overview: the board's own work counts stand in, health is unknown

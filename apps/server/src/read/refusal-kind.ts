@@ -1,18 +1,18 @@
 /**
- * What a refusal was, in a class that does not change with the commit, the branch or the Issue it named. Friction counts
- * a refusal by this class: the stored text is full of shas and paths, so the text itself is a new key on nearly every
+ * What a refusal was, in a kind that does not change with the commit, the branch or the Issue it named. Friction counts
+ * a refusal by this kind: the stored text is full of shas and paths, so the text itself is a new key on nearly every
  * row (72 of 90 ship-refusal keys of the week to 2026-11-20 held a sha) and never adds up to a count the loop can judge.
  *
- * The class is read from the stored text, which is the only record there is (`issue_events.detail`,
- * `quality_ships.detail`): a rule here is the one place that ties a producer's wording to its class, and
- * `refusal-class.test.ts` holds a week's texts as a hand-kept copy and builds the ones whose producers export them, so
- * a reworded exported refusal fails there; a reworded work-table or git text falls to an `other:` class until the copy is updated.
+ * The kind is read from the stored text, which is the only record there is (`issue_events.detail`,
+ * `quality_ships.detail`): a rule here is the one place that ties a producer's wording to its kind, and
+ * `refusal-kind.test.ts` holds a week's texts as a hand-kept copy and builds the ones whose producers export them, so
+ * a reworded exported refusal fails there; a reworded work-table or git text falls to an `other:` kind until the copy is updated.
  * Pure.
  */
 
 interface Rule {
   id: string
-  /** the class in words, after "was refused:" */
+  /** the kind in words, after "was refused:" */
   words: string
   /** what the stored text looks like */
   match: RegExp
@@ -139,7 +139,7 @@ const RULES: readonly Rule[] = [
   },
 ]
 
-export interface RefusalClass {
+export interface RefusalKind {
   id: string
   words: string
 }
@@ -160,8 +160,8 @@ function generic(text: string): string {
     .slice(0, 60)
 }
 
-/** The class of a stored refusal text; a text no rule knows is its own class by its wording alone, never by what it names. */
-export function refusalClass(detail: string | null): RefusalClass {
+/** The kind of a stored refusal text; a text no rule knows is its own kind by its wording alone, never by what it names. */
+export function refusalKind(detail: string | null): RefusalKind {
   if (detail === null || detail.trim() === '') return { id: 'no_reason_given', words: 'no reason was given' }
   const text = detail.trim()
   const rule = RULES.find((candidate) => candidate.match.test(text))

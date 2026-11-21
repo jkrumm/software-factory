@@ -49,21 +49,24 @@ test('recordPass keeps the newest time of each loop and never moves it backwards
   const loops = postgresLoopStore(db.sql)
   const at = new Date('2026-11-07T10:00:00Z')
   expect((await loops.passes()).size).toBe(0)
-  await loops.recordPass('fix-classes', at)
+  await loops.recordPass('fix-causes', at)
   await loops.recordPass('steward', at)
-  await loops.recordPass('fix-classes', new Date(at.getTime() - 60_000))
+  await loops.recordPass('fix-causes', new Date(at.getTime() - 60_000))
   expect(await loops.passes()).toEqual(
     new Map([
-      ['fix-classes', at],
+      ['fix-causes', at],
       ['steward', at],
     ]),
   )
   const later = new Date(at.getTime() + 60_000)
-  await loops.recordPass('fix-classes', later)
-  expect((await loops.passes()).get('fix-classes')).toEqual(later)
+  await loops.recordPass('fix-causes', later)
+  expect((await loops.passes()).get('fix-causes')).toEqual(later)
+  // a loop this release does not have (an older release's name after a rollback) is skipped, the rest still read
+  await db.sql`INSERT INTO factory.loop_passes (loop, last_pass_at) VALUES ('settle', ${at})`
+  expect([...(await loops.passes()).keys()].sort()).toEqual(['fix-causes', 'steward'])
 })
 
-// ---- finding classes ------------------------------------------------------------------------------------------------------
+// ---- finders ------------------------------------------------------------------------------------------------------
 
 test('recordFinding stores a row per key of an Issue and a repeat of a key once; classIssues reads filed time, closure and outcome, an Issue once per class', async () => {
   const loops = postgresLoopStore(db.sql)

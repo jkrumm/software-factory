@@ -111,10 +111,10 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
     return ok(triaged('incident', 'joined', issue.id, signal))
   }
 
-  /** The workflow found the ask already settled by a recently closed Issue: stored dismissed by the judge, nothing filed. */
-  async function settledIn(s: Stores, r: Received, decision: Decision, stateKey: Key | null): Out<Triaged> {
+  /** The workflow found the ask already covered by a recently closed Issue: stored dismissed by the judge, nothing filed. */
+  async function coveredBy(s: Stores, r: Received, decision: Decision, stateKey: Key | null): Out<Triaged> {
     const id = decision.settled as IssueId
-    const head = `already settled: ${id}`
+    const head = `already covered by ${id}`
     const reason = (decision.reason ? `${head} — ${decision.reason}` : head).slice(0, MAX_DISMISS_REASON)
     const stored = await store(s, r, stateKey, 'dismissed', null, { reason, by: 'judge', at: clock.now() })
     return ok(triaged('dropped', 'settled', null, stored, head))
@@ -171,7 +171,7 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
     s: Stores,
     r: Received,
     alert: Alert,
-    ctx: { info: RepoSignals; topology: Topology; settle?: unknown; decision?: Decision },
+    ctx: { info: RepoSignals; topology: Topology; heal?: unknown; decision?: Decision },
   ): Out<Triaged> {
     const now = clock.now()
     const { signal } = r
@@ -197,13 +197,13 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
       }
     }
 
-    if (ctx.decision?.settled) return settledIn(s, r, ctx.decision, evKey)
+    if (ctx.decision?.settled) return coveredBy(s, r, ctx.decision, evKey)
     if (ctx.decision?.amend) {
       const issue = await loadIssue(s.work, ctx.decision.amend)
       if (isOpen(issue)) return join(s, r, alert, issue, groupKey)
     }
 
-    const rule = ctx.settle === undefined ? ctx.info.heal.find((h) => h.when === `${signal.source}.down`) : undefined
+    const rule = ctx.heal === undefined ? ctx.info.heal.find((h) => h.when === `${signal.source}.down`) : undefined
     if (rule) {
       if (!(await s.intake.pendingOf(signal.source, alert.subject))) {
         await s.intake.insertPending({
@@ -229,9 +229,10 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
       )
     }
 
-    const withSettle: Received =
-      ctx.settle === undefined ? r : { ...r, alert: { ...alert, facts: { details: alert.facts, settle: ctx.settle } } }
-    return fileNew(s, withSettle, keyOf('filed', 'signal', signal.source, alert.subject, alert.event), { groupKey })
+    // the heal pass's facts are stored under the key `settle`, the name rows already carry
+    const withHeal: Received =
+      ctx.heal === undefined ? r : { ...r, alert: { ...alert, facts: { details: alert.facts, settle: ctx.heal } } }
+    return fileNew(s, withHeal, keyOf('filed', 'signal', signal.source, alert.subject, alert.event), { groupKey })
   }
 
   async function upIn(s: Stores, r: Received, alert: Alert): Out<Triaged> {
@@ -289,7 +290,7 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
     return ok(dropped('quiet', 'it is up and nothing of it is open'))
   }
 
-  return { downIn, upIn, fileNew, settledIn }
+  return { downIn, upIn, fileNew, coveredBy }
 }
 
 export type Alerts = ReturnType<typeof createAlerts>

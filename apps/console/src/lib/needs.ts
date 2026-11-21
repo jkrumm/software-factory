@@ -113,7 +113,7 @@ export const KIND_LABEL = {
   decision: 'Decisions',
   review: 'Reviews',
   errand: 'Errands',
-  held_signal: 'Held signals',
+  held_signal: 'Quarantined signals',
   long_wait: 'Long waits',
 } as const satisfies Record<NeedItem['kind'], string>
 
@@ -133,7 +133,7 @@ export const VERDICTS = [
 
 /** The words an error shows inline: a settled thing says so, anything else says what the API said. */
 export function errorWords(status: number | null, detail: string | null): string {
-  if (status === 409) return 'Already settled elsewhere'
+  if (status === 409) return 'Already answered elsewhere'
   if (status === null) return 'Could not reach the factory. Send it again in a moment.'
   return detail ?? 'The factory refused this. Change your answer and send it again.'
 }

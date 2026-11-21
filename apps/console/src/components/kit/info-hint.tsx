@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 export type InfoWord = keyof typeof LANGUAGE
 
 export interface InfoHintProps {
-  /** The domain word, in any capitalisation ("Errand", "held signal"). */
+  /** The domain word, in any capitalisation ("Errand", "quarantined signal"). */
   word: InfoWord | Capitalize<InfoWord>
   className?: string
 }

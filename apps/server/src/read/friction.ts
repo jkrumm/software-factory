@@ -5,7 +5,7 @@ import { readEdgeIncidents } from './api-errors.ts'
 import { avoidableTouches, issuesFiled, orchestratorSteering, ownerVerdict, TOUCH_LABELS, type Window } from './kpis.ts'
 import { specSourceSql } from './spec-screen.ts'
 import { per, windowOf } from './stats.ts'
-import { refusalClass } from './refusal-class.ts'
+import { refusalKind } from './refusal-kind.ts'
 import { isCut } from '../kernel/epoch.ts'
 
 /** A note of a lead that is still there and not typed this long after it was claimed is undelivered. */
@@ -36,21 +36,21 @@ const SPEC_SOURCES_SAID: Record<SpecSource, string> = {
   lead: 'Specs a lead judged due that did not need the owner',
 }
 
-const SETTLERS: Record<string, string> = {
-  owner: 'Decisions settled by the owner',
-  orchestrator: 'Decisions settled by the orchestrator',
-  judge: 'Decisions settled by the Judge',
-  default: 'Decisions settled by their default',
+const ANSWERERS: Record<string, string> = {
+  owner: 'Decisions answered by the owner',
+  orchestrator: 'Decisions answered by the orchestrator',
+  judge: 'Decisions answered by the Judge',
+  default: 'Decisions answered by their default',
 }
 
 const Count = z.object({ n: z.coerce.number().int() })
 const Grouped = Count.extend({ key: z.string().nullable(), detail: z.string().nullable() })
 
-/** Rows of one refusal class summed, most frequent first (ties by class). */
-function byClass(rows: readonly { detail: string | null; n: number }[]): { id: string; words: string; n: number }[] {
+/** Rows of one refusal kind summed, most frequent first (ties by kind). */
+function byCause(rows: readonly { detail: string | null; n: number }[]): { id: string; words: string; n: number }[] {
   const classes = new Map<string, { id: string; words: string; n: number }>()
   for (const row of rows) {
-    const { id, words } = refusalClass(row.detail)
+    const { id, words } = refusalKind(row.detail)
     const seen = classes.get(id)
     if (seen) seen.n += row.n
     else classes.set(id, { id, words, n: row.n })
@@ -114,7 +114,7 @@ async function countsOf(
     'Events the state machine refused',
     refused.reduce((sum, row) => sum + row.n, 0),
   )
-  for (const row of byClass(refused)) add('refusal', `refusal:${row.id}`, `An event was refused: ${row.words}`, row.n)
+  for (const row of byCause(refused)) add('refusal', `refusal:${row.id}`, `An event was refused: ${row.words}`, row.n)
   const ships = await grouped(sql`
     SELECT NULL::text AS key, detail, count(*) AS n FROM factory.quality_ships
     WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to} GROUP BY detail`)
@@ -124,10 +124,10 @@ async function countsOf(
     'Ships the gate refused',
     ships.reduce((sum, row) => sum + row.n, 0),
   )
-  for (const row of byClass(ships)) add('refusal', `ship_refused:${row.id}`, `A ship was refused: ${row.words}`, row.n)
+  for (const row of byCause(ships)) add('refusal', `ship_refused:${row.id}`, `A ship was refused: ${row.words}`, row.n)
 
   // A stall the next event of the Issue moved up (the light seat's own rule, `moveUpIfDue`: the attempt ends and the Issue
-  // queues on the lead row) is the seat's cost, which `read finding-classes` and the seat KPIs already count: no loop.
+  // queues on the lead row) is the seat's cost, which `read finders` and the seat KPIs already count: no loop.
   const stalls = await grouped(sql`
     SELECT wait->>'reason' AS key, NULL::text AS detail, count(*) AS n FROM factory.issue_events e
     WHERE result = 'applied' AND to_state = 'waiting' AND from_state IS DISTINCT FROM 'waiting'
@@ -239,8 +239,13 @@ async function countsOf(
   const settled = await grouped(sql`
     SELECT settled_by AS key, NULL::text AS detail, count(*) AS n FROM factory.decisions
     WHERE answered_at >= ${w.from} AND answered_at < ${w.to} GROUP BY settled_by`)
-  for (const [settler, label] of Object.entries(SETTLERS)) {
-    add('decision_settled', `decision_settled:${settler}`, label, settled.find((row) => row.key === settler)?.n ?? 0)
+  for (const [answerer, label] of Object.entries(ANSWERERS)) {
+    add(
+      'decision_answered',
+      `decision_answered:${answerer}`,
+      label,
+      settled.find((row) => row.key === answerer)?.n ?? 0,
+    )
   }
 
   const held = await grouped(sql`

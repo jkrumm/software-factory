@@ -112,7 +112,7 @@ export function screenshotSuite(variantName: VariantName) {
           await page.setViewportSize({ width, height })
         }
         if (name === 'improve' || name === 'improve-30') {
-          // The bands run taller than the viewport (Friction and the held classes sit under the cards): shoot a tall one too.
+          // The bands run taller than the viewport (Friction and the muted finders sit under the cards): shoot a tall one too.
           const { width, height } = page.viewportSize() ?? variant.viewport
           await page.setViewportSize({ width, height: width < 600 ? 4200 : 2200 })
           await page.waitForLoadState('networkidle')

@@ -16,7 +16,7 @@ export interface SeededSince {
     filed: Record<'you' | 'github' | 'application' | 'infrastructure', string[]>
   }
   /** a Decision the Judge settled after the visit: settled, so an item link to it says so */
-  settledDecision: string
+  answeredDecision: string
 }
 
 let keys = 0
@@ -120,6 +120,6 @@ export async function seedSince(sql: SQL, now = new Date()): Promise<SeededSince
       incident,
       filed: { you: [you, dropped], github: [github], application: [application], infrastructure: [incident] },
     },
-    settledDecision: 'decision_since_e2e_judge',
+    answeredDecision: 'decision_since_e2e_judge',
   }
 }

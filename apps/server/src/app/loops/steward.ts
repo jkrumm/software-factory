@@ -36,7 +36,7 @@ import { leadKey } from '../../domains/leads/names.ts'
 import type { LeadStore, Seats, Windows } from '../../domains/leads/ports.ts'
 import { deriveSession } from '../../domains/leads/session.ts'
 import { reportedSince } from '../../domains/leads/stop.ts'
-import { holdsIn } from '../../kernel/hold.ts'
+import { backoffsIn } from '../../kernel/backoff.ts'
 import type { Issue } from '../../domains/work/issue.ts'
 import { WAITS } from '../../domains/work/issue.ts'
 import type { AppliedRecord } from '../../domains/work/machine.ts'
@@ -162,7 +162,7 @@ export function repeatedStall(
     history.filter((record) => record.version < asked.version),
   ).wait
   if (before?.reason !== cause || !('detail' in before)) return null
-  // A lead that wakes from a hold rewords its block ("Unchanged at <sha>: ..."), so the words drift away from the stall the
+  // A lead that wakes from a backoff rewords its block ("Unchanged at <sha>: ..."), so the words drift away from the stall the
   // Decision answered while each block still reads like the one before it. Every block of this cause the lead made since
   // the answer is a link in the chain: alike to any of them is the same stall, not a new question.
   const chain = history
@@ -191,7 +191,7 @@ export function repeatedStall(
     )
   const alike = [before.detail, ...chain].some((earlier) => sameWords(earlier, detail) >= SAME_STALL)
   if (!straightAfter && !alike) return null
-  return { answeredAt: answered.version, held: field(answered.payload, 'hold') !== '' }
+  return { answeredAt: answered.version, backedOff: field(answered.payload, 'hold') !== '' }
 }
 
 /** What the steward knows of a stalled Issue, from its events alone; `windowOpen` comes from capacity afterwards. */
@@ -221,7 +221,7 @@ function factsOf(issue: Issue, history: readonly AppliedRecord[]): StallFacts | 
     ).length,
     episode: 0,
     repeatOf: repeatedStall(issue.id, history, cause, wait.detail, wait.since),
-    holds: holdsIn(history),
+    backoffs: backoffsIn(history),
     notes: history
       .filter((record) => record.kind === 'noted' && record.version > wait.told)
       .map((record) => field(record.payload, 'text')),
@@ -294,13 +294,13 @@ async function raise(deps: StewardDeps, facts: StallFacts, form: unknown): Out<b
   return err(portError('refused', `the Decision was refused: ${detail}`))
 }
 
-type Acted = 'woken' | 'requeued' | 'decision' | 'held' | 'nothing'
+type Acted = 'woken' | 'requeued' | 'decision' | 'backed_off' | 'nothing'
 
 /**
- * A repeated block after a Decision answered "hold": the Issue waits until a later time (the lead hears the answer's note
+ * A repeated block after a Decision answered as a backoff: the Issue waits until a later time (the lead hears the answer's note
  * and this one when it ends), where waking the lead now would only bring the same block back. No Decision is raised.
  */
-async function hold(deps: StewardDeps, facts: StallFacts, until: string, detail: string): Out<boolean> {
+async function backoff(deps: StewardDeps, facts: StallFacts, until: string, detail: string): Out<boolean> {
   return deps.uow.run(async ({ work }) => {
     const noted = await recordIn(work, deps, {
       issueId: facts.issue,
@@ -471,9 +471,9 @@ async function steward(deps: StewardDeps, id: IssueId, pass: StewardPass): Promi
         reason: action.detail.slice(STEWARD_DETAIL.length),
       })
       break
-    case 'hold': {
-      const held = await hold(deps, facts, action.until, action.detail)
-      acted = held.ok ? ok(held.value ? 'held' : 'nothing') : held
+    case 'backoff': {
+      const backedOff = await backoff(deps, facts, action.until, action.detail)
+      acted = backedOff.ok ? ok(backedOff.value ? 'backed_off' : 'nothing') : backedOff
       break
     }
     case 'ask': {
@@ -502,7 +502,7 @@ async function steward(deps: StewardDeps, id: IssueId, pass: StewardPass): Promi
   }
   if (acted.value === 'woken') pass.woken++
   else if (acted.value === 'requeued') pass.requeued++
-  else if (acted.value === 'held') pass.deferred++
+  else if (acted.value === 'backed_off') pass.deferred++
   else if (acted.value === 'decision') pass.decisions++
 }
 
@@ -539,7 +539,7 @@ export async function loadIdle(
     // auth error waits for the owner's login, and a nudge typed into it would only meet the same error. Once its resumes are
     // spent (or the error is neither kind) it is a quiet lead like any other.
     const incident = view.apiIncident
-    if (incident && incident.kind.class !== 'other') {
+    if (incident && incident.kind.name !== 'other') {
       const prefix = resumePrefix(leadKey(id, issue.attempt), incident.key)
       const resumes = (await leads.resumesOf(id, issue.attempt)).filter((delivery) => delivery.key.startsWith(prefix))
       if (!spent({ resumes: resumes.map((delivery) => delivery.claimedAt) }, deps.resume ?? DEFAULT_RESUME_RULES)) {
@@ -590,7 +590,7 @@ export async function loadIdle(
         stewardWakes: wakes.length,
         episode: view.turns,
         repeatOf: null,
-        holds: 0,
+        backoffs: 0,
         notes: [],
         history: history.slice(-HISTORY_LINES).map(lineOf),
         windowOpen: null,

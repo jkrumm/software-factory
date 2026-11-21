@@ -16,7 +16,7 @@ export const SINCE_LABEL: Record<SinceKey, string> = {
   shipped: 'Shipped and verified',
   failed: 'Regressed',
   dropped: 'Dropped',
-  judge: 'Settled by the Judge',
+  judge: 'Answered by the Judge',
   screen: 'Turned away',
   errands: 'Errands closed without you',
   filed: 'New Issues',
@@ -40,7 +40,7 @@ export const SINCE_HAPPENED: Record<SinceKey, string> = {
   shipped: 'It was deployed and the watch after the deploy passed.',
   failed: 'Production regressed while it was watched after the deploy.',
   dropped: 'Its lead gave it up, with a reason; nothing shipped.',
-  judge: 'The Judge settled a Decision on it before it reached you.',
+  judge: 'The Judge answered a Decision on it before it reached you.',
   screen: 'The screen turned it away before it reached you.',
   errands:
     'Its check said it was no longer needed, it expired, a newer request replaced it, the factory ran its MacBook command through a fixed verb, or your MacBook ran it by itself from a class you granted.',

@@ -1,4 +1,4 @@
-import type { ClassOutcome } from './classes.ts'
+import type { FinderOutcome } from './finders.ts'
 
 /**
  * The one ledger of what a loop filed (`factory.loop_findings`, `migrations/1061_loop_ledger.sql`): the Issue a finding
@@ -30,7 +30,7 @@ export interface ClosedFinding {
   key: string
   figure: number | null
   verdict: Verdict | null
-  outcome: ClassOutcome
+  outcome: FinderOutcome
   filedAt: Date
   closedAt: Date
 }

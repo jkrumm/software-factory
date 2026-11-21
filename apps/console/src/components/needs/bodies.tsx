@@ -53,7 +53,7 @@ export interface BodyProps {
 }
 
 const SENT = 'Sent to the lead'
-const SETTLED = 'Already settled elsewhere'
+const ANSWERED = 'Already answered elsewhere'
 
 function Labelled({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -80,7 +80,7 @@ const Lead = ({
   hint,
   children,
 }: {
-  hint: 'decision' | 'errand' | 'held signal' | 'long wait'
+  hint: 'decision' | 'errand' | 'quarantined signal' | 'long wait'
   children: ReactNode
 }) => (
   <p className="flex items-center gap-0.5 text-sm text-muted-foreground">
@@ -122,7 +122,7 @@ const Until = ({ iso }: { iso: string }) => (
   </time>
 )
 
-/** What the screen (the Judge's look at an Errand or a held signal) said about it. */
+/** What the screen (the Judge's look at an Errand or a quarantined signal) said about it. */
 const ScreenNote = ({ note }: { note: string | null }) =>
   note ? (
     <section className="grid gap-1">
@@ -157,7 +157,7 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
     send: (answer) => answerDecision(item.id, answer),
     keys: [['needs'], ['decision', item.id]],
     onSent: () => onSent(SENT),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   if (!data) return <CardBodySkeleton />
   const open = data.status === 'open'
@@ -297,7 +297,7 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
           </div>
         </form>
       ) : (
-        <p className="text-sm text-muted-foreground">{SETTLED}</p>
+        <p className="text-sm text-muted-foreground">{ANSWERED}</p>
       )}
       <Problem words={settle.error} />
     </div>
@@ -315,7 +315,7 @@ function ReviewBody({ item, onSent }: BodyProps) {
     send: (value) => giveVerdict(item.id, value, note.trim()),
     keys,
     onSent: () => onSent(SENT),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const annotate = useSettle<void>({
     send: () => annotateArtifact(item.id, quote.trim(), comment.trim()),
@@ -432,19 +432,19 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
     send: () => finishErrand(item.id, note.trim()),
     keys: [['needs'], ['errands']],
     onSent: (reply) => onSent(reply.errand.doneAt === null ? doneWords(reply) : SENT),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const turnBack = useSettle<void, ErrandReply>({
     send: () => turnBackErrand(item.id, note.trim()),
     keys: [['needs'], ['errands']],
     onSent: () => onSent('Turned back: the lead hears your note'),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const approve = useSettle<void>({
     send: () => approveErrand(item.id),
     keys: [['needs'], ['errands']],
     onSent: () => onSent(approveWords),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const approval = isApproval(item)
   const errand = data?.errands.find((entry) => entry.id === item.id)
@@ -521,21 +521,21 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
   )
 }
 
-function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
+function QuarantinedSignalBody({ item, issueTitle, onSent }: BodyProps) {
   const { unrouted } = item
   const [repo, setRepo] = useState(unrouted?.proposal ?? '')
   const settle = useSettle<void>({
     send: () => promoteSignal(item.id, item.repo ?? repo.trim()),
     keys: [['needs']],
     onSent: () => onSent(unrouted ? `Routed to ${repo.trim()}: the alert is filed there` : 'Promoted: it is work now'),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const [reason, setReason] = useState('')
   const dismissal = useSettle<void>({
     send: () => dismissSignal(item.id, reason.trim()),
     keys: [['needs']],
     onSent: () => onSent('Dismissed: it stays on record'),
-    onConflict: () => onSent(SETTLED),
+    onConflict: () => onSent(ANSWERED),
   })
   const needsRepo = item.repo === null
   const link = httpLink(item.sourceLink)
@@ -543,7 +543,7 @@ function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
     <div className="grid gap-4">
       {unrouted ? (
         <>
-          <Lead hint="held signal">An alert is firing and no repo is assigned to hear it</Lead>
+          <Lead hint="quarantined signal">An alert is firing and no repo is assigned to hear it</Lead>
           <Prose>
             {`"${plainExcerpt(item.title.replace(/^[^:]*:\s*/, ''))}" from ${unrouted.source} reached no repo, because none is assigned to the monitor "${unrouted.monitor}". `}
             {unrouted.proposal
@@ -553,7 +553,7 @@ function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
         </>
       ) : (
         <>
-          <Lead hint="held signal">Outside text the factory did not trust enough to turn into work</Lead>
+          <Lead hint="quarantined signal">Outside text the factory did not trust enough to turn into work</Lead>
           <Prose>{plainExcerpt(item.summary)}</Prose>
         </>
       )}
@@ -662,7 +662,7 @@ export function BodyOf(props: BodyProps) {
     case 'errand':
       return <ErrandBody {...props} />
     case 'held_signal':
-      return <HeldSignalBody {...props} />
+      return <QuarantinedSignalBody {...props} />
     case 'long_wait':
       return <LongWaitBody {...props} />
   }

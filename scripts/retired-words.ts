@@ -21,7 +21,8 @@ export interface Retired {
 /**
  * One line per retired word, from the Retires cells of `docs/language.md`. Left out on purpose, because the plain
  * English word collides with code and the factory sense cannot be matched precisely: request (HTTP), item, task,
- * track, worker, document, question, ask, and hold (triage's `held` and the memory hold are live words).
+ * track, worker, document, question and ask. The bare seat, hold, settle and class are live: each keeps one sense, and its
+ * retired senses are the phrases below.
  * Tool names on screen are a Console rule, not a word: `hyperdx` stays a signal source.
  */
 export const RETIRED: Retired[] = [
@@ -49,6 +50,34 @@ export const RETIRED: Retired[] = [
     use: 'Flow, the numbers and their charts, or the Chain (there are no state columns)',
   },
   { term: 'dedup', pattern: 'dedup(e|es|ed|ing|licate|licated|lication)?', use: 'triage (amend or incident)' },
+  // seat is the tier, effort and role a lead runs on; how many leads may run is the allowance
+  { term: 'seat bonus', pattern: 'seats?\\s+bonus', use: 'allowance bonus' },
+  { term: 'idle seat', pattern: 'idle\\s+seats?', use: 'idle allowance' },
+  { term: 'seat-hours', pattern: 'seat\\s+(hours?|time|minutes?)', use: 'allowance-hours' },
+  { term: 'free seat', pattern: 'free\\s+seats?', use: 'room in the allowance' },
+  // hold is to keep a resource; the Judge's timed answer is a backoff, a step kept on the mini is benched
+  { term: 'judge hold', pattern: "judge(?:'s)?\\s+holds?", use: 'backoff' },
+  { term: 'remote hold', pattern: 'remote\\s+holds?', use: 'bench' },
+  { term: 'held signal', pattern: 'held\\s+signals?', use: 'quarantined signal (Held is an Issue word)' },
+  { term: 'held class', pattern: 'held\\s+(finding\\s+)?class(es)?', use: 'muted finder' },
+  // settle is an Issue leaving `settling`
+  { term: 'settler', pattern: 'settlers?', use: 'answerer' },
+  {
+    term: 'settle decision',
+    pattern: 'settl(e|es|ed|ing)\\s+(a\\s+|the\\s+|one\\s+|its\\s+own\\s+)?(open\\s+)?decisions?',
+    use: 'answer a Decision',
+  },
+  {
+    term: 'settle loop',
+    pattern: 'settle\\s+(loop|pass)(es)?|(checkpoints|intake)\\s+settle',
+    use: 'the checkpoints loop, the heal pass',
+  },
+  // class is the group a host process works for
+  { term: 'finding class', pattern: 'finding\\s+class(es)?', use: 'finder' },
+  { term: 'fix class', pattern: 'fix\\s+class(es)?', use: 'fix cause' },
+  { term: 'step class', pattern: '(step|host\\s+wide)\\s+class(es)?', use: 'exclusive step' },
+  { term: 'refusal class', pattern: '(refusal|error)\\s+class(es)?', use: 'kind' },
+  { term: 'resource class', pattern: 'resource\\s+class(es)?', use: 'resource (a lane)' },
 ]
 
 const MATCHERS = RETIRED.map((r) => ({ ...r, regex: new RegExp(`\\b(?:${r.pattern})\\b`, 'gi') }))

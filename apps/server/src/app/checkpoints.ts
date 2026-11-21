@@ -19,7 +19,7 @@ import {
   type DecisionId,
   readDecisionForm,
   refuseNoOpDefault,
-  type Settler,
+  type Answerer,
 } from '../domains/checkpoints/decision.ts'
 import {
   type ErrandId,
@@ -74,7 +74,7 @@ import type {
 } from '../domains/checkpoints/ports.ts'
 import type { CheckRunner, ErrandJoin, ErrandRecord, ErrandStore } from '../domains/errands/ports.ts'
 import type { IssueEvent } from '../domains/work/events.ts'
-import { holdsIn, holdUntil, isHold } from '../kernel/hold.ts'
+import { backoffsIn, backoffUntil, isBackoff } from '../kernel/backoff.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
@@ -108,7 +108,7 @@ export type CheckpointError =
   | { kind: 'machine_refused'; detail: string }
   | { kind: 'invalid'; detail: string }
   | { kind: 'not_found'; what: string; id: string }
-  | { kind: 'already_answered'; by: Settler; answer: string }
+  | { kind: 'already_answered'; by: Answerer; answer: string }
 
 export type CheckpointResult<T> = Result<T, CheckpointError | PortError>
 
@@ -228,7 +228,7 @@ export interface Asked {
  * then one transaction records `asked`, which makes the Issue wait, and the Decision. The same ask again is the same
  * Decision. A different form from the same asker while the Issue still waits on its open Decision amends that one
  * instead of raising another: the form is replaced, the new rendering is the artifact's next revision, and the steps and
- * unsent pages are cleared so the amended form is settled afresh. Settling it (the Judge, the default, the owner)
+ * unsent pages are cleared so the amended form is answered afresh. Answering it (the Judge, the default, the owner)
  * is the pass's, not this call's.
  */
 export async function askDecision(
@@ -238,7 +238,7 @@ export async function askDecision(
   const read = readDecisionForm(input.form)
   if (!read.ok) return read
   const form = read.value
-  // The steward's ask is about a stall, where a hold ("wait for it") is a real answer; a lead's is a choice for the owner.
+  // The steward's ask is about a stall, where a backoff ("wait for it") is a real answer; a lead's is a choice for the owner.
   const noChoice = (input.by ?? 'lead') === 'lead' ? refuseNoOpDefault(form) : null
   if (noChoice) return err({ kind: 'invalid', detail: noChoice })
   const blob = await deps.blobs.put(renderDecisionForm(form))
@@ -352,7 +352,7 @@ export async function askDecision(
 export interface Answering {
   decision: DecisionRecord
   text: string
-  by: Settler
+  by: Answerer
   /** what backs the answer */
   source: string
   /** what the lead is told beside the answer (the factory's own sentence); null for the owner's */
@@ -364,9 +364,9 @@ export type AnswerOutcome =
   | { status: 'withdrawn'; decision: DecisionRecord }
 
 /**
- * Settles a Decision inside a transaction the caller holds: the Issue must still wait for it, else the Decision is
+ * Answers a Decision inside a transaction the caller holds: the Issue must still wait for it, else the Decision is
  * withdrawn (the Issue closed or was cancelled) and nothing reaches a lead. Otherwise the answer is recorded as an
- * `answered` event by its settler, with the factory's own note before it when there is one, so the one `note_lead` that
+ * `answered` event by its answerer, with the factory's own note before it when there is one, so the one `note_lead` that
  * ends the wait carries both. One answer per Decision: the first to commit wins, the others see `already_answered`.
  */
 export async function answerIn(
@@ -395,14 +395,14 @@ export async function answerIn(
       : answering.by === 'judge'
         ? 'judge'
         : 'factory'
-  // The Judge's hold on a stall the steward asked about: the Issue waits until a time instead of waking its lead to block again.
-  let hold: string | undefined
+  // The Judge's backoff on a stall the steward asked about (stored as the payload key `hold`): the Issue waits until a time instead of waking its lead to block again.
+  let backoff: string | undefined
   let note = answering.note
-  if (answering.by === 'judge' && fresh.askedBy === 'steward' && isHold(answering.text)) {
+  if (answering.by === 'judge' && fresh.askedBy === 'steward' && isBackoff(answering.text)) {
     const history = await work.history(fresh.issueId)
-    hold = holdUntil(at, history ? holdsIn(history) : 0)
+    backoff = backoffUntil(at, history ? backoffsIn(history) : 0)
     note =
-      `${note ?? ''} The Issue waits until ${hold} and you hear this then; if the cause is unchanged by then, report it again with what you checked, and the next wait is longer.`.trim()
+      `${note ?? ''} The Issue waits until ${backoff} and you hear this then; if the cause is unchanged by then, report it again with what you checked, and the next wait is longer.`.trim()
   }
   if (note) {
     const noted = applied(
@@ -421,7 +421,7 @@ export async function answerIn(
       key: key('answered', fresh.id),
       event: {
         kind: 'answered',
-        payload: { decision: fresh.id, answer: answering.text, ...(hold ? { hold } : {}) },
+        payload: { decision: fresh.id, answer: answering.text, ...(backoff ? { hold: backoff } : {}) },
         actor,
       },
     }),
@@ -447,7 +447,7 @@ export interface Answered {
 }
 
 /**
- * The owner answers a Decision (the last step of settling, or an early answer to one still open); the orchestrator may
+ * The owner answers a Decision (the last step of answering, or an early answer to one still open); the orchestrator may
  * answer for him, recorded as its own (`settled_by` and the event's actor).
  */
 export function answerDecision(
@@ -471,8 +471,8 @@ export function answerDecision(
 }
 
 /**
- * `factory decision take-default`: the lead settles its own open Decision with the default it named, because it went on
- * with that option and a ship is refused while the Issue waits. Recorded as the `default` settler, the source saying the lead
+ * `factory decision take-default`: the lead answers its own open Decision with the default it named, because it went on
+ * with that option and a ship is refused while the Issue waits. Recorded as the `default` answerer, the source saying the lead
  * took it. Only the lead's own Decision of the attempt there is, and only one that names a default (a reversible option,
  * which the form guarantees); an answered one is `already_answered`, a Decision the Issue no longer waits for is withdrawn.
  */

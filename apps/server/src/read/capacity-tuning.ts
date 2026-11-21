@@ -2,25 +2,25 @@ import type { CapacityLoopModel, RetroCapacityFigure, RetroCapacityTune } from '
 
 /** Minutes a day over the load ceiling from which the loop takes less on. */
 export const OVER_HIGH_PER_DAY = 60
-/** Seat-hours a day idle behind a non-empty queue from which a gate is too tight. */
+/** Allowance-hours a day idle behind a non-empty queue from which a gate is too tight. */
 export const IDLE_HIGH_PER_DAY = 2
 /** A test-slot wait (p90) from which the base of the slots is too small. */
 export const WAIT_HIGH_MS = 10 * 60_000
 
-/** The share of all idle seat-time (a drained queue included, the memory cut is the host's reading) behind the memory gate from which the load ceiling is not the setting that held the queue. */
+/** The share of all idle allowance-time (a drained queue included, the memory cut is the host's reading) behind the memory gate from which the load ceiling is not the setting that held the queue. */
 export const MEMORY_SHARE_HIGH = 0.5
 
-/** What held the queue in the window: the share of the idle seat-time with the memory gate shut, and the repo whose leads weigh most. */
+/** What held the queue in the window: the share of the idle allowance-time with the memory gate shut, and the repo whose leads weigh most. */
 export interface QueueHold {
   memoryShare: number
-  /** the gate that held more of the idle seat-time: the swapout rate or swap in use */
+  /** the gate that held more of the idle allowance-time: the swapout rate or swap in use */
   trigger: 'swapout' | 'swapUsed'
   heaviest: { repo: string; peakMibP80: number } | null
 }
 
 type Totals = Pick<
   CapacityLoopModel,
-  'days' | 'throughput' | 'idleSeatHours' | 'idleSeatHoursDrain' | 'minutesOverCeiling' | 'slotWait'
+  'days' | 'throughput' | 'idleAllowanceHours' | 'idleAllowanceHoursDrain' | 'minutesOverCeiling' | 'slotWait'
 >
 
 /**
@@ -44,21 +44,21 @@ export function capacityFigures(model: Totals): RetroCapacityFigure[] {
     },
     {
       key: 'idle_seat_hours_per_day',
-      label: 'Idle seat-hours a day behind a non-empty queue, a drained queue left out',
-      value: Math.max(0, model.idleSeatHours.total - model.idleSeatHoursDrain.total) / days,
+      label: 'Idle allowance-hours a day behind a non-empty queue, a drained queue left out',
+      value: Math.max(0, model.idleAllowanceHours.total - model.idleAllowanceHoursDrain.total) / days,
       unit: 'hours',
     },
     {
       key: 'idle_seat_hours_drain_per_day',
-      label: 'Idle seat-hours a day behind a drained queue',
-      value: model.idleSeatHoursDrain.total / days,
+      label: 'Idle allowance-hours a day behind a drained queue',
+      value: model.idleAllowanceHoursDrain.total / days,
       unit: 'hours',
     },
     // the figure as it was before the drain was split off: kept until the first clean window, so the ledger can still compare
     {
       key: 'idle_seat_hours_with_drain_per_day',
-      label: 'Idle seat-hours a day behind a non-empty queue, a drained queue included',
-      value: model.idleSeatHours.total / days,
+      label: 'Idle allowance-hours a day behind a non-empty queue, a drained queue included',
+      value: model.idleAllowanceHours.total / days,
       unit: 'hours',
     },
     {
@@ -74,8 +74,8 @@ const figure = (figures: readonly RetroCapacityFigure[], key: string): number | 
   figures.find((f) => f.key === key)?.value ?? null
 
 /**
- * The one setting to change first, by fixed rules (no model): too much time over the ceiling takes less on (the seat bonus,
- * which the loop raises by itself, then the seats, then the extra slots); a machine under the ceiling with seats idle behind
+ * The one setting to change first, by fixed rules (no model): too much time over the ceiling takes less on (the allowance bonus,
+ * which the loop raises by itself, then the leads per account, then the extra slots); a machine under the ceiling with allowance idle behind
  * a queue lets more in (the load ceiling, unless most of that idle time sat behind the memory gate: then the swapout ceiling,
  * with the heaviest repo's lead memory in the reason, since a higher load ceiling would change nothing); a long slot wait with the load low raises the base of the slots. Null when
  * nothing is out of range. The reason says what the rule saw; which gate held the queue is in the parts of `queue_wait_p90`.
@@ -92,9 +92,9 @@ export function tuneConstant(
 
   if (over >= OVER_HIGH_PER_DAY) {
     const seen = `${Math.round(over)} minutes a day were over the load ceiling`
-    if (constants.seatsMaxBonus > 0)
+    if (constants.allowanceMaxBonus > 0)
       return {
-        constant: 'seatsMaxBonus',
+        constant: 'allowanceMaxBonus',
         direction: 'down',
         reason: `${seen}: stop raising seats past the account cap`,
       }
@@ -125,14 +125,14 @@ export function tuneConstant(
     return {
       constant: hold.trigger === 'swapout' ? 'swapoutCeilingMb' : 'swapCeilingPct',
       direction: 'up',
-      reason: `${idle.toFixed(1)} seat-hours a day sat idle behind a queue (a drained queue left out), ${Math.round(hold.memoryShare * 100)} % of all idle seat-time with the memory gate shut (mostly ${gate}) and the load over the ceiling only ${Math.round(over)} minutes a day: the load ceiling is not what held it${heavy}`,
+      reason: `${idle.toFixed(1)} allowance-hours a day sat idle behind a queue (a drained queue left out), ${Math.round(hold.memoryShare * 100)} % of all idle allowance-time with the memory gate shut (mostly ${gate}) and the load over the ceiling only ${Math.round(over)} minutes a day: the load ceiling is not what held it${heavy}`,
     }
   }
   if (lowLoad && idle >= IDLE_HIGH_PER_DAY)
     return {
       constant: 'loadCeiling',
       direction: 'up',
-      reason: `${idle.toFixed(1)} seat-hours a day sat idle behind a queue while the load was over the ceiling only ${Math.round(over)} minutes a day: check the parts of the queue wait (\`queue_wait_p90\`: capacity, an after edge, a draining queue, production red) for the gate that held it, the ceiling first`,
+      reason: `${idle.toFixed(1)} allowance-hours a day sat idle behind a queue while the load was over the ceiling only ${Math.round(over)} minutes a day: check the parts of the queue wait (\`queue_wait_p90\`: capacity, an after edge, a draining queue, production red) for the gate that held it, the ceiling first`,
     }
   if (lowLoad && wait !== null && wait >= WAIT_HIGH_MS && constants.slots < constants.slotsMax)
     return {

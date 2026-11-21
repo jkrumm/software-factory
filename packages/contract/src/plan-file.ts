@@ -55,7 +55,7 @@ export const PlanRow = z
     kind: z.enum(PLAN_KINDS).optional(),
     /** the tier and effort its lead starts on: `{tier, effort}` or `{role}`; default the table's lead role */
     seat: PlanSeat.optional(),
-    /** the resource class its Issue runs in; the target project's `lanes:` caps how many of a lane run at once */
+    /** the resource its Issue runs in; the target project's `lanes:` caps how many of a lane run at once */
     lane: LaneName.optional(),
     /** the queue priority its Issue is filed with, as `factory issue prio` sets it: higher runs first among the queued; default 0 */
     prio: z.number().int().min(-1000).max(1000).optional(),

@@ -247,7 +247,7 @@ test('a Decision no one settles reaches the owner: paged once, with a deep link,
   ])
 })
 
-test("a Decision is settled by the Judge, who is given the owner's earlier answers as precedent; no page", async () => {
+test("a Decision is answered by the Judge, who is given the owner's earlier answers as precedent; no page", async () => {
   const issueId = await workingIssue('example-judge')
   const asked = await ok(
     (json) => AskReply.parse(json),
@@ -276,7 +276,7 @@ test("a Decision is settled by the Judge, who is given the owner's earlier answe
   expect(decisionPages()).toHaveLength(1)
 })
 
-test('a Decision is settled by its default after the wait, when the option is reversible; no page', async () => {
+test('a Decision is answered by its default after the wait, when the option is reversible; no page', async () => {
   const issueId = await workingIssue('example-default')
   const asked = await ok(
     (json) => AskReply.parse(json),

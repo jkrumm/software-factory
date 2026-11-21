@@ -28,7 +28,7 @@ const constants = {
   slots: 2,
   slotsMax: 6,
   slotExtraLoad: 12,
-  seatsMaxBonus: 2,
+  allowanceMaxBonus: 2,
   reaperGraceMs: 300_000,
   swapoutCeilingMb: 2048,
   swapCeilingPct: 80,
@@ -98,7 +98,7 @@ describe('the retro bundle carries the capacity loop', () => {
     ])
     // the two Issues closed inside the week are the project's closed Issues, with or without a lead
     expect(week.throughput.project.find((p) => p.repo === 'app')?.closedIssues).toBe(2)
-    expect(week.throughput.host.byClass).toHaveLength(7)
+    expect(week.throughput.host.byCause).toHaveLength(7)
   })
 
   test('the figures are per day and match SQL; the ledger measures a capacity key against the window', async () => {
@@ -138,8 +138,8 @@ describe('the fixed tuning rules', () => {
       days: 1,
       throughput: { total: 5, perDay: [] },
       minutesOverCeiling: { total: over, perDay: [] },
-      idleSeatHours: { total: idle, perDay: [] },
-      idleSeatHoursDrain: { total: drain, perDay: [] },
+      idleAllowanceHours: { total: idle, perDay: [] },
+      idleAllowanceHoursDrain: { total: drain, perDay: [] },
       slotWait: {
         n: p90 === null ? 0 : 3,
         p50Ms: p90,
@@ -156,25 +156,25 @@ describe('the fixed tuning rules', () => {
     expect(value('idle_seat_hours_per_day')).toBe(4)
     expect(value('idle_seat_hours_drain_per_day')).toBe(6)
     expect(value('idle_seat_hours_with_drain_per_day')).toBe(10)
-    // 10 idle seat-hours would raise the load ceiling; 4 of them with the rest drained are below the line
+    // 10 idle allowance-hours would raise the load ceiling; 4 of them with the rest drained are below the line
     expect(tuneConstant(loop(5, IDLE_HIGH_PER_DAY * 2, null, IDLE_HIGH_PER_DAY * 2), constants)).toBeNull()
     expect(tuneConstant(loop(5, IDLE_HIGH_PER_DAY * 2, null, 0), constants)).toMatchObject({ constant: 'loadCeiling' })
   })
 
-  test('too long over the ceiling lowers the seat bonus first, then the seats, then the extra slots', () => {
+  test('too long over the ceiling lowers the allowance bonus first, then the leads per account, then the extra slots', () => {
     const figures = loop(OVER_HIGH_PER_DAY, 0, null)
-    expect(tuneConstant(figures, constants)).toMatchObject({ constant: 'seatsMaxBonus', direction: 'down' })
-    expect(tuneConstant(figures, { ...constants, seatsMaxBonus: 0 })).toMatchObject({
+    expect(tuneConstant(figures, constants)).toMatchObject({ constant: 'allowanceMaxBonus', direction: 'down' })
+    expect(tuneConstant(figures, { ...constants, allowanceMaxBonus: 0 })).toMatchObject({
       constant: 'leadsPerAccount',
       direction: 'down',
     })
-    expect(tuneConstant(figures, { ...constants, seatsMaxBonus: 0, leadsPerAccount: 1 })).toMatchObject({
+    expect(tuneConstant(figures, { ...constants, allowanceMaxBonus: 0, leadsPerAccount: 1 })).toMatchObject({
       constant: 'slotsMax',
     })
-    expect(tuneConstant(figures, { ...constants, seatsMaxBonus: 0, leadsPerAccount: 1, slotsMax: 2 })).toBeNull()
+    expect(tuneConstant(figures, { ...constants, allowanceMaxBonus: 0, leadsPerAccount: 1, slotsMax: 2 })).toBeNull()
   })
 
-  test('idle seats behind a queue on a machine under the ceiling raise the load ceiling', () => {
+  test('idle allowance behind a queue on a machine under the ceiling raise the load ceiling', () => {
     expect(tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants)).toMatchObject({
       constant: 'loadCeiling',
       direction: 'up',
@@ -183,7 +183,7 @@ describe('the fixed tuning rules', () => {
     expect(tuneConstant(loop(OVER_HIGH_PER_DAY / 2, IDLE_HIGH_PER_DAY, null), constants)).toBeNull()
   })
 
-  test('idle seats held mostly by the memory gate name the memory ceiling, never the load ceiling', () => {
+  test('idle allowance held mostly by the memory gate name the memory ceiling, never the load ceiling', () => {
     const heaviest = { repo: 'basalt-ui', peakMibP80: 2560 }
     const held = tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, {
       memoryShare: 0.9,

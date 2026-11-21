@@ -153,7 +153,7 @@ describe('readThroughput', () => {
     expect(model.host.minutes).toBe(4)
     const narrow = await read(1)
     expect(narrow.host.minutes).toBe(0)
-    expect(narrow.host.byClass.every((c) => c.footprintMib === 0 && c.cores === 0 && c.procs === 0)).toBe(true)
+    expect(narrow.host.byCause.every((c) => c.footprintMib === 0 && c.cores === 0 && c.procs === 0)).toBe(true)
     expect(narrow.host.signals.load).toEqual({ p50: null, max: null })
     expect(narrow.host.collector.coreShare).toBeNull()
   })
@@ -184,7 +184,7 @@ describe('readThroughput', () => {
   })
 
   test('tenantBudget: the tenant class against its budget, over it or not', async () => {
-    const tenantMib = (await read()).host.byClass.find((c) => c.class === 'tenant')?.footprintMib ?? -1
+    const tenantMib = (await read()).host.byCause.find((c) => c.class === 'tenant')?.footprintMib ?? -1
     expect(tenantMib).toBeGreaterThan(0)
     const under = (await read()).host.tenantBudget
     expect(under).toEqual({ budgetMib: 6144, footprintMib: tenantMib, over: false, project: 'dotfiles' })
@@ -201,11 +201,11 @@ describe('readThroughput', () => {
     })
   })
 
-  test('byClass lists the seven classes, largest first', async () => {
-    const { byClass } = (await read()).host
-    expect(byClass.map((c) => c.class)).toEqual(['system', 'lead', 'tenant', 'step', 'owner', 'other', 'factory'])
+  test('byCause lists the seven classes, largest first', async () => {
+    const { byCause } = (await read()).host
+    expect(byCause.map((c) => c.class)).toEqual(['system', 'lead', 'tenant', 'step', 'owner', 'other', 'factory'])
     // lead: 1500 + 1200 + 800 + 66 over 4 minutes = 891.5, peak 1500, cpu 1.5 s over 240 s, 11 procs / 4
-    expect(byClass.find((c) => c.class === 'lead')).toEqual({
+    expect(byCause.find((c) => c.class === 'lead')).toEqual({
       class: 'lead',
       footprintMib: 892,
       peakMib: 1500,
@@ -215,7 +215,7 @@ describe('readThroughput', () => {
       share: 0.2495,
     })
     // system: 8000 / 4, peak 2100, cpu 8 s (one null ignored), 200 procs / 4
-    expect(byClass.find((c) => c.class === 'system')).toEqual({
+    expect(byCause.find((c) => c.class === 'system')).toEqual({
       class: 'system',
       footprintMib: 2000,
       peakMib: 2100,
@@ -224,7 +224,7 @@ describe('readThroughput', () => {
       procs: 50,
       share: 0.5597,
     })
-    expect(byClass.find((c) => c.class === 'factory')).toEqual({
+    expect(byCause.find((c) => c.class === 'factory')).toEqual({
       class: 'factory',
       footprintMib: 0,
       peakMib: 0,
@@ -234,18 +234,18 @@ describe('readThroughput', () => {
       share: 0,
     })
     // the shares of the seven classes add to one, each against plain SQL
-    expect(byClass.reduce((sum, c) => sum + c.share, 0)).toBeCloseTo(1, 3)
+    expect(byCause.reduce((sum, c) => sum + c.share, 0)).toBeCloseTo(1, 3)
     const total = await one(
       sql`SELECT sum(footprint_mib)::float8 AS fp FROM factory.host_class_samples WHERE at >= ${FROM} AND at < ${NOW}`,
     )
-    for (const c of byClass) {
+    for (const c of byCause) {
       const part = await one(
         sql`SELECT coalesce(sum(footprint_mib), 0)::float8 AS fp FROM factory.host_class_samples WHERE class = ${c.class} AND at >= ${FROM} AND at < ${NOW}`,
       )
       expect(c.share).toBeCloseTo((part.fp as number) / (total.fp as number), 4)
     }
     // a key's mean over every minute of the window, against plain SQL
-    for (const c of byClass) {
+    for (const c of byCause) {
       const expected = await one(sql`
         SELECT
           round((SELECT coalesce(sum(footprint_mib), 0) FROM factory.host_class_samples WHERE class = ${c.class} AND at >= ${FROM} AND at < ${NOW})::numeric
@@ -462,7 +462,7 @@ describe('GET /v1/throughput', () => {
       expect(lead.host.topProcesses.every((row) => row.tenant === null || row.tenant === 'private')).toBe(true)
       // the figures are the owner's
       expect(lead.host.byRepo.map((row) => row.footprintMib)).toEqual(whole.host.byRepo.map((row) => row.footprintMib))
-      expect(lead.host.byClass).toEqual(whole.host.byClass)
+      expect(lead.host.byCause).toEqual(whole.host.byCause)
       expect(JSON.stringify(lead)).not.toContain('svc.')
     } finally {
       await sql`DELETE FROM factory.planning_projects WHERE name = 'app'`

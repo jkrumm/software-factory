@@ -56,7 +56,7 @@ export function decideStop(facts: StopFacts): StopDecision {
 
 ## Caps that held work back
 
-The repo's lead cap left 168.8 of 308.5 idle seat-hours unused with work queued, from 2026-11-14 18:08 to 2026-11-15 07:30 UTC. A cap is a number that keeps work out.
+The repo's lead cap left 168.8 of 308.5 idle allowance-hours unused with work queued, from 2026-11-14 18:08 to 2026-11-15 07:30 UTC. A cap is a number that keeps work out.
 
 - **What broke.** `factory read capacity-loop` showed the cap as the largest reason seats idled with work queued, over 57 Issues. Seat caps and account windows cost 0.4 and 1.6 hours.
 - **What the cap protected.** The merge window (about 10 merges an hour) and rebase conflicts: 98 of 401 sessions rebased twice or more. Lifting the cap costs more rebases per merge, not more waiting past the lock.

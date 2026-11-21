@@ -1,6 +1,6 @@
-import { hygieneClass } from '@software-factory/contract'
+import { hygieneFinder } from '@software-factory/contract'
 
-export { hygieneClass }
+export { hygieneFinder }
 // The light seat: mechanical, well-specified work with a check that proves it (every hygiene finding, whatever its size)
 // starts on the cheap seat (the role table's
 // `light` row) instead of the `lead` row. modelpick's table of 2026-11-16 put haiku at high effort level with sonnet at
@@ -48,7 +48,7 @@ export function lightRule(facts: LightFacts): string | null {
   if (facts.movedUp > 0) return null
   // A hygiene finding comes from a probe, and the same probe turning green proves the fix: it starts light whatever size
   // triage gave it.
-  if (facts.hygieneKey !== null) return `hygiene:${hygieneClass(facts.hygieneKey)}`
+  if (facts.hygieneKey !== null) return `hygiene:${hygieneFinder(facts.hygieneKey)}`
   if (facts.kind === 'docs') return 'kind:docs'
   if (facts.unroutedMonitor) return 'alert:route'
   if (facts.triageSmall && facts.size === 'small' && !facts.spec && !outOfScope(facts.text)) {

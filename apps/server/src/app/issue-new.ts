@@ -20,7 +20,7 @@ export interface NewIssueInput {
   facts?: Record<string, unknown> | undefined
   /** the lead's seat as the request gave it, unchecked: `{tier, effort}` or `{role}` */
   seat?: Record<string, unknown> | undefined
-  /** the resource class, already a valid lane name */
+  /** the resource, already a valid lane name */
   lane?: string | undefined
   /** `spec`: the lead owes a Spec before it builds */
   checkpoint?: 'spec' | 'gate' | undefined

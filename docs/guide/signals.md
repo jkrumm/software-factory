@@ -1,6 +1,6 @@
 # Signals and Triage
 
-Anything that may become work arrives as a signal. Triage decides what it becomes before any lead spends a token: a new Issue, a note on an open one, part of an incident, a held signal or nothing. The deciding is code first and an `agw` workflow only where the code is unsure. Nobody files around it.
+Anything that may become work arrives as a signal. Triage decides what it becomes before any lead spends a token: a new Issue, a note on an open one, part of an incident, a quarantined signal or nothing. The deciding is code first and an `agw` workflow only where the code is unsure. Nobody files around it.
 
 ## Signals
 
@@ -160,19 +160,19 @@ The second and third did not open Issues. They reached the lead of `issue_1818` 
 - [`app/intake-signals.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-signals.ts#L29-L72): `repeatIn` and `eventIn`, a repeat or a one-off event of a subject that already has an Issue
 - [`app/intake-signals.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-signals.ts#L74-L108): `humanIn`, a person's or an agent's signal filed or amended
 
-## Held signals and the screen
+## Quarantined signals and the screen
 
-A held signal is outside text the factory did not trust enough to turn into work. It is stored, fenced as data, and waits for a person or the Judge.
+A quarantined signal is outside text the factory did not trust enough to turn into work. It is stored, fenced as data, and waits for a person or the Judge.
 
 - **Quarantine.** A signal with trust `outside` is held. It reaches a lead only when the owner or the Judge promotes it.
 - **Promote** makes it work. **Dismiss** turns it away with a reason of 1 to 500 characters and keeps it on record as `dismissed`.
-- **The screen.** The `screen` loop shows each held signal once to the `factory-screen` workflow, with the open Issues and the project names. The Judge promotes, dismisses (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads.
+- **The screen.** The `screen` loop shows each quarantined signal once to the `factory-screen` workflow, with the open Issues and the project names. The Judge promotes, dismisses (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads.
 - **Bounded retries.** A failed call backs off from 10 minutes to 6 hours and gives up after five tries. After 72 hours the signal gets one last look and is filed for a lead to investigate, who drafts any reply as an Errand and posts nothing itself.
 - **A dismissed report is answered.** The next one with the same words is a new report, under the key after it.
 
 <!-- snippet: apps/server/src/domains/intake/screen.ts MAX_SCREEN_ATTEMPTS -->
 ```ts
-/** A held signal whose screening failed this often is left unscreened for good: the owner sees it as it is. */
+/** A quarantined signal whose screening failed this often is left unscreened for good: the owner sees it as it is. */
 export const MAX_SCREEN_ATTEMPTS = WORKFLOWS.screen.retry.tries
 /** Signals the Judge looks at in one pass. */
 export const SCREEN_BATCH = 10
@@ -239,6 +239,6 @@ A work repo is a repo no `project.yaml` describes, or one whose `project.yaml` s
 **Read more:**
 
 - [`docs/architecture.md` Signals and triage](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#signals-and-triage): quarantine, the screen, the door's registry, healing
-- [`docs/language.md` Work](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L7-L46): signal, triage outcome, held signal, door route, work repo
+- [`docs/language.md` Work](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L7-L46): signal, triage outcome, quarantined signal, door route, work repo
 
 Next: [Issues](./issues.md)

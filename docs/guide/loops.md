@@ -47,7 +47,7 @@ Friction is any counted waste: an avoidable touch, a refusal, an undelivered not
 
 - **A count or a rate.** A serious pattern (a lead that stopped reporting, a lost lead, an undelivered note) files on a bare count. The others need a share of the Issues closed in the window, and only once 10 have closed. Two stalls the steward ends by itself, a lead's block and a full account window, are judged by rate too (3 and one in twenty), and so is the stall of a regressed Watch, by the same rule as a regression.
 - **Pace:** one pass a day, or sooner when 200 Issues have closed since the last. At 126 to 166 closed a day, a weekly pace would have looked at about a thousand Issues per pass.
-- **A refusal is counted by its class, not its text.** The stored text names a commit, a branch or an Issue, so each row was its own key and never added up. `read/refusal-class.ts` gives every refusal a class (`commit_not_on_base`, `waits_for_errand`, `closed`, and so on; an unknown text is its own class by its wording with shas, paths and numbers replaced) and friction sums the rows of one class.
+- **A refusal is counted by its kind, not its text.** The stored text names a commit, a branch or an Issue, so each row was its own key and never added up. `read/refusal-kind.ts` gives every refusal a class (`commit_not_on_base`, `waits_for_errand`, `closed`, and so on; an unknown text is its own class by its wording with shas, paths and numbers replaced) and friction sums the rows of one class.
 - **One signal per pattern,** with the evidence Issues (five at most) and the command that shows the count again. An open Issue of the same pattern is amended, not doubled.
 - **Retired mechanisms are never judged.** The review gate is gone, so its refusals do not count.
 - **A KPI off its target is a finding.** Each pass also reads the seven KPIs over its window. One off its target over a whole window (seven days the counting epoch did not cut) files `kpi:<key>`, and the signal names the KPI's largest part: for avoidable touches, the touch kind to remove first. The KPI targets and the friction rules are one table in the contract, so the loop and the Improve screen judge by the same numbers.
@@ -243,7 +243,7 @@ A loop's yield is what its signals became: the passes it ran, the signals it fil
 **Example files:**
 
 - [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#loops-and-agw): the loops and what each does deterministically and what it asks agw.
-- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#loops-and-agw): the ledger, finding classes and `GET /v1/loop-yield`, the read model of what each loop yielded.
+- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#loops-and-agw): the ledger, finders and `GET /v1/loop-yield`, the read model of what each loop yielded.
 - [`loop-yield.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/read-models/loop-yield.test.ts): every figure restated in plain rows.
 
 **Read more:**

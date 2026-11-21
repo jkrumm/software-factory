@@ -39,7 +39,7 @@ export const WAITS = {
   timer: {
     exit: 'machine',
     stall: false,
-    ends: 'woken by the clock at the time the lead deferred to, or the factory held it to',
+    ends: 'woken by the clock at the time the lead deferred to, or the end of a backoff the factory gave it',
   },
   dependency: { exit: 'machine', stall: false, ends: 'woken by the chain once every Issue it is after has closed' },
   wall: { exit: 'machine', stall: true, ends: "woken when the account's window opens again" },

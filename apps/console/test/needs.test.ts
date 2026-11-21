@@ -53,8 +53,8 @@ test('the origin is the repo, or App feedback; reversibility is a lozenge from a
   expect(reversibleLozenge(false)).toEqual({ state: 'paused', words: 'Not reversible' })
 })
 
-test('errorWords: 409 is settled elsewhere, no status is unreachable, the rest says what the API said', () => {
-  expect(errorWords(409, 'already_answered')).toBe('Already settled elsewhere')
+test('errorWords: 409 is answered elsewhere, no status is unreachable, the rest says what the API said', () => {
+  expect(errorWords(409, 'already_answered')).toBe('Already answered elsewhere')
   expect(errorWords(null, null)).toBe('Could not reach the factory. Send it again in a moment.')
   expect(errorWords(422, 'a verdict needs: note')).toBe('a verdict needs: note')
   expect(errorWords(500, null)).toBe('The factory refused this. Change your answer and send it again.')

@@ -12,7 +12,7 @@ import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import { giveVerdict, markNeeded, submitArtifact } from '../../src/app/checkpoints.ts'
 import type { PageDeps } from '../../src/app/checkpoints-pages.ts'
 import { previewSpecScreen, screenSpecs } from '../../src/app/checkpoints-specs.ts'
-import type { SettleDeps } from '../../src/app/checkpoints-settle.ts'
+import type { CheckpointLoopDeps } from '../../src/app/checkpoints-loop.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import type { ArtifactId } from '../../src/domains/checkpoints/artifact.ts'
 import {
@@ -115,7 +115,7 @@ afterAll(async () => {
 })
 
 const clock: FixedClock = fixedClock('2026-11-14T08:00:00Z')
-let deps: SettleDeps & PageDeps
+let deps: CheckpointLoopDeps & PageDeps
 let calls: { request: SpecScreenRequest; key: string }[]
 let answer: (request: SpecScreenRequest) => Result<SpecScreenAnswer>
 

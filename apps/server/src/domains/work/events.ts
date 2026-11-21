@@ -27,7 +27,7 @@ export const PAYLOADS = {
     origin: z.enum(ORIGINS),
     /** the seat its lead starts on, resolved at filing (old events carry none: the table's lead row) */
     seat: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional() }).optional(),
-    /** the resource class it runs in; the project's `lanes:` cap the leads of a lane (old events carry none) */
+    /** the resource it runs in; the project's `lanes:` cap the leads of a lane (old events carry none) */
     lane: LaneName.optional(),
     /** the lead owes a Spec before it builds, and the ship is refused without one (`docs/architecture.md`, "The Spec checkpoint") */
     checkpoint: z.enum(['spec', 'gate']).optional(),
@@ -74,7 +74,7 @@ export const PAYLOADS = {
   answered: z.object({
     decision: text,
     answer: text,
-    /** the answer to a stall was a hold: the Issue waits until this time instead of going back to its lead (`kernel/hold.ts`) */
+    /** the answer to a stall was a hold: the Issue waits until this time instead of going back to its lead (`kernel/backoff.ts`) */
     hold: z.iso.datetime({ offset: true }).optional(),
   }),
   /** the lead handed a Concept or Spec over for review and waits for the verdict */

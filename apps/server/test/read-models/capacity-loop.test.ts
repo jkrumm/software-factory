@@ -26,7 +26,7 @@ const constants = {
   slots: 2,
   slotsMax: 6,
   slotExtraLoad: 12,
-  seatsMaxBonus: 2,
+  allowanceMaxBonus: 2,
   reaperGraceMs: 300_000,
   swapoutCeilingMb: 2048,
   swapCeilingPct: 80,
@@ -234,25 +234,25 @@ describe('GET /v1/capacity-loop figures', () => {
     )
     expect(model.throughput.total).toBe(3)
 
-    // idle seat-hours
+    // idle allowance-hours
     const idle = (col: string) =>
       `SELECT coalesce(sum(CASE WHEN s.seats > s.leads THEN s.seats - s.leads ELSE 0 END), 0) / 60.0 AS v FROM factory.host_samples s WHERE s.queued > 0 AND num_nonnulls(s.seats, s.leads) = 2 AND ${col}`
-    expect(model.idleSeatHours.total).toBeCloseTo(await scalar(idle(inWindow('s.at'))), 9)
-    expectDays(model.idleSeatHours.perDay, await daily(idle(inDay('s.at'))), 9)
-    expect(model.idleSeatHours.total).toBeCloseTo(13 / 60, 9)
-    expect(model.idleSeatHoursMemory.total).toBeCloseTo(8 / 60, 9)
-    expect(model.idleSeatHoursMemory.swapout).toBeCloseTo(2 / 60, 9)
-    expect(model.idleSeatHoursMemory.swapUsed).toBeCloseTo(6 / 60, 9)
+    expect(model.idleAllowanceHours.total).toBeCloseTo(await scalar(idle(inWindow('s.at'))), 9)
+    expectDays(model.idleAllowanceHours.perDay, await daily(idle(inDay('s.at'))), 9)
+    expect(model.idleAllowanceHours.total).toBeCloseTo(13 / 60, 9)
+    expect(model.idleAllowanceHoursMemory.total).toBeCloseTo(8 / 60, 9)
+    expect(model.idleAllowanceHoursMemory.swapout).toBeCloseTo(2 / 60, 9)
+    expect(model.idleAllowanceHoursMemory.swapUsed).toBeCloseTo(6 / 60, 9)
 
     // what the queue waited for: queued hours by kind clipped to the window (an open interval runs to its end), the idle
-    // seat-hours split among the kinds queued in the minute, the owner's kinds (an `after` edge) only when nothing else waits
+    // allowance-hours split among the kinds queued in the minute, the owner's kinds (an `after` edge) only when nothing else waits
     const hours = (minutes: number) => minutes / 60
     const wanted = [
       {
         kind: 'cap',
         queuedHours: 24 + hours(1),
         issues: 2,
-        idleSeatHours: 0,
+        idleAllowanceHours: 0,
         byRepo: [
           { repo: 'web', queuedHours: 24, issues: 1 },
           { repo: 'api', queuedHours: hours(1), issues: 1 },
@@ -262,35 +262,35 @@ describe('GET /v1/capacity-loop figures', () => {
         kind: 'memory',
         queuedHours: hours(3),
         issues: 1,
-        idleSeatHours: hours(3),
+        idleAllowanceHours: hours(3),
         byRepo: [{ repo: 'app', queuedHours: hours(3), issues: 1 }],
       },
       {
         kind: 'chain',
         queuedHours: hours(2),
         issues: 1,
-        idleSeatHours: hours(2),
+        idleAllowanceHours: hours(2),
         byRepo: [{ repo: 'app', queuedHours: hours(2), issues: 1 }],
       },
       {
         kind: 'claim',
         queuedHours: hours(2),
         issues: 1,
-        idleSeatHours: hours(1),
+        idleAllowanceHours: hours(1),
         byRepo: [{ repo: 'api', queuedHours: hours(2), issues: 1 }],
       },
       {
         kind: 'memory_fit',
         queuedHours: hours(1),
         issues: 1,
-        idleSeatHours: hours(6),
+        idleAllowanceHours: hours(6),
         byRepo: [{ repo: 'web', queuedHours: hours(1), issues: 1 }],
       },
       {
         kind: 'drain',
         queuedHours: hours(1),
         issues: 1,
-        idleSeatHours: hours(1),
+        idleAllowanceHours: hours(1),
         byRepo: [{ repo: 'app', queuedHours: hours(1), issues: 1 }],
       },
     ]
@@ -299,7 +299,7 @@ describe('GET /v1/capacity-loop figures', () => {
       const got = model.queueByReason[i]
       expect(got?.issues).toBe(w.issues)
       expect(got?.queuedHours).toBeCloseTo(w.queuedHours, 9)
-      expect(got?.idleSeatHours).toBeCloseTo(w.idleSeatHours, 9)
+      expect(got?.idleAllowanceHours).toBeCloseTo(w.idleAllowanceHours, 9)
       expect(got?.byRepo.map((r) => r.repo)).toEqual(w.byRepo.map((r) => r.repo))
       w.byRepo.forEach((wr, j) => {
         expect(got?.byRepo[j]?.issues).toBe(wr.issues)
@@ -308,14 +308,21 @@ describe('GET /v1/capacity-loop figures', () => {
       // the repos split the kind's queued hours without loss
       expect(got?.byRepo.reduce((sum, r) => sum + r.queuedHours, 0)).toBeCloseTo(w.queuedHours, 9)
     })
-    // the split loses nothing: every idle seat-hour is in one kind
-    expect(model.queueByReason.reduce((sum, r) => sum + r.idleSeatHours, 0)).toBeCloseTo(model.idleSeatHours.total, 9)
+    // the split loses nothing: every idle allowance-hour is in one kind
+    expect(model.queueByReason.reduce((sum, r) => sum + r.idleAllowanceHours, 0)).toBeCloseTo(
+      model.idleAllowanceHours.total,
+      9,
+    )
 
     // the drained queue's share is queueByReason's drain, in total and per day, and what is left of the idle hours is not drain
-    expect(model.idleSeatHoursDrain.total).toBeCloseTo(hours(1), 9)
-    expect(model.idleSeatHoursDrain.perDay.find((d) => d.day === '2026-11-02')?.value).toBeCloseTo(hours(1), 9)
-    expect(model.idleSeatHoursDrain.perDay.filter((d) => d.day !== '2026-11-02').every((d) => d.value === 0)).toBe(true)
-    expect(model.idleSeatHoursDrain.perDay.map((d) => d.day)).toEqual(model.idleSeatHours.perDay.map((d) => d.day))
+    expect(model.idleAllowanceHoursDrain.total).toBeCloseTo(hours(1), 9)
+    expect(model.idleAllowanceHoursDrain.perDay.find((d) => d.day === '2026-11-02')?.value).toBeCloseTo(hours(1), 9)
+    expect(model.idleAllowanceHoursDrain.perDay.filter((d) => d.day !== '2026-11-02').every((d) => d.value === 0)).toBe(
+      true,
+    )
+    expect(model.idleAllowanceHoursDrain.perDay.map((d) => d.day)).toEqual(
+      model.idleAllowanceHours.perDay.map((d) => d.day),
+    )
 
     // minutes over the load ceiling
     const over = (col: string) =>

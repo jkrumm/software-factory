@@ -7,7 +7,7 @@ import { screenErrands, type ErrandScreened } from './checkpoints-errands.ts'
 import { screenSpecs, type SpecScreened } from './checkpoints-specs.ts'
 import { recheckOpen, type Rechecked } from './checkpoints-recheck.ts'
 import { recheckReviews, type ReviewLooked } from './checkpoints-reviews.ts'
-import { type SettleDeps, settleOpen, type Settled } from './checkpoints-settle.ts'
+import { type CheckpointLoopDeps, tryAnswerOpen, type DecisionOutcome } from './checkpoints-loop.ts'
 
 export interface PageDeps extends CheckpointDeps {
   notifier: Notifier
@@ -64,7 +64,7 @@ export async function sendDuePages(
 }
 
 export interface PassReport {
-  decisions: Settled[]
+  decisions: DecisionOutcome[]
   errands: ErrandScreened[]
   specs: SpecScreened[]
   rechecks: Rechecked[]
@@ -72,15 +72,15 @@ export interface PassReport {
   pages: PagesSent
 }
 
-/** Look again at what stayed with the owner, settle what can be settled and screen the Errands, then send the pages that settling planned. One call for the loops' tick and the CLI. */
+/** Look again at what stayed with the owner, answer what can be answered and screen the Errands, then send the pages that settling planned. One call for the loops' tick and the CLI. */
 export async function runCheckpointPass(
-  deps: SettleDeps & PageDeps,
+  deps: CheckpointLoopDeps & PageDeps,
 ): Promise<Result<PassReport, CheckpointError | PortError>> {
   const rechecks = await recheckOpen(deps)
   if (!rechecks.ok) return rechecks
   const reviews = await recheckReviews(deps)
   if (!reviews.ok) return reviews
-  const decisions = await settleOpen(deps)
+  const decisions = await tryAnswerOpen(deps)
   if (!decisions.ok) return decisions
   const errands = await screenErrands(deps)
   if (!errands.ok) return errands

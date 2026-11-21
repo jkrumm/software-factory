@@ -16,7 +16,7 @@ import type { DigestIssue, DigestRecord, LatestDigest } from './digest.ts'
 import type { LoopName } from '@software-factory/contract'
 import type { ClosedFinding, Judged, LedgerLoop } from './ledger.ts'
 import type { FindingRow, LedgerChange } from './throughput.ts'
-import type { ClassIssue, FindingLoop } from './classes.ts'
+import type { FinderIssue, FindingLoop } from './finders.ts'
 
 /** One friction pass (a day or 200 closed Issues) as recorded (`migrations/0950_friction.sql`). */
 export interface FrictionPassRecord {
@@ -26,7 +26,7 @@ export interface FrictionPassRecord {
   windowTo: Date
   issues: number
   filed: { key: string; count: number; title: string }[]
-  /** left out by the cap or by a held class */
+  /** left out by the cap or by a muted finder */
   overBudget: { key: string; count: number }[]
   failed: { key: string; reason: string }[]
 }
@@ -261,10 +261,10 @@ export interface ImproveStore {
 export interface ImproveReads {
   /** every Issue not closed and every one closed at or after `since`, with its open `after` edges (the digest loop and its read) */
   digestIssues(since: Date): Promise<DigestIssue[]>
-  /** the Issues each finding class of one loop filed (in every repo), with their closure and outcome, by class */
-  classIssues(loop: FindingLoop): Promise<Record<string, ClassIssue[]>>
+  /** the Issues each finder of one loop filed (in every repo), with their closure and outcome, by finder */
+  classIssues(loop: FindingLoop): Promise<Record<string, FinderIssue[]>>
   /** the Issues each Issue-opening loop's class filed (not the throughput loop's, which ranks by cost) */
-  allClassIssues(): Promise<{ loop: FindingLoop; class: string; issues: ClassIssue[] }[]>
+  allClassIssues(): Promise<{ loop: FindingLoop; class: string; issues: FinderIssue[] }[]>
   /** the loop's findings whose Issue closed that have no verdict yet, and the newest closed one of each key; `repo` narrows to one repo */
   closedFindings(loop: LedgerLoop, repo?: string): Promise<ClosedFinding[]>
   /** the timer and dependency waits of the repo's Issues, with the times their exit is judged from (self-watch) */

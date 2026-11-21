@@ -572,7 +572,7 @@ moves them). The package stays independent of the server: `claude-account` works
 | `setModeOverride` / `clearModeOverride` | `POST` and `DELETE /v1/accounts/:id/mode`, the owner's (`factory accounts mode <id> <mode> [--until <iso|reset>] [--for <model>] [--why <text>]`); written to the override file, so `claude-account mode` sees it |
 | `readQuotaAtReset({ weeks })` / `quotaUsedAtReset` (`history.ts`) | the KPI `quota_at_reset`: per week, the capacity-weighted mean of the weekly percent each account stood at when its weekly window reset, from the reset ledger |
 
-What stays the server's: the seats per account, one new lead per quota sample on an account whose 5-hour window is above 70 %,
+What stays the server's: the allowance per account, one new lead per quota sample on an account whose 5-hour window is above 70 %,
 the age (10 minutes) after which a reading admits nothing, the 401 mark of an account, and moving a walled lead.
 
 ## Installing

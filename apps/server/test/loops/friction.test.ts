@@ -13,7 +13,7 @@ import {
   withinBudget,
 } from '../../src/domains/improve/friction.ts'
 import type { LoopFinding } from '../../src/domains/intake/model.ts'
-import type { ClassIssue } from '../../src/domains/improve/classes.ts'
+import type { FinderIssue } from '../../src/domains/improve/finders.ts'
 import type { ClosedFinding, Judged } from '../../src/domains/improve/ledger.ts'
 import type { FrictionPassRecord } from '../../src/domains/improve/ports.ts'
 import type { LoopReads, LoopStore } from '../../src/app/loops/stores.ts'
@@ -36,14 +36,14 @@ const count = (key: string, group: FrictionCount['group'], n: number, label = ke
 
 const over = (counts: FrictionCount[], closed = CLOSED) => patternsOver(counts, closed)
 
-test('aggregate keys and the decision_settled group are never findings', () => {
+test('aggregate keys and the decision_answered group are never findings', () => {
   expect(
     over([
       count('refusal:total', 'refusal', 50),
       count('ship_refused:total', 'refusal', 50),
       count('signal_held:total', 'signal', 50),
-      count('decision_settled:owner', 'decision_settled', 50),
-      count('decision_settled:judge', 'decision_settled', 50),
+      count('decision_answered:owner', 'decision_answered', 50),
+      count('decision_answered:judge', 'decision_answered', 50),
     ]),
   ).toEqual([])
 })
@@ -209,13 +209,13 @@ test('a pattern without Issues says so', () => {
   expect(note).not.toContain('cut at the counting epoch')
 })
 
-// ---- finding classes ------------------------------------------------------------------------------------------------------
+// ---- finders ------------------------------------------------------------------------------------------------------
 
 const DAY = 86_400_000
 const passNow = new Date('2026-11-20T12:00:00Z')
 
 function frictionWorld(
-  classes: Record<string, ClassIssue[]>,
+  classes: Record<string, FinderIssue[]>,
   failRetro = false,
   extra: {
     last?: Date | null
@@ -274,7 +274,7 @@ function frictionWorld(
   return { deps, recorded, records, bodies, finds, verdicts }
 }
 
-const noisyFriction = (): ClassIssue[] =>
+const noisyFriction = (): FinderIssue[] =>
   Array.from({ length: 5 }, (_, i) => ({
     issue: `issue_${i + 100}`,
     filedAt: new Date(passNow.getTime() - (40 - i) * DAY),

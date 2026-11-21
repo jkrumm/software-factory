@@ -293,7 +293,7 @@ function tenantCandidates(facts: WindowFacts, policy: TenantPolicy): Candidate[]
       unit: 'MiB',
       target: policy.budgetMib,
       costMinutes: round(((tenants.classMib - policy.budgetMib) / SLOT_MEMORY_MIB) * days * MINUTES_PER_DAY),
-      query: `${READ} | .host.byClass[] | select(.class == "tenant") | .footprintMib, against .host.tenantBudget.budgetMib; .host.byTenant[] for the tenants`,
+      query: `${READ} | .host.byCause[] | select(.class == "tenant") | .footprintMib, against .host.tenantBudget.budgetMib; .host.byTenant[] for the tenants`,
     })
   }
   for (const t of tenants.day) {

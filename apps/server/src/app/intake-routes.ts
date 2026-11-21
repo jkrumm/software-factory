@@ -85,7 +85,7 @@ export function createRoutes(d: { deps: IntakeDeps; alerts: Alerts }) {
     const received = unroutedSignal(waiting, route.repo, waiting.lastTitle, '')
     const filed = await downIn(s, received, received.alert as Alert, { info, topology })
     if (!filed.ok) return filed
-    // The held signal this monitor became while it had no route is answered by the Issue.
+    // The quarantined signal this monitor became while it had no route is answered by the Issue.
     const held = await s.intake.signalByKey(keyOf('held', waiting.source, waiting.monitor))
     if (held?.state === 'held' && filed.value.issue)
       await s.intake.setSignal(held.id, { state: 'promoted', issueId: filed.value.issue, repo: route.repo })

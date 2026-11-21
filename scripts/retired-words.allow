@@ -22,3 +22,35 @@ apps/cli/src/run.ts board  # the old read verbs were called by the Herdr status 
 tests/scenarios/clients/replay.test.ts board  # the recorded requests of the Herdr status board, now the Herdr bar
 apps/server/migrations/0800_changes.sql board  # an applied migration is never edited (checksum); its comment names the Herdr status board
 packages/accounts/src/owner.ts human queue  # the directory of the owner's pending dialog requests (`~/.local/state/human-queue`) the wake check lists: an external path
+packages/contract/src/read-models.ts held signal  # the Needs item kind `held_signal`, a wire name the installed Herdr bar reads (integrations/herdr)
+apps/server/src/read/needs.ts held signal  # writes the Needs item kind `held_signal`, a wire name the installed Herdr bar reads
+apps/console/src/components/needs/bodies.tsx held signal  # reads the Needs item kind `held_signal`, a wire name
+apps/console/src/components/overview/band.tsx held signal  # reads the Needs item kind `held_signal`, a wire name
+apps/console/src/lib/needs.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+apps/console/src/routes/needs-you.tsx held signal  # reads the Needs item kind `held_signal`, a wire name
+apps/console/test/needs.test.ts held signal  # fixtures of the Needs item kind `held_signal`, a wire name
+apps/server/test/intake/screen-final.test.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+apps/server/test/read-models/models.test.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+apps/server/test/read-models/units.test.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+tests/e2e/flow.e2e.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+tests/e2e/frame-sidebar.e2e.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+tests/e2e/needs-you.e2e.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+tests/e2e/since-band.e2e.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+tests/scenarios/clients/requests.ts held signal  # the recorded Herdr bar request reads the Needs count `held_signal`
+tests/scenarios/loops/screen.test.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+tests/scenarios/read/models.test.ts held signal  # reads the Needs item kind `held_signal`, a wire name
+apps/server/migrations/0991_dismiss.sql held signal  # an applied migration is never edited (checksum)
+apps/server/migrations/0992_screen.sql held signal  # an applied migration is never edited (checksum)
+apps/server/migrations/0997_fix_commits.sql fix class  # an applied migration is never edited (checksum)
+apps/server/migrations/1000_loop_passes.sql fix class  # an applied migration is never edited (checksum)
+apps/server/src/domains/improve/ports.ts finding class  # names the applied migration files `0993_finding_classes.sql`
+apps/server/test/loops/store.test.ts finding class  # names the applied migration file `0994_finding_classes_backfill.sql`
+packages/contract/src/read-models.ts idle seat  # the figure keys `idle_seat_hours_*`, stored in retro ledger rows and markers
+packages/contract/src/read-models.ts seat-hours  # the figure keys `idle_seat_hours_*`, stored in retro ledger rows and markers
+apps/server/src/read/capacity-tuning.ts idle seat  # the figure keys `idle_seat_hours_*`, stored in retro ledger rows and markers
+apps/server/src/read/capacity-tuning.ts seat-hours  # the figure keys `idle_seat_hours_*`, stored in retro ledger rows and markers
+apps/server/src/domains/improve/retro.ts idle seat  # the retro brief names the stored figure keys `idle_seat_hours_*`
+apps/server/src/domains/improve/retro.ts seat-hours  # the retro brief names the stored figure keys `idle_seat_hours_*`
+apps/server/test/read-models/retro-capacity.test.ts idle seat  # reads the stored figure keys `idle_seat_hours_*`
+apps/server/test/read-models/retro-capacity.test.ts seat-hours  # reads the stored figure keys `idle_seat_hours_*`
+apps/server/migrations/1065_loop_pass_names.sql fix class  # moves the stored loop name `fix-classes` to `fix-causes`

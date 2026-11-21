@@ -3,7 +3,7 @@ import { AdmitAnswer } from '@software-factory/contract'
 import { type Lab, startLab } from '../planning/lab.ts'
 
 /**
- * The seats an idle host adds: one lead per account, five minute samples seeded, work queued behind the cap. The host
+ * The allowance an idle host adds: one lead per account, five minute samples seeded, work queued behind the cap. The host
  * loop is kept from writing samples of its own.
  */
 let lab: Lab

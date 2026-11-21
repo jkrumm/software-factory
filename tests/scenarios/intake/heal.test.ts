@@ -51,7 +51,7 @@ test('a heal runbook that fixes the symptom files nothing', async () => {
     detail: 'settling',
   })
 
-  // After the grace the settle pass runs `make restart` in the repo, outside any transaction.
+  // After the grace the heal pass runs `make restart` in the repo, outside any transaction.
   await until('the runbook to run', () => exists(join(repoDir, 'restarted')))
 
   // The restart fixed it: the source's own up arrives, and no lead ever starts.

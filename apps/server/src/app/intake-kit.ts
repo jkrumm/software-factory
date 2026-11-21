@@ -76,7 +76,7 @@ export type Out<T> = Promise<Result<T, IntakeError>>
 
 export const MAX_DISMISS_REASON = 500
 
-/** What the triage workflow decided: amend an open Issue, call it already settled, or neither (file anew). */
+/** What the triage workflow decided: amend an open Issue, call it already covered, or neither (file anew). */
 export type Decision = { amend: IssueId | null; settled?: IssueId | null; reason?: string }
 
 export const refuse = (kind: IntakeRefusal['kind'], detail: string): Result<never, IntakeRefusal> =>

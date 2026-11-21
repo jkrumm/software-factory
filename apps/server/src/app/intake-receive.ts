@@ -25,7 +25,7 @@ import { type Alerts } from './intake-alerts.ts'
 import { type Signals } from './intake-signals.ts'
 import { type Quarantine } from './intake-quarantine.ts'
 
-/** The workflow sees the Issues closed this recently, so a restated ask can be answered "already settled". */
+/** The workflow sees the Issues closed this recently, so a restated ask can be answered "already covered". */
 const SETTLED_WINDOW_MS = 24 * 60 * 60_000
 const MAX_SETTLED = 20
 const MAX_OPEN_SHOWN = 40
@@ -64,7 +64,7 @@ export function createReceive(d: { deps: IntakeDeps; alerts: Alerts; signals: Si
 
   /**
    * A `down` that no fingerprint-free road already handles (a replayed event, a subject with an open Issue, an open
-   * incident of its host) goes to the workflow, which may amend an open Issue or call it already settled.
+   * incident of its host) goes to the workflow, which may amend an open Issue or call it already covered.
    */
   async function decideDown(
     r: Received,

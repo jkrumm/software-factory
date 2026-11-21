@@ -15,7 +15,7 @@ import {
 import { WORKFLOWS } from '../kernel/workflows.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { type CheckpointError, type CheckpointStores, issueOf, verdictIn } from './checkpoints.ts'
-import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
+import { PASS_LIMIT, type CheckpointLoopDeps } from './checkpoints-loop.ts'
 
 export interface SpecScreened {
   artifact: string
@@ -38,7 +38,7 @@ interface Facts {
 }
 
 /** The Spec revision with its Issue and the owner's newest marks, while it is still the latest, unanswered and undecided. */
-async function factsOf(deps: SettleDeps, id: ArtifactId, revision: number): Step<Facts | 'dropped'> {
+async function factsOf(deps: CheckpointLoopDeps, id: ArtifactId, revision: number): Step<Facts | 'dropped'> {
   return deps.uow.run<Facts | 'dropped', CheckpointError>(async ({ work, checkpoints }) => {
     const spec = await checkpoints.lockSpecRevision(id, revision)
     if (!spec || spec.answered || spec.screen?.outcome) return ok('dropped')
@@ -55,7 +55,7 @@ async function factsOf(deps: SettleDeps, id: ArtifactId, revision: number): Step
 type Look = { rule: RuleOutcome; request: null } | { rule: null; request: SpecScreenRequest }
 
 /** The rules first; what they leave is the workflow's request. The blob is read here, outside any transaction. */
-async function lookOf(deps: SettleDeps, facts: Facts): Step<Look> {
+async function lookOf(deps: CheckpointLoopDeps, facts: Facts): Step<Look> {
   const { spec } = facts
   const content = await deps.blobs.get(spec.revision.blob)
   if (!content.ok) return content
@@ -89,7 +89,12 @@ async function lookOf(deps: SettleDeps, facts: Facts): Step<Look> {
  * the reason as its note, so the lead builds on its defaults at once; a failed call waits for its retry, and after the
  * last try the Spec reaches the owner unscreened.
  */
-function record(deps: SettleDeps, id: ArtifactId, revision: number, verdict: Verdict): Step<SpecScreened['outcome']> {
+function record(
+  deps: CheckpointLoopDeps,
+  id: ArtifactId,
+  revision: number,
+  verdict: Verdict,
+): Step<SpecScreened['outcome']> {
   return deps.uow.run<SpecScreened['outcome'], CheckpointError | PortError>(async (stores: CheckpointStores) => {
     const { work, checkpoints } = stores
     const spec = await checkpoints.lockSpecRevision(id, revision)
@@ -160,7 +165,7 @@ function record(deps: SettleDeps, id: ArtifactId, revision: number, verdict: Ver
 }
 
 /** Screens one Spec revision: the facts, the rules, then `factory-spec-screen` through its port (no transaction open). */
-async function screenSpec(deps: SettleDeps, id: ArtifactId, revision: number): Step<SpecScreened> {
+async function screenSpec(deps: CheckpointLoopDeps, id: ArtifactId, revision: number): Step<SpecScreened> {
   const facts = await factsOf(deps, id, revision)
   if (!facts.ok) return facts
   if (facts.value === 'dropped') return ok({ artifact: id, revision, outcome: 'dropped' })
@@ -191,7 +196,7 @@ async function screenSpec(deps: SettleDeps, id: ArtifactId, revision: number): S
 }
 
 /** One pass over the Spec revisions the screen has not decided, oldest first. */
-export async function screenSpecs(deps: SettleDeps, limit = PASS_LIMIT): Step<SpecScreened[]> {
+export async function screenSpecs(deps: CheckpointLoopDeps, limit = PASS_LIMIT): Step<SpecScreened[]> {
   const held = await deps.uow.run(async ({ checkpoints }) =>
     ok(await checkpoints.unscreenedSpecs(deps.clock.now(), limit)),
   )
@@ -224,7 +229,7 @@ export const specScreenView = (screen: SpecScreenRecord | null): SpecScreenPrevi
  * that decides it, or the request the workflow would be sent with the owner's marks as they stand now. Nothing is written.
  * This is also the replay: the request can be piped to `agw factory-spec-screen` for a Spec decided long ago.
  */
-export async function previewSpecScreen(deps: SettleDeps, id: ArtifactId): Step<SpecScreenPreview> {
+export async function previewSpecScreen(deps: CheckpointLoopDeps, id: ArtifactId): Step<SpecScreenPreview> {
   const read = await deps.uow.run<Facts & { screen: SpecScreenRecord | null }, CheckpointError>(
     async ({ work, checkpoints }) => {
       const artifact = await checkpoints.artifact(id)

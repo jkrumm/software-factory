@@ -32,8 +32,8 @@ import { err, ok, portError, type PortError, type Result } from '../../kernel/re
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 import { findingKeyOf } from '../../domains/intake/rules.ts'
-import { classOf } from '../../domains/improve/classes.ts'
-import { readGate, type ClassGate } from './gate.ts'
+import { finderOf } from '../../domains/improve/finders.ts'
+import { readGate, type FinderGate } from './gate.ts'
 import { settleClosed, type Ledger } from './ledger.ts'
 import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
@@ -112,7 +112,7 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
       // the KPIs are one input of the pass: a failed read is named in the record, the counts are still judged
       kpiFailure = `the KPIs could not be read: ${String(error).slice(0, 250)}`
     }
-    // A KPI off its target leads: it is the figure the owner set a line for. A held class is named before the budget
+    // A KPI off its target leads: it is the figure the owner set a line for. A muted finder is named before the budget
     // counts: it does not use up a slot.
     const found = [...kpisOffTarget(kpis, { whole: model.since === null }), ...patternsOver(model.counts, model.closed)]
     const allowed = found.filter((pattern) => {
@@ -208,7 +208,7 @@ async function fileRetro(deps: FrictionDeps, to: string, now: Date): Promise<str
 
 async function fileOne(
   deps: FrictionDeps,
-  { gate, ledger, now }: { gate: ClassGate; ledger: Ledger; now: Date },
+  { gate, ledger, now }: { gate: FinderGate; ledger: Ledger; now: Date },
   pattern: Pattern,
   facts: Parameters<typeof signalText>[1],
   refs: string[],
@@ -226,7 +226,7 @@ async function fileOne(
     },
     {
       loop: 'friction',
-      class: classOf('friction', pattern.key),
+      class: finderOf('friction', pattern.key),
       subject: pattern.key,
       repeatWindowMs: PATTERN_REPEAT_MS,
     },
@@ -245,7 +245,7 @@ async function fileOne(
       signal: filed.value.signal,
       at: now,
     })
-    if (lost) record.failed.push({ key: pattern.key, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
+    if (lost) record.failed.push({ key: pattern.key, reason: `finder not recorded: ${lost}`.slice(0, 300) })
   } else record.failed.push({ key: pattern.key, reason: `${outcome}: ${detail}`.slice(0, 300) })
 }
 

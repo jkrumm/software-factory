@@ -91,7 +91,7 @@ afterAll(() => db.stop())
 
 const byLoop = (model: LoopYieldModel, loop: string) => model.loops.find((l) => l.loop === loop)?.windows
 
-test('friction over 7 and 30 days: passes, signals, Issues by outcome, median time to close, top classes', async () => {
+test('friction over 7 and 30 days: passes, signals, Issues by outcome, median time to close, top finders', async () => {
   const model = LoopYieldModel.parse(await readLoopYield(db.sql, { now: NOW }))
   const [week, month] = byLoop(model, 'friction') ?? []
   expect(week).toEqual({
@@ -107,9 +107,9 @@ test('friction over 7 and 30 days: passes, signals, Issues by outcome, median ti
     cancelled: 0,
     open: 1,
     medianCloseSeconds: 3 * 3600,
-    classes: [
-      { class: 'stall', issues: 2, noise: 1 },
-      { class: 'touch', issues: 1, noise: 0 },
+    finders: [
+      { finder: 'stall', issues: 2, noise: 1 },
+      { finder: 'touch', issues: 1, noise: 0 },
     ],
   })
   expect(month).toMatchObject({
@@ -123,7 +123,7 @@ test('friction over 7 and 30 days: passes, signals, Issues by outcome, median ti
     open: 1,
     medianCloseSeconds: 4 * 3600,
   })
-  expect(month?.classes.map((c) => c.class)).toEqual(['stall', 'refusal', 'touch'])
+  expect(month?.finders.map((c) => c.finder)).toEqual(['stall', 'refusal', 'touch'])
 })
 
 test('hygiene counts a healed Issue; selfwatch and throughput read the same ledger; the moved share counts done Issues only', async () => {
@@ -136,7 +136,7 @@ test('hygiene counts a healed Issue; selfwatch and throughput read the same ledg
     done: 1,
     moved: 0,
     movedShare: 0,
-    classes: [{ class: 'migration_clash', issues: 1, noise: 0 }],
+    finders: [{ finder: 'migration_clash', issues: 1, noise: 0 }],
   })
   expect(byLoop(model, 'throughput')?.[0]).toMatchObject({
     passes: null,
@@ -145,7 +145,7 @@ test('hygiene counts a healed Issue; selfwatch and throughput read the same ledg
     open: 1,
     movedShare: null,
     medianCloseSeconds: null,
-    classes: [{ class: 'slot_minutes_per_issue', issues: 1, noise: 0 }],
+    finders: [{ finder: 'slot_minutes_per_issue', issues: 1, noise: 0 }],
   })
 })
 
@@ -290,5 +290,5 @@ test('an Issue with several keys of one class counts once, and moved only when e
   const after = await hygiene()
   expect((after?.issues ?? 0) - (before?.issues ?? 0)).toBe(2)
   expect((after?.moved ?? 0) - (before?.moved ?? 0)).toBe(1)
-  expect(after?.classes.find((c) => c.class === 'multi')?.issues).toBe(2)
+  expect(after?.finders.find((c) => c.finder === 'multi')?.issues).toBe(2)
 })
