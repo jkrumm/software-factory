@@ -214,7 +214,7 @@ export const LANGUAGE = {
   'take the default':
     "The lead's verb that answers its own open Decision with the default it named, once it went on with that option (factory decision take-default <id> --attempt <n>). Recorded as answered by default, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it)",
   'taste pass':
-    "The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
+    "The weekly retro's reading of the owner's verdict notes, comments and Decision answers in his own words: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
   'test slot':
     "A lease on the host's test capacity that factory slot run takes for a make check, test or e2e step; it waits while the host is busy and records what the step cost",
   'test slot wait':

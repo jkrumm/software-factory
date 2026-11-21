@@ -695,12 +695,10 @@ async function detailOf(
     SELECT count(*) AS n FROM factory.decisions
     WHERE asked_at >= ${w.from} AND asked_at < ${w.to}
       AND (settled_by IN ('owner', 'orchestrator') OR (answered_at IS NULL AND withdrawn_at IS NULL))`)
-  const byOwner = await one(sql`
-    SELECT count(*) AS n FROM factory.decisions WHERE settled_by = 'owner' AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
-  const recommended = await one(sql`
-    SELECT count(*) AS n FROM factory.decisions
-    WHERE settled_by = 'owner' AND lower(trim(answer)) = lower(trim(recommendation))
-      AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
+  const byOwner = await one(sql`SELECT count(*) AS n FROM factory.decisions d WHERE ${ownerDecision(sql, w)}`)
+  const recommended = await one(
+    sql`SELECT count(*) AS n FROM factory.decisions d WHERE ${ownerDecision(sql, w)} AND ${decisionChangedNothing(sql)}`,
+  )
   const verdicts = await one(sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)}`)
   const verdictsChanged = await one(
     sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)} AND (v.verdict IN ('with_notes', 'changes') OR (v.verdict = 'looks_good' AND v.note IS NOT NULL))`,
