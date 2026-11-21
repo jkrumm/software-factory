@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { finalizeLead } from '../../src/app/leads-finalize.ts'
 import { noteLead } from '../../src/app/leads-note.ts'
@@ -447,26 +450,27 @@ describe('finalize', () => {
 
   test('the sweep takes up the kept worktree of a closed Issue again: gone it loses its reason, kept it keeps one', async () => {
     const { issue, effect } = await closedLead()
-    w.worktrees.removal = { kept: 'it has uncommitted changes', path: '/w/factory-1-1' }
+    const tmp = mkdtempSync(join(tmpdir(), 'kept-'))
+    w.worktrees.removal = { kept: 'it has uncommitted changes', path: tmp }
     expect((await finalizeLead(w.deps, effect)).ok).toBe(true)
 
     // the Issue is still open: nothing to sweep
     expect(await sweepKeptWorktrees(w.deps)).toEqual({ looked: 0, removed: 0 })
 
     await w.event(issue, 'cancel', { kind: 'cancelled', payload: { reason: 'stop' }, actor: 'owner' })
-    w.worktrees.removal = { kept: 'it has uncommitted changes to tracked files (a.txt)', path: '/w/factory-1-1' }
+    w.worktrees.removal = { kept: 'it has uncommitted changes to tracked files (a.txt)', path: tmp }
     expect(await sweepKeptWorktrees(w.deps)).toEqual({ looked: 1, removed: 0 })
     expect(w.worktrees.removed.at(-1)).toMatchObject({
       branch: 'factory/1-1',
-      path: '/w/factory-1-1',
+      path: tmp,
       issue: 1,
       attempt: 1,
     })
-    const [kept] = await w.db
+    const [row] = await w.db
       .sql`SELECT worktree_kept, worktree_path FROM factory.lead_finalizations WHERE issue_id = ${issue}`
-    expect(kept).toMatchObject({
+    expect(row).toMatchObject({
       worktree_kept: 'it has uncommitted changes to tracked files (a.txt)',
-      worktree_path: '/w/factory-1-1',
+      worktree_path: tmp,
     })
 
     w.worktrees.removal = { removed: true }

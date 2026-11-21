@@ -369,7 +369,7 @@ export interface SeatOrigin {
   text: string
 }
 
-/** A finalized attempt of a closed Issue whose worktree was kept: what `remove` may take another look at. */
+/** A finalized attempt of a closed Issue (within 90 days) with a worktree path: the sweep looks at it again when the directory is still there. */
 export interface KeptWorktree {
   issue: IssueId
   attempt: number
@@ -380,7 +380,7 @@ export interface KeptWorktree {
 }
 
 export interface LeadStore {
-  /** the kept worktrees of closed Issues, newest Issue first */
+  /** the worktree paths of closed Issues' finalized attempts, newest Issue first */
   keptWorktrees(): Promise<KeptWorktree[]>
   /** the signals an Issue was filed from or joined, oldest first, at most `limit` */
   signalsOf(issue: IssueId, limit: number): Promise<BriefSignal[]>

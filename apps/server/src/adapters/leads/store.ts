@@ -427,10 +427,12 @@ export function postgresLeadStore(tx: SQL): LeadStore {
 
     async keptWorktrees() {
       const rows: unknown[] = await tx`
-        SELECT f.issue_id, f.attempt, f.worktree_path, f.worktree_kept, i.repo
+        SELECT f.issue_id, f.attempt, COALESCE(f.worktree_path, a.worktree_path) AS worktree_path, f.worktree_kept, i.repo
         FROM factory.lead_finalizations f
         JOIN factory.issues i ON i.id = f.issue_id
-        WHERE i.state = 'closed' AND f.done_at IS NOT NULL AND f.worktree_path IS NOT NULL
+        JOIN factory.lead_attempts a ON a.issue_id = f.issue_id AND a.attempt = f.attempt
+        WHERE i.state = 'closed' AND f.done_at IS NOT NULL AND f.done_at >= now() - interval '90 days'
+          AND COALESCE(f.worktree_path, a.worktree_path) IS NOT NULL
         ORDER BY f.issue_id DESC, f.attempt DESC`
       return rows.map((raw) => {
         const row = KeptRow.parse(raw)

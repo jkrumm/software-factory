@@ -260,6 +260,12 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     const { repo, branch, shipped } = input
     await gitIn(repo, 'worktree', 'prune')
     const path = await find(repo, branch, input.path)
+    if (path === null && input.path !== null && existsSync(input.path)) {
+      const top = await gitIn(input.path, 'rev-parse', '--show-toplevel')
+      if (top === undefined || real(top) !== real(input.path)) {
+        return { kept: 'git no longer lists this worktree, and its directory is still there', path: input.path }
+      }
+    }
     let scratch: string[] = []
     if (path) {
       await clearBuildOutput(path)
