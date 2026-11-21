@@ -10,7 +10,7 @@ export interface UnloadedPicture {
   reason: string
 }
 
-const INLINE_CODE = /(`+)[^`][\s\S]*?\1(?!`)/g
+const INLINE_CODE = /(`+)[^`\n][^\n]*?\1(?!`)/g
 const MD_IMAGE = /!\[([^\]]*)\]\(\s*(<[^>\n]*>|[^\s)]*)/g
 const HTML_IMG = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi
 
