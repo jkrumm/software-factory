@@ -1,8 +1,10 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { CASE_OUTCOMES } from '@software-factory/contract'
 import type { CaseRead, CaseSubject } from '../kernel/case-file.ts'
 import { scrub } from '../kernel/scrub.ts'
 import { boundedRead } from './bounded.ts'
+import { callOutcome, edgeOutcomes, outcomeOf } from './judgments.ts'
 
 /**
  * The case file's parts the database holds (`docs/architecture.md` §Loops and agw, "The case file"): the Issue as filed, the
@@ -48,6 +50,7 @@ const PrecedentRow = z.object({
   at: z.date().nullable(),
   subject: z.string().nullable(),
   answer: z.string().nullable(),
+  outcome: z.enum(CASE_OUTCOMES),
 })
 
 const IssueIdText = /^issue_[1-9][0-9]*$/
@@ -176,8 +179,51 @@ async function planPart(tx: SQL, issue: string): Promise<string | undefined> {
   return cut(parts.join('\n'), CUT.plan)
 }
 
-/** This judge's earlier answers in the repo, newest first; what became of each is the judge ledger's to read (`unknown`). */
-async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue: string | null) {
+const CallRow = z.object({ call_issue: z.string().nullable(), claimed_at: z.date(), finished_at: z.date() })
+
+/** A queue call's edges are the ones added while it ran, and this long after: the loop applies an answer once it has it. */
+const QUEUE_APPLY_MS = 5 * 60_000
+
+/**
+ * Sets the outcome of triage and queue precedents from the edges the call added (`read/judgments.ts`: the ledger's own
+ * expression): triage's are the edges of its Issue, the queue's are the repo's added while the call ran.
+ */
+async function withEdgeOutcomes(
+  tx: SQL,
+  judge: 'triage' | 'queue',
+  rows: unknown[],
+  repo: string,
+  now: Date,
+): Promise<unknown[]> {
+  const calls = rows.map((raw) => ({ raw: raw as Record<string, unknown>, call: CallRow.parse(raw) }))
+  if (calls.length === 0) return rows
+  const issues =
+    judge === 'triage'
+      ? [...new Set(calls.flatMap(({ call }) => (call.call_issue ? [call.call_issue] : [])))]
+      : undefined
+  const from =
+    judge === 'triage' ? new Date(0) : new Date(Math.min(...calls.map(({ call }) => call.claimed_at.getTime())))
+  const edges = await edgeOutcomes(tx, {
+    source: judge,
+    from,
+    to: now,
+    issues,
+    repo: judge === 'queue' ? repo : undefined,
+  })
+  return calls.map(({ raw, call }) => ({
+    ...raw,
+    outcome: callOutcome(
+      edges.filter((edge) =>
+        judge === 'triage'
+          ? edge.issue === call.call_issue
+          : edge.at >= call.claimed_at && edge.at.getTime() <= call.finished_at.getTime() + QUEUE_APPLY_MS,
+      ),
+    ),
+  }))
+}
+
+/** This judge's earlier answers in the repo, newest first, each with what became of it (`read/judgments.ts`: `unknown` while it is too early to say). */
+async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue: string | null, now: Date) {
   const limit = CUT.precedents
   let rows: unknown[] = []
   switch (subject.judge) {
@@ -188,7 +234,7 @@ async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue
                WHEN j.outcome = 'back' THEN 'sent back to its lead: ' || COALESCE(j.detail, '')
                ELSE j.outcome || ' to the owner: ' || COALESCE(j.detail, '')
                  || CASE WHEN d.settled_by = 'owner' THEN '; the owner answered ' || d.answer ELSE '' END
-          END AS answer
+          END AS answer, ${outcomeOf(tx, 'judge', now)} AS outcome
         FROM factory.decisions d
         JOIN factory.issues i ON i.id = d.issue_id
         JOIN factory.decision_steps j ON j.decision_id = d.id AND j.step = 'judge'
@@ -198,22 +244,27 @@ async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue
       break
     case 'steward':
     case 'triage':
-    case 'queue':
+    case 'queue': {
+      // a steward call is judged by the stall it ended; a triage or queue call by the edges it added (set below)
+      const outcome = subject.judge === 'steward' ? outcomeOf(tx, 'steward', now) : tx`'unknown'`
       rows = await tx`
         SELECT c.finished_at AS at,
           COALESCE((SELECT f.payload->>'title' FROM factory.issue_events f WHERE f.issue_id = c.issue_id AND f.kind = 'filed' AND f.version = 1) || ' (' || c.subject || ')', c.subject) AS subject,
-          c.answer::text AS answer
+          c.answer::text AS answer, ${outcome} AS outcome, c.issue_id AS call_issue, c.claimed_at, c.finished_at
         FROM factory.loop_calls c
         LEFT JOIN factory.issues i ON i.id = c.issue_id
         WHERE c.loop = ${subject.judge} AND c.outcome = 'answered' AND COALESCE(i.repo, c.repo) = ${repo}
           AND COALESCE(c.issue_id, '') <> ${issue ?? '-'}
         ORDER BY c.finished_at DESC LIMIT ${limit}`
+      if (subject.judge !== 'steward') rows = await withEdgeOutcomes(tx, subject.judge, rows, repo, now)
       break
+    }
     case 'screen':
       rows = await tx`
         SELECT s.screened_at AS at, s.title AS subject,
           s.state || CASE WHEN s.dismissed_by = 'judge' THEN ': ' || COALESCE(s.dismissed_reason, '') ELSE '' END
-            || CASE WHEN s.screen_note IS NOT NULL THEN '; ' || s.screen_note ELSE '' END AS answer
+            || CASE WHEN s.screen_note IS NOT NULL THEN '; ' || s.screen_note ELSE '' END AS answer,
+          ${outcomeOf(tx, 'screen', now)} AS outcome
         FROM factory.intake_signals s
         WHERE s.repo = ${repo} AND s.screened_at IS NOT NULL
         ORDER BY s.screened_at DESC LIMIT ${limit}`
@@ -221,7 +272,8 @@ async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue
     case 'errand':
       rows = await tx`
         SELECT COALESCE(e.turned_away_at, e.reached_owner_at, e.raised_at) AS at, e.summary AS subject,
-          CASE WHEN e.turned_away_at IS NOT NULL THEN 'turn_away' ELSE 'pass' END || ': ' || COALESCE(e.screen_note, '') AS answer
+          CASE WHEN e.turned_away_at IS NOT NULL THEN 'turn_away' ELSE 'pass' END || ': ' || COALESCE(e.screen_note, '') AS answer,
+          ${outcomeOf(tx, 'errand', now)} AS outcome
         FROM factory.errands e
         JOIN factory.issues i ON i.id = e.issue_id
         WHERE i.repo = ${repo} AND e.screen_by = 'judge' AND e.id <> ${subject.errand ?? ''}
@@ -229,7 +281,8 @@ async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue
       break
     case 'errandNeeded':
       rows = await tx`
-        SELECT e.done_at AS at, e.summary AS subject, 'not_needed: ' || COALESCE(e.done_note, '') AS answer
+        SELECT e.done_at AS at, e.summary AS subject, 'not_needed: ' || COALESCE(e.done_note, '') AS answer,
+          ${outcomeOf(tx, 'errandNeeded', now)} AS outcome
         FROM factory.errands e
         JOIN factory.issues i ON i.id = e.issue_id
         WHERE i.repo = ${repo} AND e.closed_by = 'judge' AND e.closed_kind = 'not_needed'
@@ -242,7 +295,7 @@ async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue
       at: row.at ? iso(row.at) : '',
       subject: cut(row.subject, CUT.precedent),
       answer: cut(row.answer, CUT.precedent),
-      outcome: 'unknown' as const,
+      outcome: row.outcome,
     }))
     .filter((row) => row.subject !== '' && row.answer !== '')
 }
@@ -251,7 +304,7 @@ async function precedentsPart(tx: SQL, subject: CaseSubject, repo: string, issue
  * The parts of a case the database holds, for the subject a judgment request names. A subject whose Issue or repo the
  * factory does not know reads an empty case; the caller sends the request as it is.
  */
-export function readCaseFile(sql: SQL, subject: CaseSubject, timeoutMs = 10_000): Promise<CaseRead> {
+export function readCaseFile(sql: SQL, subject: CaseSubject, timeoutMs = 10_000, now = new Date()): Promise<CaseRead> {
   return boundedRead(sql, timeoutMs, async (tx) => {
     const issueId = await issueOfSubject(tx, subject)
     const [issueRaw]: unknown[] = issueId
@@ -283,7 +336,7 @@ export function readCaseFile(sql: SQL, subject: CaseSubject, timeoutMs = 10_000)
       found.case.project = cut(JSON.stringify(project.project, null, 1), CUT.project)
     }
     found.case.open = await openPart(tx, repo, issue?.id ?? null)
-    found.case.precedents = await precedentsPart(tx, subject, repo, issue?.id ?? null)
+    found.case.precedents = await precedentsPart(tx, subject, repo, issue?.id ?? null, now)
     return found
   })
 }

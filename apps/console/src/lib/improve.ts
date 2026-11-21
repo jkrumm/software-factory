@@ -1,6 +1,8 @@
 import {
   type Finder,
   type FixCommitsModel,
+  type JudgmentLedger,
+  type JudgmentsModel,
   type FrictionCount,
   type Kpi,
   type KpiKey,
@@ -10,6 +12,7 @@ import {
   type ReviewerKpiRow,
   type ReviewerKpis,
   type SeatKpis,
+  judgeOverTheLine,
   meetsTarget,
 } from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone'
@@ -239,6 +242,23 @@ export function yieldWords(window: LoopYieldWindow): string {
   ]
   return parts.join(', ')
 }
+
+/** A judge's share of answers that did not stand, in whole percent; a dash while none was decided. */
+export const shareWords = (share: number | null): string => (share === null ? '–' : `${Math.round(share * 100)}%`)
+
+/** Whether a judge is over the line the friction loop files a finding at: enough decided answers and too many of them did not stand. */
+export const overTheLine = (
+  ledger: Pick<JudgmentLedger, 'stood' | 'didNotStand' | 'share'>,
+  model: Pick<JudgmentsModel, 'findingShare' | 'findingMinAnswers'>,
+): boolean => judgeOverTheLine(ledger, { share: model.findingShare, minAnswers: model.findingMinAnswers })
+
+/** The line under the ledger: what counts as a finding. */
+export const judgmentsLineWords = (model: Pick<JudgmentsModel, 'findingShare' | 'findingMinAnswers'>): string =>
+  `A judge whose answers did not stand over ${Math.round(model.findingShare * 100)}% of at least ${model.findingMinAnswers} decided ones is filed as a finding.`
+
+/** An answer that did not stand, in one line: what it was about, what was answered and how it came out. */
+export const missWords = (answer: Pick<JudgmentLedger['newest'][number], 'subject' | 'answer' | 'outcome'>): string =>
+  `${answer.subject}: ${answer.answer || 'answered'} (${answer.outcome === 'raised_again' ? 'came back' : 'overruled'})`
 
 /** The model's weeks as the table reads them, the oldest first (the API sends the newest first). */
 export const fixWeeksOldestFirst = (model: Pick<FixCommitsModel, 'weeks'>): FixCommitsModel['weeks'] =>

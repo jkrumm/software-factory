@@ -1,6 +1,12 @@
 import { expect, test } from 'bun:test'
 import { MAX_SIGNALS_PER_PASS } from '../../src/kernel/signal-budget.ts'
-import { type FrictionCount, type SignalRequest, THRESHOLDS } from '@software-factory/contract'
+import {
+  type FrictionCount,
+  type JudgmentLedger,
+  type JudgmentsModel,
+  type SignalRequest,
+  THRESHOLDS,
+} from '@software-factory/contract'
 import {
   isRetired,
   type KpiReading,
@@ -212,6 +218,36 @@ test('a pattern without Issues says so', () => {
 // ---- finders ------------------------------------------------------------------------------------------------------
 
 const DAY = 86_400_000
+const NO_JUDGMENTS: JudgmentsModel = {
+  at: '',
+  days: 30,
+  window: { from: '', to: '' },
+  since: null,
+  findingShare: 0.2,
+  findingMinAnswers: 10,
+  judges: [],
+}
+const ledgerOf = (judge: JudgmentLedger['judge'], stood: number, didNotStand: number): JudgmentLedger => ({
+  judge,
+  label: 'The Judge (Decisions)',
+  rule: 'the owner noted the Issue within 7 days',
+  answers: stood + didNotStand,
+  stood,
+  didNotStand,
+  unknown: 0,
+  share: stood + didNotStand === 0 ? null : didNotStand / (stood + didNotStand),
+  newest: didNotStand
+    ? [
+        {
+          at: '2026-11-15T10:00:00.000Z',
+          issue: 'issue_7',
+          subject: 'Which logger?',
+          answer: 'Use pino',
+          outcome: 'overruled',
+        },
+      ]
+    : [],
+})
 const passNow = new Date('2026-11-20T12:00:00Z')
 
 function frictionWorld(
@@ -225,6 +261,7 @@ function frictionWorld(
     closedFindings?: ClosedFinding[]
     counts?: FrictionCount[]
     kpis?: () => Promise<KpiReading[]>
+    judgments?: () => Promise<JudgmentsModel>
     since?: string | null
   } = {},
 ) {
@@ -260,6 +297,7 @@ function frictionWorld(
       counts: extra.counts ?? [count('lead_gone', 'lead_gone', 9), count('regression', 'regression', 9)],
     }),
     kpis: extra.kpis ?? (async () => []),
+    judgments: extra.judgments ?? (async () => ({ ...NO_JUDGMENTS, at: passNow.toISOString() })),
     evidence: async () => ({}),
     closedSince: async () => extra.closed ?? 0,
     retroFiledAt: async () => extra.retroFiled ?? null,
@@ -543,6 +581,38 @@ test('with avoidable touches above their target for a whole window the pass file
   expect(body?.text).toContain('Largest part: Notes the owner sent to a lead (touch:noted, 0.08)')
   expect(body?.text).toContain('target at most 0.07')
   expect(w.finds.find((f) => f.subject === 'kpi:avoidable_touches')?.class).toBe('kpi')
+})
+
+test('a judge whose answers did not stand over 0.2 of ten decided ones is filed once, with its newest misses', async () => {
+  const w = frictionWorld({}, false, {
+    counts: [],
+    judgments: async () => ({
+      ...NO_JUDGMENTS,
+      judges: [ledgerOf('judge', 7, 3), ledgerOf('steward', 8, 2), ledgerOf('screen', 4, 3)],
+    }),
+  })
+  expect((await frictionPass(w.deps)).ok).toBe(true)
+  // 0.3 over ten files; 0.2 exactly and seven decided answers do not
+  expect(w.records[0]?.filed.map((f) => f.key)).toEqual(['judge:judge'])
+  const body = w.bodies.find((b) => b.title !== RETRO_TITLE)
+  expect(body?.title).toContain('The Judge (Decisions)')
+  expect(body?.text).toContain('10 decided: 7 stood, 3 did not (30%)')
+  expect(body?.text).toContain('Newest that did not (overruled, 2026-11-15, issue_7): Which logger? -> Use pino')
+  expect(body?.text).toContain('factory read judgments --days 30')
+  expect(w.finds.find((f) => f.subject === 'judge:judge')?.class).toBeDefined()
+})
+
+test('a failed ledger read is named while the counts still file', async () => {
+  const w = frictionWorld({}, false, {
+    judgments: async () => {
+      throw new Error('statement timeout')
+    },
+  })
+  expect((await frictionPass(w.deps)).ok).toBe(true)
+  expect(w.records[0]?.filed.map((f) => f.key)).toEqual(['lead_gone', 'regression'])
+  expect(w.records[0]?.failed).toEqual([
+    { key: 'judge', reason: 'the judge ledger could not be read: Error: statement timeout' },
+  ])
 })
 
 test('a window the epoch cut judges no KPI, and a failed KPI read is named while the counts still file', async () => {

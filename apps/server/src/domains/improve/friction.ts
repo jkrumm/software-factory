@@ -1,5 +1,7 @@
 import {
   type FrictionCount,
+  type JudgmentLedger,
+  type JudgmentsModel,
   type FrictionRule,
   type JudgedFrictionGroup,
   type Kpi,
@@ -9,6 +11,7 @@ import {
   targetPhrase,
   THRESHOLDS,
 } from '@software-factory/contract'
+import { isFinding } from '../../kernel/judgments.ts'
 import { MAX_SIGNALS_PER_PASS } from '../../kernel/signal-budget.ts'
 
 /** A pass reads this many days of counts: the thresholds below are a week's. */
@@ -59,10 +62,10 @@ export const isRetired = (key: string): boolean => RETIRED.some((pattern) => pat
 const ruleOf = (key: string, group: Judged): Rule => BY_KEY[key] ?? GROUP_RULES[group]
 
 /** Groups whose events map to Issues; the others (an undelivered note, a quarantined signal) carry no Issue refs. */
-const WITHOUT_ISSUES = new Set<PatternGroup>(['undelivered_note', 'signal', 'kpi'])
+const WITHOUT_ISSUES = new Set<PatternGroup>(['undelivered_note', 'signal', 'kpi', 'judge'])
 
-/** A friction count's group, or `kpi`: one of the seven KPIs off its target. */
-export type PatternGroup = FrictionCount['group'] | 'kpi'
+/** A friction count's group, `kpi` (one of the seven KPIs off its target) or `judge` (a judge whose answers did not stand). */
+export type PatternGroup = FrictionCount['group'] | 'kpi' | 'judge'
 
 export interface Pattern {
   key: string
@@ -76,6 +79,8 @@ export interface Pattern {
   why: string
   /** a KPI finding's figure: the KPI as read, its target and its largest part; absent on a count */
   kpi?: { value: number; unit: Kpi['unit']; n: number; target: KpiTargetValue; largest: KpiPart | null }
+  /** a judge finding's ledger: its counts and the newest answers that did not stand; absent on a count and a KPI */
+  judge?: JudgmentLedger
 }
 
 /** `refusal:total` and the like add up the detail keys beside them; filing them too would double every finding. */
@@ -149,6 +154,43 @@ export function kpisOffTarget(readings: readonly KpiReading[], window: { whole: 
   return over
 }
 
+/**
+ * The judges whose answers did not stand over `THRESHOLDS.judges.share` of the decided ones, from at least
+ * `THRESHOLDS.judges.minAnswers` of them, as patterns keyed `judge:<judge>`. The count is the share (lower is better, the
+ * figure the ledger judges the finding's Issue by once it closes).
+ */
+export function judgesOverruled(model: Pick<JudgmentsModel, 'judges'>): Pattern[] {
+  return model.judges.filter(isFinding).map((ledger) => ({
+    key: `judge:${ledger.judge}`,
+    group: 'judge' as const,
+    label: `${ledger.label}: ${Math.round((ledger.share ?? 0) * 100)}% of its answers did not stand`,
+    count: ledger.share ?? 0,
+    perIssue: null,
+    threshold: THRESHOLDS.judges.minAnswers,
+    rate: THRESHOLDS.judges.share,
+    why: 'a judge whose answers are overruled or come back is wrong more often than the line the owner set: its input or its prompt is missing something',
+    judge: ledger,
+  }))
+}
+
+/** A judge finding's text: its counts, the rule that says an answer did not stand, the newest that did not, and how to look again. */
+function judgeSignalText(pattern: Pattern, ledger: JudgmentLedger, facts: PassFacts, last: string | null): string {
+  const decided = ledger.stood + ledger.didNotStand
+  return [
+    `Pattern: ${pattern.label} (${pattern.key})`,
+    `Window: ${facts.from} to ${facts.to} (${THRESHOLDS.judges.windowDays} days of answers)`,
+    `Answers: ${ledger.answers}, of which ${decided} decided: ${ledger.stood} stood, ${ledger.didNotStand} did not (${((ledger.share ?? 0) * 100).toFixed(0)}%), ${ledger.unknown} too early to say`,
+    `Did not stand when: ${ledger.rule}`,
+    ...ledger.newest.map(
+      (a) =>
+        `Newest that did not (${a.outcome}, ${a.at.slice(0, 10)}${a.issue ? `, ${a.issue}` : ''}): ${a.subject} -> ${a.answer}`,
+    ),
+    ...(last === null ? [] : [last]),
+    `Threshold: more than ${THRESHOLDS.judges.share * 100}% of the decided answers over at least ${THRESHOLDS.judges.minAnswers} (THRESHOLDS.judges). ${pattern.why}.`,
+    `Reproduce: factory read judgments --days ${THRESHOLDS.judges.windowDays}`,
+  ].join('\n')
+}
+
 /** A KPI value in words, in its unit. */
 function valueWords(unit: Kpi['unit'], value: number): string {
   if (unit === 'share') return `${(value * 100).toFixed(1)}%`
@@ -193,6 +235,7 @@ export function signalText(
   last: string | null = null,
 ): string {
   if (pattern.kpi) return kpiSignalText(pattern, pattern.kpi, facts, last)
+  if (pattern.judge) return judgeSignalText(pattern, pattern.judge, facts, last)
   const evidence = !hasIssueRefs(pattern)
     ? 'Evidence: this count has no Issue behind it (it counts notes or quarantined signals, not Issue events), so there are no refs.'
     : refs.length === 0

@@ -1,4 +1,4 @@
-import type { FrictionModel, SignalRequest } from '@software-factory/contract'
+import type { FrictionModel, JudgmentsModel, SignalRequest } from '@software-factory/contract'
 import {
   RETRO_EVERY_MS,
   RETRO_TITLE,
@@ -10,6 +10,7 @@ import {
   clockTrigger,
   FRICTION_WINDOW_DAYS,
   hasIssueRefs,
+  judgesOverruled,
   kpiFigure,
   type KpiReading,
   kpisOffTarget,
@@ -53,6 +54,8 @@ export interface FrictionDeps {
   friction(now: Date): Promise<FrictionModel>
   /** the seven KPIs over the pass's window (the one `friction` read), with their parts */
   kpis(window: { from: Date; to: Date }): Promise<KpiReading[]>
+  /** what became of each judge's answers over the last `THRESHOLDS.judges.windowDays` days ending at `now` (`read/judgments.ts`) */
+  judgments(now: Date): Promise<JudgmentsModel>
   /** the most recent Issue refs behind the counts of these keys, for the same window */
   evidence(now: Date, keys: string[]): Promise<Record<string, string[]>>
   /** Issues closed from `since` to `now`: what the volume trigger counts */
@@ -103,6 +106,8 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
   let over: ReturnType<typeof withinBudget>
   let kpis: KpiReading[] = []
   let kpiFailure: string | null = null
+  let judgments: JudgmentsModel | null = null
+  let judgeFailure: string | null = null
   const held: Pattern[] = []
   try {
     model = await deps.friction(now)
@@ -114,7 +119,16 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     }
     // A KPI off its target leads: it is the figure the owner set a line for. A muted finder is named before the budget
     // counts: it does not use up a slot.
-    const found = [...kpisOffTarget(kpis, { whole: model.since === null }), ...patternsOver(model.counts, model.closed)]
+    try {
+      judgments = await deps.judgments(now)
+    } catch (error) {
+      judgeFailure = `the judge ledger could not be read: ${String(error).slice(0, 250)}`
+    }
+    const found = [
+      ...kpisOffTarget(kpis, { whole: model.since === null }),
+      ...(judgments ? judgesOverruled(judgments) : []),
+      ...patternsOver(model.counts, model.closed),
+    ]
     const allowed = found.filter((pattern) => {
       if (gate.allows(pattern.key)) return true
       held.push(pattern)
@@ -140,9 +154,12 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
   const counted = new Map(model.counts.map((count) => [count.key, count.count]))
   for (const kpi of kpis)
     if (kpi.measured && kpi.value !== null) counted.set(`kpi:${kpi.key}`, kpiFigure(kpi.target, kpi.value))
+  for (const ledger of judgments?.judges ?? [])
+    if (ledger.share !== null) counted.set(`judge:${ledger.judge}`, ledger.share)
   const readNow = (key: string): number | null | undefined => {
     const figure = counted.get(key)
     if (figure !== undefined) return figure
+    if (key.startsWith('judge:')) return judgeFailure === null ? null : undefined
     if (!key.startsWith('kpi:')) return 0
     return kpiFailure === null ? null : undefined
   }
@@ -157,7 +174,10 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     issues: model.issues,
     filed: [],
     overBudget: [...over.overBudget, ...held].map(({ key, count }) => ({ key, count })),
-    failed: kpiFailure === null ? [] : [{ key: 'kpi', reason: kpiFailure }],
+    failed: [
+      ...(kpiFailure === null ? [] : [{ key: 'kpi', reason: kpiFailure }]),
+      ...(judgeFailure === null ? [] : [{ key: 'judge', reason: judgeFailure }]),
+    ],
   }
   for (const pattern of over.file)
     await fileOne(deps, { gate, ledger, now }, pattern, facts, evidence[pattern.key] ?? [], record)

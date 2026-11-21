@@ -19,6 +19,7 @@ import {
   FlowModel,
   FlowTrendSeries,
   FindersModel,
+  JudgmentsModel,
   LoopYieldModel,
   FixCommitsModel,
   FrictionModel,
@@ -167,6 +168,9 @@ export const fetchThroughput = (hours: number, signal?: AbortSignal) =>
 export const fetchFriction = (days: number, signal?: AbortSignal) =>
   getJson(`/v1/friction?days=${days}`, FrictionModel, signal)
 export const fetchFinders = (signal?: AbortSignal) => getJson('/v1/finders', FindersModel, signal)
+/** What became of each judge's answers over the last `days` days. */
+export const fetchJudgments = (days: number, signal?: AbortSignal) =>
+  getJson(`/v1/judgments?days=${days}`, JudgmentsModel, signal)
 export const fetchLoopYield = (signal?: AbortSignal) => getJson('/v1/loop-yield', LoopYieldModel, signal)
 export const fetchFixCommits = (signal?: AbortSignal) => getJson('/v1/fix-commits', FixCommitsModel, signal)
 /** Every account as the picker judges it, with its allowance and leads. One the registry switches off is in the list (`enabled: false`): the strip leaves it out, the Accounts screen names it. */

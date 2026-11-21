@@ -5,6 +5,7 @@ import type {
   Kpi,
   KpiKey,
   KpiModel,
+  JudgmentsModel,
   LoopYieldModel,
   SeatsModel,
 } from '@software-factory/contract'
@@ -31,6 +32,10 @@ import {
   finderIsQuiet,
   finderWords,
   closeWords,
+  judgmentsLineWords,
+  missWords,
+  overTheLine,
+  shareWords,
   yieldWords,
   comparisonWords,
   DEFAULT_WINDOW,
@@ -71,7 +76,7 @@ import {
 } from '@/lib/improve'
 import { ImproveSkeleton } from '@/components/skeletons'
 import { useScreen, useScreenNote } from '@/lib/screen'
-import { useFinders, useFixCommits, useFriction, useKpis, useLoopYield, useSeats } from '@/lib/queries'
+import { useFinders, useFixCommits, useFriction, useJudgments, useKpis, useLoopYield, useSeats } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/improve')({
@@ -408,6 +413,52 @@ function FrictionSection({ model, pending }: { model: FrictionModel | undefined;
   )
 }
 
+/** What became of each judge's answers: counts by outcome, the share that did not stand and the newest that did not. */
+function JudgmentsSection({ model }: { model: JudgmentsModel | undefined }) {
+  return (
+    <div data-shot="improve-judgments">
+      <Section title="Judges checked against what happened" aside={model ? judgmentsLineWords(model) : undefined}>
+        {model === undefined ? (
+          <p className="text-sm text-muted-foreground">Loading</p>
+        ) : (
+          <PanelTable
+            caption="What became of each judge's answers"
+            heads={['Judge', 'Answers', 'Stood', 'Too early to say', 'Did not stand', 'Share']}
+          >
+            {model.judges.flatMap((ledger) => {
+              const over = overTheLine(ledger, model)
+              return [
+                <tr key={ledger.judge} className="border-t" data-judge={ledger.judge}>
+                  <th scope="row" className={ROW_HEAD}>
+                    {ledger.label}
+                  </th>
+                  <td className={CELL}>{ledger.answers}</td>
+                  <td className={CELL}>{ledger.stood}</td>
+                  <td className={CELL}>{ledger.unknown}</td>
+                  <td className={CELL}>{ledger.didNotStand}</td>
+                  <td
+                    className={cn(CELL, over && cn('font-medium', TONE_TEXT.bad))}
+                    data-tone={over ? 'bad' : 'neutral'}
+                  >
+                    {shareWords(ledger.share)}
+                  </td>
+                </tr>,
+                ...ledger.newest.map((answer) => (
+                  <tr key={`${ledger.judge}/${answer.at}/${answer.subject}`} className="text-muted-foreground">
+                    <td colSpan={6} className="px-4 pb-2 pl-8 text-xs">
+                      {answer.at.slice(0, 10)} · {missWords(answer)}
+                    </td>
+                  </tr>
+                )),
+              ]
+            })}
+          </PanelTable>
+        )}
+      </Section>
+    </div>
+  )
+}
+
 /** What each loop that files signals led to: the Issues its signals opened and how those ended, the pace of a close, the kinds it files most. */
 function LoopYieldSection({ model }: { model: LoopYieldModel | undefined }) {
   return (
@@ -646,6 +697,7 @@ function Improve() {
   const note = useScreenNote(screen, kpis.error)
   const friction = useFriction(days)
   const finders = useFinders()
+  const judgments = useJudgments(days)
   const yields = useLoopYield()
   const fixes = useFixCommits()
   const seats = useSeats(days)
@@ -678,6 +730,7 @@ function Improve() {
           <FixBand model={fixes.data} pending={fixes.isPending} />
           <FrictionSection model={friction.data} pending={friction.isPending} />
           <LoopYieldSection model={yields.data} />
+          <JudgmentsSection model={judgments.data} />
           <FindersSection model={finders.data} />
         </div>
       </div>

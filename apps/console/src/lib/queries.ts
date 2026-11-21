@@ -15,6 +15,7 @@ import {
   fetchFlow,
   fetchFlowTrend,
   fetchFinders,
+  fetchJudgments,
   fetchLoopYield,
   fetchFixCommits,
   fetchFriction,
@@ -296,6 +297,16 @@ export function useFinders() {
   return useQuery({
     queryKey: ['finders'],
     queryFn: ({ signal }) => fetchFinders(signal),
+    refetchInterval: pollEvery(live),
+  })
+}
+
+/** What became of each judge's answers over the last `days` days. */
+export function useJudgments(days: number) {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['judgments', days],
+    queryFn: ({ signal }) => fetchJudgments(days, signal),
     refetchInterval: pollEvery(live),
   })
 }
