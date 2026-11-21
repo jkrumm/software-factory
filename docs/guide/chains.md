@@ -99,7 +99,7 @@ The plan merge driver is a git merge driver that keeps `docs/plan.yaml` conflict
 
 ```text
 # docs/plan.yaml is an append-only aggregator: leads add rows at the end, so two branches always touch the same last lines.
-# The driver (`git -c merge.plan.driver='factory plan merge %O %A %B' rebase …`, docs/plan.md) keeps master's file and appends the
+# The driver (`git -c merge.plan.driver='factory plan merge %O %A %B' rebase …`, docs/operations.md "Rebasing a plan file") keeps master's file and appends the
 # branch's rows; git's own `union` drops the lines two rows share. Without the -c, git merges by line as for any file.
 docs/plan.yaml merge=plan
 ```
@@ -158,7 +158,7 @@ This guide's Spec shows a wait behind another repo's Issue. On 2026-11-17 the ow
 
 **Read more:**
 
-- [The plan file](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L1-L99) and [Changing an edge](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L147-L158) in `docs/plan.md`, and [Replan](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L221-L237) in `docs/architecture.md`.
+- [The plan file](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L1-L99) and [Changing an edge](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L147-L158) in `docs/plan.md`, and [Replan](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L218-L236) in `docs/architecture.md`.
 - [Inferred edges and edge readiness](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#loops-and-agw) in `docs/architecture.md`.
 - [Defer](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L71) in `docs/language.md`.
 
