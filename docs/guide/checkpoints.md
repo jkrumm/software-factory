@@ -45,9 +45,9 @@ The wait was 24 hours. The default is not the recommendation: the lead recommend
 
 **Example files:**
 
-- [`decision.ts` L62-L146](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L62-L146): `readDecisionForm`, every required field and the reversible default.
+- [`decision.ts` L233-L350](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L233-L350): `readDecisionForm`, every required field and the reversible default.
 - [`decision.ts` L153-L172](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L153-L172): the labels that are no choice, and the refusal that points to an Errand.
-- [`decision.ts` L176-L180](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L176-L180): `defaultDue`, when the default is due.
+- [`decision.ts` L395-L400](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L395-L400): `defaultDue`, when the default is due.
 
 ## The Judge
 
@@ -92,8 +92,8 @@ Across the 300 newest closed Issues of this repo (2026-11-17), 24 Decisions were
 **Example files:**
 
 - [`decision.ts` L9-L17](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L9-L17): the steps (`policy` is history) and who may settle.
-- [`decision.ts` L210-L220](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L210-L220): `guardVerdict`, the factory's checks on an answer.
-- [`decision.ts` L234-L281](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L234-L281): `JudgeInput`, what the workflow is given.
+- [`decision.ts` L426-L440](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L426-L440): `guardVerdict`, the factory's checks on an answer.
+- [`decision.ts` L450-L521](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L450-L521): `JudgeInput`, what the workflow is given.
 
 ## Specs and artifacts
 
@@ -226,7 +226,7 @@ An avoidable touch is a touch the factory should have settled. A verdict on a Co
 
 - [`spec-screen.ts` L6-L10](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L6-L10): why the screen exists, and why it is rules only.
 - [`spec-screen.ts` L93-L142](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L93-L142): `specPathOf`, where a Spec goes: the owner, a settle by rule, or the lead's plan.
-- [`checkpoints.ts` L694-L739](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints.ts#L694-L739): `planRefused` and `recordedAsPlan`, how a lead's Spec is handed over without a wait.
+- [`checkpoints.ts` L748-L793](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints.ts#L748-L793): `planRefused` and `recordedAsPlan`, how a lead's Spec is handed over without a wait.
 
 **Read more:**
 

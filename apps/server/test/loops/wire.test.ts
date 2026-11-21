@@ -108,14 +108,12 @@ test('the Judge’s input as the checkpoints build it is the shape the workflow 
       artifact: null,
       noAnswer: { consequence: 'waits', default: 'pino', waitMinutes: 30 },
     },
-    facts: 'The owner said: logging stays on stdout.',
     spec: '## Build\n\nRequest logging.',
     precedents: [precedent],
   })
   expect(JudgeInputWire.parse(input)).toEqual(input)
   expect(input).toMatchObject({
     class: 'direction',
-    facts: expect.stringContaining('stdout'),
     spec: expect.stringContaining('Build'),
   })
   expect(input.repo).toBe('example-app')
