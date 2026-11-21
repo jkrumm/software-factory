@@ -162,7 +162,7 @@ const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
 A test slot is a lease on the host's test capacity that `factory slot run` takes for a `make check`, a test or an e2e step.
 
 - **Lease and poll.** A holder renews within 30 seconds or loses the slot. A waiter asks again within 15 seconds or drops out of the line.
-- **Base slots start on memory alone.** The first two slots start whatever the load, when the step's learned peak fits the free memory or is not known yet. A slot beyond them also needs the load under its ceiling, a known peak and room in the cores. While swap in use is growing, a second step does not start at all.
+- **Base slots start on memory alone, until the load tripwire trips.** The first two slots start whatever one peak of the load, when the step's learned peak fits the free memory or is not known yet. A slot beyond them also needs the load under its ceiling, a known peak and room in the cores. While swap in use is growing, or while the load has been over its ceiling for five minutes on end, a second step does not start at all: the first step always does, so the line moves one at a time.
 - **A step is sized by its past.** The grant reads the learned peak of the step by name. A step with none gets a guess from the same project, and says so in its wait line.
 - **The line is not first come, first served.** Slots go in the order of asking plus the step's learned run time, so a short step passes a long one. A waiter passed for ten minutes has its memory reserved: a step passes it only when it fits now and is learned to end before the memory is free for the waiter (the running steps' learned remaining runtime), or when the head still fits beside the step (see "A capacity Issue").
 

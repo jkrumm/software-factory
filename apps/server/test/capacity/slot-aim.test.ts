@@ -121,6 +121,18 @@ describe('the aim pass and the grant', () => {
       reason: string
     }[]
 
+  test('the shadow row records the minute the load tripwire was tripped', async () => {
+    for (let m = 0; m <= 6; m++) {
+      await sample(m, { load: m < 5 ? 40 : 5 })
+      value(await slotAimPass(aimDeps()))
+    }
+    const rows = (await world.db.sql`SELECT load_tripped FROM factory.slot_shadow ORDER BY at`) as {
+      load_tripped: boolean
+    }[]
+    // five minute samples over the ceiling trip it at minute 4; a reading back under the ceiling clears it at once
+    expect(rows.map((r) => r.load_tripped)).toEqual([false, false, false, false, true, false, false])
+  })
+
   test('six quiet minutes with a waiter in line add a slot, one shadow row a minute beside the live base', async () => {
     for (let m = 0; m <= 6; m++) {
       await sample(m)
@@ -260,8 +272,9 @@ describe('the aim pass and the grant', () => {
     // too few minute samples for the tripwire: the instant against the load ceiling
     expect((await wait(40)).why).toContain('load 40 is over 36 (the load ceiling, too few minute samples')
     // five minutes on end over the ceiling: the tripwire
+    // (it holds a base slot too: one step at a time, so the second waits as the third does)
     expect((await wait(40, [41, 40, 39, 38, 37])).why).toContain(
-      'load over 36 in each of the last 5 minutes (37, 38, 39, 40, 41) for a slot beyond the first 2',
+      'load over 36 in each of the last 5 minutes (37, 38, 39, 40, 41): one step at a time until it settles',
     )
     // one peak among quiet minutes trips nothing: the slot beyond the base is held back by something else, not the load
     const peak = await wait(60, [10, 10, 10, 10, 60])

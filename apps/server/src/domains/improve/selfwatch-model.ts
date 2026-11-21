@@ -154,6 +154,8 @@ export interface SlotMinute {
   aimSlots: number
   holders: number
   waiters: number
+  /** the load tripwire was tripped that minute: it holds a second step by design, so an empty base slot then is no finding */
+  loadTripped: boolean
 }
 
 /** What `GET /health` also says: the server's own routes over the last window, measured in the process. */
