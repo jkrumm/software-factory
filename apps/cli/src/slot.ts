@@ -458,7 +458,7 @@ async function slotRun(input: { name?: string; command: string[] }, io: Io): Pro
       if (junitDir !== undefined) await rm(junitDir, { recursive: true, force: true }).catch(() => undefined)
     }
   }
-  // Where the command leaves its JUnit files (the repos' check targets write them there: docs/plan.md "Check tiers").
+  // Where the command leaves its JUnit files (the repos' check targets write them there: docs/project.md "Check tiers").
   let junitDir: string | undefined
   try {
     const take = () =>

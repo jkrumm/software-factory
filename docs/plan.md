@@ -71,7 +71,7 @@ a broken plan.
 | `facts` | What the filed Issue's lead reads, an object of the same shape as `factory issue schema` prints: `why`, `what`, `change`, `acceptance`, and any other key you add. Required unless the row adopts an Issue |
 | `kind` | `feature` (the default), `bug`, `chore`, `docs` or `incident` |
 | `seat` | The tier and effort the Issue's lead starts on: `{tier: opus, effort: high}` or `{role: lead}`. Default: the light rule, else the role table's `lead` row. See Choosing the seat |
-| `lane` | A resource inside the repo (`apple`): lowercase letters, digits, dashes. The target project's `project.yaml` `lanes:` caps how many leads of a lane run at once. See Lanes |
+| `lane` | A resource inside the repo (`apple`): lowercase letters, digits, dashes. The target project's `project.yaml` `lanes:` caps how many leads of a lane run at once. See `docs/project.md` "Lanes" |
 | `prio` | The queue priority its Issue is filed with, an integer from -1000 to 1000 (default 0): higher runs first among the queued Issues, then the lower Issue number. It is `factory issue prio` applied at filing (recorded once, actor `plan`), so rows that become filable together run by `prio`, then file order; a later `factory issue prio` on the Issue overrides it. Not allowed on an adopted row (`issue`) |
 | `checkpoint` | `gate`: an owner gate: the same Spec is owed, but only the owner's own verdict ends the wait (no default after 24 hours, no Spec screen settle), so rows `after` it wait for him. `spec`: the row's lead owes a one-page Spec before it builds (a new public surface, a data model or a migration of meaning, a dependency of weight, an architecture or look-and-feel choice later Issues build on, a UI screen the owner has not seen). Its ship is refused until a Spec is submitted; with no verdict in 24 hours the lead goes on with the defaults the Spec names |
 | `repo` | The project the Issue is filed in; default: the project whose plan this is. A row may target another repo |
@@ -128,81 +128,10 @@ struggles there is moved up as the light rule's seat is (a second stall, a secon
 `--out-of-depth`), and the next lead starts on the `lead` row. `factory issue show` reports the asked-for `seat` (null for the default) and `ranOn`, the tier and effort
 the latest lead started on.
 
-## Lanes
+## Lanes and check tiers
 
-`leads: N` caps the leads in a repo; a repo that states none has no cap beyond the host (64, the bound), because memory fit,
-load and the accounts already decide what runs. State `leads` only for a shared resource the repo's merge window or its
-files cannot serve in parallel (one merge at a time, rebase conflicts on a ratchet file), with the reason in a comment
-beside it (NL32). Work inside one repo is also not equally heavy: server rows are cheap, an Apple row
-runs xcodebuild and a simulator on the one mini. Give each kind of row a `lane` and cap the heavy lane in the repo's
-`project.yaml` (a lane's `leads`, like the repo's, is at most 64; a larger value is clamped, with a warning in `factory project show`):
-
-```yaml
-leads: 2
-lanes:
-  apple: 1
-```
-
-With that file, two rows in lane `apple` and one without a lane run as: one apple Issue and the lane-less Issue start
-side by side, and the second apple Issue stays queued until the first closes. The queue order (`factory queue order`) and
-`factory issue show` say so, the lane before the repo's claims: `lane apple is full (1 of 1): Issue 643`. `factory issue new --lane apple` sets the lane on a
-hand-filed Issue; `factory project show` lists the project's `lanes` (leads and memory) and `factory issue show` the Issue's `lane`.
-
-- **Scope is the repo.** A lane's cap counts the leads of that lane in the one repo whose `project.yaml` declares it. The
-  host-wide Apple toolchain is already serialised by the shared Apple slot (`factory slot`); a lane keeps the second
-  Apple lead from building cold in its own worktree while it queues for that slot. Another repo's Apple leads are not
-  counted, so each repo states its own cap; a host-wide lane would couple one repo's file to another repo's admission.
-- **A heavy lane reserves host memory.** `lanes: {apple: {leads: 1, memory: 18GiB}}` (`MiB` or `GiB`) makes every running
-  lead of the lane count 18 GiB against the host's memory ceiling: admission adds the reserved share of RAM, for the
-  running leads of every repo and for the candidate's own lane, to the swap share before it compares with the ceiling,
-  and a refusal says so (`plus 36 GiB reserved by lanes (112.5% of RAM)`, kind `memory`). The gate only stops *new*
-  leads, and a running lead's heavy step (a booted simulator, one run took about 18 GiB) shows in the reading only after
-  it started, so the reservation covers the lead that has just been admitted. It is held for as long as the lead holds
-  its claim, so it can count a step twice (reserved and already resident); that errs on the side of waiting. Without a
-  RAM reading nothing is reserved and the pass notes it. A repo with three or more sampled attempts is admitted by what its leads were seen to take
-  instead (`docs/architecture.md` "Capacity and leads"): the lane's `memory` is then dropped for it and stays the prior
-  for a repo with fewer; the lane's `leads` cap stays.
-- **An undeclared lane is unlimited** within `leads`. A row naming a lane the project does not declare is a plan
-  **warning**, not a broken plan; the lane then limits nothing (a typo is visible in `factory project show`).
-- **What counts as running:** a lead holding its claim, and a resumed lead working without one. A lead waiting on a
-  Decision, a review, an Errand, a timer, a dependency or the owner's pause has given its claim back and its lane place with it, so another
-  lead of the lane may start meanwhile; when the wait ends the lead takes its lane place back before it is told, and
-  waits (like for a repo claim) while the lane is full.
-- **A fix is never held by a lane** (an `incident` Issue has its own place beyond `leads`; production is red).
-- A lane is a cap, not an order: it never replaces `after`, and a row that needs what another shipped still says `after`.
-- The lane is fixed when the Issue is filed. An adopted row (`issue`) has no `lane`.
-
-## Check tiers
-
-The mini is the bottleneck for parallel leads and most of its load is checks: every lead ran the whole `make check`
-locally, then `merge-guard` demanded the same suite green in CI on the exact head. `checks:` in `project.yaml` splits the
-gate:
-
-```yaml
-checks: { fast: make check-fast, full: make check, ci: true }
-```
-
-- **`fast`** (required): what a lead runs locally before each push and after each change it authors (format, lint,
-  types, scans, the unit tests of what the branch changed). **`full`** (default `make check`): the complete gate.
-  **`ci: true`**: CI runs `full` on the pull request head, so the lead relies on that run; hosted runners for a public
-  repo, `runs-on: [self-hosted, vps]` for a private one (never the self-hosted runner for a public repo), sharded with a
-  matrix where the suite allows. Both commands are `make <target>`: the brief quotes them as data.
-- **The brief** (`domains/leads/brief.ts`) gets a `## Checks in this repo` section for such a project: run `fast`
-  where the standing orders say `make check`; with `ci: true` leave the full gate to CI (`merge-guard` still demands
-  its green run on the exact head); rerun one heavy suite locally only to reproduce a CI failure, inside a slot. A
-  project without `checks:` gets no section and keeps one `make check`.
-- **Slots.** The slot name is the step (`software-factory check-fast` beside `software-factory check`), so the ledger
-  learns the fast tier's peak apart from the whole gate's.
-- **Test results.** `factory slot run` sets `FACTORY_JUNIT_DIR` (a fresh directory) for the command and posts the `*.xml` JUnit
-  files left there beside the step's cost: that is how the flake rate and the failed-run minutes per project are measured
-  (`factory read throughput`, `tests`). A repo's check targets write JUnit only when the variable is set, one file per
-  runner, so CI and a bare local run write none: Bun `--reporter=junit --reporter-outfile=$FACTORY_JUNIT_DIR/<name>.xml`, Playwright
-  the `junit` reporter with `outputFile` built from `process.env.FACTORY_JUNIT_DIR`, pytest `--junitxml=$FACTORY_JUNIT_DIR/<name>.xml`.
-  Make expands the variable before the slot starts, so put the flags on a target that runs inside the `check` slot, or run it as
-  `factory slot run -- make <target>`. Another project's Makefile is its own repo's to adopt.
-- **Budgets.** `budgets: { fast: 90s, peak: 2GiB, fail: 10% }` (each key optional) bounds what a project's checks may cost: `fast` the median of a day's fast-tier runs, `peak` the largest peak memory of one step, `fail` the share of a day's steps that exited non-zero (a red `check-fast` left out; over on two days in a row). A breach is a signal on the project's repo the day it happens and again only after the figure was back inside (`docs/architecture.md`, `selfwatch`); `peak` is also the target of the throughput loop's memory finding.
-- `factory project show` prints `checks` (`null` for none). Another project's `checks:` is its own repo's to adopt: the
-  Makefile target and the CI workflow it names are that repo's.
+A row's `lane` names a resource that its project caps, and `checks:` and `budgets:` split and bound the gate. Both are
+`project.yaml` keys: `docs/project.md` "Lanes" and "Check tiers".
 
 ## Adopting an Issue
 
@@ -230,34 +159,13 @@ state):
 The Issue's edges are not in `factory issue show`; `factory read chain --format plain` lists what blocks each Issue
 (`blocking.issue_<n>`).
 
-## Rebasing a plan file
-
-Leads append rows to `docs/plan.yaml` faster than a check and a CI run take, so a plain rebase conflicts on the last
-lines every time. The repo declares the file an append-only aggregator in `.gitattributes`:
-
-```
-docs/plan.yaml merge=plan
-```
-
-and the rebase names the driver on its command line (git keeps no driver in a tracked file):
-
-```
-git -c merge.plan.driver='factory plan merge %O %A %B' rebase origin/master && factory plan check
-```
-
-`factory plan merge <base> <ours> <theirs>` keeps master's file and appends what the branch added at the end of it. A
-side that also changed existing lines is no append: the driver leaves git's line merge with its conflict markers and
-exits 1, so two edits of one row stay a conflict to read. The resolution ends no merge window and owes no local
-`make check`; `factory plan check` after it refuses a duplicate row key. Git's own `merge=union` is not used: it drops
-the lines two appended rows share and leaves a row corrupt.
-
 ## Splitting a plan into rows
 
 - One row is one change that ships alone: its own lead, review, deploy and verify. If two halves could not be reverted
   or deployed apart, they are one row.
 - Rows that are independent carry no `after`. Add `after` only where the second row needs what the first one shipped,
   never to put independent rows in a line: the server runs them side by side when the repo's `leads` allow it. To keep
-  heavy rows (Apple builds) from running together while cheap rows run alongside, give them a `lane` (see Lanes).
+  heavy rows (Apple builds) from running together while cheap rows run alongside, give them a `lane` (`docs/project.md` "Lanes").
 - Write the gate in the row: the row's `acceptance` states the check that proves it done (a command, a test, an
   observable fact), because the lead ships by stating each line met or not met.
 - The `facts` carry everything the lead needs. It cannot see this plan or the session that wrote it: exact paths, scope
@@ -309,32 +217,10 @@ The server reads the default branch: a plan on a feature branch, or not yet push
 is listed under `broken` in the answer on every sync until it is fixed, and named on stderr (`broken: <project> <file>:
 <message>`); an empty `broken` means every file parsed.
 
-## Replan
+## Rebasing and replans
 
-A Replan is an Issue (`Replan: <project>`) whose lead rereads the plan against the open and recently closed Issues and
-proposes changes as a Spec: new, changed or dropped rows, `after` edges to add or remove, Issues to cancel or re-file.
-Every non-obvious choice is a Decision raised before the Spec is submitted. The owner files it with
-`factory planning replan <project> [--ask "..."]`; the planning pass files one when a timed wait of
-`FACTORY_LONG_WAIT_MS` or more has Issues behind it, and when a row with `after_needs: shipped` is held behind a
-dropped or cancelled row (trigger `held`: its note names each held row and the Issue holding it; one Replan covers
-every held row of the project, and a hold that was answered with "no plan change needed" files no second one). It also
-files one when a head has waited on the owner for two hours (an open Decision, a Spec under his review such as an owner
-gate's, an Errand) with open Issues or unfiled rows behind it: trigger `stalled`, once per head and wait, its note naming
-what the owner is asked and every Issue and row behind the head. A gate holds what needs its answer, and that Replan frees
-the rest: per direct dependent its Spec says in one line whether it needs the answer or the head's output, and a
-dependent is freed only when its work stands under every answer the owner can give and a revert undoes it. A freed Issue
-is an edge removal; a freed row is the head taken out of its `after`, named in the block's `free` list (`plan` lists every
-other change to a row). A proposal whose `plan` is empty and that cancels nothing is settled by rule and applied at once,
-the plan edit through the ship path; any other change is screened for the owner. Needs you shows on each item what it
-holds, and on the head's card what went ahead without the answer. One is open per project at a time; asking again while it is open
-adds the words to it as a note. On a verdict of Looks good or With notes the lead edits `docs/plan.yaml` through the
-project's ship path and applies edge changes and cancellations with `factory issue replan <id> --attempt <n> --body '<json>'`. The server gates
-that verb: the Issue must be a Replan its lead works on (current attempt), its latest Spec revision must carry a Looks
-good or With notes verdict, and every Issue it re-edges or cancels must be an Issue of the Replan's own project (a
-blocker may be any open Issue; one exception: a removed edge's dependent may be another project's open Issue when every Issue it
-waits after is of this project, since removing the edge only frees it). The whole call is refused otherwise, nothing applied; each op then answers for itself, and
-a repeated `call` changes nothing more. The owner-only edge and cancel routes stay shut to a lead: the verb is what an
-approved Spec buys. It acts as the orchestrator, so the owner-touch counts stay the owner's alone.
+Rebasing a plan file with the `plan` merge driver: `docs/operations.md` "Rebasing a plan file". A Replan, the lead's
+proposal of changes to the plan: `docs/architecture.md` "Replan".
 
 ## What the server does not read
 
