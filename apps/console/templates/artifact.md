@@ -44,4 +44,5 @@ What was run and what it showed. For a Report, this is the section to read first
   A table takes that width and scrolls sideways inside itself when it is wider: keep it to about five columns. Raw HTML is
   dropped; an https image loads from a host the owner lists (a presigned link from his bucket: `imgcli private <file> --json`) and `factory artifact submit` refuses any other image, raw.githubusercontent.com included. Submit it with:
     factory artifact submit <issue> --attempt <n> --kind spec --title "..." --content @artifact.md
+  A Spec opens with Build (what will be built, at most eight lines) and Decided (each choice and why, a line each); its text outside <details> blocks, fences and images is at most 4000 characters. Put the rest in <details><summary>one line</summary> ... </details>, a screenshot or a diagram.
 -->

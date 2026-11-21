@@ -1,4 +1,5 @@
 import { NEW_ISSUE_TEXT_MAX } from './issues.ts'
+import { SPEC_BUILD_LINES, SPEC_VISIBLE_MAX } from './checkpoints.ts'
 import { SPEC_WAIT_HOURS } from './lane.ts'
 import { EFFORTS, TIERS } from './roles.ts'
 
@@ -76,6 +77,7 @@ export const FILING = {
       'The Spec is stored with the Issue and shown to the owner as a Spec with a verdict; no lead copies it. The Issue is filed and settled as always, and the queue holds it (reason `spec`) until the Spec has a verdict.',
       `With no verdict in ${SPEC_WAIT_HOURS} hours the factory records a looks_good for you and the lead starts on the defaults the Spec names, so the queue never waits on the owner. The lead reads the verdict and builds; it does not submit another Spec.`,
       'The title is the first `# ` heading of the file, else the Issue title; `--spec-title` sets it. Keep the open choices (at most three, each with a default and what changing it later costs) in the file: that is what the owner answers.',
+      `A Spec fits a page: it opens with a "## Build" section (what will be built, at most ${SPEC_BUILD_LINES} lines) and a "## Decided" section (each choice and why, a line each), and its text outside <details> blocks, fenced code and images is at most ${SPEC_VISIBLE_MAX} characters. \`issue new --spec\` refuses (422) a longer one, or one without the two sections, with the count and two ways out: move detail into a collapsed <details><summary>one line</summary>...</details> block, or file a document several Issues build from as a Report (\`factory artifact new\`) and link it.`,
     ],
     example: '@docs/v2/spec.md',
   },
@@ -96,8 +98,7 @@ export const FILING = {
     },
     {
       flag: '--spec',
-      meaning:
-        'optional Spec you wrote, markdown (`@file` reads a file): stored with the Issue, which the queue holds until the owner gives a verdict (24 hours at most); implies `--checkpoint spec`',
+      meaning: `optional Spec you wrote, markdown (\`@file\` reads a file): Build and Decided, at most ${SPEC_VISIBLE_MAX} characters outside <details> blocks, code fences and images (refused with the count otherwise); stored with the Issue, which the queue holds until the owner gives a verdict (24 hours at most); implies \`--checkpoint spec\``,
     },
     {
       flag: '--spec-title',

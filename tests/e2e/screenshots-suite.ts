@@ -198,6 +198,18 @@ export function screenshotSuite(variantName: VariantName) {
         fullPage: true,
         animations: 'disabled',
       })
+      // the two details blocks are closed to their summary line, and a click opens one
+      const blocks = page.locator('.artifact-prose details')
+      await expect(blocks).toHaveCount(2)
+      await expect(blocks.first()).not.toHaveJSProperty('open', true)
+      await blocks.nth(1).locator('summary').click()
+      await expect(blocks.nth(1)).toHaveJSProperty('open', true)
+      await page.screenshot({
+        path: join(OUT, `${variant.name}-artifact-spec-details.png`),
+        fullPage: true,
+        animations: 'disabled',
+      })
+      await blocks.nth(1).locator('summary').click()
       await page.evaluate(`(() => {
         const text = ${JSON.stringify(SPEC_QUOTE)}
         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)

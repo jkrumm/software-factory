@@ -178,7 +178,8 @@ async function workingIssue(repo = 'example', extra: { checkpoint?: 'spec' | 'ga
 const REPLAN_SPEC = {
   kind: 'spec',
   title: 'The queue spec',
-  content: '# Queue\n\n```replan\n{"plan":["queue"],"edges":{"add":[],"remove":[]},"cancel":[]}\n```\n',
+  content:
+    '# Queue\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.\n\n```replan\n{"plan":["queue"],"edges":{"add":[],"remove":[]},"cancel":[]}\n```\n',
 }
 
 /** A working Issue that is a project's Replan. */
@@ -922,7 +923,11 @@ describe('the ledger', () => {
 })
 
 describe('artifacts', () => {
-  const SPEC = { kind: 'spec', title: 'The queue spec', content: '# Queue\n\nWe keep the queue in Postgres.' }
+  const SPEC = {
+    kind: 'spec',
+    title: 'The queue spec',
+    content: '# Queue\n\n## Build\n\nWe keep the queue in Postgres.\n\n## Decided\n\nPostgres: it is there.',
+  }
 
   test("an owner gate's Spec makes the Issue wait; a verdict is the lead's next turn, in one note_lead, once", async () => {
     const issueId = await workingIssue('example', { checkpoint: 'gate' })
@@ -1084,7 +1089,7 @@ describe('artifacts', () => {
       await reviseArtifact(deps, {
         artifactId: artifact.id,
         attempt: 1,
-        content: '# Queue\n\nThe lock is advisory.',
+        content: '# Queue\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.\n\nThe lock is advisory.',
         note: 'named it',
       }),
     )
@@ -1106,7 +1111,7 @@ describe('artifacts', () => {
         await reviseArtifact(deps, {
           artifactId: artifact.id,
           attempt: 1,
-          content: '# Queue\n\nThe lock is advisory.',
+          content: '# Queue\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.\n\nThe lock is advisory.',
           note: null,
         }),
       ),
@@ -1150,15 +1155,48 @@ describe('artifacts', () => {
     expect(verdict).toMatchObject({ issue: null, verdict: { verdict: 'looks_good' } })
   })
 
+  test('a Spec that does not fit a page refuses the submit and the revision with the count, and stores nothing', async () => {
+    const issueId = await workingIssue()
+    const form = '## Build\n\nIt.\n\n## Decided\n\nIt: why.\n\n'
+    const long = `${form}${'word '.repeat(900)}`
+    const refused = errorOf(
+      await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'spec', title: 'S', content: long } }),
+    )
+    expect(refused.kind).toBe('invalid')
+    const detail = 'detail' in refused ? String(refused.detail) : ''
+    expect(detail).toContain('at most 4000')
+    expect(detail).toMatch(/\d+ characters/)
+    expect(detail).toContain('factory artifact new')
+    expect(
+      errorOf(
+        await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'spec', title: 'S', content: 'Words.' } }),
+      ),
+    ).toMatchObject({ kind: 'invalid', detail: expect.stringContaining('## Build') })
+    expect(await rows('artifacts')).toBe(0)
+    // the same words fold into a details block, and a Report or Concept is not held to the form
+    const folded = `${form}<details><summary>The words</summary>\n\n${'word '.repeat(900)}\n\n</details>`
+    const { artifact } = value(
+      await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'spec', title: 'S', content: folded } }),
+    )
+    value(await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: null, revision: null }))
+    expect(
+      errorOf(await reviseArtifact(deps, { artifactId: artifact.id, attempt: 1, content: long, note: null })),
+    ).toMatchObject({ kind: 'invalid', detail: expect.stringContaining('at most 4000') })
+    expect(await rows('artifact_revisions')).toBe(1)
+    value(await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'report', title: 'R', content: long } }))
+    value(await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'concept', title: 'C', content: long } }))
+  })
+
   test('a picture the Console would not show refuses the submit and the revision, and stores nothing', async () => {
     const issueId = await workingIssue()
     const hosts = { ...deps, imageHosts: ['images.example.com'] }
-    const bad = '# Spec\n\n![shot](https://raw.githubusercontent.com/x/y.jpg)'
+    const form = '## Build\n\nIt.\n\n## Decided\n\nIt: why.\n\n'
+    const bad = `# Spec\n\n${form}![shot](https://raw.githubusercontent.com/x/y.jpg)`
     expect(
       errorOf(await submitArtifact(hosts, { issueId, attempt: 1, raw: { kind: 'spec', title: 'S', content: bad } })),
     ).toMatchObject({ kind: 'invalid', detail: expect.stringContaining('raw.githubusercontent.com') })
     expect(await rows('artifacts')).toBe(0)
-    const good = '# Spec\n\n![shot](https://images.example.com/y.jpg)'
+    const good = `# Spec\n\n${form}![shot](https://images.example.com/y.jpg)`
     const { artifact } = value(
       await submitArtifact(hosts, { issueId, attempt: 1, raw: { kind: 'spec', title: 'S', content: good } }),
     )
@@ -1440,7 +1478,7 @@ describe('artifacts', () => {
       await submitArtifact(deps, {
         issueId,
         attempt: 1,
-        raw: { kind: 'spec', title: 'Plan', content: 'Retries are three.' },
+        raw: { kind: 'spec', title: 'Plan', content: '## Build\n\nRetries are three.\n\n## Decided\n\nThree: enough.' },
       }),
     ).artifact
     value(
@@ -1508,7 +1546,7 @@ describe('artifacts', () => {
         await submitArtifact(deps, {
           issueId,
           attempt: 1,
-          raw: { kind: 'report', title, content: 'Retries are three.' },
+          raw: { kind: 'report', title, content: '## Build\n\nRetries are three.\n\n## Decided\n\nThree: enough.' },
         }),
       ).artifact
     const artifact = await submit('Notes')
@@ -1608,10 +1646,23 @@ describe('artifacts', () => {
     )
     const id = filed.issue.id
     await record(id, 'settled', { kind: 'settled', payload: {}, actor: 'factory' })
-    const stored = value(await storeSpecBlob(deps, { content: '# v1', given: undefined, fallback: 'a gated change' }))
+    const stored = value(
+      await storeSpecBlob(deps, {
+        content: '# v1\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.',
+        given: undefined,
+        fallback: 'a gated change',
+      }),
+    )
     value(await deps.uow.run(({ checkpoints }) => attachSpec(deps, checkpoints, { id, repo: 'example' }, stored)))
     const artifactId = (await postgresCheckpointStore(db.sql).artifactByKey(key('filed-spec', id)))?.id as ArtifactId
-    const revised = value(await reviseArtifact(deps, { artifactId, attempt: null, content: '# v2', note: null }))
+    const revised = value(
+      await reviseArtifact(deps, {
+        artifactId,
+        attempt: null,
+        content: '# v2\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.',
+        note: null,
+      }),
+    )
     expect(revised.revisions).toHaveLength(2)
     expect(await eventsOf(id)).toEqual(['filed', 'settled'])
     // the owner sees the new revision: the screen passes it, and it is the one he reads and gives his verdict on
@@ -1627,7 +1678,14 @@ describe('artifacts', () => {
       actor: 'factory',
     })
     expect(
-      errorOf(await reviseArtifact(deps, { artifactId, attempt: null, content: '# v3', note: null })),
+      errorOf(
+        await reviseArtifact(deps, {
+          artifactId,
+          attempt: null,
+          content: '# v3\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.',
+          note: null,
+        }),
+      ),
     ).toMatchObject({
       kind: 'missing_field',
     })
@@ -1659,7 +1717,11 @@ describe('artifacts', () => {
 })
 
 describe('a Decision raised during a review', () => {
-  const SPEC = { kind: 'spec', title: 'The queue spec', content: '# Queue\n\nWe keep the queue in Postgres.' }
+  const SPEC = {
+    kind: 'spec',
+    title: 'The queue spec',
+    content: '# Queue\n\n## Build\n\nWe keep the queue in Postgres.\n\n## Decided\n\nPostgres: it is there.',
+  }
 
   async function reviewed() {
     const issueId = await workingIssue('example', { checkpoint: 'gate' })
@@ -2188,7 +2250,11 @@ describe('blobs', () => {
 })
 
 describe('a Concept or Spec the owner has not answered for a day', () => {
-  const SPEC = { kind: 'spec', title: 'The queue spec', content: '# Queue\n\nOne page.' }
+  const SPEC = {
+    kind: 'spec',
+    title: 'The queue spec',
+    content: '# Queue\n\n## Build\n\nOne page.\n\n## Decided\n\nOne page: short.',
+  }
   const HOUR = 3_600_000
   const later = (hours: number) => clock.set(new Date(clock.now().getTime() + hours * HOUR))
   const rechecks = async () =>
@@ -2309,7 +2375,14 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
     const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
     value(await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: null, revision: null }))
     later(30)
-    value(await reviseArtifact(deps, { artifactId: artifact.id, attempt: 1, content: '# Queue\n\nv2', note: 'x' }))
+    value(
+      await reviseArtifact(deps, {
+        artifactId: artifact.id,
+        attempt: 1,
+        content: '# Queue\n\n## Build\n\nIt.\n\n## Decided\n\nIt: why.\n\nv2',
+        note: 'x',
+      }),
+    )
     later(23)
     expect(value(await recheckReviews(deps))).toEqual([])
     later(2)

@@ -22,6 +22,7 @@ import {
   type Answerer,
 } from '../domains/checkpoints/decision.ts'
 import { picturesRefusal } from '../domains/checkpoints/pictures.ts'
+import { specFormRefusal } from '../domains/checkpoints/spec-form.ts'
 import { PLAN_REASON, specPathOf, specSourceOf } from '../domains/checkpoints/spec-screen.ts'
 import {
   type ErrandId,
@@ -752,6 +753,8 @@ export async function submitArtifact(
   const read = readSubmission(input.raw)
   if (!read.ok) return read
   const submission = read.value
+  const unfit = submission.kind === 'spec' ? specFormRefusal(submission.content, submission.format) : null
+  if (unfit) return err({ kind: 'invalid', detail: unfit })
   const unloaded = deps.imageHosts
     ? picturesRefusal(submission.content, submission.format, deps.imageHosts, deps.clock.now())
     : null
@@ -872,6 +875,8 @@ export async function reviseArtifact(
     const issue = artifact.issueId ? await issueOf(work, artifact.issueId) : null
     if (artifact.issueId && !issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
     if (artifact.kind === 'decision') return err({ kind: 'invalid', detail: 'a Decision is not revised: ask again' })
+    const unfit = artifact.kind === 'spec' ? specFormRefusal(content, artifact.format) : null
+    if (unfit) return err({ kind: 'invalid', detail: unfit })
     const unloaded = deps.imageHosts
       ? picturesRefusal(content, artifact.format, deps.imageHosts, deps.clock.now())
       : null

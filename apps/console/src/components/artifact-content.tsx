@@ -4,6 +4,7 @@ import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from
 import { createPortal } from 'react-dom'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { remarkDetails } from '@/lib/markdown-details'
 import {
   headingPath,
   type ImageTarget,
@@ -327,7 +328,13 @@ function MarkdownContent({
   }, [primary, quotes, content])
 
   useEffect(() => {
-    if (primary && focus && !focus.image && focus.scroll !== false && root.current) scrollToQuote(root.current, focus)
+    if (!primary || !focus || focus.image || focus.scroll === false || !root.current) return
+    // a passage inside a closed details block is opened to, or it could not be shown
+    const wanted = normalizeQuote(focus.quote)
+    for (const folded of root.current.querySelectorAll<HTMLDetailsElement>('details:not([open])')) {
+      if (normalizeQuote(folded.textContent ?? '').includes(wanted)) folded.open = true
+    }
+    scrollToQuote(root.current, focus)
   }, [primary, focus])
   // the passage in focus is painted again whenever the text or the comments change under it, without scrolling to it
   useEffect(() => {
@@ -451,7 +458,7 @@ function MarkdownContent({
       }}
     >
       <Markdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkDetails]}
         skipHtml
         urlTransform={defaultUrlTransform}
         components={primary ? MARKDOWN_COMPONENTS : MARKDOWN_COMPONENTS_PLAIN}

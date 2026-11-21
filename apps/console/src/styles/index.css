@@ -205,6 +205,22 @@
 .artifact-prose hr {
   @apply my-6;
 }
+/* A details block (`<details><summary>…</summary>…</details>`): closed it is one line, open its content sits inside the card. */
+.artifact-prose details {
+  @apply my-3 rounded-lg border bg-card text-card-foreground;
+}
+.artifact-prose summary {
+  @apply cursor-pointer rounded-lg px-4 py-2 font-semibold tracking-tight outline-none marker:text-muted-foreground hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50;
+}
+.artifact-prose details[open] > summary {
+  @apply rounded-b-none border-b;
+}
+.artifact-prose details > :not(summary) {
+  @apply mx-4;
+}
+.artifact-prose details > :last-child {
+  @apply mb-4;
+}
 
 /* The chain's canvas and the schedule's band: a step off the page in light and dark, under the bg-card cards. */
 .chain-canvas {

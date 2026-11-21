@@ -206,7 +206,8 @@ describe('the filing contract', () => {
     const help = async (...words: string[]) => (await cli([...words, '--help'])).out
     for (const word of [
       'A Spec is your plan, not a question',
-      'Build (what you will build, at most eight lines) and Decided',
+      '"## Build" section (what you will build, at most 8 lines)',
+      'at most 4000 characters (an HTML Spec: its visible text outside details)',
       'field standard tools',
       'build at once: it does not wait',
       'Four Specs wait for his verdict',
@@ -223,6 +224,8 @@ describe('the filing contract', () => {
     for (const word of ['approve or merge a pull request', 'never `op`', 'make -C <worktree> <target>'])
       expect(await help('errand', 'raise')).toContain(word)
     expect(await help('artifact', 'revise')).toContain('(409)')
+    expect(await help('artifact', 'revise')).toContain('at most 4000 characters of text outside <details> blocks')
+    expect(await help('issue', 'new')).toContain('at most 4000 characters outside <details> blocks')
     expect(await help('artifact', 'annotation-reply')).toContain('refused while one is unanswered')
     expect(await help('issue', 'defer')).toContain('every 15 minutes')
     expect(await help('issue', 'ship')).toContain('`met: ` or `not met: `')

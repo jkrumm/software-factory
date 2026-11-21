@@ -102,7 +102,12 @@ test('an approved Replan Spec lets its lead change the chain and cancel, inside 
         'artifact',
         'submit',
         replan,
-        ...replanBody({ attempt: 1, kind: 'spec', title: 'Replan: app', content: '# Replan\n\nCancel A, B after C.' }),
+        ...replanBody({
+          attempt: 1,
+          kind: 'spec',
+          title: 'Replan: app',
+          content: '# Replan\n\n## Build\n\nCancel A, B after C.\n\n## Decided\n\nCancel: stale.',
+        }),
       ])
     ).json,
   )

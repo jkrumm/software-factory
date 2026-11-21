@@ -15,7 +15,7 @@ const MD_IMAGE = /!\[([^\]]*)\]\(\s*(<[^>\n]*>|[^\s)]*)/g
 const HTML_IMG = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi
 
 /** The text with every fenced code block (and its fences) dropped: a fence closes on its own character, as long, bare. */
-function withoutFences(content: string): string {
+export function withoutFences(content: string): string {
   let open: { char: string; length: number } | null = null
   return content
     .split('\n')

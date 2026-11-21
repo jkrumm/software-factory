@@ -1,5 +1,6 @@
 import { NEW_ISSUE_SPEC_TITLE_MAX } from '@software-factory/contract'
 import type { BlobStore, CheckpointStore } from '../domains/checkpoints/ports.ts'
+import { specFormRefusal } from '../domains/checkpoints/spec-form.ts'
 import type { Clock } from '../kernel/clock.ts'
 import type { IdSource, IssueId } from '../kernel/ids.ts'
 import { type Key, key } from '../kernel/keys.ts'
@@ -32,11 +33,19 @@ export interface StoredSpec {
   blob: { path: string; sha256: string; bytes: number }
 }
 
-/** Puts the Spec's content in the blob store, outside any transaction. */
+/** A Spec that does not fit a page (`specFormRefusal`): nothing is stored, and the filing is refused with the reason. */
+export interface SpecRefused {
+  kind: 'spec_refused'
+  detail: string
+}
+
+/** Puts the Spec's content in the blob store, outside any transaction; a Spec that does not fit a page is refused first. */
 export async function storeSpecBlob(
   deps: Pick<FiledSpecDeps, 'blobs'>,
   input: { content: string; given: string | undefined; fallback: string },
-): Promise<Result<StoredSpec, PortError>> {
+): Promise<Result<StoredSpec, PortError | SpecRefused>> {
+  const unfit = specFormRefusal(input.content, 'markdown')
+  if (unfit) return err({ kind: 'spec_refused', detail: unfit })
   const blob = await deps.blobs.put(input.content)
   if (!blob.ok) return blob
   return ok({ title: specTitleOf(input), blob: blob.value })
