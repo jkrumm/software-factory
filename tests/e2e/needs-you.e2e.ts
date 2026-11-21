@@ -320,18 +320,24 @@ test('a comment on a review is kept and shown, and the review stays on the list'
   await expect(card(page, 'The queue spec')).toHaveCount(1)
 })
 
-test('an answer someone else gave first says so and the card leaves', async ({ page, apiUrl }) => {
-  const decision = await needNamed(apiUrl, 'Which cache store')
-  await open(page, 'Which cache store')
-  // answered elsewhere just before the Console's own answer arrives (the CLI, the lead's other channel)
-  await page.route(`**/v1/decisions/${decision.id}/answer`, async (route) => {
-    await api(apiUrl, `/v1/decisions/${decision.id}/answer`, { answer: 'redis' })
-    await route.continue()
+test.describe('answered elsewhere first', () => {
+  // The Console's worker claims the page a moment after load, and a request of a controlled page goes through the worker,
+  // where `page.route` never sees it: the Console's own answer then won the race and this test failed on master (Issue 2766).
+  test.use({ serviceWorkers: 'block' })
+
+  test('an answer someone else gave first says so and the card leaves', async ({ page, apiUrl }) => {
+    const decision = await needNamed(apiUrl, 'Which cache store')
+    await open(page, 'Which cache store')
+    // answered elsewhere just before the Console's own answer arrives (the CLI, the lead's other channel)
+    await page.route(`**/v1/decisions/${decision.id}/answer`, async (route) => {
+      await api(apiUrl, `/v1/decisions/${decision.id}/answer`, { answer: 'redis' })
+      await route.continue()
+    })
+    await card(page, 'Which cache store').getByRole('button', { name: 'Take the recommendation' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Already answered elsewhere' })).toBeVisible()
+    await expect(card(page, 'Which cache store')).toHaveCount(0)
+    expect(await api<{ answer: string }>(apiUrl, `/v1/decisions/${decision.id}`)).toMatchObject({ answer: 'redis' })
   })
-  await card(page, 'Which cache store').getByRole('button', { name: 'Take the recommendation' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Already answered elsewhere' })).toBeVisible()
-  await expect(card(page, 'Which cache store')).toHaveCount(0)
-  expect(await api<{ answer: string }>(apiUrl, `/v1/decisions/${decision.id}`)).toMatchObject({ answer: 'redis' })
 })
 
 test.describe('nothing waits', () => {
