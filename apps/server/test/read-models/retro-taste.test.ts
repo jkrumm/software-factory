@@ -39,7 +39,7 @@ beforeAll(async () => {
     ['artifact_e', 'spec', 'Spec E'],
   ] as const)
     await artifact(id, 'issue_1', kind, title)
-  await verdict('artifact_a', 'with_notes', 'fewer words in the title', ago(30), 'owner')
+  await verdict('artifact_a', 'looks_good', 'fewer words in the title', ago(30), 'owner')
   await verdict('artifact_b', 'changes', 'drop the third choice', ago(20), 'owner')
   await verdict('artifact_c', 'looks_good', null, ago(10), 'owner')
   await verdict('artifact_d', 'looks_good', 'no verdict in 24 hours: go on', ago(5), 'factory')
@@ -61,14 +61,14 @@ describe('the retro bundle carries the owner’s taste', () => {
     const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: 7 }))
     expect(model.taste.verdicts.map((v) => [v.artifact, v.verdict, v.note, v.repo, v.issue])).toEqual([
       ['artifact_b', 'changes', 'drop the third choice', 'app', 'issue_1'],
-      ['artifact_a', 'with_notes', 'fewer words in the title', 'app', 'issue_1'],
+      ['artifact_a', 'looks_good', 'fewer words in the title', 'app', 'issue_1'],
     ])
     expect(model.taste.annotations.map((a) => [a.artifact, a.quote, a.comment, a.repo, a.issue])).toEqual([
       ['artifact_a', 'a long sentence', 'shorter', 'app', 'issue_1'],
     ])
   })
 
-  test('verdict_changes_share is the owner’s with_notes and changes over all his verdicts, the factory’s default not counted', async () => {
+  test('verdict_changes_share is the owner’s looks_good with a note, with_notes and changes over all his verdicts, the factory’s default not counted', async () => {
     const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: 7 }))
     // beside the Specs not needed, under the key it had as a KPI of its own
     const specs = model.kpis.kpis.find((k) => k.key === 'specs_not_needed')

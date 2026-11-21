@@ -118,7 +118,7 @@ export const LANGUAGE = {
   'memory used':
     "The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes. What to do: nothing at normal pressure; read Memory pressure before acting on a high figure",
   'needed me':
-    'The owner\'s one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
+    'The owner\'s mark on a verdict of a Spec or Report: did it need him (set through the API or the CLI; the Console no longer offers it). The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
   needs:
     'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, quarantined signals, long waits',
   'not measured':

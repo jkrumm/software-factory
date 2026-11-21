@@ -632,7 +632,7 @@ async function detailOf(
       AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const verdicts = await one(sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)}`)
   const verdictsChanged = await one(
-    sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)} AND v.verdict IN ('with_notes', 'changes')`,
+    sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)} AND (v.verdict IN ('with_notes', 'changes') OR (v.verdict = 'looks_good' AND v.note IS NOT NULL))`,
   )
   const specs = await one(sql`
     SELECT count(*) AS n FROM factory.artifacts WHERE kind = 'spec' AND created_at >= ${w.from} AND created_at < ${w.to}`)

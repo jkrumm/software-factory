@@ -233,10 +233,10 @@ is an edge removal; a freed row is the head taken out of its `after`, named in t
 other change to a row). A proposal whose `plan` is empty and that cancels nothing is settled by rule and applied at once,
 the plan edit through the ship path; any other change is screened for the owner. Needs you shows on each item what it
 holds, and on the head's card what went ahead without the answer. One is open per project at a time; asking again while it is open
-adds the words to it as a note. On a verdict of Looks good or With notes the lead edits `docs/plan.yaml` through the
+adds the words to it as a note. On a verdict of Looks good the lead edits `docs/plan.yaml` through the
 project's ship path and applies edge changes and cancellations with `factory issue replan <id> --attempt <n> --body '<json>'`. The server gates
 that verb: the Issue must be a Replan its lead works on (current attempt), its latest Spec revision must carry a Looks
-good or With notes verdict, and every Issue it re-edges or cancels must be an Issue of the Replan's own project (a
+good verdict, and every Issue it re-edges or cancels must be an Issue of the Replan's own project (a
 blocker may be any open Issue; one exception: a removed edge's dependent may be another project's open Issue when every Issue it
 waits after is of this project, since removing the edge only frees it). The whole call is refused otherwise, nothing applied; each op then answers for itself, and
 a repeated `call` changes nothing more. The owner-only edge and cancel routes stay shut to a lead: the verb is what an
