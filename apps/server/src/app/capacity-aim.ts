@@ -83,6 +83,7 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
       swapoutMbPer300s: fresh ? newest.swapoutMbPer300s : null,
       swapGrowing: growing,
       load: fresh ? newest.load : null,
+      loadTripped: trip?.tripped === true,
       reason: step.reason,
       leadAim: lead.state.target,
       leadsRunning: running,

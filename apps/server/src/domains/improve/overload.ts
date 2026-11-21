@@ -72,7 +72,7 @@ export function loadOverCeilingFindings(
 export const SLOT_WAITERS = 8
 /** ...in this many consecutive minutes is a line that does not move. */
 export const SLOT_WAIT_MINUTES = 15
-/** A base slot empty while a caller waits, this many consecutive minutes: the memory rule is refusing a step the host could run. */
+/** A base slot empty while a caller waits, this many consecutive minutes: the memory rule is refusing a step the host could run (a minute the load tripwire held it is not counted). */
 export const SLOT_EMPTY_MINUTES = 5
 
 /**
@@ -99,7 +99,7 @@ export function slotLineFindings(minutes: readonly SlotMinute[], now: Date): Fin
       reproduce: 'factory capacity state (the slot lines); factory slot list',
     })
   }
-  const empty = tailRun(minutes, (m) => m.holders < grantBase(m) && m.waiters > 0)
+  const empty = tailRun(minutes, (m) => m.holders < grantBase(m) && m.waiters > 0 && !m.loadTripped)
   const emptyLast = empty[empty.length - 1]
   if (emptyLast && empty.length >= SLOT_EMPTY_MINUTES && freshRun(empty, now)) {
     found.push({

@@ -530,9 +530,9 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
     async recordSlotShadow(r) {
       await tx`
         INSERT INTO factory.slot_shadow (at, live_slots, live_max, aim_slots, holders, waiters, pressure_level, swap_used_pct,
-          swapout_mb_per_300s, swap_growing, load, reason, lead_aim, leads_running)
+          swapout_mb_per_300s, swap_growing, load, load_tripped, reason, lead_aim, leads_running)
         VALUES (${r.at}, ${r.liveSlots}, ${r.liveMax}, ${r.aimSlots}, ${r.holders}, ${r.waiters}, ${r.pressureLevel},
-          ${r.swapUsedPct}, ${r.swapoutMbPer300s}, ${r.swapGrowing}, ${r.load}, ${r.reason}, ${r.leadAim}, ${r.leadsRunning})
+          ${r.swapUsedPct}, ${r.swapoutMbPer300s}, ${r.swapGrowing}, ${r.load}, ${r.loadTripped}, ${r.reason}, ${r.leadAim}, ${r.leadsRunning})
         ON CONFLICT (at) DO NOTHING`
     },
 

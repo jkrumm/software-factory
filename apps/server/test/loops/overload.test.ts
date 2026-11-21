@@ -86,6 +86,7 @@ const slots = (n: number, over: Partial<SlotMinute> = {}): SlotMinute[] =>
     aimSlots: 2,
     holders: 2,
     waiters: 0,
+    loadTripped: false,
     ...over,
   }))
 
@@ -119,6 +120,8 @@ test('slot_line: a base slot empty while callers wait fires after five minutes, 
   expect(slotLineFindings(slots(SLOT_EMPTY_MINUTES - 1, { holders: 1, waiters: 2 }), NOW)).toEqual([])
   expect(slotLineFindings(slots(10, { holders: 1, waiters: 0 }), NOW)).toEqual([])
   expect(slotLineFindings(slots(10, { holders: 2, waiters: 5 }), NOW)).toEqual([])
+  // a tripped load tripwire holds the second step by design: those minutes are no finding
+  expect(slotLineFindings(slots(10, { holders: 1, waiters: 2, loadTripped: true }), NOW)).toEqual([])
   // cleared: the slot was granted in the newest minute
   const granted = slots(10, { holders: 1, waiters: 2 })
   granted[9] = { ...(granted[9] as SlotMinute), holders: 2 }

@@ -143,6 +143,8 @@ export interface SlotShadowRow {
   swapoutMbPer300s: number | null
   swapGrowing: boolean
   load: number | null
+  /** the load tripwire was tripped that minute: a second test step is held whatever the memory */
+  loadTripped: boolean
   reason: string
   /** the lead aim's count that minute and the leads running; null: not recorded */
   leadAim: number | null

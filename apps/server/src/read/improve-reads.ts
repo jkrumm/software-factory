@@ -65,6 +65,7 @@ const SlotMinuteRow = z.object({
   aim_slots: z.number().int(),
   holders: z.number().int(),
   waiters: z.number().int(),
+  load_tripped: z.boolean(),
 })
 
 const ClassCpuRow = z.object({
@@ -259,7 +260,7 @@ export function improveReads(tx: SQL): ImproveReads {
 
     async slotMinutes(since) {
       const rows: unknown[] = await tx`
-        SELECT at, live_slots, aim_slots, holders, waiters FROM factory.slot_shadow WHERE at >= ${since} ORDER BY at`
+        SELECT at, live_slots, aim_slots, holders, waiters, load_tripped FROM factory.slot_shadow WHERE at >= ${since} ORDER BY at`
       return rows.map((raw) => {
         const row = SlotMinuteRow.parse(raw)
         return {
@@ -268,6 +269,7 @@ export function improveReads(tx: SQL): ImproveReads {
           aimSlots: row.aim_slots,
           holders: row.holders,
           waiters: row.waiters,
+          loadTripped: row.load_tripped,
         }
       })
     },
