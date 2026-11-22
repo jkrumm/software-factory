@@ -17,7 +17,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | What | Where |
 |-|-|
 | Registry | `$CLAUDE_ACCOUNTS_REGISTRY`, else `~/.config/claude-accounts/registry.json` when it exists, else the dotfiles checkout's `config/claude-accounts.json` |
-| Quota cache | `~/.cache/claude-accounts/` (`$CLAUDE_ACCOUNTS_CACHE_DIR`): `<id>.sample.json`, `.exhausted.json`, `.auth.json`, `.verified.json`, `.statusline.json`, `.refresh.claim`, `.relogin-ask.json` |
+| Quota cache | `~/.cache/claude-accounts/` (`$CLAUDE_ACCOUNTS_CACHE_DIR`): `<id>.sample.json`, `.exhausted.json`, `.auth.json`, `.verified.json`, `.statusline.json`, `.endpoint.json`, `.refresh.claim`, `.relogin-ask.json` |
 | Pick log | `~/.local/share/claude-accounts/picks.jsonl` (`$CLAUDE_ACCOUNTS_PICKS`); usage tracker, the browser extension and the dashboards read it |
 | History | `~/.local/share/claude-accounts/` (`$CLAUDE_ACCOUNTS_HISTORY` is the directory): `samples-YYYY-MM.jsonl` and `resets.jsonl` (§History) |
 | Mode overrides | `~/.local/share/claude-accounts/modes.json` (`$CLAUDE_ACCOUNTS_MODES`) and its audit `modes.jsonl` (§Modes) |
@@ -125,7 +125,7 @@ claude-account remove <id>
 
 ## Quota sources
 
-**Quota sources: read-only use of the account's own token for one GET, plus a peer import.** Four feeds, freshest wins, all
+**Quota sources: read-only use of the account's own token for one GET, plus a peer import.** Four feeds; **one weekly figure per account: the newest usable reading across the statusline, the peer sample and the endpoint's `weekly_all` limit wins** (`settleWeekly`, applied on every merge and every load, a tie keeps the window; no usable reading from any source is still `no-sample`), all
 written into `~/.cache/claude-accounts/` as one small file per account and kind (`<id>.sample.json`, `<id>.exhausted.json`, `<id>.auth.json`, `<id>.refresh.claim`; no lock, each writer replaces only its own file atomically, windows carry their own timestamps):
 
 1. **Statusline (live, free):** every render gets native `rate_limits` for the
@@ -139,7 +139,10 @@ written into `~/.cache/claude-accounts/` as one small file per account and kind 
    (`claudeAiOauth.accessToken`). 0 tokens, no window priming, 10 s timeout, in-process. The token is used for that one
    request and nothing else: never copied, logged, written to the cache or written back to the Keychain (invariant 2: we
    never become co-owner of the login). `utilization` / `resets_at` of `five_hour` / `seven_day` become the sample
-   (`src: oauth`). Any failure (Keychain locked or denied, HTTP 401/429/5xx, unparseable body) means *no sample* and
+   (`src: oauth`). A body with no `seven_day` (the ultra plan's, seen 2026-11-22) carries its weekly figure in the
+   `weekly_all` entry of `limits[]` (`percent`, ISO `resets_at`): that becomes the weekly window (`w_src: limits`), so an
+   answered call is a sample. Each refresh also writes `<id>.endpoint.json` (`{at, status, outcome}`; outcome `ok`, `auth` for
+   HTTP 401/403, `no-weekly`, `http`, `unreachable` or `no-token`): what `health` reads to say why a sample is old. Any failure (Keychain locked or denied, HTTP 401/429/5xx, unparseable body) means *no sample* and
    never an auth mark: a locked Keychain or a 429 proves nothing about the login, so the run falls through to the
    `claude auth status` verdict (§Operate, Login keepalive). One failure is repaired instead: **HTTP 401**. The Keychain
    access token of an idle account expires and nothing renews it (seen live 2026-10-25: `me` idle 01:01 to 08:27, sample
@@ -392,7 +395,9 @@ meaning and check (one account cannot be both).
 
 `usage --json` rows gain `mode` (`{kind, for, hold, until, until_at, why, source, set_at, set_on}`, the mode in force; `hold` is `account` or `allowance` for a reserve, else null), `mode_override`
 (the raw record, a tombstone included, or null), `limits` and `weekly_scoped_shares` (as the endpoint gave them, each with
-`age_s`, or null). Every other field and the plain text are unchanged.
+`age_s`, or null; the `weekly_all` entry also `in_force`: true when it is the `seven_day` figure, false when a newer reading superseded it),
+`seven_day_source` (the feed the `seven_day` figure came from) and `endpoint` (`{outcome, status, age_s}` of this machine's last usage-endpoint call, or null).
+`health`'s quota row names that outcome: "token rejected" only for `auth`, and a re-login is its fix only for `auth` and `no-token`. Every other field and the plain text are unchanged.
 
 `claude-account status [--json] [--resets]` is the read model (§status). `usage --json` stays as it is.
 

@@ -22,6 +22,8 @@ interface UsageAcct {
   id: string
   auth_ok: boolean
   age_s: number | null
+  /** How the last usage-endpoint call of this machine ended (`usage --json`'s `endpoint`); absent or null = not recorded (an older peer). */
+  endpoint?: { outcome: string; status: number | null } | null
 }
 interface ExpiryAcct {
   id: string
@@ -35,7 +37,7 @@ export interface PendingAsk {
   ageMs: number
 }
 
-/** Sample older than this while the login claims to be fine means the usage endpoint is rejecting the token. */
+/** A sample older than this while the login claims to be fine: the quota row says why, from the last endpoint call. */
 export const STALE_QUOTA_S = 6 * 3600
 
 /** The end of a login as the row carries it; nothing when the check could not read one. */
@@ -48,6 +50,24 @@ const endsOf = (exp: ExpiryAcct | undefined): Pick<HealthRow, 'ends_at' | 'days_
     : {}
 
 const relogin = (machine: string, id: string) => `claude-relogin ${id} --machine ${machine}`
+
+/** Why an account has no recent quota sample, and whether a re-login is the repair: only an auth error of the endpoint call itself points at the token. */
+function whyNoSample(e: UsageAcct['endpoint']): { why: string; relogin: boolean } {
+  switch (e?.outcome) {
+    case 'auth':
+      return { why: `token rejected: usage endpoint HTTP ${e.status ?? '401'}`, relogin: true }
+    case 'no-token':
+      return { why: 'no readable token in the Keychain', relogin: true }
+    case 'no-weekly':
+      return { why: 'the usage endpoint answered with no weekly window', relogin: false }
+    case 'http':
+      return { why: `usage endpoint HTTP ${e.status}`, relogin: false }
+    case 'unreachable':
+      return { why: 'usage endpoint unreachable', relogin: false }
+    default:
+      return { why: 'no usage endpoint call on record', relogin: false }
+  }
+}
 
 /** `fix` is the repair hint of a row for an account id (default: the owner's `claude-relogin`); null = none. */
 export function gradeMachine(
@@ -109,13 +129,14 @@ export function gradeMachine(
       })
     }
     if (a.auth_ok && a.age_s !== null && a.age_s > STALE_QUOTA_S) {
+      const { why, relogin: reloginHelps } = whyNoSample(a.endpoint)
       rows.push({
         machine,
         id: a.id,
         check: 'quota',
         state: 'warn',
-        detail: `no quota sample for ${Math.round(a.age_s / 3600)} h (token rejected?)`,
-        fix: fix(a.id),
+        detail: `no quota sample for ${Math.round(a.age_s / 3600)} h (${why})`,
+        fix: reloginHelps ? fix(a.id) : null,
       })
     }
   }

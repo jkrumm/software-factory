@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path'
 import {
   type RefreshResult,
   type Registry,
+  type Sample,
   SPILL,
   defaultAccountId,
   fableAccount,
@@ -19,6 +20,7 @@ import {
   reserveBudget,
   reserveHold,
   newestAge,
+  weeklySource,
   POLICY_NAMES,
   isPolicyName,
   livePolicy,
@@ -255,6 +257,16 @@ const modeWithHold = (v: ModeView) => ({
 const withAge = (list: Record<string, unknown>[] | undefined, ts: number | undefined, now: number) =>
   list && ts !== undefined ? list.map((l) => ({ ...l, age_s: Math.round((now - ts) / 1000) })) : null
 
+/** The endpoint's limits as `usage --json` prints them; the `weekly_all` one says whether it is the weekly figure in force (`seven_day`) or an older reading the newer one superseded. */
+const limitsWithAge = (x: Sample | undefined, now: number) =>
+  x?.limits && x.limits_ts !== undefined
+    ? x.limits.map((l) => ({
+        ...l,
+        age_s: Math.round((now - x.limits_ts!) / 1000),
+        ...(l.kind === 'weekly_all' ? { in_force: x.w === l.percent && x.w_ts === x.limits_ts } : {}),
+      }))
+    : null
+
 function usage(reg0: Registry, json: boolean): void {
   const now = Date.now()
   const { reg, cache, views } = liveAccounts(reg0, now)
@@ -274,12 +286,22 @@ function usage(reg0: Registry, json: boolean): void {
       five_hour_age_s: x && x.s !== null && x.s_ts !== null ? Math.round((now - x.s_ts) / 1000) : null,
       seven_day_age_s: x && x.w !== null && x.w_ts !== null ? Math.round((now - x.w_ts) / 1000) : null,
       source: x?.src ?? null,
+      /** the feed the `seven_day` figure in force came from; the newest reading across the statusline, the peer and the endpoint's weekly_all limit wins */
+      seven_day_source: x && x.w !== null ? weeklySource(x) : null,
+      /** how this machine's last usage-endpoint call ended (`health` reads it); null when none was recorded */
+      endpoint: cache.endpoint?.[id]
+        ? {
+            outcome: cache.endpoint[id].outcome,
+            status: cache.endpoint[id].status,
+            age_s: Math.round((now - cache.endpoint[id].at) / 1000),
+          }
+        : null,
       auth_ok: !cache.auth_failed[id],
       exhausted_until: until && until * 1000 > now ? until : null,
       // additive (registry v2): the mode in force, the raw override the peer imports, the endpoint's limits with their age
       mode: modeWithHold(views[id]),
       mode_override: views[id].override,
-      limits: withAge(x?.limits, x?.limits_ts, now),
+      limits: limitsWithAge(x, now),
       weekly_scoped_shares: withAge(x?.scoped_shares, x?.limits_ts, now),
     }
   })

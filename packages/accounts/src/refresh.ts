@@ -4,6 +4,7 @@ import { type KeychainDeps, keychainToken } from './keychain.ts'
 import { fetchUsage } from './oauth.ts'
 import {
   type Cache,
+  type EndpointCall,
   type Registry,
   type RefreshResult,
   type Sample,
@@ -17,6 +18,7 @@ import {
   scopedDue,
   usable,
   dueIds,
+  endpointOutcome,
   withoutSessionWindows,
 } from './policy.ts'
 import { isOverrideRecord, newerRecord } from './modes.ts'
@@ -27,6 +29,7 @@ import {
   loadCache,
   markExhausted,
   markVerified,
+  recordEndpoint,
   readVerified,
   releaseClaim,
   saveSample,
@@ -61,15 +64,25 @@ export interface RefreshDeps extends KeychainDeps {
  * Keychain, so a 401 runs it (`status`, shared with the caller's verdict), re-reads the token and retries the GET
  * once. The token is never logged or stored.
  */
-async function oauthSample(d: RefreshDeps, id: string, status: () => LoginVerdict): Promise<Sample | null> {
+async function oauthSample(
+  d: RefreshDeps,
+  id: string,
+  status: () => LoginVerdict,
+): Promise<{ sample: Sample | null; call: EndpointCall }> {
+  const at = d.now()
+  const noToken = { sample: null, call: { at, status: null, outcome: 'no-token' } as const }
   const token = keychainToken(d, id)
-  if (!token) return null
+  if (!token) return noToken
+  const done = (r: { sample: Sample | null; status: number | null }) => ({
+    sample: r.sample,
+    call: { at, status: r.status, outcome: endpointOutcome(r.status, r.sample) },
+  })
   const first = await fetchUsage(d, id, token)
-  if (first.status !== 401) return first.sample
+  if (first.status !== 401) return done(first)
   d.log?.(`refresh ${id}: usage endpoint HTTP 401, renewing the access token via \`claude auth status\``)
-  if (status().startFailed) return null
+  if (status().startFailed) return done(first)
   const renewed = keychainToken(d, id)
-  return renewed ? (await fetchUsage(d, id, renewed)).sample : null
+  return renewed ? done(await fetchUsage(d, id, renewed)) : done(first)
 }
 
 /**
@@ -202,7 +215,8 @@ export async function runRefresh(d: RefreshDeps): Promise<Record<string, Refresh
               : unverified(d, id)
       continue
     }
-    const sample = await oauthSample(d, id, status)
+    const { sample, call } = await oauthSample(d, id, status)
+    recordEndpoint(id, call, d.dir)
     if (sample) {
       saveSample(id, sample, d.dir, hasSessionLimit(required(d.reg.accounts, id)), d.now(), d.history)
       setAuthFailed(id, false, d.now(), d.dir)

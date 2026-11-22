@@ -1,5 +1,5 @@
 // The usage endpoint adapter: one read-only GET with the account's own token (packages/accounts/docs/accounts.md §Sources of a sample).
-import { type Sample, sampleFromClaudeJson } from './policy.ts'
+import { type Sample, isNum, sampleFromClaudeJson } from './policy.ts'
 import type { HttpGet } from './ports.ts'
 
 export const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
@@ -14,6 +14,8 @@ export const OAUTH_TIMEOUT_MS = 10_000
 /**
  * Parse the `GET /api/oauth/usage` body (`five_hour` / `seven_day` with `utilization` percent + ISO `resets_at`); a window it
  * omits stays null. `limits[]` and `weekly_scoped_shares[]` are kept as the endpoint gives them, stamped with the fetch time.
+ * A body with no `seven_day` (the ultra plan's) carries its weekly figure in the `weekly_all` limit: that becomes the weekly
+ * window (`w_src: 'limits'`), so an answered call is a sample.
  */
 export function sampleFromOAuthUsage(json: unknown, nowMs: number): Sample | null {
   if (!json || typeof json !== 'object' || Array.isArray(json)) return null
@@ -25,20 +27,27 @@ export function sampleFromOAuthUsage(json: unknown, nowMs: number): Sample | nul
       ? { utilization: w.utilization, resets_at: w.resets_at }
       : null
   }
-  const sample = sampleFromClaudeJson(
-    {
-      cachedUsageUtilization: {
-        fetchedAtMs: nowMs,
-        utilization: { five_hour: window(j.five_hour), seven_day: window(j.seven_day) },
-      },
-    },
-    'oauth',
-  )
   const objects = (v: unknown) =>
     Array.isArray(v)
       ? (v.filter((e) => !!e && typeof e === 'object' && !Array.isArray(e)) as Record<string, unknown>[])
       : null
   const limits = objects(j.limits)
+  const weeklyAll = limits?.find((l) => l.kind === 'weekly_all')
+  const seven = window(j.seven_day)
+  const fromLimit =
+    !seven && weeklyAll && isNum(weeklyAll.percent) && typeof weeklyAll.resets_at === 'string'
+      ? { utilization: weeklyAll.percent, resets_at: weeklyAll.resets_at }
+      : null
+  const base = sampleFromClaudeJson(
+    {
+      cachedUsageUtilization: {
+        fetchedAtMs: nowMs,
+        utilization: { five_hour: window(j.five_hour), seven_day: seven ?? fromLimit },
+      },
+    },
+    'oauth',
+  )
+  const sample = base && fromLimit ? { ...base, w_src: 'limits' } : base
   if (!sample || !limits) return sample
   const shares = objects(j.weekly_scoped_shares)
   return { ...sample, limits, ...(shares ? { scoped_shares: shares } : {}), limits_ts: nowMs }

@@ -253,6 +253,7 @@ export const pool = async <T, R>(items: T[], f: (x: T) => Promise<R>, width = 8)
 
 /** The additive files of the package (packages/accounts/docs/accounts.md §Health): the dotfiles CLI never wrote them, so a parity state leaves them out. */
 const ADDITIVE_FILES = new Set(['health.json'])
+const ADDITIVE_FILE_SUFFIX = '.endpoint.json'
 
 /** Every file under a directory, relative path to content, sorted: the state a stateful verb left behind. */
 const tree = (dir: string): Record<string, string> => {
@@ -261,7 +262,7 @@ const tree = (dir: string): Record<string, string> => {
     for (const e of readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const p = join(d, e.name)
       if (e.isDirectory()) walk(p)
-      else if (!/\.claim$|\.tmp$/.test(e.name) && !ADDITIVE_FILES.has(e.name))
+      else if (!/\.claim$|\.tmp$/.test(e.name) && !ADDITIVE_FILES.has(e.name) && !e.name.endsWith(ADDITIVE_FILE_SUFFIX))
         out[p.slice(dir.length + 1)] = readFileSync(p, 'utf8')
     }
   }
@@ -312,8 +313,8 @@ export const run = async (cli: string, c: Case) => {
 export type Result = Awaited<ReturnType<typeof run>>
 
 /** The additive fields of registry v2 (packages/accounts/docs/accounts.md §usage --json, §Samples): the v1 CLI has none of them. */
-const ADDITIVE_ROW = ['mode', 'mode_override', 'limits', 'weekly_scoped_shares']
-const ADDITIVE_SAMPLE = ['limits', 'scoped_shares', 'limits_ts']
+const ADDITIVE_ROW = ['mode', 'mode_override', 'limits', 'weekly_scoped_shares', 'seven_day_source', 'endpoint']
+const ADDITIVE_SAMPLE = ['limits', 'scoped_shares', 'limits_ts', 'w_src']
 const strip = (o: Record<string, unknown>, keys: string[]) => {
   for (const k of keys) delete o[k]
   return o
