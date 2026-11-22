@@ -70,7 +70,8 @@ echo "agw $*" >> "$LAND_STATE/calls"
 cat "$LAND_STATE/covered"
 `
 
-const GREEN = '[{"name":"ci","bucket":"pass","link":"https://ci/1"},{"name":"lint","bucket":"skipping"}]'
+const GREEN =
+  '[{"name":"ci","bucket":"pass","link":"https://github.com/o/app/actions/runs/1/job/1"},{"name":"lint","bucket":"skipping"}]'
 const COVERED = '{"covered":true,"commits":[],"uncovered":[],"state":"covered"}'
 
 beforeEach(async () => {
@@ -218,6 +219,15 @@ describe('factory land', () => {
     const result = await land([], { FACTORY_LAND_NO_RUN_MS: '200' }).done
     expect(result.code).toBe(1)
     expect(result.err).toContain('land: ci: refused: no CI check on')
+    expect(await calls()).not.toContain('gh pr merge')
+  })
+
+  test('a status from another service that passes before the CI workflow run registers is not green: waits, never merged', async () => {
+    await writeFile(join(state, 'checks'), '[{"name":"Vercel","bucket":"pass","link":"https://vercel.com/o/app"}]')
+    const result = await land([], { FACTORY_LAND_CI_MINUTES: '0.02', FACTORY_LAND_POLL_MS: '10' }).done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: ci: waiting for the CI workflow run on')
+    expect(result.err).not.toContain('ci: green')
     expect(await calls()).not.toContain('gh pr merge')
   })
 
