@@ -447,7 +447,7 @@ describe('admission', () => {
     expect(result.notes).toEqual([])
   })
 
-  test('the load gate is the tripwire: five minutes on end over the ceiling keep a lead out, a peak or a reading back under it does not', async () => {
+  test('the load gate is the tripwire: five minutes on end over the ceiling keep a lead out, a peak does not, and a reading back under it does not let it go', async () => {
     const issue = await world.queued({ repo: 'app' })
     const now = world.clock.now()
     const minutes = async (loads: number[]) => {
@@ -470,8 +470,15 @@ describe('admission', () => {
     expect(shut.queue.find((e) => e.issue === next)?.reason?.message).toBe(
       'the machine is busy: load over 60 in each of the last 5 minutes (75, 70, 68, 66, 64)',
     )
-    // the reading before the admission is back under the ceiling: the trip clears
+    // the reading before the admission is back under the ceiling: the trip holds
     world.host.loadQueue = [ok(75), ok(30)]
+    const held = await pass()
+    expect(held.admitted).toEqual([])
+    expect(held.queue.find((e) => e.issue === next)?.reason?.message).toContain('the machine is busy')
+    // three minute samples at three quarters of the ceiling or under: it lets go
+    nextSample()
+    await minutes([40, 44, 30, 66, 64, 70, 75])
+    world.host.loadValue = ok(40)
     expect((await pass()).admitted.map((a) => a.issue)).toEqual([next])
   })
 

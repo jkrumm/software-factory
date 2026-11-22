@@ -158,7 +158,7 @@ export function checkAdmission(input: AdmissionInputs): Admission {
   const booting = input.boot ? bootRefusal(input.boot, input.now) : null
   if (booting) return no('boot', booting.message, booting.opensAt)
   const trip = input.loadTrip
-  if (trip?.tripped) return no('load', `the machine is busy: ${describeTrip(trip.loads, input.loadCeiling)}`)
+  if (trip?.tripped) return no('load', `the machine is busy: ${describeTrip(trip, input.loadCeiling)}`)
   if (!trip && input.load !== null && overLoad(input.load, input.loadCeiling)) {
     return no('load', `the machine is busy: ${describeLoad(input.load, input.loadCeiling)}`)
   }

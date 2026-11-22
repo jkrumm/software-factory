@@ -79,7 +79,7 @@ export function aimStep(state: AimState, signals: AimSignals, ceiling: number): 
   if (signals.loadTrip?.tripped)
     return {
       state: { target, quietSince },
-      reason: `quiet, but ${describeTrip(signals.loadTrip.loads, signals.loadCeiling)}`,
+      reason: `quiet, but ${describeTrip(signals.loadTrip, signals.loadCeiling)}`,
     }
   return {
     state: { target: target + 1, quietSince: at },
@@ -141,7 +141,7 @@ export function leadAimStep(state: LeadAim | null, signals: LeadAimSignals): { s
   if (signals.loadTrip?.tripped)
     return {
       state: { target, since },
-      reason: `quiet, but ${describeTrip(signals.loadTrip.loads, signals.loadCeiling)}`,
+      reason: `quiet, but ${describeTrip(signals.loadTrip, signals.loadCeiling)}`,
     }
   return {
     state: { target: target + 1, since: at },
