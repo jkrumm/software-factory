@@ -312,9 +312,11 @@ export async function startWorld(): Promise<World> {
           ? ok({ tier: 'haiku' as const, effort: 'high' as const })
           : name === 'reviewer-cheap' && world.reviewerCheap
             ? ok({ tier: 'haiku' as const, effort: 'high' as const })
-            : name === 'deep'
-              ? ok({ tier: 'opus' as const, effort: 'max' as const })
-              : err(portError('refused', `no role "${name}"`)),
+            : name === 'strong'
+              ? ok({ tier: 'opus' as const, effort: 'high' as const })
+              : name === 'deep'
+                ? ok({ tier: 'opus' as const, effort: 'max' as const })
+                : err(portError('refused', `no role "${name}"`)),
   }
   const seats: Seats = {
     seat: async () => (world.seatError ? err(world.seatError) : ok({ account: world.seatAccount })),

@@ -81,6 +81,8 @@ A seat is the tier and effort a lead starts on, read from the role table.
 - **A rule names the light start.** `lightRule` returns why an Issue starts light (`hygiene:<class>`, `kind:docs`, `alert:route`, `triage:small`) or null. An Issue with a design choice (`checkpoint: spec`) never starts light on size alone. A hygiene finding starts light whatever its size.
 - **Stated edges do not cost the size.** An Issue filed with `--after`, `--alone` or as a plan row has its edges final, but triage is still asked for its size and kind (with no Issue to wait for, so it names no edge). Before the planned lead starts, `factory issue show` reports the seat the rule gives it now, with the rule's name, or says the size is not known yet.
 - **A struggling light lead moves up once.** Its second stall or second refused ship, an out-of-depth block, or a regression on its first watch gives the next lead the lead row. After that, never light again. A filed seat with `moveUp: true` is moved up and spent the same way; any other filed seat is not.
+- **A lead-row seat filed with `moveUp: true` takes one more step.** The same four signs give the next lead the `strong` row (opus, high) and the leaving lead's handover in its brief: an out-of-depth block's `--reason` is the handover (the brief of a moveUp seat says so); for the other signs the factory asks the leaving lead once and its finalize waits for the answer, up to ten minutes, and a lead that is gone or silent leaves its last words. A default lead-row Issue does not move up; the strong lead is never moved.
+- **A seat above the lead row says why.** `seat.why` is one sentence; `issue new` and `issue seat` refuse a tier above the lead row's without it, a plan row only warns (`factory plan check`). The filing answer's `seatCost` says what Issues on that tier cost over the last 7 days.
 
 An excerpt of `config/roles.json`, cut off before the end of the file:
 
@@ -103,7 +105,7 @@ const MOVE_UP_AFTER = 2
 **Example files:**
 
 - [`roles.json`](https://github.com/jkrumm/software-factory/blob/master/config/roles.json#L1-L10): the role table, one tier and effort per role
-- [`light.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/light.ts#L47-L85): `lightRule` picks the seat, `moveUpWhy` moves a struggling light lead up
+- [`light.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/light.ts#L62-L105): `lightRule` picks the seat, `moveUpWhy` moves a struggling light or lead-row lead up
 - [`seats.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/allowance.ts#L21-L39): the extra leads an idle host can take
 
 ## Verbs

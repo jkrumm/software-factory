@@ -57,8 +57,8 @@ import {
   partWords,
   subWords,
   lineTone,
-  SEAT_LABEL,
   seatCells,
+  seatLabelOf,
   shortDate,
   type FrictionRow,
   MEANING,
@@ -648,9 +648,9 @@ function SeatSection({ model }: { model: SeatsModel }) {
           {rows.map((row) => {
             const cells = seatCells(row)
             return (
-              <tr key={row.seat} className="border-t">
+              <tr key={`${row.seat}-${row.tier ?? ''}-${row.effort ?? ''}`} className="border-t">
                 <th scope="row" className={ROW_HEAD}>
-                  {SEAT_LABEL[row.seat]}
+                  {seatLabelOf(row)}
                 </th>
                 {SEAT_COLUMNS.map((column) => (
                   <td key={column.key} className={CELL}>

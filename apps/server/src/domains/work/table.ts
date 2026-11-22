@@ -576,6 +576,14 @@ const moveUp = (ctx: Ctx<'moved_up'>): Cell => {
       `it waits for a ${issue.wait.reason}: that ends with its answer first: answer it with ${answerOf(issue.wait)}`,
     )
   }
+  // The lead row's step asks the leaving lead for its handover (`ask`): the note first, and the finalize waits for the answer.
+  if (ctx.event.payload.ask) {
+    const asked = next(issue)
+    return {
+      to: 'queued',
+      effects: [noteLead(issue.id, issue.attempt, asked, asked), finalize(issue.id, issue.attempt, asked)],
+    }
+  }
   return { to: 'queued', effects: [finalize(issue.id, issue.attempt)] }
 }
 

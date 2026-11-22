@@ -1,5 +1,5 @@
 import { type Effort, REVIEWER_CHEAP_ROLE, type Tier } from '@software-factory/contract'
-import { buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.ts'
+import { type BriefInput, buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.ts'
 import { LEAD_ROLE, LIGHT_ROLE, lightRule } from '../domains/leads/light.ts'
 import { reviewerBrief, reviewerRoleFor } from '../domains/leads/reviewer.ts'
 import { deriveSession } from '../domains/leads/session.ts'
@@ -35,7 +35,17 @@ type Look =
       signals: BriefSignal[]
       filedSpec: BriefSpec | null
       origin: SeatOrigin
-      movedFrom: { attempt: number; why: string; transcript: string | null } | null
+      movedFrom: {
+        attempt: number
+        why: string
+        transcript: string | null
+        /** the row the move went to: `strong` on the lead row's step, absent on the light step */
+        to: string | null
+        /** the leaving lead's own handover (an out-of-depth block's reason) */
+        handover: string | null
+        /** the factory asked for one, and whether the lead answered after it was asked */
+        asked: { answered: boolean } | null
+      } | null
     }
 
 /** The notes recorded before the attempt's admission: the new lead has no memory, so all of them. */
@@ -97,11 +107,23 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
     const moved = loaded.history.findLast(
       (record) => record.kind === 'moved_up' && (record.payload as { attempt?: number }).attempt === attempt - 1,
     )
+    const movedFacts = moved ? await leads.hookFacts(leadKey(issue, attempt - 1)) : []
+    const movedView = deriveSession(movedFacts)
+    const movedPayload = (moved?.payload ?? {}) as { why?: unknown; to?: unknown; handover?: unknown; ask?: unknown }
+    // The note that asked the leaving lead for its handover; a turn that began after it was typed is the answer.
+    const askedAt =
+      moved && movedPayload.ask === 1 ? (await leads.delivery(key('note_lead', issue, moved.version)))?.typedAt : null
     const movedFrom = moved
       ? {
           attempt: attempt - 1,
-          why: String((moved.payload as { why?: unknown }).why ?? ''),
-          transcript: deriveSession(await leads.hookFacts(leadKey(issue, attempt - 1))).transcriptPath,
+          why: String(movedPayload.why ?? ''),
+          transcript: movedView.transcriptPath,
+          to: typeof movedPayload.to === 'string' ? movedPayload.to : null,
+          handover: typeof movedPayload.handover === 'string' ? movedPayload.handover : null,
+          asked:
+            movedPayload.ask === 1
+              ? { answered: Boolean(askedAt && movedView.lastTurnAt && movedView.lastTurnAt > askedAt) }
+              : null,
         }
       : null
     return ok({
@@ -156,11 +178,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
     }
     const role = await seatOf(deps, current, origin)
     if (!role.ok) return fail(role.error)
-    const movedUp = movedFrom && {
-      attempt: movedFrom.attempt,
-      why: movedFrom.why,
-      lastWords: await lastWordsOf(deps, { issue, attempt: movedFrom.attempt, transcript: movedFrom.transcript }),
-    }
+    const movedUp = movedFrom && (await movedUpOf(deps, issue, movedFrom))
 
     const reviewer = await reviewerOf(deps, issue, role.value.rule !== null)
     const notes = notesBefore(history, attempt)
@@ -190,6 +208,8 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       ...(previous ? { previous } : {}),
       light: role.value.rule,
       moveUp: role.value.moveUp === true,
+      // a lead-row seat filed with the move-up: its handover goes to the strong row
+      handoverTo: role.value.moveUp === true && role.value.role === LEAD_ROLE,
       reviewer: reviewer ? reviewerBrief(reviewer.role, reviewer.cheap) : null,
       movedUp,
     })
@@ -259,6 +279,13 @@ export interface LeadSeat {
  * rule names the Issue (and the table has the row), else its `lead` row.
  */
 export async function seatOf(deps: LeadDeps, issue: Issue, origin: SeatOrigin): Promise<Result<LeadSeat, PortError>> {
+  // A move-up that named its row (the lead row's step: `strong`): the next lead starts there; a table without the row is the
+  // lead row as before.
+  if (issue.movedTo) {
+    const row = await deps.roles.role(issue.movedTo)
+    if (row.ok) return ok({ ...row.value, role: issue.movedTo, rule: null })
+    if (row.error.kind !== 'refused') return row
+  }
   // A filed seat that asked for the move-up is a start, not a verdict: once it was moved up, the next lead takes the lead row.
   if (issue.seat && !(issue.seat.moveUp && issue.movedUp > 0)) {
     return ok({
@@ -304,20 +331,49 @@ async function reviewerOf(
   return { role: reviewerRoleFor({ issueNumber: issueNumber(issue), light, takesAll }), cheap: cheap.value }
 }
 
-/** The last words of a moved-up light lead, for its successor's brief; nothing when they cannot be read. */
+/**
+ * What the next lead's brief carries of the lead that was moved up: the light step has its last words as ever; the lead
+ * row's step has its handover, which is an out-of-depth block's reason, or what the lead wrote when asked (its last words
+ * when it did not answer).
+ */
+async function movedUpOf(
+  deps: LeadDeps,
+  issue: IssueId,
+  from: NonNullable<Extract<Look, { stop: false }>['movedFrom']>,
+): Promise<NonNullable<BriefInput['movedUp']>> {
+  const step = from.to ? ('lead' as const) : ('light' as const)
+  const base = { attempt: from.attempt, why: from.why, step }
+  if (from.handover) return { ...base, lastWords: null, handover: { kind: 'reason', text: from.handover } }
+  const lastWords = await lastWordsOf(deps, {
+    issue,
+    attempt: from.attempt,
+    transcript: from.transcript,
+    chars: step === 'lead' ? HANDOVER_CHARS : LAST_WORDS_CHARS,
+  })
+  if (!from.asked) return { ...base, lastWords }
+  return {
+    ...base,
+    lastWords: null,
+    handover: { kind: from.asked.answered ? 'answer' : 'none', text: lastWords },
+  }
+}
+
+/** The last words of a moved-up lead, for its successor's brief; nothing when they cannot be read. */
 async function lastWordsOf(
   deps: LeadDeps,
-  of: { issue: IssueId; attempt: number; transcript: string | null },
+  of: { issue: IssueId; attempt: number; transcript: string | null; chars?: number },
 ): Promise<string | null> {
   if (!of.transcript || !deps.apiErrors) return null
   // The attempt is finished by now: its transcript may only be left in the archive.
   const path = await deps.transcripts.resolve({ issue: of.issue, attempt: of.attempt, path: of.transcript })
-  const words = await deps.apiErrors.tails.lastWords(path, LAST_WORDS_CHARS)
+  const words = await deps.apiErrors.tails.lastWords(path, of.chars ?? LAST_WORDS_CHARS)
   return words.ok ? words.value : null
 }
 
 /** How much of a moved-up lead's last words its successor reads. */
 const LAST_WORDS_CHARS = 3_000
+/** How much of a leaving lead's handover its successor reads: a page of what the Issue needs and what was tried. */
+const HANDOVER_CHARS = 8_000
 
 async function recordStarted(
   work: Parameters<Parameters<LeadDeps['uow']['run']>[0]>[0]['work'],

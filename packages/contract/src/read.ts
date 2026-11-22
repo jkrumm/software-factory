@@ -132,7 +132,17 @@ export const ReadIssueCard = z
     heldBy: z.number().int().nullable(),
     waitingOnOwner: z.boolean(),
     /** the seat the Issue asked its lead for; null when it asked for none (the lead role of the table) */
-    seat: z.object({ tier: z.string(), effort: z.string(), role: z.string().nullable() }).nullable(),
+    seat: z
+      .object({
+        tier: z.string(),
+        effort: z.string(),
+        role: z.string().nullable(),
+        /** the filer's one sentence on why the work needs this seat (`seat.why`); null when none was given */
+        why: z.string().nullable(),
+        /** the seat asked to be moved up when its lead struggles */
+        moveUp: z.boolean(),
+      })
+      .nullable(),
     /** the seat of the Issue's lead for the badge: what the current attempt started on, else (`planned`) what it will start on; null when neither is known or the Issue is closed with no lead */
     leadSeat: LeadSeat.nullable(),
     /** the resource the Issue was filed in (the repo's `lanes:` cap it); null for none */

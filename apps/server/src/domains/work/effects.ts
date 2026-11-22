@@ -20,7 +20,7 @@ export interface EffectPayloads {
    * end the attempt: its terminals, transcripts, worktree and claim; `closed` marks the one a close plans, which also
    * cleans the Issue's branches
    */
-  finalize: { attempt: number; closed?: 1 }
+  finalize: { attempt: number; closed?: 1; handover?: number }
 }
 
 export type EffectKind = keyof EffectPayloads
@@ -52,12 +52,13 @@ export const startWatch = (issue: IssueId, attempt: number, watch: number): Effe
 
 /**
  * A restart's end of the attempt, with an Issue that stays open: one per attempt, so a second plan of the same attempt
- * is a no-op. It never cleans branches.
+ * is a no-op. It never cleans branches. `handover` is the version of the note that asked the leaving lead for its handover
+ * (a move-up of the lead row): the finalize waits for the answer before it closes the terminal.
  */
-export const finalize = (issue: IssueId, attempt: number): Effect => ({
+export const finalize = (issue: IssueId, attempt: number, handover?: number): Effect => ({
   kind: 'finalize',
   key: key('finalize', issue, attempt),
-  payload: { attempt },
+  payload: handover === undefined ? { attempt } : { attempt, handover },
 })
 
 /**

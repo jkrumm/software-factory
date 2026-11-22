@@ -1,9 +1,12 @@
+import { HANDOVER_WAIT_MS } from '../domains/leads/light.ts'
 import { leadBranch, leadKey } from '../domains/leads/names.ts'
+import { deriveSession } from '../domains/leads/session.ts'
 import type { BranchClosure, FinalizeStep } from '../domains/leads/ports.ts'
 import type { QualityStore } from '../domains/quality/store.ts'
 import type { EffectOf } from '../domains/work/effects.ts'
 import { type IssueId, issueNumber } from '../kernel/ids.ts'
-import { ok, type PortError, type Result } from '../kernel/result.ts'
+import { key } from '../kernel/keys.ts'
+import { err, ok, type PortError, portError, type Result } from '../kernel/result.ts'
 import { type LeadDeps, loadIssue } from './leads.ts'
 
 interface Closing {
@@ -33,6 +36,29 @@ async function cleanClosed(
   if (!located.ok) return located.error.kind === 'refused' ? ok(undefined) : located
   const cleaned = await deps.branches.clean({ repo: located.value, issue: issueNumber(issue), ...closing })
   return cleaned.ok ? ok(undefined) : cleaned
+}
+
+/**
+ * Whether the finalize still waits for the handover the leaving lead was asked for (`note_lead` of version `asked`): its
+ * note was typed, no turn since it ended, and the lead is alive and inside the wait's bound. A lead that never took the note
+ * (gone, never started) or that ended has nothing to wait for.
+ */
+async function handoverPending(
+  deps: LeadDeps,
+  input: { issue: IssueId; attempt: number; name: string; asked: number },
+): Promise<Result<boolean, PortError>> {
+  const read = await deps.uow.run(async ({ leads }) =>
+    ok({
+      delivery: await leads.delivery(key('note_lead', input.issue, input.asked)),
+      view: deriveSession(await leads.hookFacts(input.name)),
+    }),
+  )
+  if (!read.ok) return read
+  const { delivery, view } = read.value
+  if (!delivery?.typedAt || view.state === 'gone') return ok(false)
+  const answered = view.lastTurnAt !== null && view.lastTurnAt > delivery.typedAt && view.state !== 'working'
+  if (answered) return ok(false)
+  return ok(deps.clock.now().getTime() - delivery.typedAt.getTime() < HANDOVER_WAIT_MS)
 }
 
 /**
@@ -93,6 +119,14 @@ export async function finalizeLead(deps: LeadDeps, effect: FinalizeEffect): Prom
     if (!released.ok) return released
     const marked = await mark('claim')
     if (!marked.ok) return marked
+  }
+
+  // A move-up of the lead row asked the leaving lead for its handover: its terminal stays until it has answered, ended, or
+  // the wait's bound passed (then its last words are the handover).
+  if (!done('terminals') && effect.payload.handover !== undefined) {
+    const pending = await handoverPending(deps, { issue, attempt, name, asked: effect.payload.handover })
+    if (!pending.ok) return pending
+    if (pending.value) return err(portError('refused', 'the leaving lead is writing its handover'))
   }
 
   if (!done('terminals')) {

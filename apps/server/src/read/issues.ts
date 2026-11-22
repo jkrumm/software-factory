@@ -66,7 +66,9 @@ function seatOf(value: unknown): ReadIssueCard['seat'] {
   if (!isRecord(value)) return null
   const tier = text(value.tier)
   const effort = text(value.effort)
-  return tier && effort ? { tier, effort, role: text(value.role) } : null
+  return tier && effort
+    ? { tier, effort, role: text(value.role), why: text(value.why), moveUp: value.moveUp === true }
+    : null
 }
 
 const ISSUE_COLUMNS = (sql: SQL) => sql`

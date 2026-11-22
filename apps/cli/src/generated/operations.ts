@@ -575,6 +575,8 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'tier', flag: 'tier', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'effort', flag: 'effort', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'role', flag: 'role', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'moveUp', flag: 'move-up', kind: 'boolean', repeatable: false, required: false, untyped: false },
+      { name: 'why', flag: 'why', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],

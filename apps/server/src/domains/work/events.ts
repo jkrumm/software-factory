@@ -6,6 +6,7 @@ import {
   ISSUE_SIZES,
   LaneName,
   MAX_AFTER_IDS,
+  SEAT_WHY_MAX,
   TIERS,
 } from '@software-factory/contract'
 import * as z from 'zod'
@@ -40,6 +41,8 @@ export const PAYLOADS = {
         effort: z.enum(EFFORTS),
         role: text.optional(),
         moveUp: z.literal(true).optional(),
+        /** what the work needs on a seat above the lead row (`seat.why`) */
+        why: text.max(SEAT_WHY_MAX).optional(),
       })
       .optional(),
     /** the resource it runs in; the project's `lanes:` cap the leads of a lane (old events carry none) */
@@ -89,6 +92,8 @@ export const PAYLOADS = {
     tier: z.enum(TIERS),
     effort: z.enum(EFFORTS),
     role: text.optional(),
+    moveUp: z.literal(true).optional(),
+    why: text.max(SEAT_WHY_MAX).optional(),
   }),
   /** an amend or a note reaches the lead */
   /** `back`: the Judge sent this Decision back to the lead, which hears it now though the Issue waits on it (old events carry none) */
@@ -142,7 +147,16 @@ export const PAYLOADS = {
     depth: z.literal(true).optional(),
   }),
   /** a light lead struggled (`domains/leads/light.ts`): its attempt ends and the Issue queues again for the lead row */
-  moved_up: z.object({ attempt, why: text }),
+  moved_up: z.object({
+    attempt,
+    why: text,
+    /** the role table's row the next lead starts on when it is not the lead row (`strong`, for a filed lead-row seat that asked for the move-up) */
+    to: z.string().optional(),
+    /** the leaving lead's own handover: the `--reason` of an out-of-depth block on the lead row's step */
+    handover: text.optional(),
+    /** the factory asked the leaving lead for its handover (the lead row's step, a sign other than an out-of-depth block): the finalize waits for the answer */
+    ask: z.literal(1).optional(),
+  }),
   /** a wait ended without a person; `since` names the wait */
   woken: z.object({ since: z.number().int().min(1), detail: text }),
   /** the lead landed and deployed: the watch begins */

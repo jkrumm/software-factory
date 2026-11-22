@@ -208,3 +208,203 @@ describe('the light seat delivers', () => {
     expect(kpis.delivery.light.movedUpCost).toBeCloseTo(1 / 11)
   })
 })
+
+describe('the move-up steps, the filed seats and the move-up seat of the lead row', () => {
+  // a window of its own in 2030: nothing of the fixture above falls in it
+  const LATER = new Date('2030-01-15T12:00:00Z')
+  const W2 = { from: new Date(LATER.getTime() - 7 * 24 * 3_600_000), to: LATER }
+  const base = new Date(LATER.getTime() - 2 * 24 * 3_600_000)
+  const at = (minutes: number) => new Date(base.getTime() + minutes * MIN)
+  const LIGHT_SEAT = { tier: 'haiku', effort: 'high', role: 'light', rule: 'hygiene:links' }
+  const LEAD_SEAT = { tier: 'sonnet', effort: 'high', role: 'lead' }
+  const MOVE_UP_SEAT = { tier: 'sonnet', effort: 'medium', role: 'lead', moveUp: true }
+  const STRONG_SEAT = { tier: 'opus', effort: 'high', role: 'strong' }
+  let steps = 0
+
+  async function put(
+    issue: string,
+    version: number,
+    kind: string,
+    when: Date,
+    payload: Record<string, unknown>,
+    from: string | null,
+    to: string,
+  ) {
+    steps += 1
+    await sql`
+      INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, from_state, to_state)
+      VALUES (${`step_${steps}`}, ${issue}, ${`step_key_${steps}`}, ${kind}, ${payload}, 'factory', ${when}, 'applied', ${version}, ${from}, ${to})`
+  }
+
+  async function filed(issue: string, seat: Record<string, unknown> | null) {
+    await sql`INSERT INTO factory.issues (id, repo, state, version) VALUES (${issue}, 'app', 'working', 3)`
+    await put(issue, 1, 'filed', base, seat === null ? {} : { seat }, null, 'settling')
+  }
+
+  async function lead(issue: string, version: number, attempt: number, seat: Record<string, unknown>) {
+    await put(issue, version, 'lead_started', base, { attempt, terminal: 't', seat }, 'working', 'working')
+    await sql`INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)
+      VALUES (${`hook_${issue}_${attempt}`}, ${`lead-${issue}-${attempt}`}, ${issue}, ${attempt}, 'session_started', ${base}, ${base}, ${{ claudeSessionId: `claude-${issue}-${attempt}` }})`
+  }
+
+  async function moved(issue: string, version: number, minutes: number, why: string, to?: string) {
+    await put(
+      issue,
+      version,
+      'moved_up',
+      at(minutes),
+      { attempt: 1, why, ...(to === undefined ? {} : { to }) },
+      'working',
+      'working',
+    )
+  }
+
+  async function watch(issue: string, attempt: number, n: number, answer: 'passed' | 'regressed') {
+    await sql`INSERT INTO factory.quality_watches (key, issue_id, attempt, watch, started_at, window_ms, answer, answered_at)
+      VALUES (${`step_watch_${issue}_${n}`}, ${issue}, ${attempt}, ${n}, ${base}, 0, ${answer}, ${base})`
+  }
+
+  async function closed(issue: string, version: number, outcome: 'done' | 'dropped' | 'cancelled') {
+    await sql`UPDATE factory.issues SET state = 'closed', outcome = ${outcome} WHERE id = ${issue}`
+    await put(issue, version, 'closed', at(120), { outcome }, 'working', 'closed')
+  }
+
+  async function spend(id: number, claude: string, cost: number) {
+    await sql`INSERT INTO usage.sessions VALUES (${id}, ${claude}, NULL)`
+    await sql`INSERT INTO usage.records_unique VALUES (${id}, ${cost})`
+  }
+
+  beforeAll(async () => {
+    await sql`DROP SCHEMA IF EXISTS usage CASCADE`
+    await sql`CREATE SCHEMA usage`
+    await sql`CREATE TABLE usage.sessions (id bigint PRIMARY KEY, source_session_id text, issue_id text)`
+    await sql`CREATE TABLE usage.records_unique (session_id bigint, cost_usd numeric)`
+
+    // light Issues: one moves up for each sign and the lead row finishes it, one regresses again after its move, one passes
+    await filed('issue_101', null)
+    await lead('issue_101', 2, 1, LIGHT_SEAT)
+    await moved('issue_101', 3, 30, 'the light lead said the work is beyond its seat: the parser is out of reach')
+    await lead('issue_101', 4, 2, LEAD_SEAT)
+    await closed('issue_101', 5, 'done')
+
+    await filed('issue_102', null)
+    await lead('issue_102', 2, 1, LIGHT_SEAT)
+    await watch('issue_102', 1, 1, 'regressed')
+    await moved('issue_102', 3, 90, 'the light lead’s change regressed on its first watch')
+    await lead('issue_102', 4, 2, LEAD_SEAT)
+    await watch('issue_102', 2, 2, 'regressed')
+    await closed('issue_102', 5, 'dropped')
+
+    await filed('issue_103', null)
+    await lead('issue_103', 2, 1, LIGHT_SEAT)
+    await moved('issue_103', 3, 45, 'the light lead stalled 2 times')
+    await lead('issue_103', 4, 2, LEAD_SEAT)
+
+    await filed('issue_104', null)
+    await lead('issue_104', 2, 1, LIGHT_SEAT)
+    await moved('issue_104', 3, 15, 'the light lead’s ship was refused 2 times')
+    await lead('issue_104', 4, 2, LEAD_SEAT)
+    await closed('issue_104', 5, 'cancelled')
+
+    await filed('issue_105', null)
+    await lead('issue_105', 2, 1, LIGHT_SEAT)
+    await watch('issue_105', 1, 1, 'passed')
+
+    await filed('issue_106', null)
+    await lead('issue_106', 2, 1, LEAD_SEAT)
+    await watch('issue_106', 1, 1, 'passed')
+
+    // the lead row's move-up seat: four move up to the strong row, one passes
+    await filed('issue_111', MOVE_UP_SEAT)
+    await lead('issue_111', 2, 1, MOVE_UP_SEAT)
+    await moved('issue_111', 3, 20, 'the lead said the work is beyond its seat: out of reach', 'strong')
+    await lead('issue_111', 4, 2, STRONG_SEAT)
+    await closed('issue_111', 5, 'done')
+
+    await filed('issue_112', MOVE_UP_SEAT)
+    await lead('issue_112', 2, 1, MOVE_UP_SEAT)
+    await moved('issue_112', 3, 40, 'the lead stalled 2 times', 'strong')
+    await lead('issue_112', 4, 2, STRONG_SEAT)
+    await watch('issue_112', 2, 2, 'regressed')
+    await closed('issue_112', 5, 'cancelled')
+
+    await filed('issue_113', MOVE_UP_SEAT)
+    await lead('issue_113', 2, 1, MOVE_UP_SEAT)
+    await watch('issue_113', 1, 1, 'regressed')
+    await moved('issue_113', 3, 60, 'the lead’s change regressed on its first watch', 'strong')
+    await lead('issue_113', 4, 2, STRONG_SEAT)
+
+    await filed('issue_114', MOVE_UP_SEAT)
+    await lead('issue_114', 2, 1, MOVE_UP_SEAT)
+    await moved('issue_114', 3, 30, 'the lead’s ship was refused 3 times', 'strong')
+    await lead('issue_114', 4, 2, STRONG_SEAT)
+    await closed('issue_114', 5, 'done')
+
+    await filed('issue_115', MOVE_UP_SEAT)
+    await lead('issue_115', 2, 1, MOVE_UP_SEAT)
+    await watch('issue_115', 1, 1, 'passed')
+    await closed('issue_115', 3, 'done')
+
+    // a filed seat without the move-up: its own row
+    await filed('issue_116', { tier: 'opus', effort: 'high' })
+    await lead('issue_116', 2, 1, { tier: 'opus', effort: 'high' })
+    await watch('issue_116', 1, 1, 'passed')
+    await closed('issue_116', 3, 'done')
+
+    // dollars of the first attempts: 1, 2, 3 and 4 moved up, 10 did not
+    await spend(1001, 'claude-issue_111-1', 1)
+    await spend(1002, 'claude-issue_112-1', 2)
+    await spend(1003, 'claude-issue_113-1', 3)
+    await spend(1004, 'claude-issue_114-1', 4)
+    await spend(1005, 'claude-issue_115-1', 10)
+  })
+
+  test('splits the filed Issues by tier and effort, one row per pair', async () => {
+    const kpis = await readSeatKpis(sql, W2, { now: LATER, cost: null })
+    expect(kpis.rows.filter((row) => row.seat === 'filed').map((row) => [row.tier, row.effort, row.issues])).toEqual([
+      ['opus', 'high', 1],
+      ['sonnet', 'medium', 5],
+    ])
+    expect(kpis.rows.find((row) => row.seat === 'light')).toMatchObject({
+      tier: null,
+      effort: null,
+      issues: 5,
+      movedUp: 4,
+    })
+  })
+
+  test('counts the move-ups of each step by sign and by where the Issue ended', async () => {
+    const kpis = await readSeatKpis(sql, W2, { now: LATER, cost: null })
+    expect(kpis.steps.light).toEqual({
+      moved: 4,
+      bySign: { outOfDepth: 1, regressed: 1, stalled: 1, refusedShips: 1 },
+      outcomes: { done: 1, dropped: 2, regressedAfter: 1, open: 1 },
+    })
+    expect(kpis.steps.lead).toEqual({
+      moved: 4,
+      bySign: { outOfDepth: 1, regressed: 1, stalled: 1, refusedShips: 1 },
+      outcomes: { done: 2, dropped: 1, regressedAfter: 1, open: 1 },
+    })
+  })
+
+  test('delivers the lead row’s move-up seat: first pass, move-ups with their cost and minutes, regressions', async () => {
+    const kpis = await readSeatKpis(sql, W2, { now: LATER, cost: null })
+    const { leadMoveUp, lead } = kpis.delivery
+    // the first watches that shipped on the move-up seat: one regressed (issue_113), one passed (issue_115)
+    expect(leadMoveUp).toMatchObject({
+      issues: 5,
+      finishedWatches: 2,
+      finishedPassRate: 0.5,
+      movedUp: 4,
+      regressions: 2,
+      regressionsPerIssue: 0.4,
+      cost: null,
+      costPerIssue: null,
+    })
+    expect(leadMoveUp.movedUpShare).toBeCloseTo(0.8)
+    // the moved-up attempts ran 20, 40, 60 and 30 minutes; their dollars 1 + 2 + 3 + 4 over the five Issues
+    expect(leadMoveUp.movedUpMs).toBe(37.5 * MIN)
+    expect(leadMoveUp.movedUpCost).toBeCloseTo(2)
+    expect(lead).toMatchObject({ issues: 1, movedUp: 0, movedUpShare: null })
+  })
+})

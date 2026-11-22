@@ -1,4 +1,4 @@
-import { moveUpWhy } from '../domains/leads/light.ts'
+import { moveUpWhy, STRONG_ROLE, stepOf } from '../domains/leads/light.ts'
 import type { QualityStore } from '../domains/quality/store.ts'
 import { OUTLIVES_CLOSE } from '../domains/work/effects.ts'
 import { movable } from '../domains/work/issue.ts'
@@ -31,34 +31,61 @@ export async function moveUpIfDue(
   const issue = replay(input.issueId, history)
   // Only a lead the light rule seated, or one whose filed seat asked for it (`moveUp`): any other filed seat is the filer's,
   // and moving it up would start it there again.
-  if (issue.state === 'closed' || !movable(issue)) return ok(null)
+  const step = stepOf(issue.ranOn)
+  if (issue.state === 'closed' || !movable(issue) || !step) return ok(null)
   const stalls = history.filter(
     (record) =>
       record.kind === 'stalled' &&
       attemptOf(record.payload) === issue.attempt &&
       (record.payload as { cause?: unknown }).cause !== 'wall',
   )
+  const depth = stalls.findLast((record) => (record.payload as { depth?: unknown }).depth === true)
   const why = moveUpWhy({
-    light: true,
+    step,
     stalls: stalls.length,
-    outOfDepth: stalls.some((record) => (record.payload as { depth?: unknown }).depth === true),
+    outOfDepth: depth !== undefined,
     shipRefusals: stores.quality ? await stores.quality.refusedShips(input.issueId, issue.attempt) : 0,
     regressedWatch: input.regressedWatch ?? null,
   })
   if (!why) return ok(null)
+  // The lead row's step goes to the strong row with a handover: an out-of-depth block's `--reason` is it, and for any other
+  // sign the factory asks the leaving lead once (the note is planned with the event; the finalize waits for the answer).
+  const handover = step === 'lead' ? (depth?.payload as { detail?: unknown } | undefined)?.detail : undefined
+  const lead =
+    step === 'lead'
+      ? {
+          to: STRONG_ROLE,
+          ...(typeof handover === 'string' && handover.trim()
+            ? { handover: handover.trim().slice(0, MAX_HANDOVER_CHARS) }
+            : { ask: 1 as const }),
+        }
+      : {}
+  const eventKey = key('moved_up', input.issueId, issue.attempt)
   const recorded = await recordIn(stores.work, deps, {
     issueId: input.issueId,
-    key: key('moved_up', input.issueId, issue.attempt),
-    event: { kind: 'moved_up', payload: { attempt: issue.attempt, why: whyWith(why, input.detail) }, actor: 'factory' },
+    key: eventKey,
+    event: {
+      kind: 'moved_up',
+      payload: { attempt: issue.attempt, why: whyWith(why, input.detail), ...lead },
+      actor: 'factory',
+    },
   })
   if (!recorded.ok) return recorded
-  // As a close does: a note still owed to the light lead would hold the finalize behind it (the outbox runs an Issue's
-  // effects in order), and the next lead reads every note in its brief anyway.
+  // As a close does: a note still owed to the leaving lead would hold the finalize behind it (the outbox runs an Issue's
+  // effects in order), and the next lead reads every note in its brief anyway. The note that asks for the handover stays.
   if (recorded.value.result === 'applied') {
-    await stores.work.cancelOpenEffects(input.issueId, OUTLIVES_CLOSE, deps.clock.now())
+    await stores.work.cancelOpenEffects(
+      input.issueId,
+      OUTLIVES_CLOSE,
+      deps.clock.now(),
+      'ask' in lead ? [key('note_lead', input.issueId, recorded.value.issue.version)] : [],
+    )
   }
   return ok(recorded.value)
 }
+
+/** The longest handover the event keeps: an out-of-depth block's reason, as the next lead's brief quotes it. */
+const MAX_HANDOVER_CHARS = 4_000
 
 /** The rule's reason, and what broke when a regression moved it: the next lead reads both in its brief. */
 const whyWith = (why: string, detail: string | undefined): string =>

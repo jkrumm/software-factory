@@ -42,7 +42,8 @@ export interface WorkStore {
   /** into the outbox, in order; an effect whose key is planned already is left as it is */
   planEffects(event: StoredEvent, effects: readonly Effect[]): Promise<void>
   /** cancels the Issue's open effects but those of the kinds kept */
-  cancelOpenEffects(issueId: IssueId, keep: readonly EffectKind[], at: Date): Promise<void>
+  /** cancels the Issue's open effects but the kinds in `keep` and the keys in `spare` (a note planned by the event that cancels the rest) */
+  cancelOpenEffects(issueId: IssueId, keep: readonly EffectKind[], at: Date, spare?: readonly Key[]): Promise<void>
   /** each Issue's oldest open effect that is due and free, held until `until` */
   claimEffects(input: { now: Date; until: Date; limit: number }): Promise<ClaimedEffect[]>
   recordRun(key: Key, run: EffectRun): Promise<void>

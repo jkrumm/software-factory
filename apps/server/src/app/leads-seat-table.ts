@@ -14,6 +14,7 @@ export function plannedSeatTable(input: { roles: Pick<Roles, 'role'>; light: Pic
   }
   return {
     lead: row('lead'),
+    row,
     light: {
       role: LIGHT_ROLE,
       row: row(LIGHT_ROLE),

@@ -424,7 +424,7 @@ test('a seat is resolved at filing: tier and effort are kept, a role is stored w
     '--key',
     'seat-1',
     '--seat',
-    '{"tier":"opus","effort":"max"}',
+    '{"tier":"opus","effort":"max","why":"a design the next Issues build on"}',
   ])
   expect(direct.code).toBe(0)
   const byRole = await v.run([
@@ -442,7 +442,7 @@ test('a seat is resolved at filing: tier and effort are kept, a role is stored w
   expect(byRole.code).toBe(0)
   const [a] = await v.events(String(direct.json?.issue), 'filed')
   const [b] = await v.events(String(byRole.json?.issue), 'filed')
-  expect(a?.payload.seat).toEqual({ tier: 'opus', effort: 'max' })
+  expect(a?.payload.seat).toEqual({ tier: 'opus', effort: 'max', why: 'a design the next Issues build on' })
   expect(b?.payload.seat).toEqual({ tier: 'sonnet', effort: 'medium', role: 'reviewer' })
   const shown = await v.run(['issue', 'show', String(byRole.json?.issue)])
   expect(shown.json).toMatchObject({ seat: { tier: 'sonnet', effort: 'medium', role: 'reviewer' }, ranOn: null })
@@ -476,14 +476,15 @@ test('issue seat: an Issue no lead has started takes a seat or a role; a started
   ])
   const id = String(filed.json?.issue)
 
-  const set = await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'high', '--call', 's1'])
+  const why = ['--why', 'the claim race needs a design']
+  const set = await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'high', ...why, '--call', 's1'])
   expect(set.json).toMatchObject({ result: 'applied', issue: { id, state: 'settling' } })
-  expect((await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'high', '--call', 's1'])).json).toMatchObject(
-    {
-      result: 'replayed',
-    },
-  )
-  expect((await v.run(['issue', 'show', id])).json).toMatchObject({ seat: { tier: 'opus', effort: 'high' } })
+  expect(
+    (await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'high', ...why, '--call', 's1'])).json,
+  ).toMatchObject({ result: 'replayed' })
+  expect((await v.run(['issue', 'show', id])).json).toMatchObject({
+    seat: { tier: 'opus', effort: 'high', why: 'the claim race needs a design' },
+  })
 
   const byRole = await v.run(['issue', 'seat', id, '--role', 'reviewer'], 'orchestrator')
   expect(byRole.json).toMatchObject({ result: 'applied' })
@@ -512,7 +513,201 @@ test('issue seat: an Issue no lead has started takes a seat or a role; a started
   await v.w.tick()
   const [started] = await v.events(id, 'lead_started')
   expect(started?.payload.seat).toEqual({ tier: 'sonnet', effort: 'medium', role: 'reviewer' })
-  const late = await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'max'])
+  const late = await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'max', ...why])
   expect(late.code).toBe(5)
   expect(late.error?.message).toContain('settling or queued')
+})
+
+test('a seat above the lead row says why: refused without it, naming the alternative; filed with it, and issue show prints it', async () => {
+  const bare = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Needs opus',
+    '--seat',
+    '{"tier":"opus","effort":"high"}',
+  ])
+  expect(bare.code).toBe(2)
+  expect(bare.error?.code).toBe('seat_refused')
+  expect(bare.error?.message).toContain('seat.why')
+  expect(bare.error?.message).toContain('{"role":"lead","moveUp":true}')
+  const byRole = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Needs strong',
+    '--seat',
+    '{"role":"strong"}',
+  ])
+  expect(byRole.error?.message).toContain('seat.why')
+
+  const before = await v.issueCount()
+  const tooLong = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'x',
+    '--seat',
+    JSON.stringify({ tier: 'opus', effort: 'high', why: 'x'.repeat(301) }),
+  ])
+  expect(tooLong.error?.message).toContain('seat.why')
+  expect(await v.issueCount()).toBe(before)
+
+  const filed = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Needs opus',
+    '--key',
+    'why-1',
+    '--seat',
+    '{"tier":"opus","effort":"high","why":"a schema others build on"}',
+  ])
+  expect(filed.code).toBe(0)
+  expect(filed.json).toMatchObject({ filed: true })
+  const shown = await v.run(['issue', 'show', String(filed.json?.issue)])
+  expect(shown.json).toMatchObject({
+    seat: { tier: 'opus', effort: 'high', why: 'a schema others build on', moveUp: false },
+  })
+})
+
+test('the lead row with moveUp files without a why, is stored as the lead row, and a seat above it cannot move up', async () => {
+  const filed = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Doubtful',
+    '--key',
+    'moveup-1',
+    '--seat',
+    '{"role":"lead","moveUp":true}',
+  ])
+  expect(filed.code).toBe(0)
+  const [event] = await v.events(String(filed.json?.issue), 'filed')
+  expect(event?.payload.seat).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead', moveUp: true })
+  const byTier = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Doubtful 2',
+    '--key',
+    'moveup-2',
+    '--seat',
+    '{"tier":"sonnet","effort":"high","moveUp":true}',
+  ])
+  const [second] = await v.events(String(byTier.json?.issue), 'filed')
+  expect(second?.payload.seat).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead', moveUp: true })
+  const above = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'x',
+    '--seat',
+    '{"tier":"opus","effort":"high","moveUp":true,"why":"hard"}',
+  ])
+  expect(above.error?.message).toContain('seat.moveUp')
+})
+
+test('the filing answer of a seated Issue carries the 7-day cost line from the usage schema, and none when the read fails', async () => {
+  const sql = v.w.world.db.sql
+  const none = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'No usage',
+    '--key',
+    'cost-0',
+    '--seat',
+    '{"tier":"opus","effort":"high","why":"first"}',
+  ])
+  expect(none.json).not.toHaveProperty('seatCost')
+
+  // Two opus Issues and one on the lead row, each with a lead attempt that cost dollars, started a day ago.
+  await sql`CREATE SCHEMA usage`
+  await sql`CREATE TABLE usage.sessions (id bigint PRIMARY KEY, source_session_id text, issue_id text)`
+  await sql`CREATE TABLE usage.records_unique (session_id bigint, cost_usd numeric)`
+  const at = new Date(Date.now() - 24 * 3_600_000)
+  let n = 0
+  const issue = async (id: string, seat: Record<string, unknown>, cost: number, minutes: number) => {
+    await sql`INSERT INTO factory.issues (id, repo, state, version) VALUES (${id}, 'app', 'working', 3)`
+    const event = async (version: number, kind: string, when: Date, payload: Record<string, unknown>) => {
+      n += 1
+      await sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, from_state, to_state)
+        VALUES (${`fx_${n}`}, ${id}, ${`fx_key_${n}`}, ${kind}, ${payload}, 'factory', ${when}, 'applied', ${version}, NULL, 'working')`
+    }
+    await event(1, 'filed', at, {})
+    await event(2, 'lead_started', at, { attempt: 1, terminal: 't', seat })
+    await event(3, 'closed', new Date(at.getTime() + minutes * 60_000), {})
+    await sql`INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)
+      VALUES (${`fx_hook_${n}`}, ${`lead-${id}-1`}, ${id}, 1, 'session_started', ${at}, ${at}, ${{ claudeSessionId: `claude-${id}` }})`
+    await sql`INSERT INTO usage.sessions VALUES (${n}, ${`claude-${id}`}, NULL)`
+    await sql`INSERT INTO usage.records_unique VALUES (${n}, ${cost})`
+  }
+  await issue('issue_9001', { tier: 'opus', effort: 'high' }, 20, 120)
+  await issue('issue_9002', { tier: 'opus', effort: 'high' }, 10, 60)
+  await issue('issue_9003', { tier: 'sonnet', effort: 'high', role: 'lead' }, 4, 40)
+
+  const priced = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Priced',
+    '--key',
+    'cost-1',
+    '--seat',
+    '{"tier":"opus","effort":"high","why":"second"}',
+  ])
+  expect(priced.json?.seatCost).toMatch(
+    /^opus seats, last 7 days: 15\.00 dollars an Issue, median \d+ working minutes \(2 Issues\); the lead row: \d+\.\d\d dollars, \d+ minutes \(\d+ Issues\)$/,
+  )
+  // issue seat answers it too
+  const plain = await v.run(['issue', 'new', '--repo', 'example', '--title', 'Seated later', '--key', 'cost-2'])
+  expect(plain.json).not.toHaveProperty('seatCost')
+  const seated = await v.run([
+    'issue',
+    'seat',
+    String(plain.json?.issue),
+    '--tier',
+    'opus',
+    '--effort',
+    'high',
+    '--why',
+    'third',
+  ])
+  expect(String(seated.json?.seatCost)).toContain('opus seats, last 7 days: 15.00 dollars an Issue')
+
+  // The usage read fails: the line is gone and filing still works.
+  await sql`DROP SCHEMA usage CASCADE`
+  const failed = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Unpriced',
+    '--key',
+    'cost-3',
+    '--seat',
+    '{"tier":"opus","effort":"high","why":"fourth"}',
+  ])
+  expect(failed.code).toBe(0)
+  expect(failed.json).not.toHaveProperty('seatCost')
 })

@@ -91,7 +91,7 @@ export async function fileNewIssue(
       input.key === undefined ? null : await deps.uow.run(async ({ work }) => ok(await work.eventByKey(request)))
     if (before !== null && !before.ok) return before
     if (!before?.value) {
-      const resolved = await resolveSeat(deps.roles, parsed.seat)
+      const resolved = await resolveSeat(deps.roles, parsed.seat, { requireWhy: true })
       if (!resolved.ok) return resolved
       seat = resolved.value
     }

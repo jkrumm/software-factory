@@ -40,6 +40,8 @@ import { failure, issueMove, verbResponse, writeFailure } from './written.ts'
 /** The owner's Issue verbs and the session note, bound in `main.ts`. */
 export interface IssueApi {
   file(input: NewIssueInput): Promise<Result<NewIssued, NewIssueError | PortError>>
+  /** the cost line of a seat's tier (`read/seat-cost.ts`), or null when the usage schema cannot be read: filing never waits on it */
+  seatCost(tier: string): Promise<string | null>
   /** a Report no Issue owns, linked to the Issues it concerns */
   newArtifact(input: {
     repo: string
@@ -113,6 +115,7 @@ type NoteError = Parameters<typeof writeFailure>[0]
 const gone = async () => err(portError('gone', 'the Issue verbs are not wired into this server'))
 const unwired: IssueApi = {
   file: gone,
+  seatCost: async () => null,
   newArtifact: gone,
   linkArtifact: gone,
   retireArtifact: gone,
@@ -266,12 +269,16 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           actor: ownerActorOf(request),
         })
         if (!filed.ok) return fileFailure(filed.error)
+        // a seat filed by hand says what it costs; never a reason to refuse
+        const seatCost =
+          filed.value.filed && filed.value.issue.seat ? await api.seatCost(filed.value.issue.seat.tier) : null
         return Response.json(
           NewIssueAnswer.parse({
             issue: filed.value.issue.id,
             id: filed.value.issue.id,
             state: filed.value.issue.state,
             filed: filed.value.filed,
+            ...(seatCost ? { seatCost } : {}),
           }),
         )
       },
@@ -474,7 +481,12 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           const { field, detail } = seated.error
           return Response.json(failure(`${field}: ${detail}`, 'seat_refused'), { status: 422 })
         }
-        return verbResponse(seated as Written)
+        const seatedWritten = seated as Written
+        const seatCost =
+          seatedWritten.ok && seatedWritten.value.result === 'applied' && seatedWritten.value.issue.seat
+            ? await api.seatCost(seatedWritten.value.issue.seat.tier)
+            : null
+        return verbResponse(seatedWritten, { seatCost })
       },
       {
         params: Params,

@@ -94,6 +94,8 @@ export const LeadVerbAnswer = z
       version: z.number().int(),
     }),
     event: z.object({ id: z.string(), key: z.string(), version: z.number().int().nullable() }),
+    /** `issue seat` only: the cost line of the seat (see `NewIssueAnswer`) */
+    seatCost: z.string().optional(),
   })
   .meta({ id: 'LeadVerbAnswer' })
 export type LeadVerbAnswer = z.infer<typeof LeadVerbAnswer>

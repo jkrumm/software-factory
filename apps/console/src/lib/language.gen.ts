@@ -90,6 +90,8 @@ export const LANGUAGE = {
   friction: 'Any counted waste: an avoidable touch, a refusal, an undelivered note',
   gate: 'A machine check a lead cannot talk past. Evidence is what a gate reads',
   gone: 'Session state: its session ended or its terminal is gone',
+  handover:
+    "What a lead that is moved up from the lead row leaves its successor, in its brief: what the Issue needs, what was tried, what failed and why, the state of the branch, what it would do next. An out-of-depth block's --reason is it; for any other sign the leaving lead is asked once and writes it as its last message; a lead that is gone or does not answer leaves its last words",
   healed: 'Outcome: an incident that went away before a lead started',
   held: "No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a quarantined signal",
   idle: 'Session state: its last turn ended',
@@ -209,6 +211,8 @@ export const LANGUAGE = {
     'The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment',
   'still-needed look':
     'The factory-errand-needed workflow reading a request that has no check, once a day from its first day: only a not_needed with a reason closes it. Closures by the check, the look, the expiry or a newer request are the "Errands closed without you" band of the next since read',
+  'strong seat':
+    "The role table's strong row (opus, high): where a lead-row seat filed with moveUp: true goes when its lead struggles, and the only seat above the lead row a plan names by role. A seat above the lead row filed by hand says why (seat.why, one sentence of at most 300 characters)",
   surface: 'Console, Herdr, Iris, Argo, ntfy',
   'swap used':
     "The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts. What to do: if it keeps growing, read Memory by class on Throughput to find what writes memory out; a full but steady swap needs nothing",

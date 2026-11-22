@@ -35,7 +35,7 @@ export const issueMove = ({ issue }: Pick<Recorded, 'issue'>) => ({
 })
 
 /** A recorded verb as the answer: a refusal is a 409 with the machine's reason, an ignored or replayed one changed nothing and says so. */
-export function verbResponse(written: Written): Response {
+export function verbResponse(written: Written, extra: { seatCost?: string | null } = {}): Response {
   if (!written.ok) {
     const out = writeFailure(written.error)
     return Response.json(out.body, { status: out.status })
@@ -48,6 +48,7 @@ export function verbResponse(written: Written): Response {
       detail: event.detail,
       issue: issueMove(written.value),
       event: { id: event.id, key: event.key, version: event.version },
+      ...(extra.seatCost ? { seatCost: extra.seatCost } : {}),
     }),
   )
 }

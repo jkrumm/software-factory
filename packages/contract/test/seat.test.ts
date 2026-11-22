@@ -20,6 +20,27 @@ describe('parseSeat', () => {
     expect(alone.ok).toBe(false)
   })
 
+  test('takes a why of one line up to 300 characters, beside either form', () => {
+    expect(parseSeat({ tier: 'opus', effort: 'high', why: ' a design later Issues build on ' })).toEqual({
+      ok: true,
+      seat: { tier: 'opus', effort: 'high', why: 'a design later Issues build on' },
+    })
+    expect(parseSeat({ role: 'strong', moveUp: false, why: 'x' })).toEqual({
+      ok: true,
+      seat: { role: 'strong', why: 'x' },
+    })
+    const why = (value: unknown) => {
+      const parsed = parseSeat({ role: 'strong', why: value })
+      return parsed.ok ? null : parsed.field
+    }
+    expect(why('x'.repeat(300))).toBeNull()
+    expect(why('x'.repeat(301))).toBe('seat.why')
+    expect(why('')).toBe('seat.why')
+    expect(why('  ')).toBe('seat.why')
+    expect(why(7)).toBe('seat.why')
+    expect(why('two\nlines')).toBe('seat.why')
+  })
+
   test('refuses what is not a seat, naming the field', () => {
     const field = (raw: unknown) => {
       const parsed = parseSeat(raw)

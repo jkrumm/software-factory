@@ -7,6 +7,7 @@ import { claudeProjectsDirs } from './adapters/hc/terminals.ts'
 import { fileTranscriptTails } from './adapters/leads/transcripts.ts'
 import { casedAgw } from './app/case-agw.ts'
 import { readCaseFile } from './read/case-file.ts'
+import { readSeatCost, seatCostLine } from './read/seat-cost.ts'
 import { askQueueDir, queuedAsksIn } from './adapters/checkpoints/queued-asks.ts'
 import { shellCheckRunner } from './adapters/shell/check-runner.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
@@ -404,6 +405,10 @@ async function main(env: Environment): Promise<void> {
         consoleUrl: checkpointSettings.line.consoleUrl,
       },
       checkpoints,
+      seatCost: async (tier) => {
+        const cost = await readSeatCost(sql, { tier })
+        return cost ? seatCostLine(tier, cost) : null
+      },
     }),
     capacity: planning.capacity,
     quality: {

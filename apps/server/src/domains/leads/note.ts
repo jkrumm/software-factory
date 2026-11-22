@@ -47,6 +47,11 @@ function item(record: HistoryRecord): string | null {
       const ends = typeof until === 'string' ? `, or at ${until}` : ''
       return `the owner paused this Issue: ${oneLine(field(record, 'reason'))}. A paused Issue takes none of your verbs and a block is refused: end your turn; only his word${ends} ends the pause`
     }
+    case 'moved_up':
+      // Only the lead row's step asks (`ask`): the light step has never asked for one.
+      return field(record, 'ask') === 1
+        ? `you are being moved up: ${oneLine(field(record, 'why'))}. A stronger lead takes the Issue over and reads only your handover and your branch. Push your branch if it holds work, then write the handover as your final message and end the turn: what the Issue needs, what you tried, what failed and why, the state of the branch, what you would do next`
+        : null
     case 'woken':
       return `your wait is over: ${oneLine(field(record, 'detail'))}`
     case 'regressed':

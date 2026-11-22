@@ -12,6 +12,8 @@ export type TableRow = () => Promise<{ tier: Tier; effort: Effort } | null>
  */
 export interface SeatTable {
   lead: TableRow
+  /** a role of the table by its name: the row a move-up named (`to`) is planned on */
+  row?: (role: string) => TableRow
   light?: {
     /** the role table's name of the light row (`light`) */
     role: string
@@ -32,6 +34,10 @@ interface EventRow {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** The row a move-up named (`to`), or null: the lead row's move names the strong row. */
+const roleOf = (payload: unknown): string | null =>
+  isRecord(payload) && typeof payload.to === 'string' && payload.to.trim() ? payload.to.trim() : null
 
 /** A seat payload (`{ tier, effort, role? }`) read as the badge wants it, or null when it names no known tier and effort. */
 function seatOf(value: unknown, planned: boolean): LeadSeat | null {
@@ -80,7 +86,7 @@ async function planFacts(sql: SQL, ids: readonly string[]): Promise<Map<string, 
  * The seat of each Issue's lead for the badge. An Issue whose latest `lead_started` is newer than its latest `admitted`
  * shows what that attempt started on; one waiting for its next attempt (or never started) shows the seat it will start on:
  * the last `seated`, else the filed seat, else what the light rule says for the Issue as it stands now (the table's
- * `light` row with the rule's name), else the table's `lead` row, marked `planned`. An Issue the rule does not name
+ * `light` row with the rule's name), else the table's `lead` row, marked `planned`. A filed seat moved up to a named row (`to`) shows that row. An Issue the rule does not name
  * and that has no size yet says so (`sizeKnown: false`): it may still start light once triage has sized it. A closed Issue
  * with no lead shows none. An Issue with nothing known is absent from the map.
  */
@@ -127,6 +133,17 @@ export async function readLeadSeats(
   const lightRow = light ? await light.row().catch(() => null) : null
   const gate = light ? await light.gate().catch(() => false) : false
   for (const id of unstarted) {
+    const movedTo = roleOf(byIssue.get(id)?.get('moved_up')?.payload)
+    const named =
+      movedTo && table?.row
+        ? await table
+            .row(movedTo)()
+            .catch(() => null)
+        : null
+    if (movedTo && named) {
+      seats.set(id, { ...named, role: movedTo, planned: true, rule: null, sizeKnown: true })
+      continue
+    }
     const row = facts.get(id)
     const filed = byIssue.get(id)?.get('filed')?.payload
     const fields = isRecord(filed) ? filed : {}

@@ -29,10 +29,13 @@ export function composeIssues(input: {
   writes: WriteDeps & { uow: WithdrawWrites }
   filing: NewIssueDeps
   checkpoints: Pick<CheckpointUses, 'decisions' | 'answer'>
+  /** the cost line of a seat's tier; absent: none (a server with no usage schema to read) */
+  seatCost?: (tier: string) => Promise<string | null>
 }): IssueApi {
   const { writes, filing, checkpoints } = input
   return {
     file: (request) => fileNewIssue(filing, request),
+    seatCost: async (tier) => (await input.seatCost?.(tier).catch(() => null)) ?? null,
     newArtifact: (request) => newStandaloneArtifact(filing, request),
     linkArtifact: (request) => linkArtifactToIssue(filing, request),
     retireArtifact: (request) => setArtifactRetired(filing, request),

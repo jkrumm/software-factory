@@ -138,10 +138,11 @@ export function postgresWorkStore(tx: SQL): WorkStore {
       }
     },
 
-    async cancelOpenEffects(issueId, keep, at) {
+    async cancelOpenEffects(issueId, keep, at, spare = []) {
       await tx`
         UPDATE factory.issue_effects SET cancelled_at = ${at}
-        WHERE issue_id = ${issueId} AND done_at IS NULL AND cancelled_at IS NULL AND kind NOT IN ${tx(['', ...keep])}`
+        WHERE issue_id = ${issueId} AND done_at IS NULL AND cancelled_at IS NULL AND kind NOT IN ${tx(['', ...keep])}
+          AND key NOT IN ${tx(['', ...spare])}`
     },
 
     async claimEffects({ now, until, limit }) {
