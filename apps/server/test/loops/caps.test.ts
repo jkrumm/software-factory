@@ -6,6 +6,7 @@ import { postgresLoopStore } from '../../src/adapters/postgres/loop-store.ts'
 import { throughputPass, type ThroughputPass } from '../../src/app/loops/throughput.ts'
 import type { UnitOfWork } from '../../src/app/unit-of-work.ts'
 import { type CapFact, capText, capTitle, bindingCaps } from '../../src/domains/improve/caps.ts'
+import { type MergeFigures, mergeCapacityOf } from '../../src/kernel/merge-capacity.ts'
 import type { LoopStore } from '../../src/app/loops/stores.ts'
 import type { ProjectShape } from '../../src/domains/improve/throughput.ts'
 import { ok } from '../../src/kernel/result.ts'
@@ -189,6 +190,7 @@ describe('what the signal quotes for the resource the comment names', () => {
       disk: { freeMib: 130 * 1024, totalMib: 500 * 1024 },
       lead: { attempts: 8, p80Mib: 900 },
       mergeWindows: { days: 7, windows: 40, holdMedianMinutes: 6, waitMedianMinutes: 2.5 },
+      mergeCapacity: null,
     },
   })
 
@@ -210,5 +212,73 @@ describe('what the signal quotes for the resource the comment names', () => {
     const lane = { ...fact(null), lane: 'apple', cap: 1 }
     expect(capTitle(lane)).toBe('The lead cap `lanes.apple.leads: 1` of argo binds while seats idle')
     expect(bindingCaps([lane, { ...lane, bindingMinutes: 59 }, { ...lane, cap: 64 }])).toEqual([lane])
+  })
+})
+
+describe('what the repo can merge', () => {
+  const figures = (over: Partial<MergeFigures>): MergeFigures => ({
+    days: 1,
+    windows: 20,
+    merges: 18,
+    heldMinutes: 300,
+    holdMedianMinutes: 16,
+    waitMedianMinutes: 0,
+    waitP90Minutes: 4,
+    ciQueueMedianMinutes: 3,
+    ciRunMedianMinutes: 16,
+    ...over,
+  })
+
+  test('the merges a day are read against what the median hold allows', () => {
+    const c = mergeCapacityOf(figures({}))
+    expect(c).toMatchObject({ mergesPerDay: 18, allowedPerDay: 90, busyShare: 0.21, saturated: false })
+    expect(mergeCapacityOf(figures({ windows: 0, merges: 0 }))).toBeNull()
+  })
+
+  test('a window held half the day, or a tenth of calls waiting half an hour, is saturated', () => {
+    expect(mergeCapacityOf(figures({ heldMinutes: 720 }))?.saturated).toBe(true)
+    expect(mergeCapacityOf(figures({ waitP90Minutes: 31 }))?.saturated).toBe(true)
+    expect(mergeCapacityOf(figures({ heldMinutes: 719, waitP90Minutes: 29 }))?.saturated).toBe(false)
+  })
+
+  test('a capped repo whose merge window is the limit files no lift, and says so in the pass', async () => {
+    await cleanSlate()
+    await db.sql`DELETE FROM factory.merge_windows`
+    await samples(90, 10, 2)
+    await queuedFor('shutterflow', 'claim', 120)
+    // four calls of 4 h each over the last day: the window was held 16 of 24 hours
+    for (let i = 0; i < 4; i++) {
+      const start = new Date(NOW.getTime() - (i + 1) * 5 * 60 * MINUTE)
+      await db.sql`INSERT INTO factory.merge_windows (project, requested_at, acquired_at, released_at, exit_code)
+        VALUES ('shutterflow', ${start}, ${start}, ${new Date(start.getTime() + 4 * 60 * MINUTE)}, 0)`
+    }
+    const filed: { title: string; text: string; repo: string }[] = []
+    const pass = await run(deps(shapes(2), filed))
+    expect(pass.caps).toEqual([])
+    expect(pass.capsHeld).toHaveLength(1)
+    expect(pass.capsHeld[0]).toMatchObject({ project: 'shutterflow', cap: 'leads: 2' })
+    expect(filed.filter((f) => f.title.startsWith('The lead cap'))).toEqual([])
+    expect(pass.notes).toEqual([])
+    await db.sql`DELETE FROM factory.merge_windows`
+  })
+
+  test('a capped repo whose window is mostly idle still files, with the merge capacity in the text', async () => {
+    await cleanSlate()
+    await db.sql`DELETE FROM factory.merge_windows`
+    await samples(90, 10, 2)
+    await queuedFor('shutterflow', 'claim', 120)
+    for (let i = 0; i < 6; i++) {
+      const start = new Date(NOW.getTime() - (i + 1) * 3 * 60 * MINUTE)
+      await db.sql`INSERT INTO factory.merge_windows (project, requested_at, acquired_at, released_at, exit_code)
+        VALUES ('shutterflow', ${start}, ${start}, ${new Date(start.getTime() + 16 * MINUTE)}, 0)`
+    }
+    const filed: { title: string; text: string; repo: string }[] = []
+    const pass = await run(deps(shapes(2), filed))
+    expect(pass.caps).toHaveLength(1)
+    expect(pass.capsHeld).toEqual([])
+    expect(filed[0]?.text).toContain(
+      'Merge capacity: 6 merges in 1 day (6 a day) against the 90 a day a median hold of 16 min allows',
+    )
+    await db.sql`DELETE FROM factory.merge_windows`
   })
 })

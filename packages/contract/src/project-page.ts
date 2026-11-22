@@ -128,6 +128,34 @@ export const ProjectMonitor = z
   .meta({ id: 'ProjectMonitor' })
 export type ProjectMonitor = z.infer<typeof ProjectMonitor>
 
+/**
+ * What a project merges against what its merge window allows (`mergeCapacityOf`): its pull requests land one at a time, so the
+ * median hold of the window bounds the merges a day, whatever its lead cap. `saturated`: the window was held half the time, or
+ * the slowest tenth of calls waited half an hour for it, and another lead only waits.
+ */
+export const ProjectMerge = z
+  .strictObject({
+    /** the days read, ending at the page's `at` */
+    days: z.number().int().min(1),
+    /** merge-lock calls that got the window, and of those the ones whose command exited 0 */
+    windows: z.number().int().min(0),
+    merges: z.number().int().min(0),
+    mergesPerDay: z.number().min(0),
+    /** the most a day the median hold allows when windows run back to back */
+    allowedPerDay: z.number().int().min(0),
+    /** the share of the days the window was held, 0 to 1 */
+    busyShare: z.number().min(0).max(1),
+    holdMedianMinutes: z.number().min(0),
+    waitMedianMinutes: z.number().min(0),
+    waitP90Minutes: z.number().min(0),
+    /** a finished CI run's median wait for a runner, and its median run; null: none finished in the days */
+    ciQueueMedianMinutes: z.number().min(0).nullable(),
+    ciRunMedianMinutes: z.number().min(0).nullable(),
+    saturated: z.boolean(),
+  })
+  .meta({ id: 'ProjectMerge' })
+export type ProjectMerge = z.infer<typeof ProjectMerge>
+
 export const ProjectPageModel = z
   .strictObject({
     at,
@@ -142,6 +170,8 @@ export const ProjectPageModel = z
     /** the `project.yaml` now on the default branch does not parse; the setup is the last valid one */
     projectError: z.string().nullable(),
     counts: ProjectCounts,
+    /** the last 7 days of the merge window against what it allows; null: no window was held */
+    merge: ProjectMerge.nullable(),
     shipped: z.strictObject({
       /** Issues closed done or healed per day, oldest first, the last day ending at `at` */
       days: z.array(z.number().int().min(0)).length(7),

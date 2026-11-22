@@ -171,6 +171,23 @@ function UpcomingRows({ name, rows }: { name: string; rows: readonly PlanRowView
   )
 }
 
+/** What the project merged against what its merge window allows: its pull requests land one at a time, so the window caps the day. */
+function MergeLine({ merge }: { merge: NonNullable<ProjectPageModel['merge']> }) {
+  const wait = `waited a median ${merge.waitMedianMinutes} min, slowest tenth ${merge.waitP90Minutes} min`
+  return (
+    <p
+      data-saturated={merge.saturated}
+      className="px-1.5 text-[length:var(--vx-text-sm)] text-muted-foreground"
+      title={`The window was held a median ${merge.holdMedianMinutes} min per pull request, ${Math.round(merge.busyShare * 100)} % of the ${merge.days} days`}
+    >
+      <span className="font-medium text-foreground">Merges</span>{' '}
+      <span className="tabular-nums">{merge.mergesPerDay}</span> a day against{' '}
+      <span className="tabular-nums">{merge.allowedPerDay}</span> the window allows; {wait}
+      {merge.saturated ? '. Another lead only waits.' : '.'}
+    </p>
+  )
+}
+
 /** The hourly bars of the last 7 days with the newest five shipped; the history is the Shipped tab. */
 function ShippedPanel({
   name,
@@ -210,6 +227,7 @@ function ShippedPanel({
         ]}
         as={(props) => <Link to="/projects/$name/shipped" params={{ name }} {...props} />}
       />
+      {page.merge ? <MergeLine merge={page.merge} /> : null}
       {newest.length === 0 ? (
         <None>Nothing shipped in the last 7 days.</None>
       ) : (

@@ -69,6 +69,13 @@ export const waitSubjectOf = (kind: string): WaitSubject | null =>
  */
 export const CAP_WINDOW_HOURS = 24
 export const BINDING_MINUTES = 60
+/**
+ * A repo whose merge window was held for this share of the cap window, or whose slowest tenth of calls waited this many minutes
+ * for it, cannot use another lead: the pull requests merge one at a time, so a lead more only waits at `factory land` while it
+ * holds a place on the host. The finder proposes no lifted cap for it (Issue 2959).
+ */
+export const MERGE_BUSY_SHARE = 0.5
+export const MERGE_WAIT_P90_MINUTES = 30
 
 /** The queue interval kind of the memory gate's lead-fit refusal (what a repo's lead is learned to take); the host's reading is `memory`. */
 export const MEMORY_FIT_KIND = 'memory_fit'

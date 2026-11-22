@@ -4,7 +4,9 @@ import { DEFAULT_LEADS } from '@software-factory/contract/project'
 import type { CapFact, CapFigures } from '../domains/improve/caps.ts'
 import { CAP_WINDOW_HOURS } from '../kernel/throughput-limits.ts'
 import type { ProjectShape } from '../domains/improve/throughput.ts'
+import { mergeCapacityOf } from '../kernel/merge-capacity.ts'
 import { boundedRead } from './bounded.ts'
+import { readMergeFigures } from './merge-capacity.ts'
 
 const num = z.coerce.number()
 const HOUR_MS = 3_600_000
@@ -105,6 +107,7 @@ async function figuresFor(
         ? { attempts: size.attempts, p80Mib: Math.round(size.p80), largestMib: Math.round(size.largest) }
         : null,
     disk,
+    mergeCapacity: mergeCapacityOf(await readMergeFigures(tx, { project, to, days: CAP_WINDOW_HOURS / 24 })),
     lead: peak.attempts > 0 && peak.p80 !== null ? { attempts: peak.attempts, p80Mib: Math.round(peak.p80) } : null,
     mergeWindows:
       window.windows > 0

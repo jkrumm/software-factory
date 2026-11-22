@@ -6,7 +6,9 @@
  * raise it to what the figures allow. No I/O here.
  */
 import { capReasonOf, DEFAULT_LEADS, type CapReason } from '@software-factory/contract/project'
+import type { ProjectMerge } from '@software-factory/contract'
 import { BINDING_MINUTES } from '../../kernel/throughput-limits.ts'
+import { mergeCapacityText } from '../../kernel/merge-capacity.ts'
 
 /** What the repo's merge windows over the last week measured (`factory.merge_windows`): how often, how long held, how long waited for. */
 export interface MergeWindowFigures {
@@ -25,6 +27,8 @@ export interface CapFigures {
   /** a lead's memory outside test slots over the last week: the 80th percentile of the attempts' peaks, MiB */
   lead: { attempts: number; p80Mib: number } | null
   mergeWindows: MergeWindowFigures | null
+  /** what the repo merged over the cap window against what its merge window allows; null: no window was held */
+  mergeCapacity: ProjectMerge | null
 }
 
 /** One repo's cap that kept Issues queued while seats idled, over the window. */
@@ -50,6 +54,9 @@ export interface CapFact {
 export const bindingCaps = (facts: readonly CapFact[]): CapFact[] =>
   facts.filter((f) => f.cap < DEFAULT_LEADS && f.bindingMinutes >= BINDING_MINUTES)
 
+/** A cap whose repo cannot merge more pull requests than it does: another lead only waits at `factory land`, so no lift is proposed. */
+export const mergeLimited = (fact: CapFact): boolean => fact.figures.mergeCapacity?.saturated === true
+
 const gib = (mib: number): string => `${Math.round((mib / 1024) * 10) / 10} GiB`
 const minutes = (value: number): string => `${Math.round(value * 10) / 10} min`
 
@@ -69,6 +76,7 @@ function figureLines(reason: CapReason, f: CapFigures): string[] {
       `- Disk: a worktree with its build output measured ${gib(f.worktrees.p80Mib)} (p80 of ${f.worktrees.attempts} attempts), the largest ${gib(f.worktrees.largestMib)}${free}`,
     )
   }
+  const capacity: string[] = f.mergeCapacity ? [`- Merge capacity: ${mergeCapacityText(f.mergeCapacity)}`] : []
   const merge: string[] = []
   if (f.mergeWindows) {
     const w = f.mergeWindows
@@ -83,13 +91,15 @@ function figureLines(reason: CapReason, f: CapFigures): string[] {
     : []
   switch (reason) {
     case 'disk':
-      return disk.length > 0 ? disk : ['- Disk: no worktree of this repo has been measured yet']
+      return disk.length > 0
+        ? [...disk, ...capacity]
+        : ['- Disk: no worktree of this repo has been measured yet', ...capacity]
     case 'merge':
-      return merge.length > 0 ? merge : ['- Merge windows: none recorded in the last week']
+      return [...(merge.length > 0 ? merge : ['- Merge windows: none recorded in the last week']), ...capacity]
     case 'deploy':
-      return ['- Deploy queue: `factory deploy-lock` serialises it whatever the cap', ...merge]
+      return ['- Deploy queue: `factory deploy-lock` serialises it whatever the cap', ...merge, ...capacity]
     default:
-      return [...disk, ...memory, ...merge]
+      return [...disk, ...memory, ...merge, ...capacity]
   }
 }
 
