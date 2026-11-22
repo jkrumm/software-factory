@@ -114,41 +114,43 @@ export function orderQueue(input: {
       withoutEdges: reasonOf(issue, [], stopped),
     }))
   const rank = (row: Ordered): number => (row.reason !== null ? 2 : isFix(row.issue) ? 0 : 1)
-  rows.sort(
-    (a, b) =>
-      rank(a) - rank(b) ||
-      b.prio - a.prio ||
-      b.projectPrio - a.projectPrio ||
-      issueNumber(a.issue.id) - issueNumber(b.issue.id),
-  )
-  // The project priority decided a place when a row stands elsewhere in its band (one class, one Issue prio) than its Issue number alone would put it.
-  const bands = new Map<string, Ordered[]>()
-  for (const row of rows) bands.set(`${rank(row)}|${row.prio}`, [...(bands.get(`${rank(row)}|${row.prio}`) ?? []), row])
-  for (const band of bands.values()) {
-    const byNumber = [...band].sort((a, b) => issueNumber(a.issue.id) - issueNumber(b.issue.id))
-    band.forEach((row, at) => {
-      row.byProjectPrio = byNumber[at] !== row
-    })
-  }
-
   const model = (row: Ordered): number => input.modelOrder?.get(row.issue.id) ?? Number.POSITIVE_INFINITY
   const sooner = (a: Ordered, b: Ordered): number =>
     throughputKey(a.issue, input.now) - throughputKey(b.issue, input.now) ||
     (model(a) === model(b) ? 0 : model(a) < model(b) ? -1 : 1) ||
     issueNumber(a.issue.id) - issueNumber(b.issue.id)
-  const groups = new Map<string, number[]>()
-  rows.forEach((row, at) => {
-    if (row.reason !== null) return
-    const groupKey = `${rank(row)}|${row.prio}|${row.issue.project ?? ''}`
-    groups.set(groupKey, [...(groups.get(groupKey) ?? []), at])
-  })
-  const placed = [...rows]
-  for (const places of groups.values()) {
-    const members = places.map((at) => rows[at] as Ordered).sort(sooner)
-    places.forEach((at, i) => {
-      placed[at] = members[i] as Ordered
+
+  /** The order the rules give, the project priority counted as `projectPrioOf` says. */
+  const place = (projectPrioOf: (row: Ordered) => number): Ordered[] => {
+    const sorted = [...rows].sort(
+      (a, b) =>
+        rank(a) - rank(b) ||
+        b.prio - a.prio ||
+        projectPrioOf(b) - projectPrioOf(a) ||
+        issueNumber(a.issue.id) - issueNumber(b.issue.id),
+    )
+    const groups = new Map<string, number[]>()
+    sorted.forEach((row, at) => {
+      if (row.reason !== null) return
+      const groupKey = `${rank(row)}|${row.prio}|${row.issue.project ?? ''}`
+      groups.set(groupKey, [...(groups.get(groupKey) ?? []), at])
     })
+    const placed = [...sorted]
+    for (const places of groups.values()) {
+      const members = places.map((at) => sorted[at] as Ordered).sort(sooner)
+      places.forEach((at, i) => {
+        placed[at] = members[i] as Ordered
+      })
+    }
+    return placed
   }
+
+  const placed = place((row) => row.projectPrio)
+  // The project priority decided a place when a row stands elsewhere than it would with every project at priority 0.
+  const without = new Map(place(() => 0).map((row, at) => [row.issue.id, at]))
+  placed.forEach((row, at) => {
+    row.byProjectPrio = without.get(row.issue.id) !== at
+  })
   return placed
 }
 

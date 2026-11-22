@@ -63,6 +63,20 @@ describe('the order of projects', () => {
     expect(queue.map((e) => e.byProjectPrio)).toEqual([false, false])
   })
 
+  test('a size reorder inside one project is no project priority', async () => {
+    const sized = async (size: 'small' | 'large') => {
+      const issue = await world.file({ repo: 'low' })
+      await world.send(issue, 'settled', 'settled', { size })
+      return issue
+    }
+    const big = await sized('large')
+    const small = await sized('small')
+    await prio('low', 3)
+    const queue = await order()
+    expect(queue.map((e) => e.issue)).toEqual([small, big])
+    expect(queue.map((e) => e.byProjectPrio)).toEqual([false, false])
+  })
+
   test('a project priority below zero sends its Issues behind the unset ones', async () => {
     const first = await world.queued({ repo: 'low' })
     const second = await world.queued({ repo: 'high' })
