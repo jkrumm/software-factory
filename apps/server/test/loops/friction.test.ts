@@ -534,6 +534,40 @@ test('a KPI off its target over a whole window is a finding that names its large
   expect(pattern?.count).toBeCloseTo(0.12)
 })
 
+test('the largest part of a KPI of shares is the one with the most answers, not the highest share of a small group', () => {
+  const asks: KpiReading = {
+    key: 'asks_not_needed',
+    label: 'Asks that did not need the owner',
+    value: 0.42,
+    unit: 'share',
+    n: 85,
+    count: 36,
+    measured: true,
+    target: THRESHOLDS.kpis.asks_not_needed,
+    parts: [
+      { key: 'kind:spec', label: 'Spec verdicts that changed nothing', value: 0.42, unit: 'share' },
+      {
+        key: 'source:filer',
+        label: 'Specs the filer made owed that changed nothing',
+        value: 27 / 65,
+        unit: 'share',
+        count: 27,
+        n: 65,
+      },
+      {
+        key: 'source:lead',
+        label: 'Specs a lead judged due that changed nothing',
+        value: 0.5,
+        unit: 'share',
+        count: 1,
+        n: 2,
+      },
+    ],
+  }
+  const [pattern] = kpisOffTarget([asks], { whole: true })
+  expect(pattern?.kpi?.largest?.key).toBe('source:filer')
+})
+
 test('a KPI on its target, unmeasured, with no number yet, or over a window the epoch cut is no finding', () => {
   const target = THRESHOLDS.kpis.avoidable_touches.max ?? 0
   expect(kpisOffTarget([touchesOver(target)], { whole: true })).toEqual([])

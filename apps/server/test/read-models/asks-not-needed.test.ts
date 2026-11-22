@@ -88,6 +88,16 @@ test('the KPI is the share of his own answers that changed nothing, verdicts and
     'source:triage': 1,
     'source:lead': 0,
   })
+  // a part that is a share of its own group says how many of how many; the Specs by kind are the sum of the sources
+  const counts = Object.fromEntries(kpi?.parts.map((p) => [p.key, p.count === undefined ? null : [p.count, p.n]]) ?? [])
+  expect(counts).toMatchObject({
+    'kind:spec': null,
+    'kind:concept': [1, 1],
+    'kind:decision': [1, 2],
+    'source:filer': [1, 2],
+    'source:triage': [1, 1],
+    'source:lead': [0, 2],
+  })
 })
 
 test('friction counts the same answers by kind and by who made the ask owed, and its evidence names their Issues', async () => {

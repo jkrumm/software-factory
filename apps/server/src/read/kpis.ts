@@ -127,16 +127,19 @@ async function askAnswers(sql: SQL, w: Window): Promise<{ n: number; count: numb
       return [row.key, row] as const
     }),
   )
-  const part = (key: string, label: string): KpiPart[] => {
+  const part = (key: string, label: string, leaf = true): KpiPart[] => {
     const row = found.get(key)
-    return row && row.n > 0 ? [{ key, label, value: row.nothing / row.n, unit: 'share' }] : []
+    if (!row || row.n === 0) return []
+    const share: KpiPart = { key, label, value: row.nothing / row.n, unit: 'share' }
+    return [leaf ? { ...share, count: row.nothing, n: row.n } : share]
   }
   const kinds = ASK_KINDS.map(([kind]) => found.get(`kind:${kind}`))
   return {
     n: kinds.reduce((sum, row) => sum + (row?.n ?? 0), 0),
     count: kinds.reduce((sum, row) => sum + (row?.nothing ?? 0), 0),
     parts: [
-      ...ASK_KINDS.flatMap(([kind, label]) => part(`kind:${kind}`, label)),
+      // the Specs by kind are the Specs by source below: the sum of those parts, so it carries no count to rank by
+      ...ASK_KINDS.flatMap(([kind, label]) => part(`kind:${kind}`, label, kind !== 'spec')),
       ...Object.entries(ASK_SOURCES).flatMap(([source, label]) => part(`source:${source}`, label)),
     ],
   }
