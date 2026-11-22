@@ -141,7 +141,9 @@ export const ProjectMerge = z
     windows: z.number().int().min(0),
     merges: z.number().int().min(0),
     mergesPerDay: z.number().min(0),
-    /** the most a day the median hold allows when windows run back to back */
+    /** the minutes one merge takes: the longer of the median hold and a CI run's median wait for a runner plus run */
+    perMergeMinutes: z.number().min(0),
+    /** the most a day that allows when merges run back to back */
     allowedPerDay: z.number().int().min(0),
     /** the share of the days the window was held, 0 to 1 */
     busyShare: z.number().min(0).max(1),

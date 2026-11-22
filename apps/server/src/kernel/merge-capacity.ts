@@ -1,6 +1,6 @@
 /**
  * What a repo can merge: its pull requests land one at a time through `factory merge-lock`, and a window is held from the
- * rebase through CI to the merge, so the median hold bounds the merges a day, whatever the lead cap says. The throughput loop
+ * rebase through CI to the merge, so the longer of the median hold and one CI run bounds the merges a day, whatever the lead cap says. The throughput loop
  * reads it before it proposes more leads for a repo, and the project page shows it beside the merges that happened. No I/O here.
  */
 import type { ProjectMerge } from '@software-factory/contract'
@@ -31,12 +31,16 @@ const round = (value: number, places = 1): number => Math.round(value * 10 ** pl
 export function mergeCapacityOf(figures: MergeFigures): ProjectMerge | null {
   if (figures.windows === 0 || figures.days <= 0) return null
   const busyShare = Math.min(1, figures.heldMinutes / (figures.days * DAY_MINUTES))
+  // a merge costs the longer of the window's hold and one CI run (its wait for a runner plus its run): CI may sit outside the lock
+  const ciMinutes = (figures.ciQueueMedianMinutes ?? 0) + (figures.ciRunMedianMinutes ?? 0)
+  const perMergeMinutes = Math.max(figures.holdMedianMinutes, ciMinutes, 1)
   return {
     days: figures.days,
     windows: figures.windows,
     merges: figures.merges,
     mergesPerDay: round(figures.merges / figures.days),
-    allowedPerDay: Math.floor(DAY_MINUTES / Math.max(figures.holdMedianMinutes, 1)),
+    perMergeMinutes: round(perMergeMinutes),
+    allowedPerDay: Math.floor(DAY_MINUTES / perMergeMinutes),
     busyShare: round(busyShare, 2),
     holdMedianMinutes: round(figures.holdMedianMinutes),
     waitMedianMinutes: round(figures.waitMedianMinutes),
@@ -53,5 +57,5 @@ export function mergeCapacityText(c: ProjectMerge): string {
     c.ciRunMedianMinutes === null
       ? ''
       : `; CI waited for a runner a median ${c.ciQueueMedianMinutes ?? 0} min and ran ${c.ciRunMedianMinutes} min`
-  return `${c.merges} merge${c.merges === 1 ? '' : 's'} in ${c.days} day${c.days === 1 ? '' : 's'} (${c.mergesPerDay} a day) against the ${c.allowedPerDay} a day a median hold of ${c.holdMedianMinutes} min allows; the window was held ${Math.round(c.busyShare * 100)} % of the time and a call waited a median ${c.waitMedianMinutes} min (slowest tenth ${c.waitP90Minutes} min)${ci}`
+  return `${c.merges} merge${c.merges === 1 ? '' : 's'} in ${c.days} day${c.days === 1 ? '' : 's'} (${c.mergesPerDay} a day) against the ${c.allowedPerDay} a day ${c.perMergeMinutes} min per merge allows (window held a median ${c.holdMedianMinutes} min); the window was held ${Math.round(c.busyShare * 100)} % of the time and a call waited a median ${c.waitMedianMinutes} min (slowest tenth ${c.waitP90Minutes} min)${ci}`
 }
