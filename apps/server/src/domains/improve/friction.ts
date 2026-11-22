@@ -62,7 +62,7 @@ export const isRetired = (key: string): boolean => RETIRED.some((pattern) => pat
 const ruleOf = (key: string, group: Judged): Rule => BY_KEY[key] ?? GROUP_RULES[group]
 
 /** Groups whose events map to Issues; the others (an undelivered note, a quarantined signal) carry no Issue refs. */
-const WITHOUT_ISSUES = new Set<PatternGroup>(['undelivered_note', 'signal', 'kpi', 'judge'])
+const WITHOUT_ISSUES = new Set<PatternGroup>(['undelivered_note', 'signal', 'api_refused', 'kpi', 'judge'])
 
 /** A friction count's group, `kpi` (one of the seven KPIs off its target) or `judge` (a judge whose answers did not stand). */
 export type PatternGroup = FrictionCount['group'] | 'kpi' | 'judge'

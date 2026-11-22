@@ -486,7 +486,8 @@ What each decides in code and what it files:
 - `friction` (`app/loops/friction.ts`, `domains/improve/friction.ts`): the week's counts (`read/friction.ts`), cut at
   the counting epoch, against rules: a rate per Issue closed with a minimum sample of 10, or a bare count for the
   serious patterns (a lead that stopped reporting, lead lost, undelivered note; a regression is 0.05 per Issue closed
-  from 3). One signal per pattern, 5 a pass (`kernel/signal-budget.ts`, shared by all four signal loops). A pass is
+  from 3). Every 4xx the API answers is a row of `api_refusals` (operation id, caller, status, the field names of a
+  422, never a value; `api/refusals.ts`) and the group `api_refused:<operation>:<status>` counts them, a finding at 10 a week. One signal per pattern, 5 a pass (`kernel/signal-budget.ts`, shared by all four signal loops). A pass is
   due after a day or 200 closed Issues (`friction_passes`). It files the retro signal when none went out in 7 days
   (`domains/improve/retro.ts`): an Issue whose lead reads `factory retro --days 7`, writes a Report opening with the
   three largest sources of waste (`read/retro-waste.ts`) and files a signal per change with a `Retro:` marker.

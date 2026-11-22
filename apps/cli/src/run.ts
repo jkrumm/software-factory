@@ -13,7 +13,16 @@ import { planVerb } from './plan.ts'
 import { projectVerb } from './project.ts'
 import { planMergeVerb } from './plan-merge.ts'
 import { retroVerb } from './retro.ts'
-import { type BodyField, extensionOf, type FlagValue, type Io, type Operation, runOperation } from './operation.ts'
+import {
+  boundWords,
+  type BodyField,
+  extensionOf,
+  type FlagValue,
+  type Io,
+  type Operation,
+  type QueryBound,
+  runOperation,
+} from './operation.ts'
 import { type Format, render } from './output.ts'
 import { retiredHint } from './retired.ts'
 import { DEFAULT_ROLES_FILE, loadRoleTable } from './roles.ts'
@@ -251,6 +260,17 @@ const FIRST_STAGE = {
   all: { type: 'boolean' },
 } as const satisfies ParseArgsOptionsConfig
 
+/** `--state <open|closed|all>`, `--limit <n>  integer from 1 to 500`, `--repo <text>  1-200 characters`: what the contract allows. */
+function queryBoundHelp(bound: QueryBound): string {
+  const hint = bound.values ? `<${bound.values.join('|')}>` : bound.numeric ? '<n>' : '<text>'
+  const note = [
+    ...(bound.numeric === 'integer' ? ['integer'] : []),
+    boundWords(bound.min, bound.max),
+    boundWords(bound.minLength, bound.maxLength, 'characters'),
+  ].filter(Boolean)
+  return `--${bound.name} ${hint}${note.length ? `  ${note.join(' ')}` : ''}`
+}
+
 const flagHelp = (op: Operation, field: BodyField): string => {
   if (op.bodySchema) {
     const { hint, notes } = fieldNotes(op, field)
@@ -271,6 +291,8 @@ function commandHelp(op: Operation): string {
     ...op.queryParams.map((name) => {
       const bare = op.queryFlags.find((flag) => flag.name === name)
       if (op.issueParams?.includes(name)) return `--${name} <issue-id>  issue_<n> or a bare <n>`
+      const bound = op.queryBounds?.find((b) => b.name === name)
+      if (bound) return queryBoundHelp(bound)
       return bare?.boolean ? `--${name} [true|false]` : bare ? `--${name}` : `--${name} <text>`
     }),
     ...op.bodyFields.filter((field) => !op.args.includes(field.name)).map((field) => flagHelp(op, field)),

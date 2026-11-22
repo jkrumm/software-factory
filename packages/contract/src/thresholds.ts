@@ -104,6 +104,11 @@ export const THRESHOLDS = {
         rate: 0.2,
         why: 'quarantined signals from one source on one in five closed Issues is a route or a trust rule to settle',
       },
+      api_refused: {
+        min: 10,
+        rate: null,
+        why: 'one operation refused ten times in a week, with the same status, is a contract the CLI help or the policy does not teach: callers keep sending what it refuses',
+      },
       ask_unneeded: {
         min: 2,
         rate: null,

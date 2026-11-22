@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { FrictionCount, FrictionModel, SpecSource } from '@software-factory/contract'
 import { readEdgeIncidents } from './api-errors.ts'
+import { readApiRefusals } from './api-refusals.ts'
 import {
   askVerdict,
   avoidableTouches,
@@ -174,6 +175,26 @@ async function countsOf(
       `api_transient:${edge.firstAt.toISOString()}`,
       `${edge.leads} leads${edge.plans > 0 ? ` and ${edge.plans} plan sessions (not resumed)` : ''} hit transient API errors within ${minutes} min of ${edge.firstAt.toISOString()}`,
       edge.leads,
+    )
+  }
+
+  // A request the API refused with a 4xx (the policy, a body or query that does not match the contract, an unknown id), by
+  // operation and status; who was refused and which fields a validation named are in the label. No value is ever stored.
+  const refusedRequests = await readApiRefusals(sql, w)
+  add(
+    'api_refused',
+    'api_refused:total',
+    'Requests the API refused',
+    refusedRequests.reduce((sum, row) => sum + row.count, 0),
+  )
+  for (const row of refusedRequests) {
+    const callers = row.callers.map((c) => `${c.caller} ${c.count}`).join(', ')
+    const fields = row.fields.length ? `; fields: ${row.fields.map((f) => `${f.field} ${f.count}`).join(', ')}` : ''
+    add(
+      'api_refused',
+      `api_refused:${row.operation}:${row.status}`,
+      `${row.operation} refused with ${row.status} (${callers}${fields})`,
+      row.count,
     )
   }
 

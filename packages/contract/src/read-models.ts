@@ -711,6 +711,7 @@ export const FrictionCount = z
       'decision_answered',
       'signal',
       'api_transient',
+      'api_refused',
       'ask_unneeded',
     ]),
     label: z.string(),
