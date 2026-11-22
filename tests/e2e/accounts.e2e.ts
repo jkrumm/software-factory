@@ -245,12 +245,10 @@ test.describe('logins', () => {
     const other = page.getByRole('article', { name: `Account ${second.id}` }).getByRole('region', { name: 'Logins' })
     await expect(other.getByRole('listitem')).toHaveCount(2)
     await expect(page.getByTestId('strip-login')).toHaveCount(1)
-    await expect(
-      panel
-        .getByRole('heading', { level: 3 })
-        .locator('..')
-        .getByText(/leads allowed$/),
-    ).not.toContainText('Issue')
+    // the second account has a lead running: its header says how many seats are taken and names no Issue
+    const header = page.getByRole('article', { name: `Account ${second.id}` }).locator('header')
+    await expect(header).toContainText('1 of 3 leads allowed')
+    await expect(header).not.toContainText('Issue')
     await page.waitForLoadState('networkidle')
     await page.screenshot({ path: join(OUT, 'accounts-logins-dark.png'), fullPage: true, animations: 'disabled' })
   })
