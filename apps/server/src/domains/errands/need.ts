@@ -58,7 +58,7 @@ const GATE_RELEASE = /\bdeploy-release\b|\bgate\.py\s+release\b|\bgate\s+release
  */
 const RULE_ENDPOINT =
   /\bgh\s+api\b[^;&|\n]*(?:\/rulesets(?:[\s/]|$)|\/branches\/[^\s/]+\/protection(?:[\s/]|$)|\/protected_branches)/i
-const METHOD = /(?:^|\s)(?:-X\s*|--method(?:=|\s+))(\w+)/gi
+const METHOD = /(?:^|\s)(?:-X=?\s*|--method(?:=|\s+))(\w+)/gi
 const BODY_FIELD = /(?:^|\s)(?:-[fF]|--field|--raw-field|--input)/
 /** The last method named wins, as gh's flag parsing takes it; quotes are shell syntax, not part of the endpoint or the method. */
 export function isRuleWrite(command: string): boolean {

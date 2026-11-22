@@ -956,6 +956,12 @@ describe('the Errand screen', () => {
     expect(screenByNeed({ summary: 'Protect v1', detail: null, command: quoted, host: 'macbook' })).toMatchObject({
       need: 'place',
     })
+    const equalsForm = 'gh api -X=DELETE repos/o/r/rulesets/1'
+    expect(
+      screenByNeed({ summary: 'Drop a ruleset', detail: null, command: equalsForm, host: 'macbook' }),
+    ).toMatchObject({
+      need: 'place',
+    })
     const lastMethod = 'gh api -X GET repos/o/r/rulesets -X DELETE repos/o/r/rulesets/1'
     expect(
       screenByNeed({ summary: 'Drop a ruleset', detail: null, command: lastMethod, host: 'macbook' }),
