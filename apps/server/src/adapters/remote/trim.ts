@@ -45,7 +45,9 @@ export function scratchScript(): string {
 export function parseScratch(stdout: string): number[] {
   const ids = stdout.split('\n').flatMap((line) => {
     const match = /^scratch (\d{1,9})$/.exec(line.trim())
-    return match?.[1] ? [Number(match[1])] : []
+    // an Issue number starts at 1: an `exp0` is not an Issue's directory
+    const id = Number(match?.[1])
+    return id >= 1 ? [id] : []
   })
   return [...new Set(ids)]
 }

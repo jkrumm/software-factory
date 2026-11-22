@@ -212,6 +212,10 @@ describe('the closed-Issue sweep of the step host', () => {
     expect(parseScratch(listed.out).sort((a, b) => a - b)).toEqual([12, 30])
   })
 
+  test('a directory numbered 0 is no Issue', () => {
+    expect(parseScratch('scratch 0\nscratch 00\nscratch 4')).toEqual([4])
+  })
+
   test('a home with none lists nothing', () => {
     const listed = sh(scratchScript())
     expect(listed.code).toBe(0)

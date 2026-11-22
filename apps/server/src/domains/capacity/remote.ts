@@ -53,7 +53,8 @@ export const COPY_IDLE_DAYS = 7
 /**
  * A scratch directory `~/exp<issue>` of the VPS's home (a lead's experiment for that Issue: bench logs, bundles, a clone with
  * its `node_modules`; 13 GB at 8 of them, 2026-11-20) in which no file or directory changed for this many days is removed.
- * A lead writes into its directory every few minutes while it works, and nothing in it is the only copy of anything.
+ * A lead writes into its directory every few minutes while it works, and nothing in it is the only copy of anything. The
+ * directory of a closed Issue goes at any age: the host's root sweep removes it (see `trim.ts`).
  */
 export const EXP_IDLE_DAYS = 2
 
