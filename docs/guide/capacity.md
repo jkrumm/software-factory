@@ -102,7 +102,7 @@ A load of 61.6 against a ceiling of 36 refuses nothing by itself. A reading back
 **Example files:**
 
 - [`host.ts` L39-L58](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L39-L58): `overMemory` and the measured basis of the tripwire.
-- [`host.ts` L63-L137](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L63-L137): the release line and `loadTrip`.
+- [`host.ts` L62-L137](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L62-L137): the release line and `loadTrip`.
 - [`host.ts` L145-L151](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L145-L151): the per-core ceiling and the process cap.
 
 ## Seats and accounts

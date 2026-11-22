@@ -62,8 +62,8 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
 
 **Example files:**
 
-- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L29-L165): `PAYLOADS`, every event with its payload
-- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L182-L208): `SENDERS`, who may send each
+- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L29-L164): `PAYLOADS`, every event with its payload
+- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L181-L207): `SENDERS`, who may send each
 
 ## The transition table
 
