@@ -650,6 +650,20 @@ describe("a person's or an agent's signal", () => {
     expect(await issues()).toHaveLength(1)
   })
 
+  test('a down alert that never reported up is not covered by its closed Issue: it is still firing, so it files', async () => {
+    done(await intake.receive(down('kuma', 'api', 'e1')))
+    await send('issue_1' as IssueId, 'closed', {
+      kind: 'closed',
+      payload: { attempt: null, outcome: 'healed', reason: 'a documented baseline' },
+      actor: 'factory',
+    })
+    clock.advance(5 * 60_000)
+    triageAnswer = () => ok({ amend: null, settled: 'issue_1' as IssueId, reason: 'a documented baseline' })
+    const out = done(await intake.receive(down('kuma', 'api', 'e2')))
+    expect(out).toMatchObject({ outcome: 'filed', detail: 'new' })
+    expect(await issues()).toHaveLength(2)
+  })
+
   test('a down alert whose subject Issue is open does not call the workflow', async () => {
     done(await intake.receive(down('kuma', 'api', 'e1')))
     done(await intake.receive(down('kuma', 'api', 'e2')))

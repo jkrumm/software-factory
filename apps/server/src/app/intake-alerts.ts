@@ -185,6 +185,9 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
       const issue = await loadIssue(s.work, latest.issueId)
       if (isOpen(issue)) return amendOpen(s, r, alert, issue, latest.id, latest.groupKey)
     }
+    // An alert that never reported up since its last Issue was filed is the same one still firing: that Issue closing did not
+    // clear it, so a closed Issue never covers it (on the first live read 36 of 37 such dismissals came back as an Issue of their own).
+    const stillFiring = latest?.upAt === null
 
     const groupKey = groupOf(ctx.topology, r, signal.repo as string, ctx.info.host)
     if (groupKey) {
@@ -197,7 +200,7 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
       }
     }
 
-    if (ctx.decision?.settled) return coveredBy(s, r, ctx.decision, evKey)
+    if (ctx.decision?.settled && !stillFiring) return coveredBy(s, r, ctx.decision, evKey)
     if (ctx.decision?.amend) {
       const issue = await loadIssue(s.work, ctx.decision.amend)
       if (isOpen(issue)) return join(s, r, alert, issue, groupKey)
