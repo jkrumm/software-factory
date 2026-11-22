@@ -284,7 +284,8 @@ export function screenByRule(input: ErrandInput): { verdict: 'turn_away'; reason
  * mini that asks only his yes (`approval`), or a step on his MacBook that names a secret only he has (1Password, a biometric,
  * the mini's sudo password, which is MacBook-only: `dotfiles/docs/global-reference.md` §Sudo on a server; the screen model does
  * not know that policy and would turn it away with a note that points at the password). Decided by the shape (a command, its
- * host, the words), not by the lead's wording; null leaves the rest to the screen.
+ * host, the words), not by the lead's wording; null leaves the rest to the screen. A ruleset or branch-protection write (`isRuleWrite`)
+ * is the owner's hand too: the lead's review-bypass hook reserves it, so it reaches him as a place.
  */
 export function screenByNeed(input: ErrandInput & { command: string | null; host: Host | null }): {
   need: Need

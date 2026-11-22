@@ -58,12 +58,14 @@ const GATE_RELEASE = /\bdeploy-release\b|\bgate\.py\s+release\b|\bgate\s+release
  */
 const RULE_ENDPOINT =
   /\bgh\s+api\b[^;&|\n]*(?:\/rulesets(?:[\s/]|$)|\/branches\/[^\s/]+\/protection(?:[\s/]|$)|\/protected_branches)/i
-const METHOD = /(?:^|\s)(?:-X\s*|--method(?:=|\s+))(\w+)/i
+const METHOD = /(?:^|\s)(?:-X\s*|--method(?:=|\s+))(\w+)/gi
 const BODY_FIELD = /(?:^|\s)(?:-[fF]|--field|--raw-field|--input)/
+/** The last method named wins, as gh's flag parsing takes it; quotes are shell syntax, not part of the endpoint or the method. */
 export function isRuleWrite(command: string): boolean {
-  if (!RULE_ENDPOINT.test(command)) return false
-  const method = METHOD.exec(command)?.[1]
-  return method === undefined ? BODY_FIELD.test(command) : method.toUpperCase() !== 'GET'
+  const bare = command.replace(/['"]/g, '')
+  if (!RULE_ENDPOINT.test(bare)) return false
+  const method = [...bare.matchAll(METHOD)].at(-1)?.[1]
+  return method === undefined ? BODY_FIELD.test(bare) : method.toUpperCase() !== 'GET'
 }
 
 /** The command as the mini runs it: `ssh <alias> 'x'` is `x` there. Null when the command is not addressed to the mini. */
@@ -87,6 +89,7 @@ export function needByRule(input: NeedInput): Need | null {
   if (SECRET.test(text)) return 'secret'
   if (input.command !== null) {
     if (isApprovalCommand(input.command)) return 'approval'
+    if (isRuleWrite(input.command)) return 'place'
     if (input.host === 'iphone' || input.host === 'portal' || PHYSICAL.test(`${input.summary}\n${input.detail ?? ''}`))
       return 'hands'
     if (input.host === 'macbook') return 'place'
