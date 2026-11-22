@@ -273,7 +273,8 @@ async function checksOf(sh: Shell, ref: string, head: string): Promise<{ checks:
 }
 
 /** A check that links to a GitHub Actions workflow run: the one that says CI ran on the head. */
-const isWorkflowRun = (check: Check): boolean => check.link?.includes('/actions/runs/') === true
+const isWorkflowRun = (check: Check): boolean =>
+  check.bucket !== 'skipping' && check.link?.includes('/actions/runs/') === true
 
 class Lander {
   private readonly out: (line: string) => void
@@ -473,6 +474,7 @@ class Lander {
       })
       let state: string
       let anyCheck = false
+      let workflowRan = false
       if (view?.headRefOid !== head) {
         greens = 0
         state = `the pull request does not show ${short(head)} yet`
@@ -493,7 +495,7 @@ class Lander {
         // a set that is all skipped (a path or `if` filter) is no CI at all, as the hygiene pass reads it
         anyCheck = reading.state !== 'none'
         // green is the workflow run's word alone: another service's status (a Vercel one) can pass before CI registers
-        const workflowRan = checks.some(isWorkflowRun)
+        workflowRan = checks.some(isWorkflowRun)
         const settled = reading.state === 'green' && !workflowRan ? { state: 'pending' as const, failed: [] } : reading
         greens = nextGreens(greens, settled)
         if (settled.state === 'green') {
@@ -528,7 +530,9 @@ class Lander {
         throw new Refused(
           'ci',
           `CI on ${short(head)} still runs after ${Math.round(waited / 60_000)} min`,
-          'factory land again once it finished',
+          workflowRan
+            ? 'factory land again once it finished'
+            : "no CI workflow run registered: find why it did not start; only when every workflow's paths filter skips this change: factory land --no-ci",
         )
       if (state !== previous) this.out(`ci: ${state}`)
       previous = state

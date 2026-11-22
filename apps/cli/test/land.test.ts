@@ -227,7 +227,19 @@ describe('factory land', () => {
     const result = await land([], { FACTORY_LAND_CI_MINUTES: '0.02', FACTORY_LAND_POLL_MS: '10' }).done
     expect(result.code).toBe(1)
     expect(result.err).toContain('land: ci: waiting for the CI workflow run on')
+    expect(result.err).toContain('factory land --no-ci')
     expect(result.err).not.toContain('ci: green')
+    expect(await calls()).not.toContain('gh pr merge')
+  })
+
+  test('a skipped workflow run is no CI: a status from another service that passes beside it waits, never merged', async () => {
+    await writeFile(
+      join(state, 'checks'),
+      '[{"name":"Vercel","bucket":"pass","link":"https://vercel.com/o/app"},{"name":"ci","bucket":"skipping","link":"https://github.com/o/app/actions/runs/1/job/1"}]',
+    )
+    const result = await land([], { FACTORY_LAND_CI_MINUTES: '0.02', FACTORY_LAND_POLL_MS: '10' }).done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: ci: waiting for the CI workflow run on')
     expect(await calls()).not.toContain('gh pr merge')
   })
 
