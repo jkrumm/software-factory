@@ -601,6 +601,10 @@ export const queueReasonWords = (kind: string): string => QUEUE_REASON_WORDS[kin
 /** The seat rows of the "By seat" table, in the words the Console shows. */
 export const SEAT_LABEL: Record<SeatKpiRow['seat'], string> = { light: 'Light', lead: 'Lead', filed: 'Filed seat' }
 
+/** A seat row's label: a filed row names its tier and effort. */
+export const seatLabelOf = (row: SeatKpiRow): string =>
+  row.seat === 'filed' && row.tier && row.effort ? `Filed seat ${row.tier} ${row.effort}` : SEAT_LABEL[row.seat]
+
 const rateWords = (rate: number | null): string => (rate === null ? '–' : formatValue('share', rate))
 
 /** A seat row's cells as text: Issues with their share, the rates, the medians and the cost; none is an en dash. */

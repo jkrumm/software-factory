@@ -21,6 +21,9 @@ import {
 import type { CheckpointUses } from './app/checkpoints-uses.ts'
 import type { WriteDeps } from './app/issues.ts'
 
+/** How long a filing answer waits for the seat's cost line. */
+const SEAT_COST_WAIT_MS = 3_000
+
 /**
  * The owner's Issue verbs and the session note: `new` files through the planning stores (edges), the rest record events
  * on the Issue. `answer` goes through the checkpoints' own use case.
@@ -29,10 +32,24 @@ export function composeIssues(input: {
   writes: WriteDeps & { uow: WithdrawWrites }
   filing: NewIssueDeps
   checkpoints: Pick<CheckpointUses, 'decisions' | 'answer'>
+  /** the cost line of a seat's tier; absent: none (a server with no usage schema to read) */
+  seatCost?: (tier: string) => Promise<string | null>
 }): IssueApi {
   const { writes, filing, checkpoints } = input
   return {
     file: (request) => fileNewIssue(filing, request),
+    // bounded: a slow usage read leaves the line out, it never holds the filing answer
+    seatCost: async (tier) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const late = new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), SEAT_COST_WAIT_MS)
+      })
+      try {
+        return (await Promise.race([input.seatCost?.(tier).catch(() => null) ?? null, late])) ?? null
+      } finally {
+        clearTimeout(timer)
+      }
+    },
     newArtifact: (request) => newStandaloneArtifact(filing, request),
     linkArtifact: (request) => linkArtifactToIssue(filing, request),
     retireArtifact: (request) => setArtifactRetired(filing, request),

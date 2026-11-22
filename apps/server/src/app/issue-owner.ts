@@ -205,7 +205,7 @@ export async function seatIssue(
 ): Promise<Result<Recorded, SeatIssueError | PortError>> {
   const parsed = parseSeat(input.seat)
   if (!parsed.ok) return err({ kind: 'seat_refused', field: parsed.field, detail: parsed.detail })
-  const resolved = await resolveSeat(deps.roles, parsed.seat)
+  const resolved = await resolveSeat(deps.roles, parsed.seat, { requireWhy: true })
   if (!resolved.ok) return resolved
   return recordIssueEvent(deps, {
     issueId: input.issueId,

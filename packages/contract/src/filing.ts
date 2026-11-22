@@ -38,17 +38,18 @@ export const FILING = {
   },
   seat: {
     shape:
-      'optional; the tier and effort the Issue\'s lead starts on, one JSON object in one of two forms: {"tier", "effort"} or {"role"}, either with "moveUp": true; omitted, the lead starts on the role table\'s light row when the light rule names the Issue (a hygiene finding, kind docs, an unrouted monitor alert, or triage\'s size small with no design checkpoint and none of the words that keep it off), else on the lead row; name a seat only to override that',
+      'optional, and omitted is the default: file no seat. One JSON object, one of two forms, {"tier", "effort"} or {"role"}, either with "moveUp": true and "why": "<one sentence>". Omitted, the lead starts on the role table\'s light row when the light rule names the Issue (a hygiene finding, kind docs, an unrouted monitor alert, or triage\'s size small with no design checkpoint and none of the words that keep it off), else on the lead row',
     tiers: TIERS,
     efforts: EFFORTS,
     notes: [
       'Never a model id: the tier is a word, the launcher maps it to a model.',
-      'A filed seat always wins and is never moved up, unless it says `moveUp: true` (`{"role": "light", "moveUp": true}`: start light, and a lead that struggles there is moved up to the lead row as the light rule\'s seat is); with none, the light rule decides at the lead\'s start and `factory issue show` reports it before then (leadSeat, planned, with the rule\'s name). Name a seat when the work needs a stronger lead (novel hard logic, a design that must hold) or when a mechanical sweep should run light whatever its size.',
+      'Three choices, in this order. 1. No seat (the default): the light rule decides at the lead\'s start, and `factory issue show` reports it before then (leadSeat, planned, with the rule\'s name). 2. In doubt whether the lead row is enough: `{"role": "lead", "moveUp": true}` starts on the lead row, and if its lead struggles (a second stall, a second refused ship, a regression of its first watch, or `issue block --out-of-depth`) a new lead takes over on the `strong` row (opus, high) from the first lead\'s handover. 3. Work that needs the strongest lead from the first minute (novel hard logic, a design that must hold): `{"tier": "opus", "effort": "high", "why": "<one sentence>"}`; a tier above the lead row\'s is refused (422, seat.why) without the why, and the refusal names choice 2. Opus costs several times the lead row per Issue: the answer of `issue new` and `issue seat` carries one line (`seatCost`) with what Issues on that tier cost over the last 7 days beside the lead row\'s.',
+      'Any other filed seat always wins and is never moved up. `{"role": "light", "moveUp": true}` starts light, and a lead that struggles there is moved up to the lead row as the light rule\'s seat is; a light step ends on the lead row and takes no second step.',
       'A role is looked up in the role table when the Issue is filed and the result is kept; an unknown role is refused (422, seat.role).',
-      'Not both forms at once; `moveUp` is the one key either form may add, any other key is refused by name.',
+      'Not both forms at once; `moveUp` and `why` are the keys either form may add, any other key is refused by name. `why` is one line of at most 300 characters.',
     ],
-    example: { tier: 'opus', effort: 'high' } as const,
-    roleExample: { role: 'lead' } as const,
+    example: { tier: 'opus', effort: 'high', why: 'a schema the next Issues build on' } as const,
+    roleExample: { role: 'lead', moveUp: true } as const,
   },
   lane: {
     shape:

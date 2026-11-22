@@ -19,7 +19,7 @@ const WHERE = [
   'Elsewhere, FACTORY_TOKEN must be set, else the server answers 401.',
   'A lead (its session holds the agent token) cannot file an Issue: `factory issue new` answers 403 for it. It files a signal, `factory signal file --repo <repo> ...`, and triage makes the Issue. A work repo hears the owner only, so a signal there is dropped (`work_repo`), except the follow-up of a lead whose own Issue the owner filed: that signal is held for the owner to promote (Needs you).',
   'Something only for the owner to read and comment on, with no work for a lead (a report, a research page, a specification several Issues build from) is not an Issue: `factory artifact new --repo <repo> --title <title> --content @file [--content-format html] [--issue <id>]...` stores a Report no Issue owns (an HTML one starts from `apps/console/templates/artifact.html` in the factory repo and declares color-scheme); it shows on the Artifacts screen, takes his comments and revisions (`factory artifact revise <id> --content @file`) and links to the Issues it concerns (`factory artifact link <id> --issue <id>`). Never file an Issue and cancel it to carry one.',
-  '`issue new` answers `{"issue": "issue_N", "id": "issue_N", "state", "filed"}`: read `.id`. Other verbs answer `issue` as an object.',
+  '`issue new` answers `{"issue": "issue_N", "id": "issue_N", "state", "filed"}` (and `seatCost`, one line, when a seat was filed): read `.id`. Other verbs answer `issue` as an object.',
   'Several Issues that depend on each other, or that are filed over time: do not file them one by one. Write rows into the repo `docs/plan.yaml` (the server files each row as an Issue once its `after` rows are done).',
   'Format: `factory plan schema` (docs/plan.md); check before pushing: `factory plan check docs/plan.yaml`; read back after pushing: `factory project sync --fetch true`, then `factory project show <repo> --format plain`.',
 ]
@@ -72,7 +72,7 @@ export function filingGuide(): string {
 export const filingContract = () => ({ ...FILING, where: WHERE })
 
 const factsHint = `facts is one JSON object: ${factsShape} (markdown is not JSON); print the full contract with: ${POINTER}`
-const seatHint = `seat is one JSON object: {"tier": "opus", "effort": "high"} or {"role": "lead"}, either with "moveUp": true; print the full contract with: ${POINTER}`
+const seatHint = `seat is one JSON object: {"role": "lead", "moveUp": true} or {"tier": "opus", "effort": "high", "why": "<one sentence>"} (a tier above the lead row's needs the why), or none at all; print the full contract with: ${POINTER}`
 const pointerHint = `the filing contract (facts keys, flags, example): ${POINTER}`
 
 const planLimitsHelp = `docs/plan.yaml limits: at most ${PLAN_LIMITS.maxBytes / 1024} KiB, at most ${PLAN_LIMITS.maxAliases} YAML aliases, at most ${PLAN_LIMITS.maxAfter} "after" keys per row (a plan over any is broken; format in docs/plan.md)`

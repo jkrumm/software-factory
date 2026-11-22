@@ -103,7 +103,7 @@ export interface Issue {
   kind: IssueKind
   origin: IssueOrigin
   /** the seat asked for at filing, resolved; absent: the lead row of the role table */
-  seat?: { tier: Tier; effort: Effort; role?: string; moveUp?: true }
+  seat?: { tier: Tier; effort: Effort; role?: string; moveUp?: true; why?: string }
   /** `spec`: the lead owes a one-page Spec before it builds, and cannot ship without one; `gate`: the same, and only the owner's own verdict ends the wait */
   checkpoint?: 'spec' | 'gate'
   /** triage's size, when it judged one */
@@ -112,6 +112,8 @@ export interface Issue {
   ranOn?: { tier: Tier; effort: Effort; role?: string; rule?: string; moveUp?: true }
   /** times a light lead was moved up: the next lead starts on the lead row, a filed seat that asked for the move-up included */
   movedUp: number
+  /** the role table's row the next lead starts on after a move-up that did not go to the lead row (`strong`); absent: the lead row */
+  movedTo?: string
   /** the lead number: 0 until admitted, one more with every admission */
   attempt: number
   /** how many times it shipped; the current watch is this number */

@@ -157,6 +157,23 @@ describe('factory plan check', () => {
     expect((await cli(['plan', 'check', '-'])).out).not.toContain('warning')
   })
 
+  test('a plan row with opus and no why still files, and plan check warns naming the row', async () => {
+    const opus = ['    seat:', '      tier: opus', '      effort: high']
+    const said = await checkText(
+      file(
+        row('a', opus),
+        row('b', [...opus, '      why: a schema the next rows build on']),
+        row('c', ['    seat:', '      role: lead', '      moveUp: true']),
+      ),
+      'seat.yaml',
+    )
+    expect(said.code).toBe(0)
+    expect(said.out).toContain(`${said.path}: warning: row a: a seat above the lead row has no seat.why`)
+    expect(said.out).toContain('seat: {role: lead, moveUp: true}')
+    expect(said.out.match(/warning/g)).toHaveLength(1)
+    expect(said.out).toContain('ok: ')
+  })
+
   test('a missing file is exit 2 and never throws', async () => {
     const result = await cli(['plan', 'check', join(dir, 'nope.yaml')])
     expect(result.code).toBe(2)

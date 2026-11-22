@@ -386,11 +386,14 @@ export const KPI_SEATS = ['light', 'lead', 'filed'] as const
 
 /**
  * The Issues whose first lead started in the window, grouped by the seat that first lead ran on: an Issue counts for the
- * seat the rule started it on, so a light Issue moved up stays light's and its move shows in `movedUp`.
+ * seat the rule started it on, so a light Issue moved up stays light's and its move shows in `movedUp`. A filed seat is one
+ * row per tier and effort (`tier`, `effort`; null on the other rows).
  */
 export const SeatKpiRow = z
   .strictObject({
     seat: z.enum(KPI_SEATS),
+    tier: z.string().nullable(),
+    effort: z.string().nullable(),
     issues: z.number().int(),
     /** of every Issue whose first lead started in the window; null when none did */
     share: z.number().nullable(),
@@ -418,8 +421,9 @@ export type SeatKpiRow = z.infer<typeof SeatKpiRow>
 
 /**
  * What one seat delivers, over a window, in the four figures the owner pays for (`definitions` says each in a line). `light`
- * follows the Issues the light rule seated, `lead` the Issues that started on the lead row; the fields that only a move-up
- * has are 0 or null on the lead row.
+ * follows the Issues the light rule seated, `lead` the Issues that started on the lead row, `leadMoveUp` those that started on
+ * the lead row under a filed seat that asked for the move-up; the fields that only a move-up has are 0 or null on the seats
+ * that cannot move up.
  */
 export const SeatDelivery = z
   .strictObject({
@@ -428,10 +432,10 @@ export const SeatDelivery = z
     finishedWatches: z.number().int(),
     /** (a) the share of them that passed; null with none */
     finishedPassRate: z.number().nullable(),
-    /** (b) the Issues moved up to the lead row, and their share of `issues` (null with none) */
+    /** (b) the Issues moved up (light to the lead row, a move-up seat's lead to the strong row), and their share of `issues` (null with none) */
     movedUp: z.number().int(),
     movedUpShare: z.number().nullable(),
-    /** (b) dollars the light attempts of moved-up Issues cost, and the mean ms they ran before moving up; null while unmeasured */
+    /** (b) dollars the attempts that moved up cost, and the mean ms they ran before moving up; null while unmeasured */
     movedUpCost: z.number().nullable(),
     movedUpMs: z.number().nullable(),
     /** (c) watches that ended regressed, and per Issue (null with none) */
@@ -474,21 +478,52 @@ export const SEAT_DELIVERY_DEFINITIONS = {
   finishedPass:
     'First pass of what finished: the share of first verifications that passed, over the attempts that shipped on the seat; an attempt that moved up shipped nothing and is not in it',
   movedUp:
-    'Move-up share: the share of the seat’s Issues a light lead handed to the lead row, with the dollars and minutes the light attempt spent before it moved',
+    'Move-up share: the share of the seat’s Issues moved up (a light lead to the lead row, a move-up seat’s lead to the strong row), with the dollars and minutes the attempt spent before it moved',
   regressions:
     'Regressions per Issue: watches that ended regressed, over the Issues whose first lead started on the seat',
   cost: 'Cost per Issue: dollars of every session of those Issues, the light attempts of moved-up ones included',
 } as const
+
+/**
+ * One move-up step over the window's Issues: `light` is the light lead's move to the lead row (a `moved_up` with no `to`),
+ * `lead` the lead row's move to the strong row (`to` 'strong', a filed seat that asked for `moveUp`). `moved` counts the
+ * Issues with an applied move of the step; `bySign` counts them by the sign their `why` names (`moveSignOf`), so a move whose
+ * `why` names none is in no sign.
+ */
+export const MoveStepKpis = z
+  .strictObject({
+    moved: z.number().int(),
+    bySign: z.strictObject({
+      outOfDepth: z.number().int(),
+      regressed: z.number().int(),
+      stalled: z.number().int(),
+      refusedShips: z.number().int(),
+    }),
+    outcomes: z.strictObject({
+      done: z.number().int(),
+      /** closed dropped, a cancelled one included */
+      dropped: z.number().int(),
+      /** a watch of a later attempt than the moved one ended regressed; it may overlap `done` */
+      regressedAfter: z.number().int(),
+      /** not closed */
+      open: z.number().int(),
+    }),
+  })
+  .meta({ id: 'MoveStepKpis' })
+export type MoveStepKpis = z.infer<typeof MoveStepKpis>
 
 export const SeatKpis = z
   .strictObject({
     rows: z.array(SeatKpiRow),
     /** the light Issues moved up, of the light Issues; null with none light */
     movedUpShare: z.number().nullable(),
-    /** the window's four figures for the light seat beside the lead row's, each defined in one line */
+    /** the move-up steps of the window's Issues: light to the lead row, and the lead row to the strong row */
+    steps: z.strictObject({ light: MoveStepKpis, lead: MoveStepKpis }),
+    /** the window's four figures for the light seat beside the lead row's and the move-up filed seat's, each defined in one line */
     delivery: z.strictObject({
       light: SeatDelivery,
       lead: SeatDelivery,
+      leadMoveUp: SeatDelivery,
       definitions: z.strictObject({
         finishedPass: z.string(),
         movedUp: z.string(),

@@ -24,7 +24,8 @@ describe('docs/plan.yaml', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.plan.rows.length).toBeGreaterThan(0)
-    expect(result.warnings).toEqual([])
+    // opus rows without a seat.why are warned about, never refused (the owner's plan carries them); nothing else warns
+    expect(result.warnings.filter((warning) => !warning.includes('seat.why'))).toEqual([])
   })
 
   test('the example in docs/plan.md parses, and shows every key a new row can use', async () => {

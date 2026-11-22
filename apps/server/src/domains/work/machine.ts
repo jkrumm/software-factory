@@ -46,8 +46,9 @@ function evolve(
   const checkpoint = issue.checkpoint ?? settled?.checkpoint
   const size = settled?.size ?? issue.size
   const started = kind === 'lead_started' ? PAYLOADS.lead_started.parse(payload) : undefined
+  const moved = kind === 'moved_up' && transition.to === 'queued' ? PAYLOADS.moved_up.parse(payload) : undefined
   // A new attempt has not started yet; the started lead's seat is its attempt's.
-  const { ranOn: previous, ...rest } = issue
+  const { ranOn: previous, movedTo: previousMove, ...rest } = issue
   const ranOn = kind === 'admitted' ? undefined : started && started.attempt === issue.attempt ? started.seat : previous
   return {
     ...rest,
@@ -56,6 +57,8 @@ function evolve(
     ...(checkpoint ? { checkpoint } : {}),
     ...(size ? { size } : {}),
     ...(ranOn ? { ranOn } : {}),
+    // an owner's re-seat of a moved-up Issue is the seat the next lead starts on: it ends the named row
+    ...(moved?.to ? { movedTo: moved.to } : previousMove && kind !== 'seated' ? { movedTo: previousMove } : {}),
     movedUp: kind === 'moved_up' && transition.to === 'queued' ? issue.movedUp + 1 : issue.movedUp,
     version,
     state: transition.to,

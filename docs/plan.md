@@ -70,7 +70,7 @@ a broken plan.
 | `title` | The filed Issue's title, up to 200 characters. Required unless the row adopts an Issue |
 | `facts` | What the filed Issue's lead reads, an object of the same shape as `factory issue schema` prints: `why`, `what`, `change`, `acceptance`, and any other key you add. Required unless the row adopts an Issue |
 | `kind` | `feature` (the default), `bug`, `chore`, `docs` or `incident` |
-| `seat` | The tier and effort the Issue's lead starts on: `{tier: opus, effort: high}` or `{role: lead}`. Default: the light rule, else the role table's `lead` row. See Choosing the seat |
+| `seat` | The tier and effort the Issue's lead starts on. Default: no seat (the light rule, else the role table's `lead` row); in doubt `{role: lead, moveUp: true}`; opus only with a `why`. See Choosing the seat |
 | `lane` | A resource inside the repo (`apple`): lowercase letters, digits, dashes. The target project's `project.yaml` `lanes:` caps how many leads of a lane run at once. See `docs/project.md` "Lanes" |
 | `prio` | The queue priority its Issue is filed with, an integer from -1000 to 1000 (default 0): higher runs first among the queued Issues, then the lower Issue number. It is `factory issue prio` applied at filing (recorded once, actor `plan`), so rows that become filable together run by `prio`, then file order; a later `factory issue prio` on the Issue overrides it. Not allowed on an adopted row (`issue`) |
 | `checkpoint` | `spec`: the row's lead writes its plan first, as a Spec (a new public surface, a data model or a migration of meaning, a dependency of weight, an architecture or look-and-feel choice later Issues build on), and nobody waits: the lead submits it and builds at once, and its ship is refused until a Spec is submitted. What in it is the owner's, the lead raises beside it as a Decision; settle what you can in the row's facts instead. `gate`: an owner gate, the one way a filer makes the owner read: the same Spec is owed, and only the owner's own verdict ends the wait (no default after 24 hours, no settle by rule), so rows `after` it wait for him |
@@ -116,17 +116,19 @@ edges are stated and final, and triage is asked for its size and kind only (NL51
 by the same rule. A row whose Issue moved up from the light seat never starts light again. `factory issue show` reports the seat
 before a lead starts (`leadSeat`, `planned: true`, with the rule's name, or `sizeKnown: false` while triage has not sized it).
 
-Name a `seat` to override that: a row worth a stronger lead (novel hard logic, a design that must hold) or one that should run
-light whatever its size. A filed seat always wins and is never moved up, unless it says `moveUp: true`. Two forms, never mixed:
-`{tier, effort}` (tier `haiku|sonnet|opus`, effort `low|medium|high|xhigh|max`; never a model id) or `{role}`, a row of
-the role table. A role is looked up when the Issue is filed and the result is kept, so a later table change does not move
-a filed Issue. A tier or effort outside the lists fails the plan's parse and the last valid plan stays; a role the table
-lacks at filing time files nothing, and the planning pass reports `<project>:<row>: seat.role: ...` until it is fixed.
-`factory issue new --seat '{"tier":"opus","effort":"high"}'` sets the same on a hand-filed Issue (422 naming the field
-when refused). Either form takes `moveUp: true` (`{role: light, moveUp: true}`): the row starts on that seat and a lead that
-struggles there is moved up as the light rule's seat is (a second stall, a second refused ship, a first-watch regression, or
-`--out-of-depth`), and the next lead starts on the `lead` row. `factory issue show` reports the asked-for `seat` (null for the default) and `ranOn`, the tier and effort
-the latest lead started on.
+Three choices, in this order. Most rows need none.
+
+1. **No `seat`** (the default). The light rule or the `lead` row runs the row, and the lead's own judgment moves it up from the light row. File this unless you know better.
+2. **`seat: {role: lead, moveUp: true}`** when you doubt the lead row is enough. The row starts on the `lead` row; if its lead struggles by one of four signs (a second stall, a second refused ship, a regression of its first watch, or `issue block --out-of-depth`) a new lead takes over on the `strong` row (opus, high). The leaving lead writes a handover (what the Issue needs, what it tried, what failed and why, the state of its branch, what it would do next): an out-of-depth block's `--reason` is it; for the other signs the factory asks the lead once, and a lead that is gone or does not answer leaves its last words. The step is taken once. The same keys on `{role: light, moveUp: true}` give the light step (to the `lead` row, with the lead's last words, no second step).
+3. **`seat: {tier: opus, effort: high, why: "<one sentence>"}`** when the work needs the strongest lead from the first minute: novel hard logic, a design that must hold. `why` is one sentence of at most 300 characters; `factory issue new` and `factory issue seat` refuse a tier above the lead row's without it (422, `seat.why`, naming choice 2). A plan row is not refused (a refused row would hold its whole plan at the last valid version): `factory plan check` warns, naming the row, and the row files. The answer of `issue new` and `issue seat` carries `seatCost`, one line with what Issues on that tier cost per Issue and in median working minutes over the last 7 days, beside the lead row's; `factory issue show` prints the `why`.
+
+A filed seat otherwise always wins and is never moved up. Two forms, never mixed: `{tier, effort}` (tier `haiku|sonnet|opus`, effort
+`low|medium|high|xhigh|max`; never a model id) or `{role}`, a row of the role table; `moveUp` and `why` are the keys either may add.
+A role is looked up when the Issue is filed and the result is kept, so a later table change does not move a filed Issue. A tier
+or effort outside the lists fails the plan's parse and the last valid plan stays; a role the table lacks at filing time files
+nothing, and the planning pass reports `<project>:<row>: seat.role: ...` until it is fixed. `factory issue new --seat '{"role":"lead","moveUp":true}'`
+sets the same on a hand-filed Issue (422 naming the field when refused). `factory issue show` reports the asked-for `seat`
+(null for the default, with its `why` and `moveUp`) and `ranOn`, the tier and effort the latest lead started on.
 
 ## Lanes and check tiers
 

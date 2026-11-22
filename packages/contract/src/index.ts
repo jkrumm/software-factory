@@ -37,6 +37,7 @@ export {
   type ImageRef,
 } from './image-anchor.ts'
 export * from './seat.ts'
+export * from './move-sign.ts'
 export * from './light-gate.ts'
 export * from './landing.ts'
 export * from './reviewer.ts'
@@ -59,6 +60,7 @@ export {
   REVIEWER_WINDOW_MIN_ISSUES,
   RoleName,
   type RoleTable,
+  STRONG_ROLE,
   TIERS,
   Tier,
   TRIPWIRE_CONFIDENCE,

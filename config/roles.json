@@ -2,6 +2,7 @@
   "roles": {
     "lead": { "tier": "sonnet", "effort": "high" },
     "light": { "tier": "haiku", "effort": "high" },
+    "strong": { "tier": "opus", "effort": "high" },
     "implementer": { "tier": "haiku", "effort": "high" },
     "verifier": { "tier": "haiku", "effort": "high" },
     "reviewer": { "tier": "sonnet", "effort": "medium" },

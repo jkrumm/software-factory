@@ -1,6 +1,6 @@
-import { hygieneFinder } from '@software-factory/contract'
+import { hygieneFinder, STRONG_ROLE } from '@software-factory/contract'
 
-export { hygieneFinder }
+export { hygieneFinder, STRONG_ROLE }
 // The light seat: mechanical, well-specified work with a check that proves it (every hygiene finding, whatever its size)
 // starts on the cheap seat (the role table's
 // `light` row) instead of the `lead` row. modelpick's table of 2026-11-16 put haiku at high effort level with sonnet at
@@ -10,6 +10,22 @@ export { hygieneFinder }
 /** The role table's rows a lead starts on. */
 export const LEAD_ROLE = 'lead'
 export const LIGHT_ROLE = 'light'
+
+/**
+ * The step a lead's move-up takes, read from the seat its attempt ran on: `light` (a lead the light rule seated, or a
+ * filed seat below the lead row that asked for it) ends on the lead row; `lead` (a filed lead-row seat that asked for it)
+ * ends on the strong row. Null: the lead is not moved: any other filed seat is the filer's, and a lead that was moved up
+ * already runs on a row with no step left.
+ */
+export type MoveStep = 'light' | 'lead'
+export function stepOf(
+  ranOn: { role?: string | undefined; rule?: string | undefined; moveUp?: true | undefined } | undefined,
+): MoveStep | null {
+  if (!ranOn) return null
+  if (ranOn.rule) return 'light'
+  if (!ranOn.moveUp) return null
+  return ranOn.role === LEAD_ROLE ? 'lead' : 'light'
+}
 
 /** What decides whether an Issue with no filed seat starts light. */
 export interface LightFacts {
@@ -60,10 +76,10 @@ export function lightRule(facts: LightFacts): string | null {
 /** A light lead's second stall, or its second refused ship, moves it up. */
 const MOVE_UP_AFTER = 2
 
-/** What a light lead's attempt did, read from its events and its ships. */
+/** What a movable lead's attempt did, read from its events and its ships. */
 export interface StruggleFacts {
-  /** the current attempt's lead started on the light row */
-  light: boolean
+  /** the step the current attempt's lead can take (`stepOf`), null for a lead that is never moved */
+  step: MoveStep | null
   /** its stalls this attempt, a wall not counted: the account's, not the lead's */
   stalls: number
   /** it said it is out of its depth (`issue block --out-of-depth`) */
@@ -74,12 +90,28 @@ export interface StruggleFacts {
   regressedWatch: number | null
 }
 
-/** Why a light lead is moved up now, or null: it keeps working. A lead on any other seat is never moved. */
+/**
+ * Why a movable lead is moved up now, or null: it keeps working. A lead on any other seat is never moved. The words are
+ * read back by `moveSignOf` (the seats read): the light step's are as they always were, the lead row's say `the lead`.
+ */
 export function moveUpWhy(facts: StruggleFacts): string | null {
-  if (!facts.light) return null
-  if (facts.outOfDepth) return 'the light lead said the work is beyond its seat'
-  if (facts.regressedWatch === 1) return 'the light lead’s change regressed on its first watch'
-  if (facts.stalls >= MOVE_UP_AFTER) return `the light lead stalled ${facts.stalls} times`
-  if (facts.shipRefusals >= MOVE_UP_AFTER) return `the light lead’s ship was refused ${facts.shipRefusals} times`
+  if (!facts.step) return null
+  const who = facts.step === 'light' ? 'the light lead' : 'the lead'
+  if (facts.outOfDepth) return `${who} said the work is beyond its seat`
+  if (facts.regressedWatch === 1) return `${who}’s change regressed on its first watch`
+  if (facts.stalls >= MOVE_UP_AFTER) return `${who} stalled ${facts.stalls} times`
+  if (facts.shipRefusals >= MOVE_UP_AFTER) return `${who}’s ship was refused ${facts.shipRefusals} times`
   return null
 }
+
+/**
+ * How long the factory waits for a leaving lead's handover, from the moment it asked: a lead that is gone ends the wait at
+ * once, and one that does not answer leaves its last words. It bounds the factory's own wait, not the lead (the stall rule
+ * is the only liveness rule a lead has).
+ */
+export const HANDOVER_WAIT_MS = 10 * 60_000
+/**
+ * A turn that began this long before the note was marked typed still counts as the lead's answer to it: the hook of the turn
+ * and the factory's stamp of the typing come from two processes.
+ */
+export const HANDOVER_TURN_GRACE_MS = 2_000

@@ -83,7 +83,12 @@ export function describeEvent(kind: string, payload: unknown): string {
     case 'stalled':
       return after('Stalled', field(payload, 'detail'))
     case 'moved_up':
-      return after('Moved up from the light seat to the lead seat', field(payload, 'why'))
+      return after(
+        field(payload, 'to')
+          ? 'Moved up from the lead seat to the stronger seat'
+          : 'Moved up from the light seat to the lead seat',
+        field(payload, 'why'),
+      )
     case 'woken':
       return after('Woken', field(payload, 'detail'))
     case 'shipped':

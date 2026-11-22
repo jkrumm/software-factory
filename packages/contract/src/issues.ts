@@ -56,7 +56,14 @@ export const NewIssueBody = z
 
 /** `issue` is the Issue's id as a string; `id` is the same id, the key the other verbs' `issue` object carries (read `.id`). */
 export const NewIssueAnswer = z
-  .object({ issue: z.string(), id: z.string(), state: z.string(), filed: z.boolean() })
+  .object({
+    issue: z.string(),
+    id: z.string(),
+    state: z.string(),
+    filed: z.boolean(),
+    /** one line: what a seat of this tier cost per Issue over the last 7 days beside the lead row's; absent without a seat or when the usage schema cannot be read */
+    seatCost: z.string().optional(),
+  })
   .meta({ id: 'NewIssueAnswer' })
 
 /** `issue pause`: the owner puts a started Issue into a wait that only his word, or `until`, ends. */
@@ -94,6 +101,10 @@ export const SeatBody = z
     tier: z.enum(TIERS).optional(),
     effort: z.enum(EFFORTS).optional(),
     role: RoleName.optional(),
+    /** a lead that struggles on this seat is moved up: from the light row to the lead row, from the lead row to the strong row */
+    moveUp: z.boolean().optional(),
+    /** one sentence on what the work needs; required for a tier above the lead row's */
+    why: z.string().optional(),
     call: Call.optional(),
   })
   .meta({ id: 'SeatBody' })

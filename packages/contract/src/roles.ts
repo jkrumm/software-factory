@@ -9,6 +9,9 @@ export type Tier = z.infer<typeof Tier>
 export const Effort = z.enum(EFFORTS)
 export type Effort = z.infer<typeof Effort>
 
+/** The role table's row above the lead row (opus, high): where a lead-row seat filed with `moveUp` goes when its lead struggles. */
+export const STRONG_ROLE = 'strong'
+
 /** A role is a word: it ends up in a file name, a CLI argument and a column. */
 export const ROLE_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/
 export const RoleName = z.string().regex(ROLE_NAME, 'not a valid role name')

@@ -518,3 +518,31 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   weather. Cost: about 130 bytes of every brief, and one more owner question where a loop runs on a default. Revert: delete the
   sentence in order 2 and the two note lines. Count after two weeks: Decisions asked with no default by a lead whose row files
   its successor, and any repo whose same-named Issues pass five in ten days with no owner answer between them.
+- **NL55 A lead-row seat can ask to move up to a stronger lead with a handover, and a seat above the lead row says why (Issue 2952, 2026-11-22).**
+  Of the newest 500 Issues, 62 were filed opus at high effort: 59 started, 1,462 dollars, 24.78 an Issue, median 119 working
+  minutes, against 3.81 and 40 minutes for the 276 on the default lead row and 0.52 for the 93 on the light row; their triage
+  sizes were 23 large, 12 medium, 1 small and 26 unsized. Opus took 967 of 2,974 attributed five-hour window points and 278 of 864
+  weekly points over 7 days, and `read seats` hid it in one `filed` row (216 Issues at 16.95) that mixed sonnet at about 1.2 with
+  opus at about 25. A filed seat was moved up only from the light row, so a planner who doubted the lead row filed opus, and nothing
+  showed him the price. The light step is measured and works: 41 moved-up Issues of the 500 (33 on the light lead's own
+  `--out-of-depth` block, median 1.4 minutes after its start, 3 after a second refused ship, 3 after a first-watch regression, 2
+  after a second stall), 36 of them done; Issues that start light cost 0.89 with the moved ones counted, against 4.02 on the lead row.
+  Decided: (1) A filed seat on the lead row with `moveUp: true` is moved up by the same four signs and the same `moved_up` event to
+  the new `strong` row (opus, high), with a handover the leaving lead writes: an out-of-depth block's `--reason` is it; for the
+  other three signs the factory asks the lead once (a note planned with the event, the finalize waiting for the lead's answer, at
+  most ten minutes from the ask, and not at all for a lead that is gone), and a lead that does not answer leaves its last words
+  as the light step does. The move is a new lead reading a handover, never the same session compacted and continued under
+  another model: both hold a summary, the new lead is the path 41 moves already took, and the other needs three things nothing
+  here has done (typing a compaction, changing the model of a running session, resuming under another tier); the cache is per
+  model and is lost either way. The light step is unchanged and takes no second step. (2) Opt-in: about 970 Issues a week run on
+  the lead row and how many meet the four signs there is not measured, so the filer asks for it and `read seats` counts it first.
+  (3) `seat.why`, one sentence of at most 300 characters, is required by `issue new` and `issue seat` for a tier above the lead
+  row's (422, `seat.why`, naming `{"role":"lead","moveUp":true}`) and only warned about on a plan row by `factory plan check`, because
+  a refused row holds its whole plan at the last valid version (about 130 rows carry opus today). (4) The filing answer carries
+  `seatCost`, the 7-day cost per Issue and median working minutes of Issues on that tier beside the lead row's, and never
+  blocks. (5) `read seats` splits the `filed` row by tier and effort and counts each step's moves by sign and outcome. No cap on
+  opus and no rule that lowers a filed seat: the filer's seat still wins (the owner: opus is "probably also reasonable for many of
+  them"). Fable is left out of every figure; the owner counts it as free. Cost: a moved-up Issue pays its first attempt and a
+  handover turn before the strong lead starts. Revert: remove `moveUp` from the seats that ask for it (nothing moves up), and the
+  `strong` row from `config/roles.json`. Count after two weeks: `read seats`, steps, lead to strong: the share moved, the first
+  pass of what finished, the cost per Issue with the moved attempts counted, against the same Issues filed opus at the start.

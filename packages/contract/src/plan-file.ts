@@ -2,7 +2,8 @@ import { parse, YAMLParseError } from 'yaml'
 import * as z from 'zod'
 import { CheckpointName, LaneName } from './lane.ts'
 import { PLAN_LIMITS } from './planning.ts'
-import { PlanSeat } from './seat.ts'
+import { STRONG_ROLE } from './roles.ts'
+import { PlanSeat, type Seat } from './seat.ts'
 import { ISSUE_KINDS } from './vocab.ts'
 
 /**
@@ -176,6 +177,9 @@ export type PlanParse = { ok: true; plan: PlanFile; warnings: string[] } | { ok:
 
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max)}…` : text)
 
+/** A seat that is above the lead row without reading the role table: the opus tier, or the `strong` row. */
+const aboveLeadRow = (seat: Seat): boolean => ('role' in seat ? seat.role === STRONG_ROLE : seat.tier === 'opus')
+
 /** A zod error as one line: every issue with its path, clipped. */
 export const issuesMessage = (error: z.ZodError): string =>
   clip(
@@ -204,7 +208,14 @@ export function parsePlan(raw: unknown, lanes: readonly string[] | null = []): P
             (row) =>
               `row ${row.key}: lane ${row.lane} is not declared in project.yaml lanes (${lanes.length > 0 ? lanes.join(', ') : 'none declared'}): it is unlimited within leads`,
           )
-  return { ok: true, plan: parsed.data, warnings: [...retired, ...unknown] }
+  // A plan row is never refused for a missing `seat.why` (a refused row holds its whole plan at the last valid version): it warns.
+  const unsaid = parsed.data.rows
+    .filter((row) => row.seat !== undefined && !row.seat.why && aboveLeadRow(row.seat))
+    .map(
+      (row) =>
+        `row ${row.key}: a seat above the lead row has no seat.why (one sentence on what the work needs); the row files as it is. Unsure? seat: {role: lead, moveUp: true} starts on the lead row and moves up if its lead struggles`,
+    )
+  return { ok: true, plan: parsed.data, warnings: [...retired, ...unknown, ...unsaid] }
 }
 
 /** The options of the hardened YAML read: YAML 1.2 core, no merge keys, duplicate keys refused, few aliases. */

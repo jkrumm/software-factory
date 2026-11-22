@@ -270,7 +270,7 @@ describe('start_lead seats', () => {
       },
     ])
     const shown = await detail(issue)
-    expect(shown?.seat).toEqual({ tier: 'opus', effort: 'high', role: null })
+    expect(shown?.seat).toEqual({ tier: 'opus', effort: 'high', role: null, why: null, moveUp: false })
     expect(shown?.ranOn).toEqual({ tier: 'opus', effort: 'high', role: null })
     expect(await attemptSeat(issue, 1)).toEqual({ tier: 'opus', effort: 'high' })
     expect(shown?.timeline.find((line) => line.kind === 'lead_started')?.text).toBe(

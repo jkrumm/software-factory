@@ -167,6 +167,17 @@ const leadGone = (ctx: Ctx<'lead_gone'>): Cell => {
   return { to: 'waiting', wait: { reason: 'lead_gone', detail }, effects: [] }
 }
 
+/**
+ * A queued Issue takes a new seat. One that was moved up already takes none that asks to move up: the move is spent, and the
+ * next lead would start on the seat with the flag and no step left to take.
+ */
+const reseat = (ctx: Ctx<'seated'>): Cell =>
+  ctx.issue.movedUp > 0 && ctx.event.payload.moveUp
+    ? refuse(
+        `it was moved up already: a seat that asks to move up is spent; set the seat without moveUp, or name the strong row; ${show(ctx.issue)} says where it stands`,
+      )
+    : { to: 'queued', effects: [] }
+
 /** The seat is set only while no lead works: a lead that started keeps the seat it started on. */
 const seatTaken = (ctx: Ctx<'seated'>): Cell =>
   refuse(
@@ -576,6 +587,14 @@ const moveUp = (ctx: Ctx<'moved_up'>): Cell => {
       `it waits for a ${issue.wait.reason}: that ends with its answer first: answer it with ${answerOf(issue.wait)}`,
     )
   }
+  // The lead row's step asks the leaving lead for its handover (`ask`): the note first, and the finalize waits for the answer.
+  if (ctx.event.payload.ask) {
+    const asked = next(issue)
+    return {
+      to: 'queued',
+      effects: [noteLead(issue.id, issue.attempt, asked, asked), finalize(issue.id, issue.attempt, asked)],
+    }
+  }
   return { to: 'queued', effects: [finalize(issue.id, issue.attempt)] }
 }
 
@@ -625,7 +644,7 @@ export const TABLE: Table = {
     admitted: admit,
     lead_started: factoryNews('queued'),
     lead_gone: factoryNews('queued'),
-    seated: () => ({ to: 'queued', effects: [] }),
+    seated: reseat,
     noted: () => ({ to: 'queued', effects: [] }),
     asked: noLeadYet,
     answered: said('nothing waits for an answer'),

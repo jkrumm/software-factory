@@ -16,6 +16,7 @@ import {
   moveUpWhy,
   outOfScope,
   type StruggleFacts,
+  stepOf,
 } from '../../src/domains/leads/light.ts'
 
 const facts = (over: Partial<LightFacts> = {}): LightFacts => ({
@@ -79,9 +80,27 @@ describe('lightRule', () => {
   })
 })
 
+describe('stepOf', () => {
+  test('a lead the light rule seated, or a filed seat below the lead row, steps to the lead row', () => {
+    expect(stepOf({ role: 'light', rule: 'kind:docs' })).toBe('light')
+    expect(stepOf({ role: 'light', moveUp: true })).toBe('light')
+    expect(stepOf({ moveUp: true })).toBe('light')
+  })
+
+  test('a filed lead-row seat that asked for it steps to the strong row', () => {
+    expect(stepOf({ role: 'lead', moveUp: true })).toBe('lead')
+  })
+
+  test('any other seat has no step: a filed seat, a lead that was moved up already', () => {
+    expect(stepOf(undefined)).toBeNull()
+    expect(stepOf({ role: 'lead' })).toBeNull()
+    expect(stepOf({ role: 'strong' })).toBeNull()
+  })
+})
+
 describe('moveUpWhy', () => {
   const struggle = (over: Partial<StruggleFacts> = {}): StruggleFacts => ({
-    light: true,
+    step: 'light',
     stalls: 0,
     outOfDepth: false,
     shipRefusals: 0,
@@ -100,7 +119,16 @@ describe('moveUpWhy', () => {
   })
 
   test('a lead on any other seat is never moved', () => {
-    expect(moveUpWhy(struggle({ light: false, stalls: 5, outOfDepth: true, regressedWatch: 1 }))).toBeNull()
+    expect(moveUpWhy(struggle({ step: null, stalls: 5, outOfDepth: true, regressedWatch: 1 }))).toBeNull()
+  })
+
+  test('the lead row’s step says the lead, not the light lead, in words the seats read back', () => {
+    expect(moveUpWhy(struggle({ step: 'lead', stalls: 2 }))).toBe('the lead stalled 2 times')
+    expect(moveUpWhy(struggle({ step: 'lead', outOfDepth: true }))).toBe('the lead said the work is beyond its seat')
+    expect(moveUpWhy(struggle({ step: 'lead', regressedWatch: 1 }))).toBe(
+      'the lead’s change regressed on its first watch',
+    )
+    expect(moveUpWhy(struggle({ step: 'lead', shipRefusals: 2 }))).toBe('the lead’s ship was refused 2 times')
   })
 })
 
