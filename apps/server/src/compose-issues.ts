@@ -39,11 +39,17 @@ export function composeIssues(input: {
   return {
     file: (request) => fileNewIssue(filing, request),
     // bounded: a slow usage read leaves the line out, it never holds the filing answer
-    seatCost: async (tier) =>
-      (await Promise.race([
-        input.seatCost?.(tier).catch(() => null) ?? null,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), SEAT_COST_WAIT_MS)),
-      ])) ?? null,
+    seatCost: async (tier) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const late = new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), SEAT_COST_WAIT_MS)
+      })
+      try {
+        return (await Promise.race([input.seatCost?.(tier).catch(() => null) ?? null, late])) ?? null
+      } finally {
+        clearTimeout(timer)
+      }
+    },
     newArtifact: (request) => newStandaloneArtifact(filing, request),
     linkArtifact: (request) => linkArtifactToIssue(filing, request),
     retireArtifact: (request) => setArtifactRetired(filing, request),

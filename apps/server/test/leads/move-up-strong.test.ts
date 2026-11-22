@@ -245,6 +245,17 @@ describe('a filed lead-row seat with moveUp', () => {
 })
 
 describe('what does not move up to the strong row', () => {
+  test('an owner re-seat that asks to move up is refused once the Issue was moved up', async () => {
+    const issue = await leadWithMoveUp()
+    await blockIssue(w.deps, issue, { attempt: 1, reason: 'beyond me', call: 'b1', outOfDepth: true })
+    const refused = await w.event(issue, 'seated:1', {
+      kind: 'seated',
+      payload: { tier: 'sonnet', effort: 'high', role: 'lead', moveUp: true },
+      actor: 'owner',
+    })
+    expect(refused).toMatchObject({ result: 'refused' })
+  })
+
   test('an owner re-seat of a moved-up Issue starts the next lead on that seat, not on the strong row', async () => {
     const issue = await leadWithMoveUp()
     await blockIssue(w.deps, issue, { attempt: 1, reason: 'beyond me', call: 'b1', outOfDepth: true })
