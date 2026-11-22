@@ -16,9 +16,11 @@ import type { SQL } from 'bun'
 import type { FindingIssue } from '../domains/hygiene/hygiene-lifecycle.ts'
 import * as z from 'zod'
 import { countsOf, DIGEST_WINDOW_MS, groupByProject, shipped, type DigestIssue } from '../kernel/digest-scope.ts'
+import { mergeCapacityOf } from '../kernel/merge-capacity.ts'
 import { projectOf } from '../kernel/project-of.ts'
 import { queueKindOf, type QueueReasons } from './flow.ts'
 import { loopReads } from './loops.ts'
+import { readMergeFigures } from './merge-capacity.ts'
 
 /**
  * The project screens' read models: the list of projects, one project's page and one project's hygiene, from the stored
@@ -36,6 +38,8 @@ const DAY_MS = 24 * 3_600_000
 const SHIPPED_ITEMS = 100
 const HOUR_MS = 3_600_000
 const HOURS = 168
+/** The days of merge windows the page reads: a week, the span its shipped bars use. */
+const MERGE_DAYS = 7
 const PASSES = 5
 /** Passes read for the probes' last runs and the lifecycle: a fortnight of daily passes and the weekly ones. */
 const RECENT_PASSES = 16
@@ -548,6 +552,7 @@ export async function readProjectPage(
     syncedAt: project.syncedAt ? iso(project.syncedAt) : null,
     projectError: project.error,
     counts,
+    merge: mergeCapacityOf(await readMergeFigures(sql, { project: project.name, to: now, days: MERGE_DAYS })),
     shipped: shippedOf(issues, now),
     production: {
       watching: issues

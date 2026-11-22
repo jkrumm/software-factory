@@ -4,7 +4,7 @@ import { MAX_SIGNALS_PER_PASS } from '../../kernel/signal-budget.ts'
 import type { LoopStore } from './stores.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
 import { budgetsOf } from '@software-factory/contract/project'
-import { bindingCaps, type CapFact, capName, capText, capTitle } from '../../domains/improve/caps.ts'
+import { bindingCaps, type CapFact, capName, capText, capTitle, mergeLimited } from '../../domains/improve/caps.ts'
 import { repoTextOf } from '../../domains/planning/sync.ts'
 import {
   type Candidate,
@@ -82,6 +82,8 @@ export interface ThroughputPass {
   held: string[]
   /** the caps whose binding was filed (or found already open) this pass */
   caps: { project: string; cap: string; issue: string | null }[]
+  /** the caps that bound but whose repo cannot merge more pull requests than it does: no lift was proposed (Issue 2959) */
+  capsHeld: { project: string; cap: string; reason: string }[]
   failed: { key: string; reason: string }[]
   notes: string[]
 }
@@ -117,7 +119,7 @@ const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.k
  */
 export async function throughputPass(deps: ThroughputDeps): Promise<Result<ThroughputPass, PortError>> {
   const now = deps.clock.now()
-  const pass: ThroughputPass = { ledger: [], filed: [], held: [], caps: [], failed: [], notes: [] }
+  const pass: ThroughputPass = { ledger: [], filed: [], held: [], caps: [], capsHeld: [], failed: [], notes: [] }
   const read = async () => deps.uow.run(async ({ loops }) => ok(await loops.throughputFindings()))
   const stored = await read()
   if (!stored.ok) return stored
@@ -313,10 +315,23 @@ async function fileBindingCaps(
     return
   }
   const byProject = new Map(projects.map((p) => [p.project, p]))
-  for (const fact of bindingCaps(facts).toSorted(
-    (a, b) =>
-      b.bindingMinutes - a.bindingMinutes || a.project.localeCompare(b.project) || capName(a).localeCompare(capName(b)),
-  )) {
+  for (const fact of bindingCaps(facts)
+    .filter((fact) => {
+      if (!mergeLimited(fact) || !fact.figures.mergeCapacity) return true
+      const c = fact.figures.mergeCapacity
+      pass.capsHeld.push({
+        project: fact.project,
+        cap: capName(fact),
+        reason: `its merge window was held ${Math.round(c.busyShare * 100)} % of the day and a call waited a median ${c.waitMedianMinutes} min (slowest tenth ${c.waitP90Minutes} min)`,
+      })
+      return false
+    })
+    .toSorted(
+      (a, b) =>
+        b.bindingMinutes - a.bindingMinutes ||
+        a.project.localeCompare(b.project) ||
+        capName(a).localeCompare(capName(b)),
+    )) {
     const target = byProject.get(fact.project)
     if (!target || pass.caps.length >= MAX_SIGNALS_PER_PASS) continue
     const filed = await deps.file(
@@ -351,6 +366,9 @@ export const throughputSummary = (pass: ThroughputPass): string =>
     pass.held.length > 0 ? `${pass.held.length} project(s) with an improvement already open` : null,
     pass.caps.length > 0
       ? `${pass.caps.length} binding cap(s) (${pass.caps.map((c) => `${c.project} ${c.cap}`).join(', ')})`
+      : null,
+    pass.capsHeld.length > 0
+      ? `${pass.capsHeld.length} cap(s) left in place, the merge window is the limit (${pass.capsHeld.map((c) => `${c.project} ${c.cap}`).join(', ')})`
       : null,
     pass.failed.length > 0 ? `${pass.failed.length} failed` : null,
     ...pass.notes,
