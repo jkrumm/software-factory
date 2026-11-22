@@ -106,22 +106,33 @@ export type SettleChecked =
   | { ok: true; after: IssueId[]; dropped: DroppedEdge[]; reason: string; refinement: Refinement }
   | { ok: false; why: string }
 
+/** Wording that says the work builds on, follows or waits for what a reference names. */
+const DEPENDS =
+  /\b(?:builds? on|built on|depends? on|dependent on|blocked by|waits? for|on top of|requires?|needs?|after|once|until|follow[- ]?ups?|continu(?:es|ation)|extends?)\b/i
+/** Wording that says the reference only tells where the problem was seen or found: it is not an order. */
+const MENTIONED =
+  /\b(?:found (?:while|during|when|in)|noticed (?:while|during|when|in)|spotted (?:while|during)|seen (?:in|on|at|while)|came up (?:in|while|during)|not in (?:its|their|that|this) scope|out of scope|lost time)\b/i
+
 /**
- * Whether the filed words name the blocker: `Issue 1177`, `issue_1177` or `#1177`. A shared file or topic is no
- * evidence that an Issue builds on another's output; naming it is (2026-11-14: urgent fixes chained behind slow
- * Issues that only touched the same area).
+ * Whether the filed words build on the blocker: a sentence that names it (`Issue 1177`, `issue_1177` or `#1177`) and
+ * says the work builds on, follows or waits for it. A shared file or topic is no evidence (2026-11-14: urgent fixes
+ * chained behind slow Issues that only touched the same area), and neither is a bare mention: "found while closing
+ * Issue 2701, not in its scope" or "three leads lost time to that (issue 2648)" name where a problem was seen, not an
+ * order (2026-11-22: 47 of 79 decided triage answers did not stand, the newest three all of that kind).
  */
-function namesIssue(facts: Pick<SettlingFacts, 'title' | 'text'>, blocker: IssueId): boolean {
+function buildsOn(facts: Pick<SettlingFacts, 'title' | 'text'>, blocker: IssueId): boolean {
   const number = issueNumber(blocker)
-  const pattern = new RegExp(`(?:\\bissues?[ _#]*|#)${number}\\b`, 'i')
-  return pattern.test(facts.title) || pattern.test(facts.text)
+  const reference = new RegExp(`(?:\\bissues?[ _#]*|#)${number}\\b`, 'i')
+  return [facts.title, facts.text]
+    .flatMap((words) => words.split(/(?<=[.!?;])\s+|\n+/))
+    .some((sentence) => reference.test(sentence) && DEPENDS.test(sentence) && !MENTIONED.test(sentence))
 }
 
 /**
  * An answer is held to what it was shown (the workflow's guard, checked again here): only open Issues it saw, never the
  * Issue itself, none twice. An edge is dropped with its reason, the rest standing, when it would make the Issue wait
  * on one that (`waitsForIssue`: through the open chain) already waits on it, on one filed after it, on any Issue at
- * all when the owner ranked it (`RANKED_PRIO`), or on one the filed words never name. A blocker that closed meanwhile is
+ * all when the owner ranked it (`RANKED_PRIO`), or on one the filed words do not say they build on. A blocker that closed meanwhile is
  * refused later by planning's own use case.
  */
 export function checkSettle(
@@ -150,10 +161,10 @@ export function checkSettle(
         issue: id,
         why: `${issue} is ranked prio ${facts.prio}: the owner's rank is not chained by inference`,
       })
-    } else if (!namesIssue(facts, id)) {
+    } else if (!buildsOn(facts, id)) {
       dropped.push({
         issue: id,
-        why: `the filed words never name ${id}: a shared topic is no evidence it builds on it`,
+        why: `the filed words never say they build on ${id}: a shared topic or a bare mention is no evidence`,
       })
     } else if (waitsForIssue(id)) dropped.push({ issue: id, why: `${id} already waits for ${issue}` })
     else after.push(id)

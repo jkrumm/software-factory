@@ -555,8 +555,9 @@ What each decides in code and what it files:
   path rule). Unknown processes, pid 1, this server and its ancestors are never touched. SIGTERM first, SIGKILL on a
   later pass; each signal is a `reaped_processes` row.
 
-**Inferred edges** (`checkSettle`, `domains/planning/settle.ts`). A settle answer's `after` edge stands only when the
-filed title or text names the blocker (`Issue 1177`, `issue_1177`, `#1177`): a shared file or topic is no evidence. An
+**Inferred edges** (`checkSettle`, `domains/planning/settle.ts`). A settle answer's `after` edge stands only when a sentence of the
+filed title or text names the blocker (`Issue 1177`, `issue_1177`, `#1177`) and says the work builds on, follows or waits
+for it; a shared file or topic, or a mention of where a problem was found or seen, is no evidence. An
 Issue the owner ranked at `prio` 400 or above (`RANKED_PRIO`) takes none, and the owner's `--after` is stated, not
 inferred. A dropped edge is recorded in the call's detail (`dropped: <why>`); one that stands carries
 `planning_edges.inferred_by` (`triage: <reason>`, `queue: <reason>`; null when stated) and the queue reason says it.
