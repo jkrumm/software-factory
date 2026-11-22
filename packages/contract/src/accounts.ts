@@ -104,6 +104,33 @@ export const AccountRow = z
   .meta({ id: 'AccountRow' })
 export type AccountRow = z.infer<typeof AccountRow>
 
+/**
+ * One row of `claude-account health`: a check of one account's login or quota on one machine, graded by the package
+ * (`ok`, `warn`, `fail`). A login row carries when it ends and the days left; a row with `id` `-` is about the machine
+ * (unreachable, re-login requests waiting for the owner's click).
+ */
+export const AccountHealthRow = z
+  .object({
+    machine: z.string(),
+    id: z.string(),
+    check: z.enum(['reach', 'login', 'quota', 'queue']),
+    state: z.enum(['ok', 'warn', 'fail']),
+    detail: z.string(),
+    /** the shell command that repairs it, run on the MacBook; null when there is none */
+    fix: nullableString,
+    via: z.enum(['core', 'ssh']).optional(),
+    ends_at: z.string().optional(),
+    days_left: z.number().optional(),
+  })
+  .meta({ id: 'AccountHealthRow' })
+export type AccountHealthRow = z.infer<typeof AccountHealthRow>
+
+/** The package's health rows of this machine and its peer, with when they were read; null before the first read. */
+export const AccountsHealth = z
+  .object({ at: z.string(), rows: z.array(AccountHealthRow) })
+  .meta({ id: 'AccountsHealth' })
+export type AccountsHealth = z.infer<typeof AccountsHealth>
+
 export const AccountsView = z
   .object({
     schema: z.number().int(),
@@ -114,6 +141,8 @@ export const AccountsView = z
     default_account: z.string(),
     lanes: z.array(z.string()),
     accounts: z.array(AccountRow),
+    /** the logins' health per machine as the package last read it (`claude-account health`, the keepalive) */
+    health: AccountsHealth.nullable(),
   })
   .meta({ id: 'AccountsView' })
 export type AccountsView = z.infer<typeof AccountsView>

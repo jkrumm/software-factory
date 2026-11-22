@@ -2119,7 +2119,11 @@ describe('CLI (isolated HOME)', () => {
     chmodSync(join(okBin, 'claude'), 0o755)
     const r = cli(['refresh', '--all'], { CLAUDE_ACCOUNTS_SSH: sshStub, PATH: `${okBin}:${bin}:${process.env.PATH}` })
     expect(r.rc).toBe(0)
-    const args = readFileSync(sshLog, 'utf8').trim().split('\n')
+    // the keepalive also reads the peer's health for the cache (the snapshot verbs); the usage import is the one `usage` call
+    const args = readFileSync(sshLog, 'utf8')
+      .trim()
+      .split('\n')
+      .filter((line) => /account-usage$|claude-account usage --json/.test(line))
     expect(args.length).toBe(1)
     expect(args[0]).toMatch(
       /BatchMode=yes .*ConnectTimeout=5 (iumac account-usage$|mini .*claude-account usage --json)/,

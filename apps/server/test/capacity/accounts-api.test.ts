@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { liveAccounts, loadRegistry } from '@software-factory/accounts'
+import { liveAccounts, loadRegistry, writeHealthCache } from '@software-factory/accounts'
 import { ReadAccountList } from '@software-factory/contract'
 import { createApp } from '../../src/api/app.ts'
 import type { CapacityApi } from '../../src/api/capacity.ts'
@@ -88,6 +88,49 @@ describe('GET /v1/accounts', () => {
       fresh: false,
       rank: null,
     })
+  })
+})
+
+describe('GET /v1/accounts, the logins', () => {
+  const row = (patch: Record<string, unknown>) => ({
+    machine: 'mini',
+    id: 'a',
+    check: 'login' as const,
+    state: 'ok' as const,
+    detail: '20 d left',
+    fix: null,
+    ...patch,
+  })
+  const read = async () => (await (await call('GET', '/v1/accounts', READER)).json()) as { health: unknown }
+
+  test('carry the package rows and when it read them; null before the first read', async () => {
+    expect((await read()).health).toBeNull()
+    const rows = [
+      row({
+        detail: 'login ends in 6.9 d',
+        state: 'warn',
+        fix: 'claude-relogin a --machine mini',
+        ends_at: '2026-11-29T10:00:00.000Z',
+        days_left: 6.9,
+      }),
+      row({
+        machine: 'macbook',
+        id: 'b',
+        check: 'quota',
+        state: 'warn',
+        detail: 'no quota sample for 7 h (token rejected?)',
+        via: 'core',
+      }),
+      row({
+        machine: 'macbook',
+        id: '-',
+        check: 'queue',
+        state: 'warn',
+        detail: '1 re-login request(s) waiting for your click',
+      }),
+    ]
+    writeHealthCache(rows, NOW.getTime(), paths.cacheDir)
+    expect((await read()).health).toEqual({ at: NOW.toISOString(), rows })
   })
 })
 

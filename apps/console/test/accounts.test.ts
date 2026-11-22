@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AccountMode, AccountRow } from '@software-factory/contract'
+import type { AccountHealthRow, AccountMode, AccountRow, AccountsView } from '@software-factory/contract'
 import {
   defaultHoldModel,
   EXPIRIES,
@@ -8,6 +8,10 @@ import {
   laneOrder,
   ledgerBars,
   limitsOf,
+  loginAlerts,
+  loginLines,
+  loginMark,
+  machineNotes,
   modeLabel,
   modeUntil,
   reasonWords,
@@ -170,5 +174,97 @@ describe('the intents', () => {
       until: 'reset',
     })
     expect(defaultHoldModel({ mode: mode(), reserve: null })).toBe('fable')
+  })
+})
+
+describe('the logins of an account', () => {
+  const row = (patch: Partial<AccountHealthRow>): AccountHealthRow => ({
+    machine: 'mini',
+    id: 'me',
+    check: 'login',
+    state: 'ok',
+    detail: '20 d left',
+    fix: null,
+    ...patch,
+  })
+  const view = (rows: AccountHealthRow[]): Pick<AccountsView, 'health' | 'machine'> => ({
+    machine: 'mini',
+    health: { at: '2026-11-19T11:50:00Z', rows },
+  })
+  // the owner's state on 2026-11-22: the mini login ends in 6.9 d, the MacBook has had no quota sample for 7 h
+  const rows = [
+    row({
+      machine: 'macbook',
+      id: 'me2',
+      check: 'quota',
+      state: 'warn',
+      detail: 'no quota sample for 7 h (token rejected?)',
+    }),
+    row({ machine: 'macbook', id: 'me2', detail: '9 d left', ends_at: '2026-11-28T12:00:00.000Z', days_left: 9 }),
+    row({
+      id: 'me',
+      state: 'warn',
+      detail: 'login ends in 6.9 d',
+      fix: 'claude-relogin me --machine mini',
+      ends_at: '2026-11-26T09:00:00.000Z',
+      days_left: 6.9,
+    }),
+    row({ id: 'me', machine: 'macbook', detail: '11 d left', ends_at: '2026-11-30T12:00:00.000Z', days_left: 11 }),
+    row({
+      machine: 'macbook',
+      id: '-',
+      check: 'queue',
+      state: 'warn',
+      detail: '1 re-login request(s) waiting for your click',
+    }),
+  ]
+
+  test('one line per machine with the date and the days left, toned by the package grade, this machine first', () => {
+    const lines = loginLines(view(rows), 'me', NOW)
+    expect(lines.map((l) => [l.machine, l.label, l.state, l.tone])).toEqual([
+      ['mini', 'Login', 'warn', 'warn'],
+      ['macbook', 'Login', 'ok', 'good'],
+    ])
+    expect(lines[0]?.words).toMatch(/^Ends (Thu 26 Nov|Fri 27 Nov) · 6\.9 d left$/)
+    expect(lines[1]?.words).toMatch(/^Valid until \w{3} \d+ Nov · 11 d left$/)
+  })
+
+  test('a rejected-token quota row shows beside the login, in the package words', () => {
+    const lines = loginLines(view(rows), 'me2', NOW)
+    expect(lines.map((l) => [l.label, l.state, l.words])).toEqual([
+      ['Login', 'ok', expect.stringMatching(/^Valid until .* · 9 d left$/)],
+      ['Quota', 'warn', 'No quota sample for 7 h (token rejected?)'],
+    ])
+  })
+
+  test('a login past its end says expired; a row with no date shows the package detail', () => {
+    const gone = loginLines(
+      view([row({ state: 'fail', detail: 'login expired', ends_at: '2026-11-18T00:00:00.000Z', days_left: -1.5 })]),
+      'me',
+      NOW,
+    )
+    expect(gone[0]).toMatchObject({ state: 'fail', tone: 'bad' })
+    expect(gone[0]?.words).toMatch(/^Expired /)
+    expect(loginLines(view([row({ state: 'fail', detail: 'logged out' })]), 'me', NOW)[0]?.words).toBe('Logged out')
+  })
+
+  test('the strip shows only warn and fail, and marks the worst', () => {
+    expect(loginAlerts(view(rows), 'me', NOW).map((l) => l.machine)).toEqual(['mini'])
+    expect(loginAlerts(view(rows), 'me2', NOW).map((l) => l.label)).toEqual(['Quota'])
+    expect(loginAlerts(view([row({})]), 'me', NOW)).toEqual([])
+    const both = loginAlerts(
+      view([row({ state: 'warn', detail: 'x' }), row({ check: 'quota', state: 'fail', detail: 'y' })]),
+      'me',
+      NOW,
+    )
+    expect(loginMark(both)).toEqual({ label: 'Quota', tone: 'bad' })
+    expect(loginMark([])).toBeNull()
+  })
+
+  test('no health read yet shows nothing; a waiting re-login request is a note on the machine', () => {
+    expect(loginLines({ machine: 'mini', health: null }, 'me', NOW)).toEqual([])
+    expect(machineNotes(view(rows))).toEqual([
+      { key: 'macbook/queue', tone: 'warn', words: 'macbook: 1 re-login request(s) waiting for your click' },
+    ])
   })
 })

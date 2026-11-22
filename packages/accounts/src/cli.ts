@@ -56,6 +56,7 @@ import {
 import { latestSessionId, sessionAccount } from './sessions.ts'
 import { spawnDetached, spawner } from './spawn.ts'
 import { type HealthRow, gradeMachine, worst } from './health.ts'
+import { readHealthCache, writeHealthCache } from './health-cache.ts'
 import { SSH_OPTS, fetchPeerUsage, machineSnapshot, notifyIfChanged, reloginAsk, spawnLogged } from './owner.ts'
 import { versionLine } from './version.ts'
 import {
@@ -217,6 +218,16 @@ function askForRelogins(reg: Registry, results: Record<string, RefreshResult>): 
   }
 }
 
+/** Keepalive only: the health rows of both machines into the cache, for the readers that must not reach the peer themselves. */
+function cacheHealth(reg: Registry): void {
+  try {
+    const now = Date.now()
+    writeHealthCache(gradeBothMachines(reg, now).rows, now)
+  } catch (e) {
+    console.error(`claude-account: health cache skipped: ${(e as Error).message}`) // a courtesy, never a failure of the keepalive
+  }
+}
+
 function expiry(reg: Registry, json: boolean, ids?: string[]): void {
   const unknown = ids?.filter((id) => !Object.hasOwn(reg.accounts, id))
   if (unknown?.length)
@@ -351,7 +362,15 @@ function statusVerb(reg0: Registry, rest: string[]): number {
   const now = Date.now()
   const { reg, cache, views } = liveAccounts(reg0, now)
   const history = Object.fromEntries(Object.keys(reg.accounts).map((id) => [id, loadHistory(id, now)]))
-  const status = buildStatus({ reg, cache, views, history, nowMs: now, machine: resolveMachine(reg0.host).name })
+  const status = buildStatus({
+    reg,
+    cache,
+    views,
+    history,
+    nowMs: now,
+    machine: resolveMachine(reg0.host).name,
+    health: readHealthCache(),
+  })
   if (rest.includes('--json')) {
     console.log(JSON.stringify(status, null, 2))
     return 0
@@ -428,8 +447,8 @@ function historyVerb(reg: Registry, rest: string[]): number {
 
 // ── health (wake check) ─────────────────────────────────────────────────────────────────────────────────────────
 
-async function health(reg: Registry, argv: string[]): Promise<number> {
-  const now = Date.now()
+/** The rows of this machine and its peer, graded now; `theirs` is the peer's raw read (the wake check needs its pending asks). */
+function gradeBothMachines(reg: Registry, now: number) {
   const m = resolveMachine(reg.host)
   const mine = machineSnapshot(null, now)
   const theirs = m.peer ? machineSnapshot(m.peer, now) : null
@@ -444,6 +463,13 @@ async function health(reg: Registry, argv: string[]): Promise<number> {
     ...gradeMachine(m.name, mine, fixFor(m.name, true)),
     ...(m.peer && theirs ? gradeMachine(m.peer.name, theirs, fixFor(m.peer.name, false)) : []),
   ]
+  return { m, theirs, rows }
+}
+
+async function health(reg: Registry, argv: string[]): Promise<number> {
+  const now = Date.now()
+  const { m, theirs, rows } = gradeBothMachines(reg, now)
+  writeHealthCache(rows, now)
   // The plain-ssh read cannot see the peer's Keychain: say so, whatever the format (stderr keeps --json parseable).
   if (m.peer && theirs?.via === 'ssh' && m.peer.herdrCore) {
     const note = `NOTE ${m.peer.name}: its herdr-core was not reachable, so this read went over plain ssh; Keychain logins may show as unreadable here`
@@ -946,6 +972,7 @@ export async function main(argv: string[]): Promise<number> {
       if (all && unresolved.length)
         console.error(`claude-account: refresh --all: no fresh sample and no auth verdict for ${unresolved.join(', ')}`)
       if (all) askForRelogins(reg, results)
+      if (all) cacheHealth(reg)
       if (all && (unresolved.length || stale.length)) return 1
       return 0
     }

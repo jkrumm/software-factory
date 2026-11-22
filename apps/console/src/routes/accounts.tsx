@@ -20,13 +20,18 @@ import {
   laneOrder,
   ledgerBars,
   limitsOf,
+  type LoginLine,
+  loginLines,
+  type MachineNote,
+  machineNotes,
   MODE_TONES,
   modeLabel,
   modeSource,
   modeUntil,
   quotaWeeks,
 } from '@/lib/accounts'
-import { meterTone } from '@/components/kit/tone'
+import { meterTone, TONE_TEXT } from '@/components/kit/tone'
+import { ageWords } from '@/lib/age'
 import { useNow } from '@/lib/now'
 import { useAccounts, useKpis } from '@/lib/queries'
 import { useScreen, useScreenNote } from '@/lib/screen'
@@ -310,7 +315,45 @@ function Actions({ account, now }: { account: AccountRow; now: Date }) {
   )
 }
 
-function AccountPanel({ account, lanes, now }: { account: AccountRow; lanes: string[]; now: Date }) {
+/** One line per machine and check: where the account's login ends, or what the quota sample says about its token. */
+function Logins({ lines, readAt, now }: { lines: LoginLine[]; readAt: string | null; now: Date }) {
+  if (lines.length === 0) return null
+  return (
+    <section aria-label="Logins" className="mb-4">
+      <h4 className="mb-1.5 text-[length:var(--vx-text-sm)] font-medium">
+        Logins
+        {readAt === null ? null : (
+          <span className="ml-2 font-normal text-muted-foreground">
+            read {ageWords(now.getTime() - new Date(readAt).getTime())}
+          </span>
+        )}
+      </h4>
+      <ul className="grid gap-1 text-[length:var(--vx-text-sm)]">
+        {lines.map((line) => (
+          <li key={line.key} data-state={line.state} className="flex min-w-0 items-baseline gap-2">
+            <span className="w-20 shrink-0 text-muted-foreground">{line.machine}</span>
+            <span className="w-14 shrink-0 text-muted-foreground">{line.label}</span>
+            <span className={cn('min-w-0 tabular-nums', TONE_TEXT[line.tone])}>{line.words}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function AccountPanel({
+  account,
+  lines,
+  readAt,
+  lanes,
+  now,
+}: {
+  account: AccountRow
+  lines: LoginLine[]
+  readAt: string | null
+  lanes: string[]
+  now: Date
+}) {
   const weekly = limitsOf(account).find((l) => l.key === 'weekly_all')
   const forecast = forecastWords(account, weekly?.resetsAt ?? null, now)
   return (
@@ -321,9 +364,6 @@ function AccountPanel({ account, lanes, now }: { account: AccountRow; lanes: str
         <ModeBadge account={account} now={now} />
         <span className="ml-auto text-[length:var(--vx-text-sm)] text-muted-foreground tabular-nums">
           {account.seats.taken} of {account.seats.cap} leads allowed
-          {account.leads.length > 0
-            ? ` · Issue ${account.leads.map((lead) => lead.replace('issue_', '')).join(', ')}`
-            : ''}
         </span>
       </header>
       <div className={INSET}>
@@ -337,6 +377,7 @@ function AccountPanel({ account, lanes, now }: { account: AccountRow; lanes: str
             </span>
           ) : null}
         </p>
+        <Logins lines={lines} readAt={readAt} now={now} />
         <div className="grid gap-6 lg:grid-cols-3">
           <section aria-label="Limits" className="grid min-w-0 content-start gap-4">
             <Limits account={account} now={now} />
@@ -353,6 +394,20 @@ function AccountPanel({ account, lanes, now }: { account: AccountRow; lanes: str
         </div>
       </div>
     </article>
+  )
+}
+
+/** What the package says of a whole machine: unreachable, or re-login requests waiting for the owner's click. */
+function MachineNotes({ notes }: { notes: MachineNote[] }) {
+  if (notes.length === 0) return null
+  return (
+    <ul aria-label="Machines" className="mb-4 grid gap-1 text-[length:var(--vx-text-sm)]">
+      {notes.map((note) => (
+        <li key={note.key} className={TONE_TEXT[note.tone]}>
+          {note.words}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -389,9 +444,17 @@ function Accounts() {
           <Score />
         </Section>
         <Section title="Each account" aside={`${inService.length} in service`}>
+          <MachineNotes notes={machineNotes(view)} />
           <div className="grid gap-4">
             {inService.map((account) => (
-              <AccountPanel key={account.id} account={account} lanes={view.lanes} now={now} />
+              <AccountPanel
+                key={account.id}
+                account={account}
+                lines={loginLines(view, account.id, now)}
+                readAt={view.health?.at ?? null}
+                lanes={view.lanes}
+                now={now}
+              />
             ))}
           </div>
           {off.length > 0 ? (

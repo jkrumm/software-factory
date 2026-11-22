@@ -24,6 +24,7 @@ import {
 } from './policy.ts'
 import { type ModeView, modeField } from './modes.ts'
 import { type Forecast, type Held, type ResetEntry, forecastWeekly } from './history.ts'
+import type { HealthSnapshot } from './health-cache.ts'
 
 export const STATUS_SCHEMA_VERSION = 1
 
@@ -40,6 +41,8 @@ export interface StatusInput {
   history: Record<string, AccountHistory>
   nowMs: number
   machine: string
+  /** the last health rows of both machines (health-cache.ts); absent or null when none were read yet */
+  health?: HealthSnapshot | null
 }
 
 /** How many past resets each account row lists. */
@@ -129,6 +132,8 @@ export interface Status {
   default_account: string
   lanes: string[]
   accounts: AccountStatus[]
+  /** the logins' health of this machine and its peer as the last `claude-account health` or keepalive read them; null before the first */
+  health: HealthSnapshot | null
 }
 
 const limitsOf = (x: Sample | undefined, hasSession: boolean, nowMs: number): Record<string, unknown>[] => {
@@ -247,6 +252,7 @@ export function buildStatus(i: StatusInput): Status {
     default_account: defaultAccountId(reg),
     lanes,
     accounts,
+    health: i.health ?? null,
   }
 }
 
@@ -345,7 +351,7 @@ const STR_OR_NULL = nullable('string')
 
 export const STATUS_SCHEMA = {
   type: 'object',
-  required: ['schema', 'at', 'machine', 'rule', 'default_account', 'lanes', 'accounts'],
+  required: ['schema', 'at', 'machine', 'rule', 'default_account', 'lanes', 'accounts', 'health'],
   properties: {
     schema: { type: 'number', enum: [STATUS_SCHEMA_VERSION] },
     at: str,
@@ -353,6 +359,31 @@ export const STATUS_SCHEMA = {
     rule: str,
     default_account: str,
     lanes: { type: 'array', items: str },
+    health: {
+      ...nullable('object'),
+      required: ['at', 'rows'],
+      properties: {
+        at: str,
+        rows: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['machine', 'id', 'check', 'state', 'detail', 'fix'],
+            properties: {
+              machine: str,
+              id: str,
+              check: { type: 'string', enum: ['reach', 'login', 'quota', 'queue'] },
+              state: { type: 'string', enum: ['ok', 'warn', 'fail'] },
+              detail: str,
+              fix: STR_OR_NULL,
+              via: { type: 'string', enum: ['core', 'ssh'] },
+              ends_at: str,
+              days_left: num,
+            },
+          },
+        },
+      },
+    },
     accounts: {
       type: 'array',
       items: {

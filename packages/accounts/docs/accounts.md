@@ -57,7 +57,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | `modes.ts` | Pure: the override records, their expiry, `resolveModes` and `applyModes` (§Modes) |
 | `history.ts`, `history-store.ts` | The sample line, the reset replay and the forecast (pure); the monthly sample log and the ledger on disk (§History) |
 | `status.ts` | Pure: `buildStatus`, its schema, the plain lines (§status) |
-| `health.ts` | Pure grading of one machine's `usage` and `expiry` into health rows |
+| `health.ts`, `health-cache.ts` | Pure grading of one machine's `usage` and `expiry` into health rows (a login row carries `ends_at` and `days_left`); the last rows of both machines as `health.json` in the cache directory |
 | `registry.ts`, `paths.ts`, `store.ts` | The registry file, every path, the per-account cache files, the claim and stamp files and the override state file |
 | `ports.ts` | The ports: `Spawner`, `HttpGet`, `PeerUsage` |
 | `keychain.ts`, `oauth.ts`, `claude-auth.ts`, `spawn.ts` | The adapters: the login item through `security`, the usage endpoint, `claude auth status`, processes with a deadline that returns |
@@ -464,8 +464,14 @@ machine's local time); a forecast that does not fill the week says `ends at 88 %
     "closed": null,
     "lanes": {"bulk": {"open": true, "position": 1, "reason": "drain", "closed": null, "why": null, "opens_at": null}},
     "forecast": {"method": "burn-rate-24h-v1", "weekly_at_reset": 100, "full_at": "<iso>", "waste_percent": 0, "waste_units": 0, "burn_per_hour": 1.4, "basis_hours": 24},
-    "resets": [{"at": "<iso>", "weekly": 99, "scoped": 12, "modes": ["drain"], "rule": "v1.10", "closed_hours": 3.5, "manual": false}] }] }
+    "resets": [{"at": "<iso>", "weekly": 99, "scoped": 12, "modes": ["drain"], "rule": "v1.10", "closed_hours": 3.5, "manual": false}] }],
+  "health": {"at": "<iso>", "rows": [{"machine": "mini", "id": "me", "check": "login", "state": "warn", "detail": "login ends in 6.9 d",
+                                     "fix": "claude-relogin me --machine mini", "ends_at": "<iso>", "days_left": 6.9}]} }
 ```
+
+- `health` is `claude-account health`'s rows as the last run left them (`health.json`; `null` before the first): `health` writes it on every run and the
+  keepalive (`refresh --all`, hourly) writes it too, so a reader that must not reach the peer itself (the factory server) shows the logins of both machines and
+  the age of the read (`at`). `status` grades nothing: the state of a row is `health.ts`'s. The file is additive; the parity tests leave it out.
 
 - `lanes` is `interactive`, `bulk`, every exact home lane and `other` (a lane no account claims). `position` and `reason` are `rank --lane`'s
   (test: the order of every lane equals rank's); an account `rank` does not list is closed there.
