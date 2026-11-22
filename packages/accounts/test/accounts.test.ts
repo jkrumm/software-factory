@@ -2615,7 +2615,11 @@ describe('boundedSpawnSync', () => {
     expect(left).toBe('0')
   })
   test('passes status and output through, and reports a missing binary as ENOENT', () => {
-    const ok = boundedSpawnSync('/bin/sh', ['-c', 'echo hi; echo err >&2; exit 3'], { timeoutMs: 5000 })
+    // LC_ALL=C: perl's own locale warnings on a host with a missing locale would land in the captured stderr
+    const ok = boundedSpawnSync('/bin/sh', ['-c', 'echo hi; echo err >&2; exit 3'], {
+      timeoutMs: 5000,
+      env: { ...process.env, LC_ALL: 'C' },
+    })
     expect(ok).toEqual({ status: 3, stdout: 'hi\n', stderr: 'err\n' })
     expect(boundedSpawnSync('/nonexistent/claude', ['auth', 'status'], { timeoutMs: 5000 }).error?.code).toBe('ENOENT')
   })
