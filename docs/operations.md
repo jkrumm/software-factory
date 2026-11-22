@@ -190,7 +190,7 @@ there with the script; its failure message says what to do.
 - **CLI contract.** Commands are generated from the OpenAPI document (`apps/cli/src/generated/operations.ts`); `make check`
   fails when it is stale. The hand-written verbs and the credential rules: "The CLI" above.
 - **Tooling.** `bunfig.toml` sets `exact` and a 3-day release-age cooldown; never exclude a package from it.
-- **Who may call what.** The orchestrator has the owner's rights bar the eight owner-only routes of `policy.ts`'s header.
+- **Who may call what.** The orchestrator has the owner's rights bar the six owner-only routes of `policy.ts`'s header.
 - **Trust boundary.** `FACTORY_REPO_ALLOW` takes colon-separated absolute paths, each one repo and its worktrees, never its
   siblings (`adapters/git/repos.ts`). A linked worktree is never a project. The API is loopback only.
 - **The Console listener.** `FACTORY_CONSOLE_PORT`, default 7795 (7794 is the agw gateway's). It forwards only `/health` and

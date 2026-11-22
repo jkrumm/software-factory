@@ -51,7 +51,7 @@ const Facts = z.unknown().default({}).refine(fitsFacts, `facts are larger than $
 export const DoorSource = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, 'not a source name')
 
 export const SIGNAL_STATES = ['held', 'filed', 'amended', 'incident', 'promoted', 'dismissed'] as const
-export const DISMISSERS = ['owner', 'judge', 'probe'] as const
+export const DISMISSERS = ['owner', 'orchestrator', 'judge', 'probe'] as const
 export const SIGNAL_KINDS = ['alert', 'request', 'feedback', 'remark'] as const
 export const SIGNAL_TRUSTS = ['owner', 'machine', 'agent', 'outside'] as const
 

@@ -8,19 +8,17 @@ import { fileIn, recordIn } from './issues.ts'
 import { MAX_DISMISS_REASON, type Out, refuse, triaged, type IntakeDeps } from './intake-kit.ts'
 import { type Routes } from './intake-routes.ts'
 
-/** A quarantined signal the owner (or the Judge) promotes to an Issue or dismisses. */
+/** Who promotes or dismisses a quarantined signal: the owner, his delegate agent (recorded as itself) or the Judge. */
+export type Releaser = 'owner' | 'orchestrator' | 'judge'
+
+/** A quarantined signal the owner, his orchestrator or the Judge promotes to an Issue or dismisses. */
 export function createHeld(d: { deps: IntakeDeps; routes: Routes }) {
   const { deps } = d
   const { uow, clock } = d.deps
   const { routeIn } = d.routes
 
   /** `steer`: what the lead of the new Issue is told first (a note from the factory). */
-  async function promote(
-    id: string,
-    body: PromoteRequest,
-    by: 'owner' | 'judge' = 'owner',
-    steer?: string,
-  ): Out<Triaged> {
+  async function promote(id: string, body: PromoteRequest, by: Releaser = 'owner', steer?: string): Out<Triaged> {
     const probe = await uow.run(async (s) => ok(await s.intake.signal(id)))
     if (!probe.ok) return probe
     const row = probe.value
@@ -45,7 +43,7 @@ export function createHeld(d: { deps: IntakeDeps; routes: Routes }) {
         event: {
           kind: 'filed',
           payload: { repo, title: r.signal.title, kind: issueKindOf(r), origin: r.signal.origin },
-          actor: by === 'owner' ? 'owner' : 'factory',
+          actor: by === 'judge' ? 'factory' : by,
         },
       })
       if (!filed.ok) return filed
@@ -84,7 +82,7 @@ export function createHeld(d: { deps: IntakeDeps; routes: Routes }) {
    * last alert there (`routeIn`, which also answers this quarantined signal). A monitor that came back up meanwhile has nothing
    * to file: the route stays and the signal is dismissed with that reason.
    */
-  async function promoteUnrouted(id: string, info: RepoSignals, by: 'owner' | 'judge'): Out<Triaged> {
+  async function promoteUnrouted(id: string, info: RepoSignals, by: Releaser): Out<Triaged> {
     // A route into a work repo would let a monitor file there: the work repo hears the owner only.
     if (info.work) return refuse('unknown_project', `${info.repo} is a work repo: it hears the owner only`)
     const topology = await deps.topology.load()
@@ -99,7 +97,7 @@ export function createHeld(d: { deps: IntakeDeps; routes: Routes }) {
       const routed = await routeIn(
         s,
         { source, monitor: subject, repo: info.repo },
-        by === 'owner' ? 'owner' : 'factory:screen',
+        by === 'judge' ? 'factory:screen' : by,
         info,
         topology.value,
       )
@@ -115,8 +113,8 @@ export function createHeld(d: { deps: IntakeDeps; routes: Routes }) {
     })
   }
 
-  /** The owner (or the Judge) turns a quarantined signal away: it files nothing and stays on record as dismissed. */
-  async function dismiss(id: string, body: DismissRequest, by: 'owner' | 'judge' = 'owner'): Out<SignalDismissed> {
+  /** The owner, his orchestrator or the Judge turns a quarantined signal away: it files nothing and stays on record as dismissed. */
+  async function dismiss(id: string, body: DismissRequest, by: Releaser = 'owner'): Out<SignalDismissed> {
     const reason = body.reason.trim()
     if (reason.length === 0 || reason.length > MAX_DISMISS_REASON) {
       return refuse('invalid', `a reason of 1 to ${MAX_DISMISS_REASON} characters is required`)

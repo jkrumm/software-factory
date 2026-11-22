@@ -15,7 +15,7 @@ A signal has a kind, an origin and a trust level. The receiving side sets all th
 <!-- snippet: packages/contract/src/intake.ts SIGNAL_STATES -->
 ```ts
 export const SIGNAL_STATES = ['held', 'filed', 'amended', 'incident', 'promoted', 'dismissed'] as const
-export const DISMISSERS = ['owner', 'judge', 'probe'] as const
+export const DISMISSERS = ['owner', 'orchestrator', 'judge', 'probe'] as const
 export const SIGNAL_KINDS = ['alert', 'request', 'feedback', 'remark'] as const
 export const SIGNAL_TRUSTS = ['owner', 'machine', 'agent', 'outside'] as const
 ```
@@ -163,7 +163,7 @@ The second and third did not open Issues. They reached the lead of `issue_1818` 
 
 A quarantined signal is outside text the factory did not trust enough to turn into work. It is stored, fenced as data, and waits for a person or the Judge.
 
-- **Quarantine.** A signal with trust `outside` is held. It reaches a lead only when the owner or the Judge promotes it.
+- **Quarantine.** A signal with trust `outside` is held. It reaches a lead only when the owner, his orchestrator or the Judge promotes it.
 - **Promote** makes it work. **Dismiss** turns it away with a reason of 1 to 500 characters and keeps it on record as `dismissed`.
 - **The screen.** The `screen` loop shows each quarantined signal once to the `factory-screen` workflow, with the open Issues and the project names. The Judge promotes, dismisses (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads.
 - **Bounded retries.** A failed call backs off from 10 minutes to 6 hours and gives up after five tries. After 72 hours the signal gets one last look and is filed for a lead to investigate, who drafts any reply as an Errand and posts nothing itself.

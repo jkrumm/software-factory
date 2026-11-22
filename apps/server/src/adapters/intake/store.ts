@@ -79,7 +79,7 @@ const signalOf = (row: Row): SignalRow => ({
     row.state === 'dismissed'
       ? {
           reason: text(row.dismissed_reason),
-          by: z.enum(['owner', 'judge', 'probe']).parse(row.dismissed_by),
+          by: z.enum(['owner', 'orchestrator', 'judge', 'probe']).parse(row.dismissed_by),
           at: date(row.dismissed_at),
         }
       : null,

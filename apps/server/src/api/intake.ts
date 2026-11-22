@@ -25,7 +25,7 @@ import type { Triaged } from '../domains/intake/model.ts'
 import type { DoorRouteRow, SignalRow } from '../domains/intake/ports.ts'
 import { type Result } from '../kernel/result.ts'
 import { redactSignals } from '../read/signals.ts'
-import { callerOf } from './auth.ts'
+import { callerOf, ownerActorOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
 
 /** The use cases the routes call, bound in `main.ts`. */
@@ -155,15 +155,20 @@ export const intakeRoutes = (api: IntakeApi) =>
         },
       },
     )
-    .post('/signals/:id/promote', async ({ params, body }) => answer(await api.promote(params.id, body), ackOf), {
-      params: z.object({ id: z.string() }),
-      body: PromoteRequest,
-      response: RESPONSES,
-      detail: { operationId: 'signal.promote', summary: 'Let a quarantined signal become work' },
-    })
+    .post(
+      '/signals/:id/promote',
+      async ({ params, body, request }) => answer(await api.promote(params.id, body, ownerActorOf(request)), ackOf),
+      {
+        params: z.object({ id: z.string() }),
+        body: PromoteRequest,
+        response: RESPONSES,
+        detail: { operationId: 'signal.promote', summary: 'Let a quarantined signal become work' },
+      },
+    )
     .post(
       '/signals/:id/dismiss',
-      async ({ params, body }) => answer(await api.dismiss(params.id, body), (v) => SignalDismissed.parse(v)),
+      async ({ params, body, request }) =>
+        answer(await api.dismiss(params.id, body, ownerActorOf(request)), (v) => SignalDismissed.parse(v)),
       {
         params: z.object({ id: z.string() }),
         body: DismissRequest,

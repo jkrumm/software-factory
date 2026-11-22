@@ -135,10 +135,10 @@ Every input is one envelope (`source`, `kind`, `origin`, `trust`, `repo`, `finge
   by its key. A signal with the retro marker (`Retro: <date> kpi=…`) skips both and files its own Issue. A `down`
   waits out a heal grace as `held`; an `up` inside it is `healed`, and a project's heal rule runs `make restart` in
   its repo (`adapters/intake/runbook.ts`) before an Issue is filed.
-- **Quarantine.** An outside signal is held and reaches a lead only when the owner or the Judge promotes it, fenced as
+- **Quarantine.** An outside signal is held and reaches a lead only when the owner, his orchestrator or the Judge promotes it, fenced as
   data. A later outside signal with a promoted one's fingerprint amends the Issue while it is open (`noted`, fenced),
-  else is held anew. A quarantined signal can be dismissed (`POST /signals/:id/dismiss`, owner or Judge, a reason of 1 to 500
-  characters; `dismissed_by` is `owner`, `judge` or `probe`); only a quarantined signal can be dismissed or promoted. A
+  else is held anew. A quarantined signal can be dismissed (`POST /signals/:id/dismiss`, owner, orchestrator or Judge, a reason of 1 to 500
+  characters; `dismissed_by` is `owner`, `orchestrator`, `judge` or `probe`); only a quarantined signal can be dismissed or promoted. A
   **probe** (`probe: true`) passes the guards, is stored dismissed by `probe`, files nothing and never reaches triage.
 - **Screen.** The `screen` loop has the Judge look at quarantined signals; its verdict can only promote, dismiss or leave the
   one signal it was shown (`domains/intake/screen.ts`), and a promoted signal's text stays outside text, fenced in the
@@ -630,8 +630,10 @@ words are blanked for the read token.
 - **Callers and tokens.** The bearer token alone decides the caller: `owner` (`FACTORY_TOKEN`, required),
   `orchestrator`, `agent` (a lead), `machine` (the door), `signal` (Hermes) and `read`; every other token is optional
   and a caller whose token is unset does not exist. The orchestrator, the owner's delegate, has every owner row except
-  eight that are the owner's own judgment or hands (a Decision's worth-asking flag, an artifact's annotations with
-  edit and delete, its needed mark, an Errand's approve, a quarantined signal's promote and dismiss). Its events carry the
+  six that are the owner's own judgment or hands (a Decision's worth-asking flag, an artifact's annotations with
+  edit and delete, its needed mark, an Errand's approve). Its promote and dismiss of a quarantined signal are its own
+  (`dismissed_by` and the Issue's `filed` actor are `orchestrator`). A 403 for a known caller names who may use the
+  route. Its events carry the
   actor `orchestrator`; `ownerTouch` (`read/kpis.ts`) counts the owner alone, and its steering is the friction group
   `orchestrator_steer`.
 - **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction,

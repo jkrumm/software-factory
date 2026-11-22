@@ -34,7 +34,7 @@ export const LANGUAGE = {
   'cache read share':
     'The share of prompt tokens a lead read from the cache instead of fresh. What to do: higher is cheaper; a low share on a long attempt means the context was rebuilt, so look in Activity for a restart or a compaction',
   caller:
-    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), agent (a lead session), machine (the alert door), signal (Hermes, which files the owner's words), read (the surfaces)",
+    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar six routes, its own actor in the log), agent (a lead session), machine (the alert door), signal (Hermes, which files the owner's words), read (the surfaces)",
   cancelled:
     "Outcome: the owner's stop, or a filer's withdrawal of the Issue its own signal made before a lead took it",
   chain: 'The dependency graph of Issues and plan rows, across projects. What decides what can run at once',
@@ -68,7 +68,7 @@ export const LANGUAGE = {
   'desk pass':
     'The desk loop\'s one pass over every open Errand when the owner returns (a Console read after two hours or more away, the MacBook answering after it was unreachable, or his button "Push what waits to my MacBook"; each starts it at once) and every six hours otherwise: each check runs (the resolved ones close and wake their lead), the rest are screened again, and the MacBook commands are pushed through ask-human.sh push, every pending one oldest first on a return and one while he is away',
   dismiss:
-    'A quarantined signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as dismissed',
+    'A quarantined signal the owner, his orchestrator (recorded as orchestrator) or the Judge turns away, with a reason; it files nothing and stays on record as dismissed',
   'door route':
     "The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git",
   dormant:
@@ -147,7 +147,8 @@ export const LANGUAGE = {
     'A test signal a lead marks (probe: true) so it is stored dismissed and never held; its ack is dropped, detail probe',
   project:
     "A repo the factory knows, described by its project.yaml (every key: docs/project.md). signals: says which automatic sources it listens to; a work repo listens to the owner only. host: names the host its alerts sit on (a key of config/infra.json's hosts), so its Kuma and HyperDX alerts join that host's incident. doctor: make doctor is the project saying whether this host can run it: a read-only command of seconds that exits non-zero with one line per missing prerequisite and its fix; while it is red the project's Issues stay queued (kind doctor, with those lines) and hygiene skips its check probe",
-  promote: "A quarantined signal becomes work: the owner's or the Judge's call",
+  promote:
+    "A quarantined signal becomes work: the owner's, his orchestrator's (recorded as orchestrator) or the Judge's call",
   'quarantined signal':
     "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two quarantined signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there",
   'queue reason':

@@ -11,7 +11,7 @@
  * below. No token, or an unknown one, is 401 `unauthorized`; a known caller the row does not list is 403 `forbidden`.
  * The first row that matches wins, so a narrower row goes before a wider one.
  *
- * **The classes** (the owner is on every row but `public`; the orchestrator is on every row the owner is, bar the eight `PERSON` rows):
+ * **The classes** (the owner is on every row but `public`; the orchestrator is on every row the owner is, bar the six `PERSON` rows):
  * - public: `GET /health`, the only route without a token.
  * - read: `GET /v1/*`, for owner, agent and read, except `GET /v1/errands` (the owner's hands) and a lead's own session read
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
@@ -21,8 +21,8 @@
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, seat, answer, prio, reopen, verdicts, projects, queue,
  *   capacity writes, loops, reading the door's registry; `GET /capacity` is the one capacity read a lead has). When in doubt, the owner alone.
  * - person: the owner's own judgment and hands, never the orchestrator's: `POST /v1/decisions/:id/worth-asking`,
- *   `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/approve` (his yes: the server runs the Errand's command on the mini), and
- *   `POST /signals/:id/promote` and `/dismiss` (releasing or refusing quarantined outside text).
+ *   `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, and `POST /v1/errands/:id/approve` (his yes: the server runs the Errand's command on the mini).
+ * - Signal release (`POST /signals/:id/promote` and `/dismiss`) is an owner row: the orchestrator may release or refuse a quarantined signal (it may already file an Issue with any text), recorded as `orchestrator`, never `owner`. A lead and the outside callers still may not.
  * - Errand done (`POST /v1/errands/:id/done`) is an owner row: the orchestrator may close an Errand its operator confirmed, with `confirmedBy`
  *   and only as `done` (the server refuses the rest, 422), recorded as `orchestrator`, never `owner`. A `not_needed` stays the owner's.
  * - verdict: `POST /v1/artifacts/:id/verdict` is an owner row. The orchestrator's verdict is recorded as its own (`by: orchestrator`), on a Spec that is no owner gate only, and his verdict on the same revision replaces it.
@@ -149,8 +149,8 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/checkpoints/pass', OWNER),
   rule('POST', '/v1/loops/:name/run', OWNER),
   rule('POST', '/v1/desk/push', OWNER),
-  rule('POST', '/signals/:id/promote', PERSON),
-  rule('POST', '/signals/:id/dismiss', PERSON),
+  rule('POST', '/signals/:id/promote', OWNER),
+  rule('POST', '/signals/:id/dismiss', OWNER),
   rule('GET', '/door/routes', OWNER),
   rule('POST', '/door/routes', LEAD),
   rule('POST', '/door/routes/remove', LEAD),
