@@ -209,7 +209,7 @@ export function composePlanning(input: {
         )
         if (!known.ok) return known
         if (!known.value)
-          return err(portError('refused', `no project named ${name.value}: the factory has not read its project.yaml`))
+          return err(portError('gone', `no project named ${name.value}: the factory has not read its project.yaml`))
         return setProjectPrio(writes, { ...request, project: name.value })
       },
       setQueueState: async (request) => {

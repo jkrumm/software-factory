@@ -929,6 +929,7 @@ export const OPERATIONS: readonly Operation[] = [
       400: ErrorBody,
       401: ErrorBody,
       403: ErrorBody,
+      404: ErrorBody,
       422: ErrorBody,
       500: ErrorBody,
       503: ErrorBody,

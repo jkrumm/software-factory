@@ -53,6 +53,15 @@ describe('the order of projects', () => {
     ])
   })
 
+  test('the queue order names the project priority only where it decided a place', async () => {
+    const highIssue = await world.queued({ repo: 'high' })
+    const lowIssue = await world.queued({ repo: 'low' })
+    await prio('high', 5)
+    const queue = await order()
+    expect(queue.map((e) => e.issue)).toEqual([highIssue, lowIssue])
+    expect(queue.map((e) => e.byProjectPrio)).toEqual([false, false])
+  })
+
   test('a project priority below zero sends its Issues behind the unset ones', async () => {
     const first = await world.queued({ repo: 'low' })
     const second = await world.queued({ repo: 'high' })

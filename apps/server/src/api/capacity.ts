@@ -363,13 +363,14 @@ export const capacityRoutes = (api?: CapacityApi) => {
         if (!api) return status(503, unbound)
         const states = await api.setProjectPrio(body)
         if (states.ok) return status(200, statesView(states.value))
+        if (states.error.kind === 'gone') return status(404, failure(states.error.detail, 'unknown_project'))
         return states.error.kind === 'refused'
           ? status(422, outsideRoots(states.error))
           : status(503, unavailable(states.error))
       },
       {
         body: QueuePrioBody,
-        response: { 200: QueueStatesView, ...errorResponses(400, 422, 503) },
+        response: { 200: QueueStatesView, ...errorResponses(400, 404, 422, 503) },
         detail: {
           operationId: 'queue.prio',
           summary:

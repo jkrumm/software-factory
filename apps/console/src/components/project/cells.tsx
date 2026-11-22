@@ -213,7 +213,6 @@ export function PlanCell({ row }: { row: ProjectIndexRow }) {
   )
 }
 
-/** Leads running in the project against the seats the host admits now. */
 /** The queue state that applies to the project and its priority; a state other than run reads in the warn tone. */
 export function QueueCell({ row }: { row: ProjectIndexRow }) {
   const { state, prio } = row.queue
@@ -228,6 +227,7 @@ export function QueueCell({ row }: { row: ProjectIndexRow }) {
   )
 }
 
+/** Leads running in the project against the seats the host admits now. */
 export function LeadsCell({ row, seats }: { row: ProjectIndexRow; seats: number | null }) {
   const { running, cap } = row.leads
   const ceiling = seats === null ? cap : cap === null ? seats : Math.min(cap, seats)
