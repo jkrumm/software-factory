@@ -289,7 +289,7 @@ async function defaultStep(deps: CheckpointLoopDeps, decision: DecisionRecord): 
       text: label,
       by: 'default',
       source: `no answer within ${minutes} minutes: the default`,
-      note: `No one answered within ${minutes} minutes, so the default was taken: ${label} (a reversible option). The owner can overrule it with a note.`,
+      note: `No one answered within ${minutes} minutes, so the default was taken: ${label} (a reversible option). The owner can overrule it with a note. A default is no ruling on a question that comes back: where the work files its own next round, ask again with no default.`,
     })
     return outcome.ok && outcome.value.status === 'answered' ? answered(outcome) : outcome.ok ? ok(null) : outcome
   })

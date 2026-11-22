@@ -655,7 +655,7 @@ export function takeDefault(
       source: sentBack
         ? 'the lead settled it after the Judge sent it back'
         : 'the lead took the default and went on with it',
-      note: `You ${sentBack ? 'settled' : 'took the default of'} ${decision.id} (${label}) and went on with it; the Decision is closed and no longer holds the Issue. The owner can still overrule it with a note.`,
+      note: `You ${sentBack ? 'settled' : 'took the default of'} ${decision.id} (${label}) and went on with it; the Decision is closed and no longer holds the Issue. The owner can still overrule it with a note. A default is no ruling on a question that comes back: where the work files its own next round, ask again with no default.`,
     })
     if (!outcome.ok) return outcome
     if (outcome.value.status === 'withdrawn') return ok<Answered>({ decision: outcome.value.decision, issue: null })
