@@ -26,6 +26,8 @@ type Method = MergeMethod
 const DEFAULT_POLL_MS = 15_000
 /** A head with no check this long after its push has no CI coming (`FACTORY_LAND_NO_RUN_MS`). */
 const DEFAULT_NO_RUN_MS = 3 * 60_000
+/** How often the wait for the merge window looks for a moved default branch (`FACTORY_LAND_REBASE_POLL_MS`). */
+const DEFAULT_REBASE_POLL_MS = 60_000
 /** The longest CI wait, the merge guard's own bound (`FACTORY_LAND_CI_MINUTES`). */
 const DEFAULT_CI_MINUTES = 45
 
@@ -275,6 +277,10 @@ class Lander {
   private readonly pollMs: number
   private readonly noRunMs: number
   private readonly ciMs: number
+  private readonly rebasePollMs: number
+  /** the default branch's sha the branch was last rebased onto, and when the wait last looked */
+  private seen = ''
+  private lookedAt = 0
 
   constructor(
     private readonly sh: Shell,
@@ -285,6 +291,35 @@ class Lander {
     this.pollMs = number(sh.io.env.FACTORY_LAND_POLL_MS, DEFAULT_POLL_MS)
     this.noRunMs = number(sh.io.env.FACTORY_LAND_NO_RUN_MS, DEFAULT_NO_RUN_MS)
     this.ciMs = number(sh.io.env.FACTORY_LAND_CI_MINUTES, DEFAULT_CI_MINUTES) * 60_000
+    this.rebasePollMs = number(sh.io.env.FACTORY_LAND_REBASE_POLL_MS, DEFAULT_REBASE_POLL_MS)
+  }
+
+  /**
+   * Before the window is asked for: the branch on top of the default branch, so a conflict shows now, not after the wait,
+   * and a clean rebase keeps its review (agw matches by patch) while the lead is not yet holding anybody up.
+   */
+  async prepare(): Promise<void> {
+    this.seen = (await this.rebase()).base
+  }
+
+  /**
+   * On every poll of the wait for the window: when the default branch moved, rebase again. A conflict ends the wait at once
+   * (the lead resolves it now, not after the rest of the queue); a failed fetch is a blip and waits on.
+   */
+  async whileWaiting(): Promise<number | undefined> {
+    if (Date.now() - this.lookedAt < this.rebasePollMs) return undefined
+    this.lookedAt = Date.now()
+    try {
+      const sha = await this.fetch('wait')
+      if (sha === this.seen) return undefined
+      this.seen = (await this.rebase(sha)).base
+    } catch (error) {
+      if (!(error instanceof Refused)) throw error
+      if (error.step === 'wait') return undefined
+      reportRefusal(this.sh.io, error)
+      return 1
+    }
+    return undefined
   }
 
   private get origin() {
@@ -304,8 +339,8 @@ class Lander {
   }
 
   /** Step 2: the branch on top of the default branch; the plan merge driver resolves an append-only plan file. */
-  private async rebase(): Promise<{ base: string; head: string }> {
-    const base = await this.fetch('rebase')
+  private async rebase(fetched?: string): Promise<{ base: string; head: string }> {
+    const base = fetched ?? (await this.fetch('rebase'))
     if ((await this.sh.run(['git', 'merge-base', '--is-ancestor', this.origin, 'HEAD'])).code === 0) {
       this.out(`rebase: already on ${this.origin} (${short(base)})`)
     } else {
@@ -671,20 +706,25 @@ class Lander {
   }
 }
 
+function reportRefusal(io: Io, error: Refused): void {
+  io.err(`land: ${error.step}: refused: ${error.why}\nland: next: ${error.next}\n`)
+}
+
 async function refusing(io: Io, body: () => Promise<number>): Promise<number> {
   try {
     return await body()
   } catch (error) {
     if (!(error instanceof Refused)) throw error
-    io.err(`land: ${error.step}: refused: ${error.why}\nland: next: ${error.next}\n`)
+    reportRefusal(io, error)
     return 1
   }
 }
 
 /**
  * `factory land`: lands the worktree's branch inside the repo's merge window, the recipe order 7 of a lead's brief once
- * spelled out in shell. For a repo that ships by pull request (`project.yaml` `ship:` has `via: pr`): the merge lock,
- * rebase on origin's default branch, the review check (`agw review covered`), push, the head's CI by check bucket, the
+ * spelled out in shell. For a repo that ships by pull request (`project.yaml` `ship:` has `via: pr`): a rebase on
+ * origin's default branch before the lock is asked for (a conflict shows before the wait, and the wait rebases again whenever
+ * the branch moves), the merge lock, rebase on origin's default branch, the review check (`agw review covered`), push, the head's CI by check bucket, the
  * repo's `make merge-guard` (or the same rule held here), `gh pr merge` by the method the repo allows, and the landed
  * commits. A repo that ships by push: lock, rebase, review, push to the default branch. Every refusal names its step and
  * the next command and exits 1 with nothing merged; 75 is a window not free in time. Every step is safe to repeat, so a
@@ -715,7 +755,8 @@ export async function landVerb(words: readonly string[], io: Io): Promise<number
         )
     }
     const lander = new Lander(sh, repo, options)
-    return withLock({ project: repo.project, kind: 'merge' }, io, (held) => {
+    await lander.prepare()
+    return withLock({ project: repo.project, kind: 'merge', whileWaiting: () => lander.whileWaiting() }, io, (held) => {
       sh.held = held
       return refusing(io, () => lander.land(pr))
     })

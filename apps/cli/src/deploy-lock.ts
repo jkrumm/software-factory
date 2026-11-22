@@ -75,10 +75,11 @@ export interface Held {
 /**
  * Runs `body` while holding the project's lock of `kind` on this host, waiting for a live holder as `deploy-lock` and
  * `merge-lock` do (exit 75 past the wait or on an unreadable lock, without running the body), and returns its exit code.
- * A merge window is reported to the server afterwards, best effort, as `merge-lock` reports it.
+ * A merge window is reported to the server afterwards, best effort, as `merge-lock` reports it. `whileWaiting` runs on every
+ * poll while a live holder is waited for; a number it returns ends the wait with that exit code, the body never run.
  */
 export async function withLock(
-  input: { project: string; kind: LockKind },
+  input: { project: string; kind: LockKind; whileWaiting?: () => Promise<number | undefined> },
   io: Io,
   body: (held: Held) => Promise<number>,
 ): Promise<number> {
@@ -133,7 +134,7 @@ async function reportWindow(
 }
 
 async function holdAndRun(
-  input: { project: string; kind: LockKind },
+  input: { project: string; kind: LockKind; whileWaiting?: () => Promise<number | undefined> },
   io: Io,
   timing: Timing,
   body: (held: Held) => Promise<number>,
@@ -189,6 +190,8 @@ async function holdAndRun(
         )
         return EX_TEMPFAIL
       }
+      const ended = await input.whileWaiting?.()
+      if (ended !== undefined) return ended
       await sleep(pollMs)
     }
     if (stopped) return 128 + (constants.signals[stopped] ?? 1)
