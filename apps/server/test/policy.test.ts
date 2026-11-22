@@ -48,6 +48,9 @@ const PERSON_ROUTES = [
   ['PATCH', '/v1/artifacts/:id/annotations/:annotationId'],
   ['DELETE', '/v1/artifacts/:id/annotations/:annotationId'],
   ['POST', '/v1/errands/:id/approve'],
+] as const
+
+const RELEASE_ROUTES = [
   ['POST', '/signals/:id/promote'],
   ['POST', '/signals/:id/dismiss'],
 ] as const
@@ -159,6 +162,7 @@ describe('the policy table', () => {
       ['PUT', '/queue'],
       ['POST', '/v1/loops/:name/run'],
       ['POST', '/v1/artifacts/:id/verdict'],
+      ...RELEASE_ROUTES,
     ] as const) {
       expect(allowed(method, route)).toEqual(['owner', 'orchestrator'])
     }
@@ -178,6 +182,14 @@ describe('the policy table', () => {
       expect(allowed(method, route)).toContain('orchestrator')
     }
     for (const [method, route] of PERSON_ROUTES) expect(allowed(method, route)).not.toContain('orchestrator')
+  })
+
+  test('the orchestrator may release or refuse a quarantined signal; agent, read, signal and machine may not', () => {
+    for (const [method, route] of RELEASE_ROUTES) {
+      const callers = allowed(method, route)
+      expect(callers).toContain('orchestrator')
+      for (const caller of ['agent', 'read', 'signal', 'machine'] as const) expect(callers).not.toContain(caller)
+    }
   })
 
   test('a lead may call a session note but no owner verb of the Issue', () => {
@@ -246,6 +258,18 @@ describe('the auth plugin over HTTP', () => {
     ] as const) {
       expect((await call(method, path, TOKENS.signal)).status).toBe(403)
     }
+  })
+
+  test('a 403 for a known caller names the callers that may use the route', async () => {
+    const body = async (path: string, token: string) =>
+      ((await (await call('POST', path, token)).json()) as { error: string }).error
+    expect(await body('/signals/s1/promote', TOKENS.agent)).toBe(
+      'the agent token may not use POST /signals/:id/promote: only the owner, orchestrator tokens may use it',
+    )
+    expect(await body('/v1/errands/e1/approve', TOKENS.orchestrator)).toBe(
+      'the orchestrator token may not use POST /v1/errands/:id/approve: only the owner token may use it',
+    )
+    expect(await body('/issues', TOKENS.agent)).toContain('(only the owner, orchestrator tokens may use it)')
   })
 
   test('a listed caller passes the plugin (the unwired route answers 503)', async () => {

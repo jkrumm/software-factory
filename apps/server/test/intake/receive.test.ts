@@ -769,6 +769,19 @@ describe('quarantine and the loop guard', () => {
     expect(filed).toEqual([{ origin: 'feedback', actor: 'owner' }])
   })
 
+  test('an orchestrator promote or dismiss is stored as the orchestrator, never as the owner', async () => {
+    const first = done(await intake.receive(outside('Button is broken')))
+    expect(await intake.dismiss(first.signal as string, { reason: 'noise' }, 'orchestrator')).toEqual(
+      ok({ signal: first.signal as string, state: 'dismissed' }),
+    )
+    const second = done(await intake.receive(outside('Another thing')))
+    expect(await intake.promote(second.signal as string, { repo: 'argo' }, 'orchestrator')).toMatchObject({ ok: true })
+    const dismissed = await db.sql`SELECT dismissed_by FROM factory.intake_signals WHERE state = 'dismissed'`
+    expect(dismissed).toEqual([{ dismissed_by: 'orchestrator' }])
+    const filed = await db.sql`SELECT actor FROM factory.issue_events WHERE kind = 'filed'`
+    expect(filed).toEqual([{ actor: 'orchestrator' }])
+  })
+
   test('an outside text for a work repo is dropped, not stored', async () => {
     const out = done(await intake.receive({ ...outside('x'), signal: { ...outside('x').signal, repo: 'chat' } }))
     expect(out).toMatchObject({ outcome: 'dropped', detail: 'work_repo' })

@@ -9,7 +9,7 @@ export type SignalState = 'held' | 'filed' | 'amended' | 'incident' | 'promoted'
 /** Why, by whom and when a signal was turned away: set exactly when its state is `dismissed`. */
 export interface Dismissal {
   reason: string
-  by: 'owner' | 'judge' | 'probe'
+  by: 'owner' | 'orchestrator' | 'judge' | 'probe'
   at: Date
 }
 
