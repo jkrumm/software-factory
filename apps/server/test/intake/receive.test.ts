@@ -664,6 +664,23 @@ describe("a person's or an agent's signal", () => {
     expect(await issues()).toHaveLength(2)
   })
 
+  test('a down alert that came up after its Issue closed is covered by that Issue again', async () => {
+    done(await intake.receive(down('kuma', 'api', 'e1')))
+    await send('issue_1' as IssueId, 'closed', {
+      kind: 'closed',
+      payload: { attempt: null, outcome: 'healed', reason: 'a documented baseline' },
+      actor: 'factory',
+    })
+    expect(done(await intake.receive(up('kuma', 'api', 'e2')))).toMatchObject({ outcome: 'dropped', detail: 'quiet' })
+    clock.advance(5 * 60_000)
+    triageAnswer = () => ok({ amend: null, settled: 'issue_1' as IssueId, reason: 'a documented baseline' })
+    expect(done(await intake.receive(down('kuma', 'api', 'e3')))).toMatchObject({
+      outcome: 'dropped',
+      detail: 'settled',
+    })
+    expect(await issues()).toHaveLength(1)
+  })
+
   test('a down alert whose subject Issue is open does not call the workflow', async () => {
     done(await intake.receive(down('kuma', 'api', 'e1')))
     done(await intake.receive(down('kuma', 'api', 'e2')))

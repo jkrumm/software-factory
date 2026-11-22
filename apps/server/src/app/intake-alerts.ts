@@ -283,6 +283,9 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
       return ok(triaged('amended', 'matched', issue.id, stored))
     }
 
+    // The Issue closed before the alert did: record the up, so the next `down` is a new firing a closed Issue may cover.
+    if (latest?.upAt === null) await s.intake.touchSubject(latest.id, { at: now, upAt: now })
+
     const pending = await s.intake.deletePending(signal.source, alert.subject)
     if (pending) {
       // The `down` that was waiting is settled too: its late retry opens no second row.
