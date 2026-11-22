@@ -93,7 +93,7 @@ export const LANGUAGE = {
   handover:
     "What a lead that is moved up from the lead row leaves its successor, in its brief: what the Issue needs, what was tried, what failed and why, the state of the branch, what it would do next. An out-of-depth block's --reason is it; for any other sign the leaving lead is asked once and writes it as its last message; a lead that is gone or does not answer leaves its last words",
   healed: 'Outcome: an incident that went away before a lead started',
-  held: "No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a quarantined signal",
+  held: "No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue or its project is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a quarantined signal",
   idle: 'Session state: its last turn ended',
   'idle allowance-hours':
     'The hours the allowance stood unused while Issues were queued: per minute the allowance less the leads running, counted only where an Issue waited, over 60. The hours behind a drained queue are left out, because the owner stopped admission. What to do: many hours with the load low mean a limit is too tight; Binding reason names which, and the settings in force show its value.',

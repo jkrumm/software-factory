@@ -48,7 +48,7 @@ export async function queuedHours(sql: SQL, w: QueueSpan): Promise<QueuedHours[]
 export const QUEUE_GROUPS: ReadonlyArray<readonly [key: string, label: string, kinds: readonly string[]]> = [
   ['capacity', 'Capacity', ['memory', 'memory_fit', 'disk', 'claim', 'lane', 'window', 'cap', 'load', 'boot']],
   ['chain', 'An after edge', ['chain']],
-  ['drain', 'Queue draining', ['drain']],
+  ['drain', 'Draining: the queue or a project', ['drain']],
   ['production_red', 'Production red', ['line']],
 ]
 

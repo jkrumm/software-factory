@@ -61,8 +61,17 @@ describe('plain words', () => {
     const queued = { state: 'queued', reason: null, outcome: null }
     expect(stateSentence(queued)).toBe('Ready: waits only for room in the allowance.')
     expect(
-      stateSentence({ ...queued, queue: { kind: 'drain', message: 'the queue is draining: nothing new starts' } }),
-    ).toBe('Held: the queue is draining, so no new work starts.')
+      stateSentence({
+        ...queued,
+        queue: {
+          kind: 'drain',
+          message:
+            'weatherorb is draining: nothing new of it starts; factory queue set run --project weatherorb sets it back',
+        },
+      }),
+    ).toBe(
+      'Held: weatherorb is draining: nothing new of it starts; factory queue set run --project weatherorb sets it back.',
+    )
     expect(
       stateSentence({
         ...queued,

@@ -150,7 +150,7 @@ function queueSentence(
   if (!queue) return 'Ready: waits only for room in the allowance.'
   switch (queue.kind) {
     case 'drain':
-      return 'Held: the queue is draining, so no new work starts.'
+      return `Held: ${cut(queue.message, 200)}.`
     case 'claim': {
       const repo = queue.repoName ? ` ${queue.repoName}` : ' its repo'
       return queue.heldBy

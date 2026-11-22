@@ -111,6 +111,40 @@ describe('queueBindingOf', () => {
     expect(result.state).toBeNull()
   })
 
+  test("a project's drain is its own reason that names the project; a drained queue names the whole queue", () => {
+    const drain = (id: number, repo: string, message: string) =>
+      issue(id, repo, { queue: { kind: 'drain', message, opensAt: null } })
+    const weather =
+      'weatherorb is draining: nothing new of it starts; factory queue set run --project weatherorb sets it back'
+    const projectDrain = queueBindingOf({
+      states: states({
+        queued: [
+          drain(1, 'weatherorb', weather),
+          drain(2, 'weatherorb', weather),
+          issue(3, 'app', { queue: { kind: 'chain', message: 'after #2', opensAt: null } }),
+        ],
+      }),
+      queueStates: { global: 'run', projects: { weatherorb: 'drain' }, prios: {} },
+    })
+    expect(projectDrain.binding).toEqual({
+      kind: 'drain:weatherorb',
+      words: 'weatherorb is draining',
+      count: 2,
+      message: weather,
+    })
+    const wholeQueue = 'the whole queue is draining: nothing new starts; factory queue set run sets it back'
+    const drained = queueBindingOf({
+      states: states({ queued: [drain(1, 'weatherorb', wholeQueue), drain(2, 'app', wholeQueue)] }),
+      queueStates: { global: 'drain', projects: {}, prios: {} },
+    })
+    expect(drained.binding).toEqual({
+      kind: 'drain',
+      words: 'The whole queue is draining',
+      count: 2,
+      message: wholeQueue,
+    })
+  })
+
   test('nothing held out is no binding; a paced queue says so', () => {
     const result = queueBindingOf({ states: states({}), queueStates: { global: 'pace', projects: {}, prios: {} } })
     expect(result.binding).toBeNull()

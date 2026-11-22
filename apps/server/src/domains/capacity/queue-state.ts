@@ -4,8 +4,6 @@ export type QueueState = (typeof QUEUE_STATES)[number]
 
 const RESTRICTIVENESS: Record<QueueState, number> = { run: 0, pace: 1, drain: 2 }
 
-const moreRestrictive = (a: QueueState, b: QueueState): QueueState => (RESTRICTIVENESS[a] >= RESTRICTIVENESS[b] ? a : b)
-
 /** A project's priority and an Issue's share one range. */
 export const PROJECT_PRIO_MIN = -1000
 export const PROJECT_PRIO_MAX = 1000
@@ -17,6 +15,13 @@ export interface QueueStates {
   prios: ReadonlyMap<string, number>
 }
 
-/** The most restrictive state that applies to a project: its own and the global one. */
-export const effectiveState = (states: QueueStates, project: string): QueueState =>
-  moreRestrictive(states.global, states.projects.get(project) ?? 'run')
+/**
+ * The most restrictive state that applies to a project: its own and the global one. `project` is the project's name when its
+ * own state is the one that applies (strictly more restrictive than the queue's); null when the queue's state does.
+ */
+export const effectiveScope = (states: QueueStates, project: string): { state: QueueState; project: string | null } => {
+  const own = states.projects.get(project) ?? 'run'
+  return RESTRICTIVENESS[own] > RESTRICTIVENESS[states.global]
+    ? { state: own, project }
+    : { state: states.global, project: null }
+}

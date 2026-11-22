@@ -23,7 +23,7 @@ import {
 import { testLineOf } from '../domains/capacity/slots.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountDesk, AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
-import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
+import { effectiveScope, type QueueStates } from '../domains/capacity/queue-state.ts'
 import { type Claim, type Claimant, claimRoom, holdsClaim, keepsClaim } from '../domains/capacity/claims.ts'
 import { planWaits, type SeenWait, waitKindOf } from '../domains/capacity/waits.ts'
 import type { Edge } from '../domains/planning/chain.ts'
@@ -603,10 +603,12 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
           growingMib: youngDiskMib(claims, snap, host),
         }
       : null
+    const scope = effectiveScope(snap.states, project.name)
     return checkAdmission({
       lane: laneOf(issue.id, project, claims, owed, laneByIssue),
       now: snap.now,
-      state: effectiveState(snap.states, project.name),
+      state: scope.state,
+      stateProject: scope.project,
       doctor: host.doctors.get(project.name) ?? null,
       leads: project.project.leads,
       holders: claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),

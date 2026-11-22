@@ -70,25 +70,33 @@ export interface QueueBinding {
   state: 'pace' | 'drain' | null
 }
 
-/** Why the queue does not move now: the reason kind holding the most Issues out, and the message of its first one. */
+const DRAIN_PREFIX = 'drain:'
+
+/** A reason in words: a project's drain names the project; the whole queue's drain names the queue. */
+const reasonWordsOf = (key: string): string =>
+  key.startsWith(DRAIN_PREFIX) ? `${key.slice(DRAIN_PREFIX.length)} is draining` : queueReasonWords(key)
+
+/** Why the queue does not move now: the reason holding the most Issues out, and the message of its first one. A project's drain is its own reason. */
 export function queueBindingOf(data: Pick<FlowModel, 'states' | 'queueStates'>): QueueBinding {
   const queued = data.states.queued.issues
+  const global = data.queueStates.global
   const counts = new Map<string, number>()
   const firstMessage = new Map<string, string>()
   for (const issue of queued) {
-    if (!issue.queue) continue
-    counts.set(issue.queue.kind, (counts.get(issue.queue.kind) ?? 0) + 1)
-    if (!firstMessage.has(issue.queue.kind)) firstMessage.set(issue.queue.kind, issue.queue.message)
+    const queue = issue.queue
+    if (!queue) continue
+    const key = queue.kind === 'drain' && global !== 'drain' ? `${DRAIN_PREFIX}${issue.repo}` : queue.kind
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+    if (!firstMessage.has(key)) firstMessage.set(key, queue.message)
   }
   const top = byCount(counts)[0]
-  const global = data.queueStates.global
   return {
     // Not started is Ready plus Held, the stat card's word: a settling Issue is Held too
     notStarted: queued.length + data.states.settling.issues.length,
     binding: top
       ? {
           kind: top.project,
-          words: queueReasonWords(top.project),
+          words: reasonWordsOf(top.project),
           count: top.count,
           message: firstMessage.get(top.project) ?? '',
         }

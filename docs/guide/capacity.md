@@ -67,7 +67,7 @@ Each sentence names the figures it compared where there are any. The `tests` sen
 
 **Example files:**
 
-- [`admission.ts` L233-L239](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L233-L239): `lineRefusal`, the `tests` reason.
+- [`admission.ts` L241-L247](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L241-L247): `lineRefusal`, the `tests` reason.
 - [`queue-state.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/queue-state.ts): the three queue states, `run`, `pace` and `drain`.
 
 ## Host

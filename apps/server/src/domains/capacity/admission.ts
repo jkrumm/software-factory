@@ -77,6 +77,8 @@ export interface AdmissionInputs {
   now: Date
   /** the effective queue state of the candidate's project */
   state: QueueState
+  /** the project whose own state is `state` (more restrictive than the queue's); null or absent: the queue's state */
+  stateProject?: string | null
   /** why the project's own doctor says this host cannot run it (`doctor:` of its `project.yaml`); null or absent: it says nothing, or says it can */
   doctor?: string | null
   /** `leads: N` of the project */
@@ -143,6 +145,12 @@ const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, par
   refusal: { kind, message, opensAt, ...(part ? { part } : {}) },
 })
 
+/** Why a drain holds an Issue, and how it ends: a project's drain names the project, the queue's names the whole queue. */
+const drainMessage = (project: string | null): string =>
+  project
+    ? `${project} is draining: nothing new of it starts; factory queue set run --project ${project} sets it back`
+    : 'the whole queue is draining: nothing new starts; factory queue set run sets it back'
+
 /**
  * Whether a new lead may start now, in the order of the rules: the queue state (`drain` starts nothing), the host's
  * boot grace, its load (the tripwire: sustained minutes over the ceiling), its memory (the reading, then the learned fit
@@ -153,7 +161,7 @@ const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, par
  */
 export function checkAdmission(input: AdmissionInputs): Admission {
   const pace = input.state === 'pace'
-  if (input.state === 'drain') return no('drain', 'the queue is draining: nothing new starts')
+  if (input.state === 'drain') return no('drain', drainMessage(input.stateProject ?? null))
   if (input.doctor) return no('doctor', input.doctor)
   const booting = input.boot ? bootRefusal(input.boot, input.now) : null
   if (booting) return no('boot', booting.message, booting.opensAt)
