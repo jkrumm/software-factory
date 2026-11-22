@@ -312,7 +312,7 @@ class Lander {
     try {
       const sha = await this.fetch('wait')
       if (sha === this.seen) return undefined
-      this.seen = (await this.rebase()).base
+      this.seen = (await this.rebase(sha)).base
     } catch (error) {
       if (!(error instanceof Refused)) throw error
       if (error.step === 'wait') return undefined
@@ -339,8 +339,8 @@ class Lander {
   }
 
   /** Step 2: the branch on top of the default branch; the plan merge driver resolves an append-only plan file. */
-  private async rebase(): Promise<{ base: string; head: string }> {
-    const base = await this.fetch('rebase')
+  private async rebase(fetched?: string): Promise<{ base: string; head: string }> {
+    const base = fetched ?? (await this.fetch('rebase'))
     if ((await this.sh.run(['git', 'merge-base', '--is-ancestor', this.origin, 'HEAD'])).code === 0) {
       this.out(`rebase: already on ${this.origin} (${short(base)})`)
     } else {
