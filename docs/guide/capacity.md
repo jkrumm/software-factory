@@ -33,7 +33,7 @@ const REFUSALS = [
 **Example files:**
 
 - [`admission.ts` L26-L38](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L26-L38): the refusals in the order they are looked at.
-- [`admission.ts` L154-L206](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L154-L206): `checkAdmission`, one `if` per refusal, then the account pick.
+- [`admission.ts` L162-L214](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L162-L214): `checkAdmission`, one `if` per refusal, then the account pick.
 
 ## Queue reasons
 
@@ -43,7 +43,7 @@ Two groups share the field. The chain answers first with `chain`, `line`, `final
 
 | Kind | The sentence says |
 |-|-|
-| `drain` | the queue is draining: nothing new starts |
+| `drain` | the queue or one project is draining: nothing new starts; the sentence names which, and the command that sets it back |
 | `doctor` | the project's own `doctor:` command reports a missing prerequisite |
 | `boot` | the host booted recently and has not yet been calm for five minutes |
 | `load` | load over the ceiling in each of the last 5 minutes, or too many processes |
@@ -261,7 +261,7 @@ export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
 
 - [`leadcost.ts` L142-L177](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/leadcost.ts#L142-L177): the share, the median and the falling rule.
 - [`leadcost.ts` L194-L210](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/leadcost.ts#L194-L210): `leadGrowth`.
-- [`admission.ts` L251-L270](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L251-L270): `fitRefusal`, the learned cost against the free memory.
+- [`admission.ts` L259-L278](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L259-L278): `fitRefusal`, the learned cost against the free memory.
 
 **Read more:**
 
