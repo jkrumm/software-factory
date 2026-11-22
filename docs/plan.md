@@ -169,7 +169,10 @@ The Issue's edges are not in `factory issue show`; `factory read chain --format 
   never to put independent rows in a line: the server runs them side by side when the repo's `leads` allow it. To keep
   heavy rows (Apple builds) from running together while cheap rows run alongside, give them a `lane` (`docs/project.md` "Lanes").
 - Write the gate in the row: the row's `acceptance` states the check that proves it done (a command, a test, an
-  observable fact), because the lead ships by stating each line met or not met.
+  observable fact), because the lead ships by stating each line met or not met. A lead cannot file an Issue (`POST /issues`
+  is the owner's, so `factory issue new` is 403 for a lead's token): an acceptance line never asks the lead to file one. A
+  proof that needs a filed Issue names who files it, an Errand for the owner's hands or a row of its own, or states a check
+  the lead can run (a scenario test, a read of the deployed read model).
 - The `facts` carry everything the lead needs. It cannot see this plan or the session that wrote it: exact paths, scope
   limits and any research already verified go in.
 - A row that asks the owner for a verdict on how something looks waits until enough is built to judge: place it `after`
