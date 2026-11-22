@@ -4,6 +4,7 @@ import { type Recheck, type ReviewWait, STALE_REVIEW_MS } from '../domains/check
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import { type CheckpointError, giveVerdict, holdsFiledSpec, issueOf, waitingOn } from './checkpoints.ts'
 import type { CheckpointLoopDeps } from './checkpoints-loop.ts'
+import { kindAttrs, reportLine } from '../kernel/telemetry.ts'
 
 /** What the look at a Concept or Spec that waited a day for the owner came to. */
 export interface ReviewLooked {
@@ -93,7 +94,12 @@ export async function recheckReviews(deps: CheckpointLoopDeps): Step<ReviewLooke
     })
     const applied = await apply(deps, wait, look)
     if (!applied.ok) {
-      console.error(`checkpoints: ${wait.artifact} could not be looked at: ${JSON.stringify(applied.error)}`)
+      reportLine(
+        'error',
+        `checkpoints: ${wait.artifact} could not be looked at: ${JSON.stringify(applied.error)}`,
+        'checkpoints.review_look_failed',
+        { ref: wait.artifact, ...kindAttrs(applied.error) },
+      )
       continue
     }
     report.push({ artifact: wait.artifact, outcome: look.outcome })

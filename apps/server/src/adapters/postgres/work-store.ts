@@ -7,6 +7,7 @@ import type { Wait } from '../../domains/work/issue.ts'
 import type { AppliedRecord, Transition } from '../../domains/work/machine.ts'
 import type { ClaimedEffect, EffectRun, StoredEvent, WorkStore } from '../../domains/work/ports.ts'
 import { ACTORS } from '../../kernel/events.ts'
+import { markActive } from '../../kernel/telemetry.ts'
 import { type EventId, type IssueId, issueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 
@@ -125,6 +126,8 @@ export function postgresWorkStore(tx: SQL): WorkStore {
         )
         ON CONFLICT (key) DO NOTHING
         RETURNING id`
+      // an Issue event is what a loop pass did: the pass is recorded (kernel/telemetry.ts)
+      if (rows.length === 1) markActive()
       return rows.length === 1
     },
 

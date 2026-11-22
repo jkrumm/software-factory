@@ -32,6 +32,7 @@ import {
 } from './checkpoints.ts'
 import { PASS_LIMIT, type CheckpointLoopDeps } from './checkpoints-loop.ts'
 import { recordIn } from './issues.ts'
+import { kindAttrs, reportLine } from '../kernel/telemetry.ts'
 
 /** the composition passes it to the health lines, which import no domain code */
 export { MAX_RUN_TRIES }
@@ -345,7 +346,13 @@ export async function screenErrands(deps: CheckpointLoopDeps, limit = PASS_LIMIT
   for (const errand of held.value) {
     const result = await screenErrand(deps, errand.id)
     if (result.ok) screened.push(result.value)
-    else console.error(`checkpoints: ${errand.id} could not be screened: ${JSON.stringify(result.error)}`)
+    else
+      reportLine(
+        'error',
+        `checkpoints: ${errand.id} could not be screened: ${JSON.stringify(result.error)}`,
+        'checkpoints.errand_screen_failed',
+        { ref: errand.id, ...kindAttrs(result.error) },
+      )
   }
   return ok(screened)
 }

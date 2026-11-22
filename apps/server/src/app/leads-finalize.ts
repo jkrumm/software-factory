@@ -8,6 +8,7 @@ import { type IssueId, issueNumber } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, type PortError, portError, type Result } from '../kernel/result.ts'
 import { type LeadDeps, loadIssue } from './leads.ts'
+import { kindAttrs, reportLine } from '../kernel/telemetry.ts'
 
 interface Closing {
   closed: BranchClosure
@@ -157,7 +158,7 @@ export async function finalizeLead(deps: LeadDeps, effect: FinalizeEffect): Prom
     if (!marked.ok) return marked
     // The archive keeps itself: what retention or an earlier plain copy left is dealt with on every finalize. It never fails one.
     const tidied = await deps.transcripts.tidy()
-    if (!tidied.ok) console.error(tidied.error.detail)
+    if (!tidied.ok) reportLine('error', tidied.error.detail, 'leads.transcript_tidy_failed', kindAttrs(tidied.error))
   }
 
   if (!done('worktree')) {

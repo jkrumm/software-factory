@@ -1,7 +1,10 @@
-import type { AgwPort } from '../../kernel/agw.ts'
+import type { AgwPort, AgwResult } from '../../kernel/agw.ts'
+import type { Key } from '../../kernel/keys.ts'
+import type { WorkflowName, WorkflowRequest } from '../../kernel/workflows.ts'
 import { AGW_IDLE_MS } from '../../kernel/agw.ts'
 import { killGroup } from '../process.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
+import { judgeResult, tracePort } from '../../kernel/telemetry.ts'
 import { WORKFLOWS } from '../../kernel/workflows.ts'
 
 export interface AgwOptions {
@@ -121,57 +124,74 @@ export const isUnavailable = (answer: { reason: string }): boolean => UNAVAILABL
  */
 export function agwPort(options: AgwOptions): AgwPort {
   const idleMs = options.idleMs ?? AGW_IDLE_MS
-  return {
-    async run(name, request, key) {
-      const entry = WORKFLOWS[name]
-      const workflow = entry.agw
-      // agw takes 1 to 64 of [A-Za-z0-9_.-] as a purpose (a colon is refused with a 400)
-      const purpose = `software-factory.${workflow}`
-      try {
-        let finished = await exec(
-          options.bin,
-          [workflow, '--format', 'json', '--idempotency-key', key],
-          JSON.stringify(request),
-          idleMs,
-          purpose,
-        )
-        while (finished.code === 10 && !finished.hung) {
-          const runId = runIdOf(finished)
-          if (!runId) return err(portError('unreadable', `agw ${workflow} is pending and named no run to wait for`))
-          finished = await exec(options.bin, ['run', 'wait', runId, '--format', 'json'], null, idleMs, purpose)
-        }
-        if (finished.hung) {
-          return err(portError('timeout', `agw ${workflow} went silent for ${Math.round(idleMs / 1000)} s`))
-        }
-        if (finished.code !== 0) {
-          const said = finished.err.trim() || finished.out.trim()
-          return err(portError('gone', `agw ${workflow} exited ${finished.code}: ${said.slice(0, 300)}`))
-        }
-        const envelope = parseJson(finished.out)
-        if (!isRecord(envelope)) return err(portError('unreadable', `agw ${workflow} did not print a run envelope`))
-        if (envelope.status !== 'done') {
-          return err(portError('gone', `agw ${workflow} run ${String(envelope.status)}`))
-        }
-        const parsed = entry.answer.safeParse(envelope.output)
-        if (!parsed.success) {
-          const first = parsed.error.issues[0]
-          return err(
-            portError(
-              'unreadable',
-              `agw ${workflow} output does not parse: ${first ? `${first.path.join('.') || 'output'} ${first.message}` : 'unknown'}`,
-            ),
-          )
-        }
-        if (entry.failsWhenUnavailable) {
-          const reason = (parsed.data as { reason?: unknown }).reason
-          if (typeof reason === 'string' && isUnavailable({ reason })) {
-            return err(portError('gone', `agw ${workflow} could not answer: ${reason.slice(0, 200)}`))
-          }
-        }
-        return ok(parsed.data as never)
-      } catch (error) {
-        return err(portError('gone', `agw could not run: ${error instanceof Error ? error.message : String(error)}`))
+  const port: AgwPort = {
+    // One span per call (a model ran, so the pass it is in did something): the workflow by name and the Issue id the key names, the Result kind, no request and no answer.
+    run: (name, request, key) =>
+      tracePort(
+        {
+          name: `agw.${WORKFLOWS[name].agw}`,
+          port: 'agw',
+          attrs: { workflow: WORKFLOWS[name].agw, issue: /issue_\d+/.exec(key)?.[0] },
+        },
+        () => execute(name, request, key),
+        (result) => ({ ...judgeResult(result), work: true }),
+      ),
+  }
+  return port
+
+  async function execute<N extends WorkflowName>(
+    name: N,
+    request: WorkflowRequest<N>,
+    key: Key,
+  ): Promise<AgwResult<N>> {
+    const entry = WORKFLOWS[name]
+    const workflow = entry.agw
+    // agw takes 1 to 64 of [A-Za-z0-9_.-] as a purpose (a colon is refused with a 400)
+    const purpose = `software-factory.${workflow}`
+    try {
+      let finished = await exec(
+        options.bin,
+        [workflow, '--format', 'json', '--idempotency-key', key],
+        JSON.stringify(request),
+        idleMs,
+        purpose,
+      )
+      while (finished.code === 10 && !finished.hung) {
+        const runId = runIdOf(finished)
+        if (!runId) return err(portError('unreadable', `agw ${workflow} is pending and named no run to wait for`))
+        finished = await exec(options.bin, ['run', 'wait', runId, '--format', 'json'], null, idleMs, purpose)
       }
-    },
+      if (finished.hung) {
+        return err(portError('timeout', `agw ${workflow} went silent for ${Math.round(idleMs / 1000)} s`))
+      }
+      if (finished.code !== 0) {
+        const said = finished.err.trim() || finished.out.trim()
+        return err(portError('gone', `agw ${workflow} exited ${finished.code}: ${said.slice(0, 300)}`))
+      }
+      const envelope = parseJson(finished.out)
+      if (!isRecord(envelope)) return err(portError('unreadable', `agw ${workflow} did not print a run envelope`))
+      if (envelope.status !== 'done') {
+        return err(portError('gone', `agw ${workflow} run ${String(envelope.status)}`))
+      }
+      const parsed = entry.answer.safeParse(envelope.output)
+      if (!parsed.success) {
+        const first = parsed.error.issues[0]
+        return err(
+          portError(
+            'unreadable',
+            `agw ${workflow} output does not parse: ${first ? `${first.path.join('.') || 'output'} ${first.message}` : 'unknown'}`,
+          ),
+        )
+      }
+      if (entry.failsWhenUnavailable) {
+        const reason = (parsed.data as { reason?: unknown }).reason
+        if (typeof reason === 'string' && isUnavailable({ reason })) {
+          return err(portError('gone', `agw ${workflow} could not answer: ${reason.slice(0, 200)}`))
+        }
+      }
+      return ok(parsed.data as never)
+    } catch (error) {
+      return err(portError('gone', `agw could not run: ${error instanceof Error ? error.message : String(error)}`))
+    }
   }
 }

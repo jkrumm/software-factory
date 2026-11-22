@@ -170,6 +170,20 @@ proves a branch live before it is merged.
   untouched (issue 885: at load 200+ the new release and its rollback both missed 60 s).
 
 
+## Logs and traces
+
+Where to look when the server failed or did something odd. ClickStack first, the local files for the words.
+
+**ClickStack**, service `software-factory` (`service.version` is the deployed short sha, so a restart splits two versions). The same endpoint and key as the gauges (`FACTORY_OTEL_ENDPOINT`); off without it.
+
+- **Spans.** `loop.<name>`: one per loop pass that failed or did something (an agw call, an Issue event), with its calls under it in one trace. A pass that looked and found nothing records nothing, so the volume follows what happened, not the 10 s tick. `agw.<workflow>` and `process.<program>` (`git`, `hc`, `gh`, `make`, …): one per port call, with the Result kind (`result`) and the duration (`duration.ms`); a call in a pass that recorded nothing is dropped with it, a call outside any pass is recorded only when it failed or was an agw call. A non-zero exit is an answer, not a failure (`result=exit`, `exit.code`); a timeout or a program that cannot start is. `http.request`: one per API request that ended 5xx, by method, route pattern and status.
+- **Logs.** The body is a fixed event name (`port.failed`, `loop.pass_failed`, `api.server_error`, `api.request_refused` (a 400, 403 or 422, a warning), `boot.failed`, `checkpoints.*`, `leads.*`, `console.error`, …); severity says error or warn. A line written by code that does not report structured becomes a `console.error` or `console.warn` row with the loop it happened in and its length; the words are in the local log. A log row has the trace and span of the pass it happened in.
+- **Attributes** are ids, names, kinds, counts and durations: `loop`, `issue`, `ref`, `port`, `workflow`, `program`, `verb`, `result`, `error.kind`, `error.type`, `error.code`, `exit.code`, `duration.ms`, `count`, `http.*`. The list and the one-word rule for values are `cleanAttrs` in `kernel/telemetry.ts`: a title, note, fact, signal text, path or error message has no way in, so work repos' words stay off this surface. Add a name there only for an id, a name, a kind, a count or a duration.
+- **Loss.** Records are queued and pushed every 5 s (`/v1/traces`, `/v1/logs`); a push that fails drops its batch, and a full queue drops the newest. Neither fails or delays a pass; the count is the gauge `factory.telemetry.dropped` (series `signal=logs|spans`, since the start).
+- **Query**, with `/otel` (`agw hdx query clickstack_search`, discovery first): spans `ServiceName:"software-factory"` and `SpanName:"loop.leads"` on the traces source; logs `ServiceName:"software-factory" SeverityText:ERROR` on the logs source. `SpanAttributes['loop']`, `LogAttributes['error.kind']` and `['issue']` narrow them. What failed around a deploy: the logs of one `service.version` by time, then the trace of the pass.
+
+**Local files**, `~/Library/Logs/software-factory.{out,err}.log`: the words (messages, stack lines), each line starting with an ISO time. The server stamps every line it writes (`adapters/otel/console.ts`, `console.*` and direct writes); the launcher stamps its own few (`scripts/launch.sh`, `scripts/env-file.sh`). Bun's own crash output and what a child process writes straight to the inherited stderr are not stamped. Lines from before the stamp have no time.
+
 ## Rules behind AGENTS.md
 
 The detail behind the short rules of `AGENTS.md`, for a change that touches one of them. A rule a script holds is named

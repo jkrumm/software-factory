@@ -30,6 +30,7 @@ import {
   specBlobOf,
   waitingOn,
 } from './checkpoints.ts'
+import { kindAttrs, reportLine } from '../kernel/telemetry.ts'
 
 export interface CheckpointLoopDeps extends CheckpointDeps {
   /** the Judge, the Errand screen and the Spec screen are workflows of this one port */
@@ -340,7 +341,13 @@ export async function tryAnswerOpen(deps: CheckpointLoopDeps, limit = PASS_LIMIT
   for (const decision of open.value) {
     const result = await tryAnswer(deps, decision.id)
     if (result.ok) outcomes.push(result.value)
-    else console.error(`checkpoints: ${decision.id} could not be answered: ${JSON.stringify(result.error)}`)
+    else
+      reportLine(
+        'error',
+        `checkpoints: ${decision.id} could not be answered: ${JSON.stringify(result.error)}`,
+        'checkpoints.answer_failed',
+        { ref: decision.id, ...kindAttrs(result.error) },
+      )
   }
   return ok(outcomes)
 }
