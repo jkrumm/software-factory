@@ -2124,7 +2124,7 @@ describe('CLI (isolated HOME)', () => {
     const args = readFileSync(sshLog, 'utf8')
       .trim()
       .split('\n')
-      .filter((line) => /account-usage$|claude-account usage --json/.test(line))
+      .filter((line) => /(account-usage|claude-account usage --json)$/.test(line))
     expect(args.length).toBe(1)
     // the keepalive leaves the health rows for the readers that cannot reach the peer themselves
     expect(readHealthCache(dir)?.rows.length).toBeGreaterThan(0)
