@@ -1,6 +1,6 @@
 import { type Effort, REVIEWER_CHEAP_ROLE, type Tier } from '@software-factory/contract'
 import { type BriefInput, buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.ts'
-import { LEAD_ROLE, LIGHT_ROLE, lightRule } from '../domains/leads/light.ts'
+import { HANDOVER_TURN_GRACE_MS, LEAD_ROLE, LIGHT_ROLE, lightRule } from '../domains/leads/light.ts'
 import { reviewerBrief, reviewerRoleFor } from '../domains/leads/reviewer.ts'
 import { deriveSession } from '../domains/leads/session.ts'
 import { leadBranch, leadKey, tabName } from '../domains/leads/names.ts'
@@ -122,7 +122,13 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
           handover: typeof movedPayload.handover === 'string' ? movedPayload.handover : null,
           asked:
             movedPayload.ask === 1
-              ? { answered: Boolean(askedAt && movedView.lastTurnAt && movedView.lastTurnAt > askedAt) }
+              ? {
+                  answered: Boolean(
+                    askedAt &&
+                    movedView.lastTurnAt &&
+                    movedView.lastTurnAt.getTime() > askedAt.getTime() - HANDOVER_TURN_GRACE_MS,
+                  ),
+                }
               : null,
         }
       : null

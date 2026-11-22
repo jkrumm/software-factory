@@ -110,3 +110,8 @@ export function moveUpWhy(facts: StruggleFacts): string | null {
  * is the only liveness rule a lead has).
  */
 export const HANDOVER_WAIT_MS = 10 * 60_000
+/**
+ * A turn that began this long before the note was marked typed still counts as the lead's answer to it: the hook of the turn
+ * and the factory's stamp of the typing come from two processes.
+ */
+export const HANDOVER_TURN_GRACE_MS = 2_000

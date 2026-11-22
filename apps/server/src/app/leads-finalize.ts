@@ -1,4 +1,4 @@
-import { HANDOVER_WAIT_MS } from '../domains/leads/light.ts'
+import { HANDOVER_TURN_GRACE_MS, HANDOVER_WAIT_MS } from '../domains/leads/light.ts'
 import { leadBranch, leadKey } from '../domains/leads/names.ts'
 import { deriveSession } from '../domains/leads/session.ts'
 import type { BranchClosure, FinalizeStep } from '../domains/leads/ports.ts'
@@ -56,7 +56,10 @@ async function handoverPending(
   if (!read.ok) return read
   const { delivery, view } = read.value
   if (!delivery?.typedAt || view.state === 'gone') return ok(false)
-  const answered = view.lastTurnAt !== null && view.lastTurnAt > delivery.typedAt && view.state !== 'working'
+  const answered =
+    view.lastTurnAt !== null &&
+    view.lastTurnAt.getTime() > delivery.typedAt.getTime() - HANDOVER_TURN_GRACE_MS &&
+    view.state !== 'working'
   if (answered) return ok(false)
   return ok(deps.clock.now().getTime() - delivery.typedAt.getTime() < HANDOVER_WAIT_MS)
 }

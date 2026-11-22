@@ -245,6 +245,15 @@ describe('a filed lead-row seat with moveUp', () => {
 })
 
 describe('what does not move up to the strong row', () => {
+  test('an owner re-seat of a moved-up Issue starts the next lead on that seat, not on the strong row', async () => {
+    const issue = await leadWithMoveUp()
+    await blockIssue(w.deps, issue, { attempt: 1, reason: 'beyond me', call: 'b1', outOfDepth: true })
+    await w.event(issue, 'seated:1', { kind: 'seated', payload: { tier: 'sonnet', effort: 'max' }, actor: 'owner' })
+    await w.event(issue, 'admitted:2', { kind: 'admitted', payload: {}, actor: 'factory' })
+    expect((await start(issue, 2)).ok).toBe(true)
+    expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'sonnet', effort: 'max' })
+  })
+
   test('the same seat filed without moveUp does not move', async () => {
     const issue = await leadWithMoveUp({ tier: 'sonnet', effort: 'high', role: 'lead' })
     const result = await secondStall(issue)

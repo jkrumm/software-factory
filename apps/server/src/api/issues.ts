@@ -40,7 +40,7 @@ import { failure, issueMove, verbResponse, writeFailure } from './written.ts'
 /** The owner's Issue verbs and the session note, bound in `main.ts`. */
 export interface IssueApi {
   file(input: NewIssueInput): Promise<Result<NewIssued, NewIssueError | PortError>>
-  /** the cost line of a seat's tier (`read/seat-cost.ts`), or null when the usage schema cannot be read: filing never waits on it */
+  /** the cost line of a seat's tier (`read/seat-cost.ts`), or null when the usage schema cannot be read or answers late: filing never fails on it */
   seatCost(tier: string): Promise<string | null>
   /** a Report no Issue owns, linked to the Issues it concerns */
   newArtifact(input: {
