@@ -585,7 +585,7 @@ const QUEUE_REASON_WORDS: Record<string, string> = {
   load: 'Host load',
   tests: 'The test line',
   boot: 'Host boot grace',
-  drain: 'The queue is draining',
+  drain: 'The whole queue is draining',
   chain: 'An after edge',
   line: 'A stopped line',
   finalizing: 'Another Issue finalizing',

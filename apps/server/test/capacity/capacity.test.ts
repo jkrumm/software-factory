@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { type AccountReading, pickAccount, READING_MAX_AGE_MS } from '../../src/domains/capacity/accounts.ts'
 import { type AdmissionInputs, checkAdmission } from '../../src/domains/capacity/admission.ts'
+import { effectiveScope } from '../../src/domains/capacity/queue-state.ts'
 import { type Claimant, claimRoom } from '../../src/domains/capacity/claims.ts'
 import {
   describeMemory,
@@ -380,6 +381,34 @@ describe('admission', () => {
     expect(refused).toMatchObject({ admit: false, refusal: { kind: 'doctor', message: words, opensAt: null } })
     expect(checkAdmission(inputs({ doctor: words, state: 'drain' }))).toMatchObject({ refusal: { kind: 'drain' } })
     expect(checkAdmission(inputs({ doctor: null }))).toMatchObject({ admit: true })
+  })
+
+  test("a project's drain names the project and how it ends; the queue's drain names the whole queue", () => {
+    expect(checkAdmission(inputs({ state: 'drain', stateProject: 'weatherorb' }))).toMatchObject({
+      refusal: {
+        kind: 'drain',
+        message:
+          'weatherorb is draining: nothing new of it starts; factory queue set run --project weatherorb sets it back',
+      },
+    })
+    expect(checkAdmission(inputs({ state: 'drain' }))).toMatchObject({
+      refusal: {
+        kind: 'drain',
+        message: 'the whole queue is draining: nothing new starts; factory queue set run sets it back',
+      },
+    })
+  })
+
+  test("the more restrictive scope names the state: a project's drain under a paced queue is the project's, a drained queue is the queue's", () => {
+    const states = (global: 'run' | 'pace' | 'drain', project: 'run' | 'pace' | 'drain') => ({
+      global,
+      projects: new Map([['weatherorb', project]]),
+      prios: new Map(),
+    })
+    expect(effectiveScope(states('pace', 'drain'), 'weatherorb')).toEqual({ state: 'drain', project: 'weatherorb' })
+    expect(effectiveScope(states('drain', 'drain'), 'weatherorb')).toEqual({ state: 'drain', project: null })
+    expect(effectiveScope(states('run', 'pace'), 'weatherorb')).toEqual({ state: 'pace', project: 'weatherorb' })
+    expect(effectiveScope(states('run', 'run'), 'weatherorb')).toEqual({ state: 'run', project: null })
   })
 
   test('the first rule that says no wins: drain, load, memory, claim, then the account', () => {
