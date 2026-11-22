@@ -3,6 +3,7 @@ import { leadBranch } from '../domains/leads/names.ts'
 import { ok } from '../kernel/result.ts'
 import { issueNumber } from '../kernel/ids.ts'
 import type { LeadDeps } from './leads.ts'
+import { errorAttrs, reportLine } from '../kernel/telemetry.ts'
 
 /** A kept worktree is looked at again this often: what kept it (an unarchivable file, a commit not yet on the base) can pass. */
 const WORKTREE_SWEEP_EVERY_MS = 3_600_000
@@ -77,7 +78,12 @@ export function startWorktreeSweep(deps: LeadDeps, memory: WorktreeSweepMemory, 
   memory.lastAt = now
   void sweepKeptWorktrees(deps, signal)
     .catch((error: unknown) => {
-      console.error(`worktree sweep failed: ${error instanceof Error ? error.message : String(error)}`)
+      reportLine(
+        'error',
+        `worktree sweep failed: ${error instanceof Error ? error.message : String(error)}`,
+        'leads.worktree_sweep_failed',
+        errorAttrs(error),
+      )
     })
     .finally(() => {
       memory.running = false

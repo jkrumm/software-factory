@@ -5,6 +5,7 @@ import { err, ok, portError } from '../kernel/result.ts'
 import { outputNote } from '../kernel/run.ts'
 import { err as fail, type Result } from '../kernel/result.ts'
 import { type CheckpointDeps, type CheckpointError, type CheckpointResult, finishErrand } from './checkpoints.ts'
+import { errorAttrs, kindAttrs, reportLine } from '../kernel/telemetry.ts'
 
 /** A run that began this long ago and never reported (the server restarted under it) may be started again. */
 const APPROVED_RUN_STALE_MS = 35 * 60_000
@@ -73,8 +74,11 @@ async function runApproved(deps: CheckpointDeps, errand: ErrandRecord): Promise<
       run: { status, exit: run.exit, output: run.output },
     })
     if (!result.ok) {
-      console.error(
+      reportLine(
+        'error',
         `checkpoints: the approved run of ${errand.id} could not be recorded: ${JSON.stringify(result.error)}`,
+        'checkpoints.approved_run_not_recorded',
+        { ref: errand.id, ...kindAttrs(result.error) },
       )
       return
     }
@@ -83,6 +87,11 @@ async function runApproved(deps: CheckpointDeps, errand: ErrandRecord): Promise<
       await deps.uow.run(async ({ errands }) => ok(await errands.clearRun(errand.id)))
     }
   } catch (cause) {
-    console.error(`checkpoints: the approved run of ${errand.id} failed: ${String(cause).slice(0, 300)}`)
+    reportLine(
+      'error',
+      `checkpoints: the approved run of ${errand.id} failed: ${String(cause).slice(0, 300)}`,
+      'checkpoints.approved_run_failed',
+      { ref: errand.id, ...errorAttrs(cause) },
+    )
   }
 }

@@ -13,6 +13,7 @@ import {
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { type CheckpointError, type CheckpointStores, issueOf, verdictIn } from './checkpoints.ts'
 import { PASS_LIMIT, type CheckpointLoopDeps } from './checkpoints-loop.ts'
+import { kindAttrs, reportLine } from '../kernel/telemetry.ts'
 
 export interface SpecScreened {
   artifact: string
@@ -151,7 +152,13 @@ export async function screenSpecs(deps: CheckpointLoopDeps, limit = PASS_LIMIT):
   for (const spec of held.value) {
     const result = await screenSpec(deps, spec.artifact, spec.revision)
     if (result.ok) screened.push(result.value)
-    else console.error(`checkpoints: ${spec.artifact} could not be screened: ${JSON.stringify(result.error)}`)
+    else
+      reportLine(
+        'error',
+        `checkpoints: ${spec.artifact} could not be screened: ${JSON.stringify(result.error)}`,
+        'checkpoints.spec_screen_failed',
+        { ref: spec.artifact, ...kindAttrs(result.error) },
+      )
   }
   return ok(screened)
 }

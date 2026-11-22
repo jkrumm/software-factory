@@ -52,6 +52,9 @@ import { otelExporter } from './adapters/otel/exporter.ts'
 import { loadOtelEnv } from './adapters/otel/settings.ts'
 import { readCapacityGauges } from './read/capacity-gauges.ts'
 import { selfPaced } from './adapters/intake/schedule.ts'
+import { installStampedConsole } from './adapters/otel/console.ts'
+import { otelTelemetry } from './adapters/otel/telemetry.ts'
+import { errorAttrs, installTelemetry, logEvent } from './kernel/telemetry.ts'
 import type { SignalFiler } from './app/capacity-slots.ts'
 import { composePlanning } from './compose-planning.ts'
 import { leadCheckoutOf } from './app/quality-checkout.ts'
@@ -90,6 +93,12 @@ const IDLE_TIMEOUT_S = 255
 /** How long a stop waits for the passes in flight (the loops, the intake pollers, the uptime push) before it goes on. */
 const PASS_GRACE_MS = 10_000
 
+/** How often the queued logs and spans are pushed to ClickStack. */
+const TELEMETRY_EVERY_MS = 5_000
+
+/** How long a boot that failed waits for its error to be pushed before it exits. */
+const TELEMETRY_BOOT_FLUSH_MS = 2_000
+
 /** A door source refused within this long is a health line; an older refusal has passed. */
 const DOOR_LINES_RECENT_MS = 24 * 3_600_000
 
@@ -104,8 +113,18 @@ const fail = (message: string): never => {
   process.exit(1)
 }
 
+/** Sends what the telemetry queued; set once `main` has built it, so a boot that fails still gets its error out. */
+let flushTelemetry: () => Promise<void> = async () => {}
+
 async function main(env: Environment): Promise<void> {
+  // Every line the process writes carries an ISO time from here on (the launcher stamps its own few).
+  installStampedConsole()
   const settings = loadSettings(env)
+  // Logs and spans to ClickStack beside the gauges (docs/operations.md "Logs and traces"), installed first so a failed boot is recorded too.
+  const otelEnv = loadOtelEnv(env)
+  const telemetry = otelTelemetry({ endpoint: otelEnv.endpoint, key: otelEnv.key, version: settings.version })
+  if (telemetry.enabled) installTelemetry(telemetry.sink)
+  flushTelemetry = () => telemetry.flush()
   const sql = connect(settings.databaseUrl)
 
   // The process lock comes first: nothing, not even a migration, runs beside another server on this database.
@@ -195,7 +214,6 @@ async function main(env: Environment): Promise<void> {
   const uptime = uptimePoller({ clock, url: uptimeEnv.url, token: uptimeEnv.token })
   // The capacity figures to ClickStack, beside the host and CI series; off without FACTORY_OTEL_ENDPOINT. Its own pass: a push
   // that fails is one log line and touches no loop.
-  const otelEnv = loadOtelEnv(env)
   const otel = otelExporter({
     clock,
     endpoint: otelEnv.endpoint,
@@ -203,6 +221,7 @@ async function main(env: Environment): Promise<void> {
     version: settings.version,
     allowanceCaps: { perAccount: planningEnv.leadsPerAccount, byAccount: Object.fromEntries(planningEnv.accountLeads) },
     read: () => readCapacityGauges(sql, { now: clock.now(), windowMs: otelEnv.windowMs }),
+    dropped: () => telemetry.dropped(),
   })
   const intake = await composeIntake({
     sql,
@@ -522,6 +541,9 @@ async function main(env: Environment): Promise<void> {
     ? selfPaced('uptime', uptimeEnv.everyMs, () => uptime.pass(), { firstMs: 1_000 })
     : null
   const stopOtel = otel.enabled ? selfPaced('otel', otelEnv.everyMs, () => otel.pass(), { firstMs: 15_000 }) : null
+  const stopTelemetry = telemetry.enabled
+    ? selfPaced('telemetry', TELEMETRY_EVERY_MS, () => telemetry.flush(), { firstMs: TELEMETRY_EVERY_MS })
+    : null
   await runner.start()
 
   // Active connections are closed (`stop(true)`): an SSE stream never completes on its own, and without the flag Bun
@@ -544,7 +566,10 @@ async function main(env: Environment): Promise<void> {
             intake.stop(PASS_GRACE_MS),
             stopUptime?.(PASS_GRACE_MS),
             stopOtel?.(PASS_GRACE_MS),
+            stopTelemetry?.(PASS_GRACE_MS),
           ])
+          // what the stop itself recorded (a pass cut off, a lock lost) goes out before the process does
+          await telemetry.flush()
           const cut = runner
             .view()
             .filter((loop) => loop.running)
@@ -562,4 +587,8 @@ async function main(env: Environment): Promise<void> {
   if (stopRequested !== null) void stop(stopRequested)
 }
 
-main(Bun.env).catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)))
+main(Bun.env).catch(async (error: unknown) => {
+  logEvent('error', 'boot.failed', errorAttrs(error))
+  await Promise.race([flushTelemetry(), Bun.sleep(TELEMETRY_BOOT_FLUSH_MS)])
+  fail(error instanceof Error ? error.message : String(error))
+})

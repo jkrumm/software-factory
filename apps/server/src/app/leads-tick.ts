@@ -11,6 +11,7 @@ import { type ApiErrorMemory, handleApiErrors } from './leads-api-errors.ts'
 import { type LeadDeps } from './leads.ts'
 import { runOutbox } from './outbox.ts'
 import { startWorktreeSweep, type WorktreeSweepMemory } from './leads-sweep.ts'
+import { errorAttrs, reportLine } from '../kernel/telemetry.ts'
 
 /** The effect ports the leads bring; the composition adds the other packages' (`start_watch` is quality's). */
 export function leadPorts(deps: LeadDeps): Pick<EffectPorts, 'start_lead' | 'note_lead' | 'finalize'> {
@@ -41,7 +42,12 @@ export interface LeadTickDeps {
  */
 export async function leadTick(deps: LeadTickDeps): Promise<Result<TickAnswer, PortError>> {
   const replayed = await deps.replaySpool().catch((error: unknown) => {
-    console.error(`spool replay failed: ${error instanceof Error ? error.message : String(error)}`)
+    reportLine(
+      'error',
+      `spool replay failed: ${error instanceof Error ? error.message : String(error)}`,
+      'leads.spool_replay_failed',
+      errorAttrs(error),
+    )
     return 0
   })
   // A drain ends the pass before its next step, never inside one: every step finds its own work done, so the next boot
@@ -52,19 +58,34 @@ export async function leadTick(deps: LeadTickDeps): Promise<Result<TickAnswer, P
   const apiErrors = draining()
     ? { detected: 0, resumed: 0, marked: 0, cleared: 0, edges: 0 }
     : await handleApiErrors(deps.leads, deps.apiErrorMemory).catch((error: unknown) => {
-        console.error(`api error path failed: ${error instanceof Error ? error.message : String(error)}`)
+        reportLine(
+          'error',
+          `api error path failed: ${error instanceof Error ? error.message : String(error)}`,
+          'leads.api_error_path_failed',
+          errorAttrs(error),
+        )
         return { detected: 0, resumed: 0, marked: 0, cleared: 0, edges: 0 }
       })
   // A turn the account's wall refused leaves no hook behind: found here, so the Issue stalls as a wall and is woken when the window opens.
   if (!draining()) {
     await holdWalledLeads(deps.leads).catch((error: unknown) => {
-      console.error(`held leads failed: ${error instanceof Error ? error.message : String(error)}`)
+      reportLine(
+        'error',
+        `held leads failed: ${error instanceof Error ? error.message : String(error)}`,
+        'leads.held_failed',
+        errorAttrs(error),
+      )
     })
   }
   // Before the outbox, in the same pass: a wake runs after the lead is dormant or not at all, never between the two halves.
   if (!draining()) {
     await quiesceLeads(deps.leads).catch((error: unknown) => {
-      console.error(`quiescing failed: ${error instanceof Error ? error.message : String(error)}`)
+      reportLine(
+        'error',
+        `quiescing failed: ${error instanceof Error ? error.message : String(error)}`,
+        'leads.quiesce_failed',
+        errorAttrs(error),
+      )
     })
   }
   if (draining()) return ok({ outbox: { ran: 0, failed: 0 }, replayed, lost, apiErrors })

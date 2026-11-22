@@ -1,3 +1,4 @@
+import { type Judged, tracePort } from '../kernel/telemetry.ts'
 import { withoutSecrets } from './secret-env.ts'
 
 /** Stands in for an exit code when the process had to be killed for taking too long. */
@@ -86,10 +87,48 @@ process.on('exit', () => {
  * A start that fails throws `CannotExecute`. A grandchild that still holds the pipes does not keep the call waiting: after
  * a kill the call returns at once.
  */
-export const runProcess = async (
+export const runProcess = (
   cmd: readonly string[],
   timeoutMs: number,
   options: RunOptions = {},
+): Promise<ProcessOutcome> =>
+  tracePort(
+    { name: `process.${programOf(cmd)}`, port: 'process', attrs: { program: programOf(cmd), verb: verbOf(cmd) } },
+    () => spawnProcess(cmd, timeoutMs, options),
+    judgeOutcome,
+  )
+
+/** The program's file name, which is all a span says of the command: never its arguments. */
+const programOf = (cmd: readonly string[]): string => {
+  const name = (cmd[0] ?? '').split('/').pop() ?? ''
+  return /^[A-Za-z0-9._-]{1,32}$/.test(name) ? name : 'other'
+}
+
+/** The first word after the program's flags when it is a plain lowercase verb (`git status`, `hc run`); a path, a message or a shell script is not one. */
+const verbOf = (cmd: readonly string[]): string | null => {
+  if (programOf(cmd) === 'sh') return null
+  const args = cmd.slice(1)
+  const at = args[0] === '-C' ? 2 : 0
+  const verb = args[at]
+  return verb !== undefined && /^[a-z][a-z-]{0,23}$/.test(verb) ? verb : null
+}
+
+/** A kill by the time limit is a failed call; a caller's own stop and a non-zero exit (`git diff --quiet`) are answers, not failures. */
+const judgeOutcome = (outcome: ProcessOutcome): Judged => {
+  if (outcome.timedOut) {
+    return outcome.exitCode === EXIT_TIMEOUT
+      ? { result: 'timeout', failed: true }
+      : { result: 'stopped', failed: false }
+  }
+  return outcome.exitCode === 0
+    ? { result: 'ok', failed: false }
+    : { result: 'exit', failed: false, attrs: { 'exit.code': outcome.exitCode } }
+}
+
+const spawnProcess = async (
+  cmd: readonly string[],
+  timeoutMs: number,
+  options: RunOptions,
 ): Promise<ProcessOutcome> => {
   const capture = options.stderr === 'capture'
   const stopped = (timedOut: boolean): ProcessOutcome => ({

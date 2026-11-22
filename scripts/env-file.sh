@@ -31,6 +31,9 @@ EF_ALLOWED=" \
 # warning on stderr and the server never sees it. Delete the names from this list one release after the file lost them.
 EF_RETIRED=" FACTORY_LOAD_CEILING FACTORY_LOAD_RULE FACTORY_SLOT_AIM FACTORY_SELFWATCH_BRANCH "
 
+# ef_err <message>: a line on stderr that starts with an ISO time, like every line of the server's own log.
+ef_err() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+
 # load_env_file <path>: returns 0 (an absent file included) or prints one line to stderr and returns 78.
 load_env_file() {
   local ef_file="$1" ef_mode ef_owner ef_line ef_key ef_n=0
@@ -38,33 +41,33 @@ load_env_file() {
   # A dangling symlink is not an absent file.
   [[ -e "$ef_file" || -L "$ef_file" ]] || return 0
   if [[ ! -f "$ef_file" || -L "$ef_file" ]]; then
-    echo "software-factory: $ef_file is not a regular file; refusing to start." >&2
+    ef_err "software-factory: $ef_file is not a regular file; refusing to start."
     return 78
   fi
   # GNU stat first (BSD stat has no -c and fails, and GNU's -f is something else), then BSD.
   read -r ef_mode ef_owner < <(stat -c '%a %u' "$ef_file" 2>/dev/null || stat -f '%Lp %u' "$ef_file" 2>/dev/null)
   if [[ "$ef_mode" != "600" || "$ef_owner" != "$(id -u)" ]]; then
-    echo "software-factory: $ef_file must be mode 0600 and owned by the user; refusing to start." >&2
+    ef_err "software-factory: $ef_file must be mode 0600 and owned by the user; refusing to start."
     return 78
   fi
   while IFS= read -r ef_line || [[ -n "$ef_line" ]]; do
     ef_n=$((ef_n + 1))
     [[ -z "${ef_line//[[:space:]]/}" || "$ef_line" =~ ^[[:space:]]*# ]] && continue
     if [[ "$ef_line" == *$'\r'* ]]; then
-      echo "software-factory: $ef_file line $ef_n has a carriage return (a CRLF file); refusing to start." >&2
+      ef_err "software-factory: $ef_file line $ef_n has a carriage return (a CRLF file); refusing to start."
       return 78
     fi
     if [[ ! "$ef_line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-      echo "software-factory: $ef_file line $ef_n is not KEY=VALUE; refusing to start." >&2
+      ef_err "software-factory: $ef_file line $ef_n is not KEY=VALUE; refusing to start."
       return 78
     fi
     ef_key="${ef_line%%=*}"
     if [[ "$EF_RETIRED" == *" $ef_key "* ]]; then
-      echo "software-factory: $ef_file line $ef_n sets $ef_key, which is retired and ignored; delete the line." >&2
+      ef_err "software-factory: $ef_file line $ef_n sets $ef_key, which is retired and ignored; delete the line."
       continue
     fi
     if [[ "$EF_ALLOWED" != *" $ef_key "* ]]; then
-      echo "software-factory: $ef_file line $ef_n sets $ef_key, which this file does not take; refusing to start." >&2
+      ef_err "software-factory: $ef_file line $ef_n sets $ef_key, which this file does not take; refusing to start."
       return 78
     fi
     ef_keys+=("$ef_key")

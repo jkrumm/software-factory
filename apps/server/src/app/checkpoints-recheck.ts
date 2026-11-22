@@ -40,6 +40,7 @@ import {
 } from './checkpoints.ts'
 import { turnAway } from './checkpoints-errands.ts'
 import { PASS_LIMIT, type CheckpointLoopDeps } from './checkpoints-loop.ts'
+import { kindAttrs, reportLine } from '../kernel/telemetry.ts'
 
 export interface Rechecked {
   checkpoint: string
@@ -351,7 +352,12 @@ export async function recheckOpen(deps: CheckpointLoopDeps, limit = PASS_LIMIT):
     const result = await recheckOne(deps, candidate)
     if (!result.ok) {
       worked += 1
-      console.error(`checkpoints: ${candidate.id} could not be rechecked: ${JSON.stringify(result.error)}`)
+      reportLine(
+        'error',
+        `checkpoints: ${candidate.id} could not be rechecked: ${JSON.stringify(result.error)}`,
+        'checkpoints.recheck_failed',
+        { ref: candidate.id, ...kindAttrs(result.error) },
+      )
     } else if (result.value !== 'skipped') {
       worked += 1
       if (result.value) report.push(result.value)

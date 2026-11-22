@@ -3,6 +3,7 @@ import type { AgwPort } from '../kernel/agw.ts'
 import type { AgentsHead, CaseRead, CaseSubject, LastWords } from '../kernel/case-file.ts'
 import { scrub } from '../kernel/scrub.ts'
 import type { WorkflowName, WorkflowRequest } from '../kernel/workflows.ts'
+import { errorAttrs, kindAttrs, reportLine } from '../kernel/telemetry.ts'
 
 /** Where the case comes from: the database's parts (read-only, outside any transaction) and the repo's AGENTS.md. */
 export interface CaseFiles {
@@ -98,7 +99,13 @@ async function buildCase(files: CaseFiles, subject: CaseSubject, own: JudgeCase 
   if (read.checkout) {
     const head = await files.agents(read.checkout)
     if (head.ok) agents = scrub(head.value)
-    else console.error(`case file: AGENTS.md of ${read.repo ?? '?'} could not be read: ${head.error.detail}`)
+    else
+      reportLine(
+        'error',
+        `case file: AGENTS.md of ${read.repo ?? '?'} could not be read: ${head.error.detail}`,
+        'case_file.agents_unreadable',
+        kindAttrs(head.error),
+      )
   }
   const checkout =
     read.checkout && read.checkout.length <= CHECKOUT_MAX && CHECKOUT_PATH.test(read.checkout) ? read.checkout : null
@@ -142,7 +149,12 @@ export function casedAgw(inner: AgwPort, files: CaseFiles): AgwPort {
       if (!subject) return inner.run(name, request, key)
       const own = (request as { case?: JudgeCase }).case
       const built = await buildCase(files, subject, own).catch((error: unknown) => {
-        console.error(`case file: ${name} ${key}: ${error instanceof Error ? error.message : String(error)}`)
+        reportLine(
+          'error',
+          `case file: ${name} ${key}: ${error instanceof Error ? error.message : String(error)}`,
+          'case_file.build_failed',
+          { workflow: name, ...errorAttrs(error) },
+        )
         return null
       })
       return inner.run(name, built ? withCase(name, request, built) : request, key)

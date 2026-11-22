@@ -20,6 +20,8 @@ import { noteFields, refusalCounter, type RefusalSink } from './refusals.ts'
 import type { RouteTimer } from './route-timer.ts'
 import { type ReadModelDeps, readModelRoutes } from './read-models.ts'
 import type { ReadApi } from '../read/reader.ts'
+import { errorAttrs, logEvent, quietly } from '../kernel/telemetry.ts'
+import { requestTelemetry } from './telemetry.ts'
 
 export interface ApiDeps {
   /** who may call: absent, no caller exists and every route but `GET /health` answers 401 */
@@ -77,7 +79,7 @@ const fieldsOf = (all: readonly unknown[]): string[] => [
  * groups. Built without a port, so tests and the CLI generator use it through `app.handle`.
  */
 export function createApp(deps: ApiDeps) {
-  const log = deps.log ?? ((message: string) => console.error(message))
+  const log = deps.log ?? ((message: string) => quietly(() => console.error(message)))
   /** `<METHOD> <route>` to the operation id, read from the routes once they are registered (below) */
   const operations = new Map<string, string>()
   const app = new Elysia()
@@ -91,6 +93,7 @@ export function createApp(deps: ApiDeps) {
     )
     .use(deps.routes?.plugin ?? new Elysia())
     .use(deps.refusals ? refusalCounter({ tokens: deps.tokens, sink: deps.refusals, operations }) : new Elysia())
+    .use(requestTelemetry())
     .use(auth(deps.tokens))
     .onError(({ code, error, set, request }) => {
       if (error instanceof Refusal) {
@@ -128,6 +131,7 @@ export function createApp(deps: ApiDeps) {
         }
         default:
           log(`unexpected error (${String(code)}): ${error instanceof Error ? error.message : String(error)}`)
+          logEvent('error', 'api.unexpected_error', { ...errorAttrs(error), result: String(code) })
           set.status = 500
           return failure('internal error', 'internal')
       }

@@ -2,7 +2,8 @@ import * as z from 'zod'
 import { QUEUE_REASONS } from '@software-factory/contract'
 import type { Clock } from '../../kernel/clock.ts'
 import type { CapacityGauges } from '../../read/capacity-gauges.ts'
-import { encodeGauges, type Gauge } from './otlp.ts'
+import { quietly } from './console.ts'
+import { encodeGauges, type Gauge, resourceOf } from './otlp.ts'
 
 const HTTP_TIMEOUT_MS = 8_000
 
@@ -22,6 +23,8 @@ export interface OtelExporterDeps {
   /** the settings in force the load is read against (seat caps per account) */
   allowanceCaps: { perAccount: number; byAccount: Record<string, number> }
   read: () => Promise<CapacityGauges>
+  /** the logs and spans the export dropped since the start, by signal (`telemetry.ts`) */
+  dropped?: () => { logs: number; spans: number }
   fetch?: typeof fetch
   log?: (line: string) => void
 }
@@ -36,7 +39,11 @@ const PLACEMENTS: readonly (readonly [host: string, reason: string])[] = [
 ]
 
 /** The series, named under the `factory.` prefix the telemetry contract asks for (the product's namespace). */
-export function gaugesOf(figures: CapacityGauges, caps: OtelExporterDeps['allowanceCaps']): Gauge[] {
+export function gaugesOf(
+  figures: CapacityGauges,
+  caps: OtelExporterDeps['allowanceCaps'],
+  dropped?: { logs: number; spans: number },
+): Gauge[] {
   // every queue kind is a series, 0 when nothing waits for it, so a chart falls to 0 instead of leaving a gap
   const kinds = [...new Set<string>([...QUEUE_REASONS, ...figures.queue.map((q) => q.reason)])]
   const queued = new Map(figures.queue.map((q) => [q.reason, q.issues]))
@@ -101,6 +108,17 @@ export function gaugesOf(figures: CapacityGauges, caps: OtelExporterDeps['allowa
       unit: '1',
       points: figures.host?.loadCeiling != null ? [{ value: figures.host.loadCeiling }] : [],
     },
+    {
+      // the logs and spans an export lost (a failed push, a full queue) since the server started: a series, 0 until one is lost
+      name: 'factory.telemetry.dropped',
+      unit: '{record}',
+      points: dropped
+        ? [
+            { value: dropped.logs, attributes: { signal: 'logs' } },
+            { value: dropped.spans, attributes: { signal: 'spans' } },
+          ]
+        : [],
+    },
   ]
 }
 
@@ -110,7 +128,7 @@ export function gaugesOf(figures: CapacityGauges, caps: OtelExporterDeps['allowa
  * a loop: a failure is logged once when it starts and once when the push works again.
  */
 export function otelExporter(deps: OtelExporterDeps): { enabled: boolean; pass(): Promise<void> } {
-  const log = deps.log ?? ((line: string) => console.error(line))
+  const log = deps.log ?? ((line: string) => quietly(() => console.error(line)))
   const doFetch = deps.fetch ?? fetch
   const endpoint = deps.endpoint?.trim() ? deps.endpoint.trim() : null
   const enabled = endpoint !== null
@@ -126,16 +144,10 @@ export function otelExporter(deps: OtelExporterDeps): { enabled: boolean; pass()
     try {
       const at = deps.clock.now()
       const body = encodeGauges({
-        resource: {
-          'service.name': 'software-factory',
-          'service.namespace': 'software-factory',
-          'service.version': deps.version.slice(0, 7),
-          'deployment.environment.name': 'prod',
-          'host.name': 'mini',
-        },
+        resource: resourceOf(deps.version),
         scope: 'factory.capacity',
         at,
-        gauges: gaugesOf(await deps.read(), deps.allowanceCaps),
+        gauges: gaugesOf(await deps.read(), deps.allowanceCaps, deps.dropped?.()),
       })
       const response = await doFetch(`${endpoint}/v1/metrics`, {
         method: 'POST',

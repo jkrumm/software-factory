@@ -1,6 +1,7 @@
 import type { LoopName, LoopView } from '@software-factory/contract'
 import type { Clock } from '../../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
+import { errorAttrs, logEvent, quietly, tracePass } from '../../kernel/telemetry.ts'
 
 /**
  * A loop (`docs/language.md`): a named tick with a trigger (an interval, or a kick when something changed), a budget (the
@@ -119,7 +120,7 @@ export function createLoopRunner(input: {
   passes?: LoopPasses
   log?: (message: string) => void
 }): LoopRunner {
-  const log = input.log ?? ((message: string) => console.error(message))
+  const log = input.log ?? ((message: string) => quietly(() => console.error(message)))
   const states = new Map<LoopName, State>(
     input.loops.map((spec) => [
       spec.name,
@@ -146,7 +147,7 @@ export function createLoopRunner(input: {
     state.lastStartedAt = input.clock.now()
     const before = state.lastError
     try {
-      const result = await state.spec.run()
+      const result = (await tracePass(state.spec.name, () => state.spec.run())) as Result<string, PortError>
       if (result.ok) {
         state.lastOkAt = input.clock.now()
         state.lastError = null
@@ -164,6 +165,7 @@ export function createLoopRunner(input: {
       await input.passes?.record(state.spec.name, at)
     } catch (error) {
       log(`loop ${state.spec.name}: pass not recorded: ${error instanceof Error ? error.message : String(error)}`)
+      logEvent('error', 'loop.pass_not_recorded', { loop: state.spec.name, ...errorAttrs(error) })
     }
   }
 
@@ -197,6 +199,7 @@ export function createLoopRunner(input: {
       }
     } catch (error) {
       recordRead = false
+      logEvent('error', 'loops.passes_not_loaded', errorAttrs(error))
       log(
         `loops: last passes not loaded, scheduling from boot: ${error instanceof Error ? error.message : String(error)}`,
       )

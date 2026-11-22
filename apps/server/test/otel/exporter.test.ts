@@ -53,6 +53,17 @@ describe('OTLP encoding', () => {
   })
 })
 
+describe('the dropped-records series', () => {
+  test('logs and spans lost are a series per signal; without a reading there is none', () => {
+    const dropped = gaugesOf(figures, caps, { logs: 2, spans: 5 }).find((g) => g.name === 'factory.telemetry.dropped')
+    expect(dropped?.points).toEqual([
+      { value: 2, attributes: { signal: 'logs' } },
+      { value: 5, attributes: { signal: 'spans' } },
+    ])
+    expect(gaugesOf(figures, caps).find((g) => g.name === 'factory.telemetry.dropped')?.points).toEqual([])
+  })
+})
+
 describe('the series', () => {
   test('every queue kind is a series, zero when nothing waits; a kind the contract does not list is kept', () => {
     const queue = point('factory.queue.issues') ?? []

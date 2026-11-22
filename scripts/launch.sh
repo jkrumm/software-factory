@@ -6,24 +6,27 @@
 
 set -u
 
+# ef_err <message>: a line on stderr that starts with an ISO time (also defined by env-file.sh, which a deploy sources alone).
+ef_err() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
+
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$DIR" || { echo "software-factory: cannot cd to $DIR" >&2; exit 78; }
+cd "$DIR" || { ef_err "software-factory: cannot cd to $DIR"; exit 78; }
 
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 SECRETS_RUN="$HOME/.local/bin/secrets-run"
 TPL="$DIR/.env.tpl"
 
-[[ -x "$SECRETS_RUN" ]] || { echo "software-factory: $SECRETS_RUN missing" >&2; exit 78; }
-[[ -f "$TPL" ]] || { echo "software-factory: $TPL missing" >&2; exit 78; }
-command -v bun >/dev/null 2>&1 || { echo "software-factory: bun not on PATH" >&2; exit 78; }
+[[ -x "$SECRETS_RUN" ]] || { ef_err "software-factory: $SECRETS_RUN missing"; exit 78; }
+[[ -f "$TPL" ]] || { ef_err "software-factory: $TPL missing"; exit 78; }
+command -v bun >/dev/null 2>&1 || { ef_err "software-factory: bun not on PATH"; exit 78; }
 
 # The factory's own non-secret settings (see env-file.sh): ~/.config/factory/env (FACTORY_ENV_FILE), see env-file.sh. Applied here, so the
 # secrets-run child inherits them; a file that is not mode 0600 and the user's refuses the start.
 # shellcheck source=scripts/env-file.sh
 source "$DIR/scripts/env-file.sh"
 # A path set on purpose that is not there is a typo, not "no settings".
-[[ -z "${FACTORY_ENV_FILE:-}" || -e "$FACTORY_ENV_FILE" ]] || { echo "software-factory: FACTORY_ENV_FILE $FACTORY_ENV_FILE does not exist; refusing to start." >&2; exit 78; }
+[[ -z "${FACTORY_ENV_FILE:-}" || -e "$FACTORY_ENV_FILE" ]] || { ef_err "software-factory: FACTORY_ENV_FILE $FACTORY_ENV_FILE does not exist; refusing to start."; exit 78; }
 load_env_file "${FACTORY_ENV_FILE:-$HOME/.config/factory/env}" || exit 78
 
 # A hung secrets-run must not hang the launch; `timeout` is a Homebrew coreutils binary, so it is optional.
@@ -44,7 +47,7 @@ if [[ -f "$SERVER_TPL" ]]; then
     if ${limit[@]+"${limit[@]}"} "$SECRETS_RUN" read "$ref" </dev/null >/dev/null 2>&1; then
       echo "$key=$ref" >> "$EFFECTIVE"
     else
-      echo "software-factory: optional $key ($ref) does not resolve; starting without it." >&2
+      ef_err "software-factory: optional $key ($ref) does not resolve; starting without it."
     fi
   done < <(grep -hE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$SERVER_TPL")
   TPL="$EFFECTIVE"
@@ -54,9 +57,9 @@ fi
 rendered=$(${limit[@]+"${limit[@]}"} "$SECRETS_RUN" export --env-file="$TPL" 2>/dev/null | grep -c '^export ')
 want=$(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=' "$TPL" | sort -u | wc -l | tr -d ' ')
 if [[ -z "$rendered" || "$rendered" -lt "$want" ]]; then
-  echo "software-factory: only ${rendered:-0}/$want refs of .env.tpl resolved; refusing to start." >&2
+  ef_err "software-factory: only ${rendered:-0}/$want refs of .env.tpl resolved; refusing to start."
   grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$TPL" | while IFS='=' read -r key ref; do
-    ${limit[@]+"${limit[@]}"} "$SECRETS_RUN" read "$ref" >/dev/null 2>&1 || echo "  unresolved: $key ($ref)" >&2
+    ${limit[@]+"${limit[@]}"} "$SECRETS_RUN" read "$ref" >/dev/null 2>&1 || ef_err "  unresolved: $key ($ref)"
   done
   exit 78
 fi
@@ -68,11 +71,11 @@ keys=$(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=' "$TPL" | tr -d =)
 exec "$SECRETS_RUN" run --env-file="$TPL" -- /bin/sh -c '
   for key in "$@"; do
     eval "value=\${$key-}"
-    [ -n "$value" ] || { echo "software-factory: $key resolved to an empty value; refusing to start." >&2; exit 78; }
+    [ -n "$value" ] || { printf "%s %s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "software-factory: $key resolved to an empty value; refusing to start." >&2; exit 78; }
   done
   # The password is spliced into a URL: hex needs no encoding, anything else could change the host or the database.
   case "$FACTORY_DB_PASSWORD" in
-    *[!0-9a-f]*) echo "software-factory: FACTORY_DB_PASSWORD is not hex; refusing to start." >&2; exit 78 ;;
+    *[!0-9a-f]*) printf "%s %s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "software-factory: FACTORY_DB_PASSWORD is not hex; refusing to start." >&2; exit 78 ;;
   esac
   # FACTORY_DB_ADDR points a launch at another address (a private cluster on another port); it is not on the allow-list of the settings file.
   export DATABASE_URL="postgres://factory:${FACTORY_DB_PASSWORD}@${FACTORY_DB_ADDR:-127.0.0.1:5432}/shared"

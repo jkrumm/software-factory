@@ -88,3 +88,10 @@ test('a required ref that does not resolve still refuses the start', async () =>
   expect(run.code).toBe(78)
   expect(run.err).toContain('unresolved: FACTORY_AGENT_TOKEN')
 })
+
+test('every line the launcher writes on stderr starts with an ISO time', async () => {
+  const run = await launch(['FACTORY_SIGNAL_TOKEN', 'FACTORY_AGENT_TOKEN'])
+  const lines = run.err.trim().split('\n')
+  expect(lines.length).toBeGreaterThan(1)
+  for (const line of lines) expect(line).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z /)
+})
