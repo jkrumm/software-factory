@@ -2314,6 +2314,7 @@ describe('CLI (isolated HOME)', () => {
         'age_s',
         'auth_ok',
         'enabled',
+        'endpoint',
         'exhausted_until',
         'five_hour',
         'five_hour_age_s',
@@ -2324,6 +2325,7 @@ describe('CLI (isolated HOME)', () => {
         'seven_day',
         'seven_day_age_s',
         'seven_day_resets_at',
+        'seven_day_source',
         'source',
         // additive since registry v2 (packages/accounts/docs/accounts.md §usage --json)
         'mode',

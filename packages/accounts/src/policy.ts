@@ -141,6 +141,8 @@ export interface Sample {
   limits?: Record<string, unknown>[]
   scoped_shares?: Record<string, unknown>[]
   limits_ts?: number
+  /** `limits` when the weekly window was read from the endpoint's weekly_all limit (a body without `seven_day`, or a limit set newer than the stored window); absent = the feed in `src`. */
+  w_src?: string
 }
 /** In-memory view assembled from the per-account files under cacheDir(). */
 export interface Cache {
@@ -153,6 +155,8 @@ export interface Cache {
   auth_failed_at: Record<string, number>
   /** The latest observed weekly reset per id (`<id>.reset.json`); absent when none was seen. */
   resets?: Record<string, ObservedReset>
+  /** How the last usage-endpoint call of each id ended (`<id>.endpoint.json`); absent when none was recorded. */
+  endpoint?: Record<string, EndpointCall>
 }
 /** A weekly reset seen in the samples: when (epoch ms) and the weekly reset time after it (epoch s, null when unknown). */
 export interface ObservedReset {
@@ -221,7 +225,8 @@ export function isSample(v: unknown): v is Sample {
     typeof x.src === 'string' &&
     (x.limits === undefined || isObjectList(x.limits)) &&
     (x.scoped_shares === undefined || isObjectList(x.scoped_shares)) &&
-    (x.limits_ts === undefined || isNum(x.limits_ts))
+    (x.limits_ts === undefined || isNum(x.limits_ts)) &&
+    (x.w_src === undefined || typeof x.w_src === 'string')
   )
 }
 
@@ -242,6 +247,30 @@ function newerLimits(prev: Sample, inc: Sample): Pick<Sample, 'limits' | 'scoped
 const hasS = (x: Sample) => x.s !== null
 const hasW = (x: Sample) => x.w !== null
 
+/** The endpoint's `weekly_all` limit as a weekly window, dated by the fetch of its limit set; null without a numeric percent and a readable reset. */
+export function weeklyFromLimits(
+  x: Pick<Sample, 'limits' | 'limits_ts'>,
+): Pick<Sample, 'w' | 'w_reset' | 'w_ts'> | null {
+  const l = x.limits?.find((e) => e.kind === 'weekly_all')
+  const reset = toEpochS(l?.resets_at)
+  if (!l || !isNum(l.percent) || !isNum(x.limits_ts) || reset === null) return null
+  return { w: l.percent, w_reset: reset, w_ts: x.limits_ts }
+}
+
+/**
+ * The weekly window an account is judged by is the newest usable reading across the statusline feed, the peer sample and
+ * the endpoint's weekly_all limit: a limit set fetched after the stored window replaces it (a tie keeps the window).
+ * Pure, and applied wherever a sample is merged or loaded, so every reader sees the one figure in force.
+ */
+export function settleWeekly(x: Sample): Sample {
+  const l = weeklyFromLimits(x)
+  if (!l || (hasW(x) && (x.w_ts ?? 0) >= (l.w_ts ?? 0))) return x
+  return { ...x, ...l, src: 'oauth', w_src: 'limits' }
+}
+
+/** The feed the weekly window in force came from (the limit set is the endpoint's). */
+export const weeklySource = (x: Sample): string => (x.w_src === 'limits' ? 'oauth' : x.src)
+
 /**
  * Field-wise merge, per window: an incoming window that is absent (null) keeps what we know; a present one wins
  * unless the stored one has a newer timestamp. Exception: a full endpoint answer (`src: "oauth"`) that carries a
@@ -249,11 +278,11 @@ const hasW = (x: Sample) => x.w !== null
  * session value is dropped instead of living on frozen, unless that session reading is newer than the answer (a delayed reply).
  */
 export function mergeSample(prev: Sample | null, inc: Sample): Sample {
-  if (!prev) return inc
+  if (!prev) return settleWeekly(inc)
   const takeS = hasS(inc) && !(hasS(prev) && (prev.s_ts ?? 0) > (inc.s_ts ?? 0))
   const takeW = hasW(inc) && !(hasW(prev) && (prev.w_ts ?? 0) > (inc.w_ts ?? 0))
   const dropS = inc.src === 'oauth' && !hasS(inc) && hasW(inc) && (inc.w_ts ?? 0) >= (prev.s_ts ?? 0)
-  return {
+  return settleWeekly({
     s: takeS ? inc.s : dropS ? null : prev.s,
     s_reset: takeS ? inc.s_reset : dropS ? null : prev.s_reset,
     s_ts: takeS ? inc.s_ts : dropS ? null : prev.s_ts,
@@ -262,7 +291,8 @@ export function mergeSample(prev: Sample | null, inc: Sample): Sample {
     w_ts: takeW ? inc.w_ts : prev.w_ts,
     src: takeS || takeW ? inc.src : prev.src,
     ...newerLimits(prev, inc),
-  }
+    ...(takeW ? (inc.w_src ? { w_src: inc.w_src } : {}) : prev.w_src ? { w_src: prev.w_src } : {}),
+  })
 }
 
 /** A weekly window moved forward by more than this (s) between two samples: it reset. */
@@ -406,6 +436,30 @@ export function reloginCandidates(results: Record<string, RefreshResult>, logins
  * dying, so the keepalive must go red) or `unresolved`.
  */
 export type RefreshResult = 'fresh' | 'auth-ok' | 'stale' | 'auth-failed' | 'unresolved' | 'deferred'
+
+/**
+ * How the last usage-endpoint call of an account ended: `ok` (a weekly window came back), `auth` (HTTP 401/403, the token is
+ * rejected), `no-weekly` (the endpoint answered with no weekly window), `http` (another status, a 429 for one), `unreachable`
+ * (no answer), `no-token` (no readable token in the Keychain).
+ */
+export type EndpointOutcome = 'ok' | 'auth' | 'no-weekly' | 'http' | 'unreachable' | 'no-token'
+export interface EndpointCall {
+  /** epoch ms of the call */
+  at: number
+  status: number | null
+  outcome: EndpointOutcome
+}
+const OUTCOMES: readonly unknown[] = ['ok', 'auth', 'no-weekly', 'http', 'unreachable', 'no-token']
+export const isEndpointCall = (v: unknown): v is EndpointCall => {
+  const x = v as EndpointCall | null
+  return !!x && typeof x === 'object' && isNum(x.at) && numOrNull(x.status) && OUTCOMES.includes(x.outcome)
+}
+export function endpointOutcome(status: number | null, sample: Sample | null): EndpointOutcome {
+  if (sample && sample.w !== null) return 'ok'
+  if (status === null) return 'unreachable'
+  if (status === 401 || status === 403) return 'auth'
+  return status === 200 ? 'no-weekly' : 'http'
+}
 
 /** Age (ms) of each window the sample actually has; a window without a timestamp counts as infinitely old. */
 const windowAges = (x: Sample | undefined, nowMs: number): number[] => {

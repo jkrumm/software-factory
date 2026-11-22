@@ -18,6 +18,7 @@ import {
   ruleTag,
   reserveBudget,
   weeklyCeiling,
+  weeklySource,
   withoutSessionWindows,
   isDrain,
   weeklyCeiling as ceilingOf,
@@ -143,7 +144,13 @@ const limitsOf = (x: Sample | undefined, hasSession: boolean, nowMs: number): Re
   if (hasSession && x.s !== null)
     out.push({ kind: 'session', percent: x.s, resets_at: isoS(x.s_reset), age_s: age(x.s_ts), source: x.src })
   if (x.w !== null)
-    out.push({ kind: 'weekly_all', percent: x.w, resets_at: isoS(x.w_reset), age_s: age(x.w_ts), source: x.src })
+    out.push({
+      kind: 'weekly_all',
+      percent: x.w,
+      resets_at: isoS(x.w_reset),
+      age_s: age(x.w_ts),
+      source: weeklySource(x),
+    })
   // the scoped limits come from the endpoint only: the sample keeps them as it was given, with the age of that fetch
   ;(x.limits ?? []).forEach((l, i) => {
     if (l.kind !== 'weekly_scoped') return

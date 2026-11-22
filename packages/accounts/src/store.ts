@@ -16,6 +16,7 @@ import {
 import { dirname, join } from 'node:path'
 import {
   type Cache,
+  type EndpointCall,
   type ObservedReset,
   type Registry,
   type Sample,
@@ -23,12 +24,14 @@ import {
   ID,
   dueIds,
   emptyCache,
+  isEndpointCall,
   isNum,
   isSample,
   mergeSample,
   noSession,
   observedReset,
   required,
+  settleWeekly,
   staleAfterReset,
 } from './policy.ts'
 import { type OverrideRecord, type OverrideState, overrideExpired, parseOverrides } from './modes.ts'
@@ -74,12 +77,14 @@ export function loadCache(dir = cacheDir()): Cache {
     return c
   }
   for (const name of names) {
-    const [, id, kind] = /^([A-Za-z0-9_-]+)\.(sample|exhausted|auth|reset)\.json$/.exec(name) ?? []
+    const [, id, kind] = /^([A-Za-z0-9_-]+)\.(sample|exhausted|auth|reset|endpoint)\.json$/.exec(name) ?? []
     if (!id || !kind) continue
     const j = readJson(join(dir, name)) as Record<string, unknown> | null
     if (!j) continue
     if (kind === 'sample') {
-      if (isSample(j)) c.samples[id] = j // a malformed file is dropped, the next feed rewrites it
+      if (isSample(j)) c.samples[id] = settleWeekly(j) // a malformed file is dropped, the next feed rewrites it
+    } else if (kind === 'endpoint') {
+      if (isEndpointCall(j)) (c.endpoint ??= {})[id] = j
     } else if (kind === 'reset') {
       if (isNum(j.at)) (c.resets ??= {})[id] = j as unknown as ObservedReset
     } else if (kind === 'exhausted' && isNum(j.until)) c.exhausted[id] = j.until
@@ -196,6 +201,11 @@ export function readVerified(id: string, dir = cacheDir()): number | null {
 
 export function markVerified(id: string, nowMs: number, dir = cacheDir()): void {
   writeAtomic(file(dir, id, 'verified.json'), JSON.stringify({ ts: nowMs }))
+}
+
+/** How this machine's last usage-endpoint call for `id` ended: what `usage --json` and `health` say instead of guessing at the token. */
+export function recordEndpoint(id: string, call: EndpointCall, dir = cacheDir()): void {
+  writeAtomic(file(dir, id, 'endpoint.json'), JSON.stringify(call))
 }
 
 /** Records the auth verdict; a no-op when it already says the same. */
