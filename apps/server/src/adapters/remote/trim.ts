@@ -13,6 +13,10 @@
  *   one) no install has read for `CACHE_IDLE_DAYS` is removed; while the cache is still over `CACHE_CAP_GIB` the age
  *   tightens to 7, 3 and then 1 day. The mount is `relatime`, so a read marks a file's access time within a day.
  *
+ * The closed-Issue sweep (`scratchScript`, `sweepScript`) comes before this script: the host's `~/vps/scripts/exp-sweep.sh`
+ * removes the `~/exp<issue>` and `~/agw<issue>` directories of the Issues the factory says are closed (any age, as root, so
+ * a container's files go too); the VPS has no factory CLI, so the probe lists the directories and passes the closed ids.
+ *
  * The slot and cache parts do nothing while a step container runs or when docker does not answer, so they never remove what
  * an install is reading; the exp part runs regardless of a running step or an unanswering docker, and uses docker only for the
  * root-owned fallback. A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini.
@@ -20,6 +24,44 @@
 import { CACHE_CAP_GIB, CACHE_IDLE_DAYS, COPY_IDLE_DAYS, EXP_IDLE_DAYS } from '../../domains/capacity/remote.ts'
 
 const KIB_PER_GIB = 1024 * 1024
+
+/** The sweep script of the `vps` repo's checkout in the remote user's home. */
+const SWEEP_SCRIPT = 'vps/scripts/exp-sweep.sh'
+
+/** The shell script that prints `scratch <issue>` for each `~/exp<issue>` and `~/agw<issue>` directory (a symlink is skipped). */
+export function scratchScript(): string {
+  return [
+    'cd "$HOME" || exit 0',
+    'for dir in exp[0-9]* agw[0-9]*; do',
+    '  [ -d "$dir" ] && [ ! -L "$dir" ] || continue',
+    `  id="\${dir#exp}"; id="\${id#agw}"`,
+    '  case "$id" in ""|*[!0-9]*) continue ;; esac',
+    '  echo "scratch $id"',
+    'done',
+  ].join('\n')
+}
+
+/** The issue numbers `scratchScript` printed, in order and without a repeat (an `exp7` and an `agw7` are one Issue). */
+export function parseScratch(stdout: string): number[] {
+  const ids = stdout.split('\n').flatMap((line) => {
+    const match = /^scratch (\d{1,9})$/.exec(line.trim())
+    return match?.[1] ? [Number(match[1])] : []
+  })
+  return [...new Set(ids)]
+}
+
+/**
+ * The shell script that has the host's sweep remove the scratch directories of these closed Issues, as root (`sudo -n`:
+ * never a password prompt). A host without the script or without passwordless sudo says so in a `trim:` line and exits 0.
+ */
+export function sweepScript(closed: readonly number[]): string {
+  const ids = closed.filter((id) => Number.isSafeInteger(id) && id > 0).join(' ')
+  return [
+    'cd "$HOME" || exit 0',
+    `[ -x ${SWEEP_SCRIPT} ] || { echo "trim: no ${SWEEP_SCRIPT} on the step host, closed Issues' scratch directories stay"; exit 0; }`,
+    `sudo -n "$HOME/${SWEEP_SCRIPT}" --closed ${ids} 2>&1 || echo "trim: exp-sweep.sh did not finish cleanly"`,
+  ].join('\n')
+}
 
 /** The shell script the step host runs (POSIX sh, run from the remote user's home); it prints a `trim:` line per kind of removal, and the probe logs each one. */
 export function trimScript(input: {
