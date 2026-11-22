@@ -231,7 +231,18 @@ describe('what the repo can merge', () => {
 
   test('the merges a day are read against what the median hold allows', () => {
     const c = mergeCapacityOf(figures({}))
-    expect(c).toMatchObject({ mergesPerDay: 18, allowedPerDay: 90, busyShare: 0.21, saturated: false })
+    expect(c).toMatchObject({
+      mergesPerDay: 18,
+      allowedPerDay: 75,
+      perMergeMinutes: 19,
+      busyShare: 0.21,
+      saturated: false,
+    })
+    // CI outside the window: a 3 min hold with a 16 min CI run is still 16 minutes a merge
+    expect(mergeCapacityOf(figures({ holdMedianMinutes: 3, ciQueueMedianMinutes: 0 }))).toMatchObject({
+      perMergeMinutes: 16,
+      allowedPerDay: 90,
+    })
     expect(mergeCapacityOf(figures({ windows: 0, merges: 0 }))).toBeNull()
   })
 
@@ -277,7 +288,7 @@ describe('what the repo can merge', () => {
     expect(pass.caps).toHaveLength(1)
     expect(pass.capsHeld).toEqual([])
     expect(filed[0]?.text).toContain(
-      'Merge capacity: 6 merges in 1 day (6 a day) against the 90 a day a median hold of 16 min allows',
+      'Merge capacity: 6 merges in 1 day (6 a day) against the 90 a day 16 min per merge allows',
     )
     await db.sql`DELETE FROM factory.merge_windows`
   })

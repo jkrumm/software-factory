@@ -178,7 +178,7 @@ function MergeLine({ merge }: { merge: NonNullable<ProjectPageModel['merge']> })
     <p
       data-saturated={merge.saturated}
       className="px-1.5 text-[length:var(--vx-text-sm)] text-muted-foreground"
-      title={`The window was held a median ${merge.holdMedianMinutes} min per pull request, ${Math.round(merge.busyShare * 100)} % of the ${merge.days} days`}
+      title={`One merge takes ${merge.perMergeMinutes} min (the window held a median ${merge.holdMedianMinutes} min), and the window was held ${Math.round(merge.busyShare * 100)} % of the ${merge.days} days`}
     >
       <span className="font-medium text-foreground">Merges</span>{' '}
       <span className="tabular-nums">{merge.mergesPerDay}</span> a day against{' '}

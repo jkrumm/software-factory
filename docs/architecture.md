@@ -771,8 +771,8 @@ admission refuses a lead as `disk` when the repo's learned worktree footprint (`
 attempts) does not fit the free disk less headroom (`diskRefusal`; headroom is 10 GiB or 10 % of the volume, so admission stops at about 90 % used, under the disk alert's 93 %).
 
 **The merge window bounds the leads** (`kernel/merge-capacity.ts`, `read/merge-capacity.ts`). A repo lands one pull
-request at a time, and `factory merge-lock` holds the window from the rebase through CI to the merge, so the median hold bounds
-the merges a day (`allowedPerDay`: 1440 minutes over the median hold) whatever the lead cap says; a lead past that only waits
+request at a time, and `factory merge-lock` holds the window from the rebase through CI to the merge, so the longer of the
+median hold and one CI run (its queue plus its run) bounds the merges a day (`allowedPerDay`: 1440 minutes over that) whatever the lead cap says; a lead past that only waits
 at `factory land` while it holds a place on the host. The cap finder reads the repo's last day: when the window was held half
 of it (`MERGE_BUSY_SHARE`) or the slowest tenth of calls waited 30 minutes (`MERGE_WAIT_P90_MINUTES`), it files no lift, and
 the pass notes the cap as left in place (`capsHeld`). A signal it does file quotes the merges against the allowance, the wait
