@@ -34,6 +34,20 @@ export interface QueryFlag {
   value: string
 }
 
+/** What the contract says a query parameter may be: the values of an enum, or the bounds of a number or of a string's length. */
+export interface QueryBound {
+  name: string
+  /** an enum's values: the only ones the server accepts */
+  values?: readonly string[]
+  /** a number rather than text: `--limit <n>` */
+  numeric?: 'integer' | 'number'
+  min?: number
+  max?: number
+  /** string length, in characters */
+  minLength?: number
+  maxLength?: number
+}
+
 /** One operation of the OpenAPI document as the generator writes it: `factory <group> <verb>`. */
 export interface Operation {
   operationId: string
@@ -48,6 +62,8 @@ export interface Operation {
   queryParams: readonly string[]
   /** the query parameters (a subset of `queryParams`) that are bare flags */
   queryFlags: readonly QueryFlag[]
+  /** the query parameters (a subset of `queryParams`) with an enum or a bound in the contract: shown in `--help`, checked before the request is sent */
+  queryBounds?: readonly QueryBound[]
   /** the query parameters (a subset of `queryParams`) that name an Issue: `12` is sent as `issue_12` */
   issueParams?: readonly string[]
   /** whether it takes a JSON body (`--body <json>` and one flag per property) */
@@ -188,6 +204,42 @@ async function fieldValue(op: Operation, field: BodyField, label: Label, given: 
   return field.repeatable ? values : values[values.length - 1]
 }
 
+/** Refuses a value the contract's enum or bounds refuse, naming what is allowed: exit 2, nothing sent. */
+function checkQueryBound(op: Operation, bound: QueryBound, text: string): void {
+  const flag = `--${bound.name}`
+  const bad = (what: string) => usage(`${commandOf(op)}: ${flag} must be ${what}, got: ${text}`)
+  if (bound.values && !bound.values.includes(text)) throw bad(`one of ${bound.values.join(', ')}`)
+  if (bound.numeric) {
+    const n = Number(text)
+    const kind = bound.numeric === 'integer' ? 'an integer' : 'a number'
+    const range = boundWords(bound.min, bound.max)
+    if (text.trim() === '' || !Number.isFinite(n) || (bound.numeric === 'integer' && !Number.isInteger(n))) {
+      throw bad(`${kind}${range ? ` ${range}` : ''}`)
+    }
+    if ((bound.min !== undefined && n < bound.min) || (bound.max !== undefined && n > bound.max)) {
+      throw bad(`${kind} ${range}`)
+    }
+  }
+  if (
+    (bound.minLength !== undefined && text.length < bound.minLength) ||
+    (bound.maxLength !== undefined && text.length > bound.maxLength)
+  ) {
+    throw bad(`text of ${boundWords(bound.minLength, bound.maxLength, 'characters')}`)
+  }
+}
+
+/** `from 1 to 500`, `at least 1`, `at most 500`; empty when neither bound is set. With a unit: `1-200 characters`. */
+export function boundWords(min: number | undefined, max: number | undefined, unit?: string): string {
+  if (min === undefined && max === undefined) return ''
+  if (unit) {
+    const counted = (n: number) => `${n} ${n === 1 ? unit.replace(/s$/, '') : unit}`
+    if (min !== undefined && max !== undefined) return `${min}-${max} ${unit}`
+    return min !== undefined ? `at least ${counted(min)}` : `at most ${counted(max ?? 0)}`
+  }
+  if (min !== undefined && max !== undefined) return `from ${min} to ${max}`
+  return min !== undefined ? `of at least ${min}` : `of at most ${max}`
+}
+
 const queryValue = (op: Operation, flag: QueryFlag, text: string): string => {
   const allowed = flag.boolean ? ['true', 'false'] : [flag.value]
   if (allowed.includes(text)) return text
@@ -209,6 +261,8 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
     const value = invocation.flags[name]
     if (typeof value !== 'string') continue
     const bare = op.queryFlags.find((flag) => flag.name === name)
+    const bound = op.queryBounds?.find((b) => b.name === name)
+    if (bound) checkQueryBound(op, bound, value)
     query[name] = bare ? queryValue(op, bare, value) : op.issueParams?.includes(name) ? issueIdOf(value) : value
   }
   const raw = invocation.flags.body

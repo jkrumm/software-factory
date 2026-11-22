@@ -36,6 +36,7 @@ import { loadLoopSettings } from './app/loops/settings.ts'
 import { reaperProcesses } from './adapters/planning/reaper-processes.ts'
 import { githubCiTimes } from './adapters/selfwatch/github.ts'
 import { routeTimer } from './api/route-timer.ts'
+import { postgresRefusalSink } from './adapters/postgres/refusal-sink.ts'
 import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
 import { composeRead } from './compose-read.ts'
 import { loadIntakeEnv } from './adapters/intake/settings.ts'
@@ -394,6 +395,7 @@ async function main(env: Environment): Promise<void> {
     intake: intake.api,
     health: { read: readHealth },
     routes,
+    refusals: postgresRefusalSink(sql, (message) => console.error(message)),
     planning: planning.planning,
     issues: composeIssues({
       writes,

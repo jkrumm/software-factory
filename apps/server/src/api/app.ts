@@ -16,6 +16,7 @@ import { type LeadRoutes, leadRoutes } from './leads.ts'
 import { type LoopsApi, loopRoutes } from './loops.ts'
 import { type PlanningApi, planningRoutes } from './planning.ts'
 import { readRoutes } from './read.ts'
+import { noteFields, refusalCounter, type RefusalSink } from './refusals.ts'
 import type { RouteTimer } from './route-timer.ts'
 import { type ReadModelDeps, readModelRoutes } from './read-models.ts'
 import type { ReadApi } from '../read/reader.ts'
@@ -28,6 +29,8 @@ export interface ApiDeps {
   health: HealthSource
   /** times every route but `/health` and the stream, for `heartbeat.routeP95Ms`; absent, nothing is timed */
   routes?: RouteTimer
+  /** where every 4xx answer is counted (operation, caller, status, field names; never a value); absent, nothing is counted */
+  refusals?: RefusalSink
   /** the checkpoints use cases; absent (the CLI generator reads the document only), the routes exist and answer nothing */
   checkpoints?: CheckpointUses
   /** the quality use cases (ship, reopen, what was recorded); absent, they answer unavailable */
@@ -75,7 +78,9 @@ const fieldsOf = (all: readonly unknown[]): string[] => [
  */
 export function createApp(deps: ApiDeps) {
   const log = deps.log ?? ((message: string) => console.error(message))
-  return new Elysia()
+  /** `<METHOD> <route>` to the operation id, read from the routes once they are registered (below) */
+  const operations = new Map<string, string>()
+  const app = new Elysia()
     .use(
       deps.docs
         ? openapi({
@@ -85,6 +90,7 @@ export function createApp(deps: ApiDeps) {
         : new Elysia(),
     )
     .use(deps.routes?.plugin ?? new Elysia())
+    .use(deps.refusals ? refusalCounter({ tokens: deps.tokens, sink: deps.refusals, operations }) : new Elysia())
     .use(auth(deps.tokens))
     .onError(({ code, error, set, request }) => {
       if (error instanceof Refusal) {
@@ -113,6 +119,7 @@ export function createApp(deps: ApiDeps) {
           }
           set.status = error.status
           const fields = fieldsOf(error.all)
+          noteFields(request, fields)
           return failure(
             `the ${error.type} does not match the contract: ${detail}`,
             'invalid_request',
@@ -137,6 +144,11 @@ export function createApp(deps: ApiDeps) {
     .use(loopRoutes(deps.loops))
     .use(readRoutes(deps.read))
     .use(readModelRoutes(deps.readModels))
+  for (const route of app.routes) {
+    const id: unknown = route.hooks?.detail?.operationId
+    if (typeof id === 'string') operations.set(`${route.method} ${route.path}`, id)
+  }
+  return app
 }
 
 export type App = ReturnType<typeof createApp>

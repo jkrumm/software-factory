@@ -440,6 +440,22 @@ describe('the command line of a generated command', () => {
     expect(defer.out).toContain('--after <issue-id>  repeatable')
   })
 
+  test('a query parameter shows its enum values and bounds in --help, and a value the contract refuses is exit 2 before anything is sent', async () => {
+    const help = (await cli(['issue', 'list', '--help'])).out
+    expect(help).toContain('--state <open|closed|all>')
+    expect(help).toContain('--limit <n>  integer from 1 to 500')
+    expect(help).toContain('--repo <text>  1-200 characters')
+    seen = undefined
+    const state = await cli(['issue', 'list', '--state', 'nonsense'])
+    expect(state.code).toBe(2)
+    expect(errorOf(state.err).message).toBe('issue list: --state must be one of open, closed, all, got: nonsense')
+    const limit = await cli(['issue', 'list', '--limit', '1000'])
+    expect(limit.code).toBe(2)
+    expect(errorOf(limit.err).message).toBe('issue list: --limit must be an integer from 1 to 500, got: 1000')
+    expect((await cli(['issue', 'list', '--limit', '2.5'])).code).toBe(2)
+    expect(seen).toBeUndefined()
+  })
+
   test('in a session the help lists only the verbs the agent caller may call, in under 6 KB; --all and no session list every verb', async () => {
     const verbsOf = (text: string) => {
       const rows = text.split('\n').slice(3, text.split('\n').indexOf('aliases:') - 1)

@@ -10,7 +10,7 @@ import * as contract from '@software-factory/contract'
 import { createApp, OPENAPI_PATH } from '@software-factory/server/app'
 import { ruleFor } from '@software-factory/server/policy'
 import * as z from 'zod'
-import type { BodyField, QueryFlag } from '../src/operation.ts'
+import type { BodyField, QueryBound, QueryFlag } from '../src/operation.ts'
 
 const OUTPUT = join(import.meta.dir, '..', 'src', 'generated', 'operations.ts')
 
@@ -51,6 +51,7 @@ interface Generated {
   pathParams: string[]
   queryParams: string[]
   queryFlags: QueryFlag[]
+  queryBounds: QueryBound[]
   /** the query parameters (names) that name an Issue: `x-id: issue` in the contract */
   issueParams: string[]
   body: boolean
@@ -143,6 +144,30 @@ function queryFlagOf(name: string, schema: unknown): QueryFlag | null {
   return typeof only === 'string' ? { name, boolean: false, value: only } : null
 }
 
+/** A finite bound of a schema; zod's integer type carries the safe-integer range, which is the type and no limit worth showing. */
+const finite = (value: unknown): number | undefined =>
+  typeof value === 'number' && Math.abs(value) < Number.MAX_SAFE_INTEGER ? value : undefined
+
+/** The enum values or bounds of a query parameter the contract states; null when it states none (a plain `<text>`). */
+function queryBoundOf(name: string, schema: unknown): QueryBound | null {
+  if (!isJson(schema)) return null
+  const typed = typeOf(schema, schema)
+  if (!typed || typed.type === 'array' || typed.type === 'object' || typed.type === 'boolean') return null
+  const node = typed.schema
+  const values = Array.isArray(node.enum) ? node.enum.map(String) : undefined
+  const numeric = typed.type === 'string' ? undefined : typed.type
+  const bound: QueryBound = {
+    name,
+    ...(values ? { values } : {}),
+    ...(numeric ? { numeric } : {}),
+    ...(finite(node.minimum) !== undefined ? { min: finite(node.minimum) } : {}),
+    ...(finite(node.maximum) !== undefined ? { max: finite(node.maximum) } : {}),
+    ...(finite(node.minLength) !== undefined ? { minLength: finite(node.minLength) } : {}),
+    ...(finite(node.maxLength) !== undefined ? { maxLength: finite(node.maxLength) } : {}),
+  }
+  return Object.keys(bound).length > 1 ? bound : null
+}
+
 /** One property of the body as a flag. */
 function fieldOf(name: string, schema: Json, required: boolean, root: Json): BodyField {
   const flag = kebab(name)
@@ -232,6 +257,11 @@ export function operationsOf(document: unknown): Generated[] {
       const queryParams = queries.map((p) => p.name)
       const issueParams = queries.filter((p) => namesIssue(p.schema)).map((p) => p.name)
       const queryFlags = queries.flatMap((p) => queryFlagOf(p.name, p.schema) ?? [])
+      const queryBounds = queries.flatMap((p) =>
+        queryFlags.some((flag) => flag.name === p.name) || namesIssue(p.schema)
+          ? []
+          : (queryBoundOf(p.name, p.schema) ?? []),
+      )
       for (const name of queryParams.filter((q) => RESERVED_FLAGS.includes(q))) {
         problems.push(`${where}: query parameter "${name}" is a flag the CLI owns`)
       }
@@ -270,6 +300,7 @@ export function operationsOf(document: unknown): Generated[] {
         pathParams,
         queryParams,
         queryFlags,
+        queryBounds,
         issueParams,
         body: op.requestBody !== undefined,
         bodyFields,
@@ -292,6 +323,9 @@ const list = (values: string[]): string => `[${values.map(quote).join(', ')}]`
 
 const flagText = (flag: QueryFlag): string =>
   `{ name: ${quote(flag.name)}, boolean: ${String(flag.boolean)}, value: ${quote(flag.value)} }`
+
+const boundText = (bound: QueryBound): string =>
+  `{ name: ${quote(bound.name)}${bound.values ? `, values: ${list([...bound.values])}` : ''}${bound.numeric ? `, numeric: ${quote(bound.numeric)}` : ''}${(['min', 'max', 'minLength', 'maxLength'] as const).map((key) => (bound[key] === undefined ? '' : `, ${key}: ${bound[key]}`)).join('')} }`
 
 const fieldText = (field: BodyField): string =>
   `{ name: ${quote(field.name)}, flag: ${quote(field.flag)}, kind: ${quote(field.kind)}, repeatable: ${String(field.repeatable)}, required: ${String(field.required)}, untyped: ${String(field.untyped)} }`
@@ -316,6 +350,7 @@ export function render(operations: Generated[]): string {
       `    body: ${String(op.body)},`,
       ...(op.issueParams.length ? [`    issueParams: ${list(op.issueParams)},`] : []),
       `    queryFlags: [${op.queryFlags.map(flagText).join(', ')}],`,
+      ...(op.queryBounds.length ? [`    queryBounds: [${op.queryBounds.map(boundText).join(', ')}],`] : []),
       `    bodyFields: [${op.bodyFields.map(fieldText).join(', ')}],`,
       `    args: ${list(op.args)},`,
       ...(op.agent ? ['    agent: true,'] : []),
