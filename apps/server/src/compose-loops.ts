@@ -184,6 +184,7 @@ export function composeLoops(ctx: LoopContext) {
       // A worktree made or removed takes minutes and must not hold the next pass back.
       maxPasses: 4,
       pass: () => leads.tick(ctx.draining),
+      active: (t) => t.replayed > 0 || t.lost > 0 || t.outbox.ran > 0,
       summary: (t) =>
         `spool ${t.replayed} lines, ${t.lost} lead(s) lost, outbox ${JSON.stringify(t.outbox)}, api errors ${JSON.stringify(t.apiErrors)}`,
     }),
@@ -198,6 +199,7 @@ export function composeLoops(ctx: LoopContext) {
     // The Watch's checks run on a loop of their own, so a `make verify` of minutes never holds the leads' tick.
     passLoop(wiring('watch'), {
       name: 'watch',
+      active: (w) => w.checked > 0,
       pass: () =>
         checkWatches({
           ...writes,

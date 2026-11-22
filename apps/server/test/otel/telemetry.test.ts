@@ -9,7 +9,7 @@ import { otelTelemetry } from '../../src/adapters/otel/telemetry.ts'
 import { runProcess } from '../../src/adapters/process.ts'
 import { createApp } from '../../src/api/app.ts'
 import { requestTelemetry } from '../../src/api/telemetry.ts'
-import { createLoopRunner } from '../../src/app/loops/runner.ts'
+import { createLoopRunner, passLoop } from '../../src/app/loops/runner.ts'
 import { fixedClock } from '../../src/kernel/clock.ts'
 import { key } from '../../src/kernel/keys.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
@@ -192,6 +192,24 @@ describe('what a pass records', () => {
     expect(exit).toMatchObject({ failed: false })
     expect(exit?.attrs).toMatchObject({ result: 'exit', 'exit.code': 1 })
     expect(spans.find((s) => s.name === 'process.sleep')).toMatchObject({ failed: true })
+  })
+})
+
+describe('a loop says what counts as work', () => {
+  const counted = (n: number) =>
+    passLoop(
+      { intervalMs: 5, said: () => {} },
+      { name: 'watch', pass: async () => ok({ n }), active: (p) => p.n > 0, summary: (p) => `checked ${p.n}` },
+    )
+
+  test('a pass with a count above zero is recorded as a span', async () => {
+    await tracePass('watch', () => counted(2).run())
+    expect(spans.map((s) => s.name)).toEqual(['loop.watch'])
+  })
+
+  test('a pass whose counts are all zero records nothing', async () => {
+    await tracePass('watch', () => counted(0).run())
+    expect(spans).toHaveLength(0)
   })
 })
 
