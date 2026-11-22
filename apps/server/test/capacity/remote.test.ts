@@ -243,6 +243,79 @@ describe('the probe starts the step host trim', () => {
     expect(calls.filter((c) => c === 'trim')).toHaveLength(2)
   })
 
+  test('sweeps the scratch directories of closed Issues before the idle rules, with the closed ids only', async () => {
+    const scripts: string[] = []
+    const asked: (readonly number[])[] = []
+    let now = AT.getTime()
+    const run: RunProcess = async (command) => {
+      const script = command.at(-1) ?? ''
+      scripts.push(script)
+      if (script.includes('echo "scratch $id"')) return { exit: 0, stdout: 'scratch 7\nscratch 9\nscratch 11' }
+      if (script.includes('exp-sweep.sh'))
+        return { exit: 0, stdout: 'exp-sweep: 2 removed, 0 kept, 0 failed, freed 5 MB' }
+      return {
+        exit: 0,
+        stdout: script.startsWith('cd "$HOME"')
+          ? 'trim: removed 0 idle slot copies and 0 bun cache entries'
+          : PROBE_OUT,
+      }
+    }
+    const logs: string[] = []
+    const probe = sshProbe({
+      target: 'vps',
+      run,
+      now: () => new Date(now),
+      log: (line) => logs.push(line),
+      closedOf: async (ids) => {
+        asked.push(ids)
+        return ids.filter((id) => id !== 9)
+      },
+    })
+    now += 1
+    probe.latest(null)
+    await Bun.sleep(10)
+    expect(asked).toEqual([[7, 9, 11]])
+    const sweep = scripts.findIndex((s) => s.includes('exp-sweep.sh'))
+    expect(scripts[sweep]).toContain('--closed 7 11')
+    // the idle rules run after it
+    expect(scripts.findIndex((s) => s.includes('removed $exps idle exp dirs'))).toBeGreaterThan(sweep)
+    expect(logs).toContain('exp-sweep: 2 removed, 0 kept, 0 failed, freed 5 MB')
+  })
+
+  test('no sweep call when no listed Issue is closed, and a failed sweep leaves the idle rules running', async () => {
+    const scripts: string[] = []
+    let now = AT.getTime()
+    let closed: number[] = []
+    const run: RunProcess = async (command) => {
+      const script = command.at(-1) ?? ''
+      scripts.push(script)
+      if (script.includes('echo "scratch $id"')) return { exit: 0, stdout: 'scratch 7' }
+      if (script.includes('exp-sweep.sh')) return { exit: 1, stdout: 'trim: exp-sweep.sh did not finish cleanly' }
+      return { exit: 0, stdout: script.startsWith('cd "$HOME"') ? '' : PROBE_OUT }
+    }
+    const logs: string[] = []
+    const probe = sshProbe({
+      target: 'vps',
+      run,
+      now: () => new Date(now),
+      log: (l) => logs.push(l),
+      closedOf: async () => closed,
+    })
+    now += 1
+    probe.latest(null)
+    await Bun.sleep(10)
+    expect(scripts.some((s) => s.includes('exp-sweep.sh'))).toBe(false)
+    expect(scripts.some((s) => s.includes('removed $exps idle exp dirs'))).toBe(true)
+
+    closed = [7]
+    now += TRIM_EVERY_MS
+    probe.latest(null)
+    await Bun.sleep(10)
+    expect(scripts.some((s) => s.includes('exp-sweep.sh'))).toBe(true)
+    expect(logs.some((l) => l.startsWith('step host sweep failed'))).toBe(true)
+    expect(scripts.filter((s) => s.includes('removed $exps idle exp dirs'))).toHaveLength(2)
+  })
+
   test('not while a step container runs', async () => {
     const { calls, tick } = harness(`${PROBE_OUT}\nstep 123-abc 1763380000`)
     await tick(0)

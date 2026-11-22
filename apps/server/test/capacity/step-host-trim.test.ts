@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { trimScript } from '../../src/adapters/remote/trim.ts'
+import { parseScratch, scratchScript, sweepScript, trimScript } from '../../src/adapters/remote/trim.ts'
 
 /** The retention script (issue 2035) run for real against a temporary home: what it removes, what it leaves. */
 const DAY = 86_400
@@ -167,5 +177,76 @@ describe('the step host trim', () => {
   test('a host with no step directory is left alone', () => {
     rmSync(join(home, 'factory-steps'), { recursive: true, force: true })
     expect(run('exit 0').code).toBe(0)
+  })
+})
+
+describe('the closed-Issue sweep of the step host', () => {
+  /** A stub sweep script that records its arguments, and a `sudo` that runs what it is given (the real one needs a password-less root). */
+  function sweepHost(): string {
+    mkdirSync(join(home, 'vps/scripts'), { recursive: true })
+    writeFileSync(
+      join(home, 'vps/scripts/exp-sweep.sh'),
+      '#!/bin/sh\necho "$@" > "$HOME/sweep.args"\necho "exp-sweep: 2 removed, 0 kept, 0 failed, freed 5 MB"\n',
+      {
+        mode: 0o755,
+      },
+    )
+    const bin = join(home, 'bin')
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(join(bin, 'sudo'), '#!/bin/sh\n[ "$1" = -n ] || exit 3\nshift\nexec "$@"\n', { mode: 0o755 })
+    return bin
+  }
+  const sh = (script: string, bin = join(home, 'bin')): { code: number; out: string } => {
+    const proc = Bun.spawnSync(['sh', '-c', script], {
+      env: { HOME: home, PATH: `${bin}:${process.env.PATH ?? '/usr/bin:/bin'}` },
+    })
+    return { code: proc.exitCode, out: proc.stdout.toString() + proc.stderr.toString() }
+  }
+
+  test('lists the exp and agw directories by Issue number, and skips the rest', () => {
+    for (const name of ['exp12', 'agw12', 'agw30', 'expfoo', 'exp', 'exp9x', 'other4']) mkdirSync(join(home, name))
+    writeFileSync(join(home, 'exp77'), 'a file')
+    symlinkSync(join(home, 'exp12'), join(home, 'exp88'))
+    const listed = sh(scratchScript())
+    expect(listed.code).toBe(0)
+    expect(parseScratch(listed.out).sort((a, b) => a - b)).toEqual([12, 30])
+  })
+
+  test('a directory numbered 0 is no Issue', () => {
+    expect(parseScratch('scratch 0\nscratch 00\nscratch 4')).toEqual([4])
+  })
+
+  test('a home with none lists nothing', () => {
+    const listed = sh(scratchScript())
+    expect(listed.code).toBe(0)
+    expect(parseScratch(listed.out)).toEqual([])
+  })
+
+  test('calls the sweep script as root with the closed ids', () => {
+    const bin = sweepHost()
+    const result = sh(sweepScript([2719, 2720]), bin)
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('exp-sweep: 2 removed')
+    expect(readFileSync(join(home, 'sweep.args'), 'utf8').trim()).toBe('--closed 2719 2720')
+  })
+
+  test('puts only whole numbers on the command line', () => {
+    const bin = sweepHost()
+    sh(sweepScript([5, Number.NaN, -3, 1.5, 6]), bin)
+    expect(readFileSync(join(home, 'sweep.args'), 'utf8').trim()).toBe('--closed 5 6')
+  })
+
+  test('a host without the script says so and exits 0', () => {
+    const result = sh(sweepScript([5]))
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('trim: no vps/scripts/exp-sweep.sh')
+  })
+
+  test('a failing sweep reports in a trim line and exits 0', () => {
+    const bin = sweepHost()
+    writeFileSync(join(bin, 'sudo'), '#!/bin/sh\necho "sudo: a password is required"; exit 1\n', { mode: 0o755 })
+    const result = sh(sweepScript([5]), bin)
+    expect(result.code).toBe(0)
+    expect(result.out).toContain('trim: exp-sweep.sh did not finish cleanly')
   })
 })

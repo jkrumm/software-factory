@@ -29,7 +29,7 @@ import { syncProjects } from './app/planning-sync.ts'
 import { projectStates } from './app/planning-views.ts'
 import { applyReplan, fileReplan } from './app/planning-replan.ts'
 import { projectOf } from './domains/planning/sync.ts'
-import type { IssueId } from './kernel/ids.ts'
+import { type IssueId, issueId, issueNumber } from './kernel/ids.ts'
 import { key } from './kernel/keys.ts'
 import { ok, type PortError, type Result } from './kernel/result.ts'
 
@@ -95,6 +95,13 @@ export function composePlanning(input: {
     accounts: deskAccountSource(desk),
     desk,
   }
+  /** Of these Issue numbers, those that are closed: the step host's sweep removes their scratch directories. */
+  async function closedIssues(numbers: readonly number[]): Promise<readonly number[]> {
+    if (numbers.length === 0) return []
+    const states = await writes.uow.run(async ({ reads }) => ok(await reads.statesOf(numbers.map(issueId))))
+    if (!states.ok) return []
+    return [...states.value].flatMap(([id, state]) => (state === 'closed' ? [issueNumber(id)] : []))
+  }
   const slots = {
     ...writes,
     slots: settings.slots,
@@ -110,7 +117,11 @@ export function composePlanning(input: {
         ? null
         : {
             ...settings.stepRemote,
-            probe: sshProbe({ target: settings.stepRemote.target, log: (line) => console.error(`steps: ${line}`) }),
+            probe: sshProbe({
+              target: settings.stepRemote.target,
+              log: (line) => console.error(`steps: ${line}`),
+              closedOf: closedIssues,
+            }),
           },
   }
 

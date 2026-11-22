@@ -7,7 +7,7 @@
 import type { RemoteHostProbe, RemoteProbeAnswer } from '../../domains/capacity/ports.ts'
 import { TRIM_EVERY_MS } from '../../domains/capacity/remote.ts'
 import { helperEnv, type RunProcess, runHelper } from '../intake/process.ts'
-import { trimScript } from './trim.ts'
+import { parseScratch, scratchScript, sweepScript, trimScript } from './trim.ts'
 
 /** How often the VPS is asked at most. */
 const PROBE_EVERY_MS = 30_000
@@ -88,6 +88,8 @@ export function sshProbe(input: {
   run?: RunProcess
   now?: () => Date
   log?: (line: string) => void
+  /** of these Issue numbers, those the factory says are closed (an unknown one is absent); absent, no scratch directory is swept by Issue */
+  closedOf?: (issues: readonly number[]) => Promise<readonly number[]>
 }): RemoteHostProbe {
   const run = input.run ?? runHelper
   const now = input.now ?? (() => new Date())
@@ -99,7 +101,25 @@ export function sshProbe(input: {
   let trimming = false
   // the step host's retention (`trim.ts`), apart from the probe so a long walk never ages the reading past its limit; the
   // slot and cache parts of the script do nothing while a step container runs
+  // the scratch directories of closed Issues (`exp<n>`, `agw<n>`) go by the host's own root sweep, which the VPS cannot decide alone
+  const sweep = async (): Promise<void> => {
+    if (!input.closedOf) return
+    const listed = await run([...ssh, scratchScript()], PROBE_TIMEOUT_MS, helperEnv())
+    if (listed.exit !== 0) return
+    const closed = await input.closedOf(parseScratch(listed.stdout))
+    if (closed.length === 0) return
+    const swept = await run([...ssh, sweepScript(closed)], TRIM_TIMEOUT_MS, helperEnv())
+    const lines = swept.stdout.trim().split('\n')
+    const said = lines.filter((line) => /^(trim:|FAILED|exp-sweep:)/.test(line))
+    if (swept.exit !== 0) {
+      input.log?.(`step host sweep failed (exit ${swept.exit ?? 'timeout'}): ${said.at(-1) ?? lines.at(-1) ?? ''}`)
+      return
+    }
+    for (const line of said) if (!line.startsWith('exp-sweep: 0 removed')) input.log?.(line)
+  }
   const trim = async (): Promise<void> => {
+    // a failed sweep never holds back the idle rules below
+    await sweep().catch((error: unknown) => input.log?.(`step host sweep failed: ${String(error)}`))
     const result = await run([...ssh, trimScript({ stepLabel: STEP_LABEL })], TRIM_TIMEOUT_MS, helperEnv())
     // stdout and stderr arrive joined: the script's own lines are the ones that start with `trim:`
     const lines = result.stdout.trim().split('\n')
