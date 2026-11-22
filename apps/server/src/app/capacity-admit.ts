@@ -148,7 +148,7 @@ export interface QueueEntry {
   project: string | null
   kind: string
   prio: number
-  /** the owner's priority of its project, and whether it put this Issue ahead of a candidate of another project */
+  /** the owner's priority of its project, and whether the project priorities moved this Issue's place, ahead or behind */
   projectPrio: number
   byProjectPrio: boolean
   /** null: nothing keeps it out; it is admitted when it is its turn */

@@ -37,7 +37,7 @@ export interface Ordered {
   prio: number
   /** the owner's priority of its project; 0 when none */
   projectPrio: number
-  /** true when the project's priority put this Issue ahead of a candidate of another project at the same Issue prio */
+  /** true when the project priorities put this Issue in another place, ahead or behind, than it would have with every project at 0 */
   byProjectPrio: boolean
   /** set when the chain keeps this Issue out of the candidates */
   reason: ChainReason | null

@@ -40,7 +40,7 @@ export const QueueEntry = z
     prio: z.number().int(),
     /** the owner's priority of its project; 0 when none (an older server sends none) */
     projectPrio: z.number().int().default(0),
-    /** true when the project's priority put it ahead of a candidate of another project at the same Issue `prio` */
+    /** true when the project priorities put it in another place, ahead or behind, than it would have with every project at 0 */
     byProjectPrio: z.boolean().default(false),
     /** null: nothing keeps it out, it is admitted when it is its turn */
     reason: QueueReason.nullable(),
