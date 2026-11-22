@@ -260,11 +260,15 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
     },
 
     async queueStates() {
-      const rows: unknown[] = await tx`SELECT project, state FROM factory.capacity_queue_states`
-      const parsed = rows.map((raw) => z.object({ project: z.string(), state: z.enum(QUEUE_STATES) }).parse(raw))
+      const rows: unknown[] = await tx`SELECT project, state, prio FROM factory.capacity_queue_states`
+      const parsed = rows.map((raw) =>
+        z.object({ project: z.string(), state: z.enum(QUEUE_STATES), prio: z.number().int() }).parse(raw),
+      )
+      const projectRows = parsed.filter((r) => r.project !== GLOBAL)
       const states: QueueStates = {
         global: parsed.find((r) => r.project === GLOBAL)?.state ?? 'run',
-        projects: new Map(parsed.filter((r) => r.project !== GLOBAL).map((r) => [r.project, r.state])),
+        projects: new Map(projectRows.map((r) => [r.project, r.state])),
+        prios: new Map(projectRows.filter((r) => r.prio !== 0).map((r) => [r.project, r.prio])),
       }
       return states
     },
@@ -273,6 +277,12 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       await tx`
         INSERT INTO factory.capacity_queue_states (project, state, set_at) VALUES (${project ?? GLOBAL}, ${state}, ${at})
         ON CONFLICT (project) DO UPDATE SET state = EXCLUDED.state, set_at = EXCLUDED.set_at`
+    },
+
+    async setProjectPrio(project, prio, at) {
+      await tx`
+        INSERT INTO factory.capacity_queue_states (project, state, prio, set_at) VALUES (${project}, 'run', ${prio}, ${at})
+        ON CONFLICT (project) DO UPDATE SET prio = EXCLUDED.prio`
     },
 
     async removeQueueState(project) {

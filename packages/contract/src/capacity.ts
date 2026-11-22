@@ -38,6 +38,10 @@ export const QueueEntry = z
     kind: z.string(),
     /** the owner's `prio`; 0 when none */
     prio: z.number().int(),
+    /** the owner's priority of its project; 0 when none (an older server sends none) */
+    projectPrio: z.number().int().default(0),
+    /** true when the project's priority put it ahead of a candidate of another project at the same Issue `prio` */
+    byProjectPrio: z.boolean().default(false),
     /** null: nothing keeps it out, it is admitted when it is its turn */
     reason: QueueReason.nullable(),
     /** the account it would run on, when nothing keeps it out */
@@ -90,6 +94,8 @@ export const QueueStatesView = z
   .object({
     global: z.enum(['run', 'pace', 'drain']),
     projects: z.record(z.string(), z.enum(['run', 'pace', 'drain'])),
+    /** the owner's priority per project: the order of projects among Issues of one priority; higher starts first */
+    prios: z.record(z.string(), z.number().int()).default({}),
   })
   .meta({ id: 'QueueStatesView' })
 export type QueueStatesView = z.infer<typeof QueueStatesView>
@@ -101,6 +107,14 @@ export const QueueSetBody = z
     state: z.enum(['run', 'pace', 'drain']),
   })
   .meta({ id: 'QueueSetBody' })
+
+export const QueuePrioBody = z
+  .object({
+    project: z.string().min(1),
+    /** -1000 to 1000, an Issue's range; 0 is none */
+    prio: z.number().int().min(-1000).max(1000),
+  })
+  .meta({ id: 'QueuePrioBody' })
 
 export const RelearnBody = z
   .object({

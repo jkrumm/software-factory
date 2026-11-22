@@ -98,7 +98,7 @@ describe('queueBindingOf', () => {
         ],
         settling: [issue(5, 'a')],
       }),
-      queueStates: { global: 'run', projects: {} },
+      queueStates: { global: 'run', projects: {}, prios: {} },
     })
     // Not started is Ready plus Held: the settling Issue counts, though no queue reason holds it
     expect(result.notStarted).toBe(5)
@@ -112,7 +112,7 @@ describe('queueBindingOf', () => {
   })
 
   test('nothing held out is no binding; a paced queue says so', () => {
-    const result = queueBindingOf({ states: states({}), queueStates: { global: 'pace', projects: {} } })
+    const result = queueBindingOf({ states: states({}), queueStates: { global: 'pace', projects: {}, prios: {} } })
     expect(result.binding).toBeNull()
     expect(result.state).toBe('pace')
   })

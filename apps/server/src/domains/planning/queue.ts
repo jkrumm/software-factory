@@ -35,6 +35,10 @@ export type ChainReason =
 export interface Ordered {
   issue: OpenIssue
   prio: number
+  /** the owner's priority of its project; 0 when none */
+  projectPrio: number
+  /** true when the project's priority put this Issue ahead of a candidate of another project at the same Issue prio */
+  byProjectPrio: boolean
   /** set when the chain keeps this Issue out of the candidates */
   reason: ChainReason | null
   /** for an Issue its `after` edges hold: what would keep it out with those edges gone (null: nothing of the chain's) */
@@ -80,7 +84,7 @@ function throughputKey(issue: OpenIssue, now: Date | undefined): number {
 /**
  * The queued Issues in the order they are looked at, first rule first: the fix of a stopped line (an incident), then
  * dependencies (an Issue with an open blocker, or a filed Spec without a verdict, is no candidate: it follows the others, carrying its reason), then the
- * owner's `prio` (higher first, never overridden), then age (the lower Issue number). Each Issue carries the chain's
+ * owner's `prio` (higher first, never overridden), then the owner's priority of its project (higher first), then age (the lower Issue number). Each Issue carries the chain's
  * reason when it is not a candidate.
  *
  * Within one project and one prio the order is for throughput: what finishes sooner first (`throughputKey`, with
@@ -92,6 +96,8 @@ export function orderQueue(input: {
   open: readonly OpenIssue[]
   edges: readonly Edge[]
   prio: ReadonlyMap<IssueId, number>
+  /** the owner's priority per project name; a project not in it counts 0 */
+  projectPrio?: ReadonlyMap<string, number> | undefined
   now?: Date | undefined
   /** the position of each Issue in the newest order the queue model gave its repo */
   modelOrder?: ReadonlyMap<IssueId, number> | undefined
@@ -102,11 +108,27 @@ export function orderQueue(input: {
     .map((issue): Ordered => ({
       issue,
       prio: input.prio.get(issue.id) ?? 0,
+      projectPrio: issue.project === null ? 0 : (input.projectPrio?.get(issue.project) ?? 0),
+      byProjectPrio: false,
       reason: reasonOf(issue, input.edges, stopped),
       withoutEdges: reasonOf(issue, [], stopped),
     }))
   const rank = (row: Ordered): number => (row.reason !== null ? 2 : isFix(row.issue) ? 0 : 1)
-  rows.sort((a, b) => rank(a) - rank(b) || b.prio - a.prio || issueNumber(a.issue.id) - issueNumber(b.issue.id))
+  rows.sort(
+    (a, b) =>
+      rank(a) - rank(b) ||
+      b.prio - a.prio ||
+      b.projectPrio - a.projectPrio ||
+      issueNumber(a.issue.id) - issueNumber(b.issue.id),
+  )
+  // The lowest project priority in each band of one class and Issue prio: an Issue above it was placed by its project.
+  const floor = new Map<string, number>()
+  for (const row of rows) {
+    const band = `${rank(row)}|${row.prio}`
+    floor.set(band, Math.min(floor.get(band) ?? row.projectPrio, row.projectPrio))
+  }
+  for (const row of rows)
+    row.byProjectPrio = row.projectPrio > (floor.get(`${rank(row)}|${row.prio}`) ?? row.projectPrio)
 
   const model = (row: Ordered): number => input.modelOrder?.get(row.issue.id) ?? Number.POSITIVE_INFINITY
   const sooner = (a: Ordered, b: Ordered): number =>

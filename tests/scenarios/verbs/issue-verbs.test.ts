@@ -295,6 +295,7 @@ test('every owner verb refuses the agent token with 403', async () => {
     ['issue', 'prio', 'issue_1', '1'],
     ['issue', 'reopen', 'issue_2', '--call', 'c', '--reason', 'x'],
     ['queue', 'set', 'drain'],
+    ['queue', 'prio', '5', '--project', 'example'],
   ]
   const before = await v.issueCount()
   for (const args of verbs) {
@@ -318,6 +319,25 @@ test('queue set takes the state as an argument and the project as a name or a pa
   const global = await v.run(['queue', 'set', 'drain'])
   expect(global.json).toMatchObject({ global: 'drain' })
   await v.run(['queue', 'set', 'run'])
+})
+
+test('queue prio sets a project priority beside its state; queue get shows every project with its priority', async () => {
+  const set = await v.run(['queue', 'prio', '5', '--project', 'example'])
+  expect(set.json).toMatchObject({ global: 'run', prios: { example: 5 } })
+  const drained = await v.run(['queue', 'set', 'drain', '--project', 'example'])
+  expect(drained.json).toMatchObject({ projects: { example: 'drain' }, prios: { example: 5 } })
+  expect((await v.run(['queue', 'get'])).json).toMatchObject({ projects: { example: 'drain' }, prios: { example: 5 } })
+  expect((await v.run(['queue', 'get', '--project', join(v.w.root, 'example')])).json).toMatchObject({
+    prios: { example: 5 },
+  })
+  const negative = await v.run(['queue', 'prio', '--project', 'example', '--', '-3'])
+  expect(negative.json).toMatchObject({ prios: { example: -3 } })
+  expect((await v.run(['queue', 'prio', '5000', '--project', 'example'])).code).toBe(2)
+  const unknown = await v.run(['queue', 'prio', '1', '--project', 'nowhere'])
+  expect({ code: unknown.code, error: unknown.error?.code }).toEqual({ code: 2, error: 'repo_outside_roots' })
+  expect((await v.run(['queue', 'prio', '1'])).code).toBe(2)
+  await v.run(['queue', 'prio', '0', '--project', 'example'])
+  await v.run(['queue', 'set', 'run', '--project', 'example'])
 })
 
 test('/health keeps its heartbeat names and adds the door lines and the loops', async () => {

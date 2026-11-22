@@ -394,6 +394,7 @@ describe('auth', () => {
       ['POST', '/v1/loops/leads/run'],
       ['PUT', '/slots/x'],
       ['PUT', '/queue'],
+      ['PUT', '/queue/prio'],
       ['DELETE', '/slots/x'],
       ['PATCH', '/issues'],
     ]
@@ -428,6 +429,7 @@ describe('auth', () => {
       ['POST', '/issues/1/note'],
       ['POST', '/v1/issues/1/close'],
       ['PUT', '/queue'],
+      ['PUT', '/queue/prio'],
       ['GET', '/projects'],
       ['GET', '/capacity'],
       ['GET', '/v1/errands'],

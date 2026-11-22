@@ -8,6 +8,7 @@ import {
   ErrorBody,
   MergeWindow,
   QueueOrder,
+  QueuePrioBody,
   type QUEUE_REASONS,
   QueueSetBody,
   QueueStatesView,
@@ -57,6 +58,8 @@ export interface CapacityApi {
   queueStates(project?: string): Promise<Result<QueueStates, PortError>>
   /** `project` is a name or a path inside a source root; a path outside the roots is `refused` */
   setQueueState(input: { project: string | null; state: QueueState }): Promise<Result<QueueStates, PortError>>
+  /** `project` is a name or a path inside a source root; the priority is -1000 to 1000, else `refused` */
+  setProjectPrio(input: { project: string; prio: number }): Promise<Result<QueueStates, PortError>>
   /** `repo` is a name or a path inside a source root; `at` null: now. A point in the future is `refused`. */
   setRelearn(input: { repo: string; at: Date | null; actor: string }): Promise<Result<Relearn, PortError>>
   touchSlot(input: {
@@ -117,6 +120,8 @@ const entryView = (entry: QueueEntry) => ({
   project: entry.project,
   kind: entry.kind,
   prio: entry.prio,
+  projectPrio: entry.projectPrio,
+  byProjectPrio: entry.byProjectPrio,
   reason: entry.reason
     ? { kind: entry.reason.kind, message: entry.reason.message, opensAt: iso(entry.reason.opensAt) }
     : null,
@@ -124,7 +129,11 @@ const entryView = (entry: QueueEntry) => ({
 })
 
 const statesView = (states: QueueStates): QueueStatesView =>
-  QueueStatesView.parse({ global: states.global, projects: Object.fromEntries(states.projects) })
+  QueueStatesView.parse({
+    global: states.global,
+    projects: Object.fromEntries(states.projects),
+    prios: Object.fromEntries(states.prios),
+  })
 
 const slotView = (slot: SlotView & { remote: RemoteGrant | null }): Slot => Slot.parse(slot)
 
@@ -345,6 +354,27 @@ export const capacityRoutes = (api?: CapacityApi) => {
           operationId: 'queue.set',
           summary: 'set the queue state of the whole queue or one project: run, pace or drain',
           'x-cli': { args: ['state'] },
+        },
+      },
+    )
+    .put(
+      '/queue/prio',
+      async ({ body, status }) => {
+        if (!api) return status(503, unbound)
+        const states = await api.setProjectPrio(body)
+        if (states.ok) return status(200, statesView(states.value))
+        return states.error.kind === 'refused'
+          ? status(422, outsideRoots(states.error))
+          : status(503, unavailable(states.error))
+      },
+      {
+        body: QueuePrioBody,
+        response: { 200: QueueStatesView, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'queue.prio',
+          summary:
+            "set a project's priority, the owner's: among queued Issues of one Issue priority, a higher project starts first",
+          'x-cli': { args: ['prio'] },
         },
       },
     )

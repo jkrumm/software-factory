@@ -54,7 +54,9 @@ export interface CapacityStore {
 
   queueStates(): Promise<QueueStates>
   setQueueState(project: string | null, state: QueueState, at: Date): Promise<void>
-  /** drops a project's state; the global one stays */
+  /** sets a project's priority, leaving its state as it is */
+  setProjectPrio(project: string, prio: number, at: Date): Promise<void>
+  /** drops a project's state and priority; the global one stays */
   removeQueueState(project: string): Promise<void>
 
   slots(): Promise<SlotRow[]>

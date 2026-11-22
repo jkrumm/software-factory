@@ -177,6 +177,7 @@ export const COLUMN_IDS = [
   'hygiene',
   'plan',
   'leads',
+  'queue',
 ] as const
 export type ColumnId = (typeof COLUMN_IDS)[number]
 

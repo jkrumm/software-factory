@@ -210,6 +210,7 @@ export {
   QueueOrder,
   QueueReason,
   MergeWindow,
+  QueuePrioBody,
   QueueSetBody,
   QueueStatesView,
   RefreshAnswer,
