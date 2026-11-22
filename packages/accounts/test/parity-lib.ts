@@ -251,6 +251,9 @@ export const pool = async <T, R>(items: T[], f: (x: T) => Promise<R>, width = 8)
   return out
 }
 
+/** The additive files of the package (packages/accounts/docs/accounts.md §Health): the dotfiles CLI never wrote them, so a parity state leaves them out. */
+const ADDITIVE_FILES = new Set(['health.json'])
+
 /** Every file under a directory, relative path to content, sorted: the state a stateful verb left behind. */
 const tree = (dir: string): Record<string, string> => {
   const out: Record<string, string> = {}
@@ -258,7 +261,8 @@ const tree = (dir: string): Record<string, string> => {
     for (const e of readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const p = join(d, e.name)
       if (e.isDirectory()) walk(p)
-      else if (!/\.claim$|\.tmp$/.test(e.name)) out[p.slice(dir.length + 1)] = readFileSync(p, 'utf8')
+      else if (!/\.claim$|\.tmp$/.test(e.name) && !ADDITIVE_FILES.has(e.name))
+        out[p.slice(dir.length + 1)] = readFileSync(p, 'utf8')
     }
   }
   if (existsSync(dir)) walk(dir)

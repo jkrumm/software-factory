@@ -13,6 +13,9 @@ export interface HealthRow {
   fix: string | null
   /** transport the peer's data came over; absent for the local machine */
   via?: 'core' | 'ssh'
+  /** login rows: when the login ends (ISO time) and the days left as the expiry check read them; absent when unreadable */
+  ends_at?: string
+  days_left?: number
 }
 
 interface UsageAcct {
@@ -34,6 +37,15 @@ export interface PendingAsk {
 
 /** Sample older than this while the login claims to be fine means the usage endpoint is rejecting the token. */
 export const STALE_QUOTA_S = 6 * 3600
+
+/** The end of a login as the row carries it; nothing when the check could not read one. */
+const endsOf = (exp: ExpiryAcct | undefined): Pick<HealthRow, 'ends_at' | 'days_left'> =>
+  exp && exp.refresh_expires_at !== null
+    ? {
+        ends_at: new Date(exp.refresh_expires_at).toISOString(),
+        ...(exp.days_left === null ? {} : { days_left: exp.days_left }),
+      }
+    : {}
 
 const relogin = (machine: string, id: string) => `claude-relogin ${id} --machine ${machine}`
 
@@ -73,9 +85,18 @@ export function gradeMachine(
         state: exp.severity === 'FAIL' ? 'fail' : 'warn',
         detail,
         fix: fix(a.id),
+        ...endsOf(exp),
       })
     } else if (exp?.severity === 'PASS' && exp.days_left !== null) {
-      rows.push({ machine, id: a.id, check: 'login', state: 'ok', detail: `${exp.days_left} d left`, fix: null })
+      rows.push({
+        machine,
+        id: a.id,
+        check: 'login',
+        state: 'ok',
+        detail: `${exp.days_left} d left`,
+        fix: null,
+        ...endsOf(exp),
+      })
     } else {
       // No readable expiry (Keychain unreadable over ssh, entry missing, check failed): never "ok" without data.
       rows.push({

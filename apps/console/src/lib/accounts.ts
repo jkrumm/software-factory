@@ -1,4 +1,11 @@
-import type { AccountMode, AccountModeBody, AccountRow, AccountsView, Kpi } from '@software-factory/contract'
+import type {
+  AccountHealthRow,
+  AccountMode,
+  AccountModeBody,
+  AccountRow,
+  AccountsView,
+  Kpi,
+} from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone.ts'
 import { resetWords } from './strip.ts'
 
@@ -153,6 +160,77 @@ export function ledgerBars(row: Pick<AccountRow, 'resets'>, limit = 8): LedgerBa
     .sort((a, b) => a.at.localeCompare(b.at))
     .slice(-limit)
     .map((r) => ({ at: r.at, weekly: r.weekly === null ? null : Math.round(r.weekly), manual: r.manual, rule: r.rule }))
+}
+
+/** The tone of each grade the package gives a health row, decided here and nowhere else. */
+const HEALTH_TONES: Record<AccountHealthRow['state'], Tone> = { ok: 'good', warn: 'warn', fail: 'bad' }
+
+export interface LoginLine {
+  key: string
+  machine: string
+  /** what the row checks: the login, or the quota sample the login should be keeping alive */
+  label: 'Login' | 'Quota'
+  state: AccountHealthRow['state']
+  tone: Tone
+  /** the line in words: "Valid until Sun 29 Nov · 6.9 d left", or the package's own detail when it has no date */
+  words: string
+}
+
+const shortDate = (at: string): string =>
+  new Date(at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+
+const capital = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
+
+function loginWords(row: AccountHealthRow, now: Date): string {
+  if (row.check !== 'login' || row.ends_at === undefined) return capital(row.detail)
+  const date = shortDate(row.ends_at)
+  if (new Date(row.ends_at) <= now) return `Expired ${date}`
+  // counted from the date, not from the figure stored at the read: the read may be an hour old, the date does not age
+  const days = Math.round(((new Date(row.ends_at).getTime() - now.getTime()) / 86_400_000) * 10) / 10
+  const left = ` · ${days} d left`
+  return `${row.state === 'ok' ? 'Valid until' : 'Ends'} ${date}${left}`
+}
+
+/**
+ * The login and quota rows of one account, this machine first. The grade of each row is the package's (`health.ts`): nothing
+ * here weighs a date against a limit; the words and tones only present it.
+ */
+export function loginLines(view: Pick<AccountsView, 'health' | 'machine'>, account: string, now: Date): LoginLine[] {
+  const rows = (view.health?.rows ?? []).filter((r) => r.id === account && (r.check === 'login' || r.check === 'quota'))
+  const place = (r: AccountHealthRow) => (r.machine === view.machine ? 0 : 1)
+  return rows
+    .toSorted((a, b) => place(a) - place(b) || a.machine.localeCompare(b.machine) || a.check.localeCompare(b.check))
+    .map((r) => ({
+      key: `${r.machine}/${r.check}`,
+      machine: r.machine,
+      label: r.check === 'quota' ? 'Quota' : 'Login',
+      state: r.state,
+      tone: HEALTH_TONES[r.state],
+      words: loginWords(r, now),
+    }))
+}
+
+/** The lines the strip shows: only a login or quota the package grades warn or fail; an ok one adds nothing. */
+export const loginAlerts = (view: Pick<AccountsView, 'health' | 'machine'>, account: string, now: Date): LoginLine[] =>
+  loginLines(view, account, now).filter((line) => line.state !== 'ok')
+
+/** The worst line of a list as the chip's mark: its label and tone (a fail outranks a warn). */
+export function loginMark(lines: LoginLine[]): { label: LoginLine['label']; tone: Tone } | null {
+  const worst = lines.find((l) => l.state === 'fail') ?? lines[0]
+  return worst ? { label: worst.label, tone: worst.tone } : null
+}
+
+export interface MachineNote {
+  key: string
+  tone: Tone
+  words: string
+}
+
+/** What the package says of a machine as a whole (unreachable, re-login requests waiting for a click), when it is not ok. */
+export function machineNotes(view: Pick<AccountsView, 'health'>): MachineNote[] {
+  return (view.health?.rows ?? [])
+    .filter((r) => r.id === '-' && r.state !== 'ok')
+    .map((r) => ({ key: `${r.machine}/${r.check}`, tone: HEALTH_TONES[r.state], words: `${r.machine}: ${r.detail}` }))
 }
 
 /** The four intents, named by what the owner wants; each builds the body of `POST /v1/accounts/:id/mode`. */

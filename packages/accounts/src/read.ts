@@ -20,6 +20,7 @@ import { loadHistory, readLedger } from './history-store.ts'
 import { type QuotaAtReset, type QuotaAtResetWeek, quotaUsedAtReset, quotaUsedAtResetIn } from './history.ts'
 import { buildStatus, type Status } from './status.ts'
 import { resolveMachine } from './host.ts'
+import { readHealthCache } from './health-cache.ts'
 
 /** Where the registry, the cache, the mode overrides and the history live; absent: the CLI's defaults (`paths.ts`). */
 export interface AccountPaths {
@@ -65,7 +66,15 @@ export function readStatus(
     o.history === false
       ? {}
       : Object.fromEntries(Object.keys(reg.accounts).map((id) => [id, loadHistory(id, nowMs, o.paths?.history)]))
-  return buildStatus({ reg, cache, views, history, nowMs, machine: o.machine ?? resolveMachine(reg.host).name })
+  return buildStatus({
+    reg,
+    cache,
+    views,
+    history,
+    nowMs,
+    machine: o.machine ?? resolveMachine(reg.host).name,
+    health: readHealthCache(o.paths?.cacheDir),
+  })
 }
 
 /** A mode override as a caller states it; `until` is an ISO time or `reset` (the account's next weekly reset). */

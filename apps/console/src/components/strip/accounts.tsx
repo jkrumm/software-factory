@@ -1,9 +1,9 @@
 import type { AccountRow } from '@software-factory/contract'
 import { Link } from '@tanstack/react-router'
 import { Meter, MeterBar } from '@/components/kit/meter'
-import { meterTone } from '@/components/kit/tone'
+import { meterTone, TONE_TEXT } from '@/components/kit/tone'
 import { PopoverTitle } from '@/components/ui/popover'
-import { modeLabel, modeSource, modeUntil } from '@/lib/accounts'
+import { type LoginLine, loginAlerts, loginMark, modeLabel, modeSource, modeUntil } from '@/lib/accounts'
 import { useNow } from '@/lib/now'
 import { useAccounts } from '@/lib/queries'
 import { accountMeter, isExhausted, resetWords, usedPct } from '@/lib/strip'
@@ -46,7 +46,7 @@ function Window({
   )
 }
 
-function AccountDetail({ quota, now }: { quota: AccountRow; now: Date }) {
+function AccountDetail({ quota, alerts, now }: { quota: AccountRow; alerts: LoginLine[]; now: Date }) {
   return (
     <>
       <PopoverTitle>Subscription {quota.account}</PopoverTitle>
@@ -70,6 +70,11 @@ function AccountDetail({ quota, now }: { quota: AccountRow; now: Date }) {
             {modeLabel(quota.mode)} {modeUntil(quota.mode, now)} · {modeSource(quota.mode)}
           </p>
         )}
+        {alerts.map((line) => (
+          <p key={line.key} data-testid="strip-login-line" className={TONE_TEXT[line.tone]}>
+            {line.machine}: {line.label.toLowerCase()}, {line.words.toLowerCase()}
+          </p>
+        ))}
         {quota.fresh ? null : <p className="text-[color:var(--vx-warn-solid)]">Stale</p>}
         {isExhausted(quota, now) ? <p>At its limit until {resetWords(quota.exhaustedUntil, now)}</p> : null}
         <Link
@@ -85,13 +90,16 @@ function AccountDetail({ quota, now }: { quota: AccountRow; now: Date }) {
 
 /** One meter per subscription: its weekly share on a 4 rem bar, and the used share per window in a popover. */
 export function Accounts() {
-  const accounts = useAccounts().data?.accounts.filter((a) => a.enabled)
+  const view = useAccounts().data
+  const accounts = view?.accounts.filter((a) => a.enabled)
   const now = new Date(useNow(30_000))
-  if (!accounts) return null
+  if (!view || !accounts) return null
   return (
     <div className="flex items-center gap-x-1 min-[1280px]:flex-wrap">
       {accounts.map((quota) => {
         const { weeklyPct, tone } = accountMeter(quota, now)
+        const alerts = loginAlerts(view, quota.account, now)
+        const mark = loginMark(alerts)
         return (
           <StripPopover
             key={quota.account}
@@ -101,6 +109,11 @@ export function Accounts() {
               <>
                 <span className="max-w-28 truncate">{quota.account}</span>
                 {quota.mode.kind === 'normal' ? null : <span data-testid="strip-mode">{modeLabel(quota.mode)}</span>}
+                {mark === null ? null : (
+                  <span data-testid="strip-login" className={TONE_TEXT[mark.tone]}>
+                    {mark.label.toLowerCase()}
+                  </span>
+                )}
                 <span className="w-16">
                   <MeterBar value={(weeklyPct ?? 0) / 100} tone={tone} track="surface" />
                 </span>
@@ -108,7 +121,7 @@ export function Accounts() {
               </>
             }
           >
-            <AccountDetail quota={quota} now={now} />
+            <AccountDetail quota={quota} alerts={alerts} now={now} />
           </StripPopover>
         )
       })}

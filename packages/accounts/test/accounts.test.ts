@@ -15,6 +15,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { VERBS, helpText, verbHelp } from '../src/cli.ts'
+import { readHealthCache } from '../src/health-cache.ts'
 import {
   type Cache,
   type HttpGet,
@@ -2119,8 +2120,14 @@ describe('CLI (isolated HOME)', () => {
     chmodSync(join(okBin, 'claude'), 0o755)
     const r = cli(['refresh', '--all'], { CLAUDE_ACCOUNTS_SSH: sshStub, PATH: `${okBin}:${bin}:${process.env.PATH}` })
     expect(r.rc).toBe(0)
-    const args = readFileSync(sshLog, 'utf8').trim().split('\n')
+    // the keepalive also reads the peer's health for the cache (the snapshot verbs); the usage import is the one `usage` call
+    const args = readFileSync(sshLog, 'utf8')
+      .trim()
+      .split('\n')
+      .filter((line) => /(account-usage|claude-account usage --json)$/.test(line))
     expect(args.length).toBe(1)
+    // the keepalive leaves the health rows for the readers that cannot reach the peer themselves
+    expect(readHealthCache(dir)?.rows.length).toBeGreaterThan(0)
     expect(args[0]).toMatch(
       /BatchMode=yes .*ConnectTimeout=5 (iumac account-usage$|mini .*claude-account usage --json)/,
     )
@@ -2178,6 +2185,12 @@ describe('CLI (isolated HOME)', () => {
     const linked = run({ CLAUDE_ACCOUNTS_HC: hcStub, CLAUDE_ACCOUNTS_SSH: sshStub, STUB_PEER_CORE: 'down' })
     expect(linked.rows).toMatchObject([{ state: 'ok', detail: '12 d left', via: 'core' }])
     expect(linked.err).not.toContain('NOTE')
+    // the verb leaves the same rows in the cache that status reads
+    expect(readHealthCache(dir)?.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ state: 'ok', detail: '12 d left', via: 'core', check: 'login' }),
+      ]),
+    )
     // (2) not linked here: one ssh hop, then the peer's own core
     const itsCore = run({ CLAUDE_ACCOUNTS_HC: '/usr/bin/false', CLAUDE_ACCOUNTS_SSH: sshStub })
     expect(itsCore.rows).toMatchObject([{ state: 'ok', detail: '12 d left', via: 'core' }])
