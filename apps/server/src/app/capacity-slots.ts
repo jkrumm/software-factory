@@ -10,7 +10,12 @@ import {
   stepNameOf,
   stepPrior,
 } from '../domains/capacity/costs.ts'
-import { DEFAULT_SWAPOUT_CEILING_MB, describeTrip, loadTrip, SUSTAINED_LOAD_SAMPLES } from '../domains/capacity/host.ts'
+import {
+  DEFAULT_SWAPOUT_CEILING_MB,
+  describeTrip,
+  LOAD_TRIP_HISTORY_SAMPLES,
+  loadTrip,
+} from '../domains/capacity/host.ts'
 import type {
   HostReader,
   MergeWindowRow,
@@ -313,7 +318,7 @@ export async function touchSlot(
       await Promise.all(holders.map(async (h) => ({ name: (await sizeOf(h.name, h.cwd)).key, rssMib: h.rssMib }))),
       learned,
     )
-    const hostSamples = await capacity.recentHostSamples(Math.max(SWAP_WINDOW, SUSTAINED_LOAD_SAMPLES))
+    const hostSamples = await capacity.recentHostSamples(Math.max(SWAP_WINDOW, LOAD_TRIP_HISTORY_SAMPLES))
     const newestSample = hostSamples[0]
     const freeMib = freeMibOf(newestSample ?? null, ramMib, now)
     const swapRising =
@@ -385,7 +390,7 @@ export async function touchSlot(
               growthMib: growth,
               max: aimed,
               loadOk: trip === null ? loadNow !== null && loadNow <= deps.loadCeiling : !trip.tripped,
-              ...(trip?.tripped ? { loadTripped: true, loadWhy: describeTrip(trip.loads, deps.loadCeiling) } : {}),
+              ...(trip?.tripped ? { loadTripped: true, loadWhy: describeTrip(trip, deps.loadCeiling) } : {}),
               // the pressure level is the margin: the fit refuses a step only when its peak and the growth of the running ones exceed the free memory
               headroomMib: 0,
               swapGrowing: swapRising,

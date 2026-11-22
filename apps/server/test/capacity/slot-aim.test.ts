@@ -122,15 +122,15 @@ describe('the aim pass and the grant', () => {
     }[]
 
   test('the shadow row records the minute the load tripwire was tripped', async () => {
-    for (let m = 0; m <= 6; m++) {
+    for (let m = 0; m <= 8; m++) {
       await sample(m, { load: m < 5 ? 40 : 5 })
       value(await slotAimPass(aimDeps()))
     }
     const rows = (await world.db.sql`SELECT load_tripped FROM factory.slot_shadow ORDER BY at`) as {
       load_tripped: boolean
     }[]
-    // five minute samples over the ceiling trip it at minute 4; a reading back under the ceiling clears it at once
-    expect(rows.map((r) => r.load_tripped)).toEqual([false, false, false, false, true, false, false])
+    // five minute samples over the ceiling trip it at minute 4; it holds until the third calm sample, at minute 7
+    expect(rows.map((r) => r.load_tripped)).toEqual([false, false, false, false, true, true, true, false, false])
   })
 
   test('six quiet minutes with a waiter in line add a slot, one shadow row a minute beside the live base', async () => {

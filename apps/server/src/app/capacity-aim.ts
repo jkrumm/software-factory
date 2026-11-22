@@ -1,5 +1,5 @@
 import { SAMPLE_MAX_AGE_MS } from '../domains/capacity/costs.ts'
-import { loadTrip, SUSTAINED_LOAD_SAMPLES, sustainedSwapoutMb } from '../domains/capacity/host.ts'
+import { LOAD_TRIP_HISTORY_SAMPLES, loadTrip, sustainedSwapoutMb } from '../domains/capacity/host.ts'
 import { type AimState, aimStep, leadAimStep, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import { slotCounts } from '../domains/capacity/slots.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
@@ -33,7 +33,7 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
   return deps.uow.run(async ({ capacity }) => {
     await capacity.lock()
     const now = deps.clock.now()
-    const samples = await capacity.recentHostSamples(Math.max(5, SUSTAINED_LOAD_SAMPLES))
+    const samples = await capacity.recentHostSamples(Math.max(5, LOAD_TRIP_HISTORY_SAMPLES))
     const newest = samples[0]
     const fresh = newest !== undefined && now.getTime() - newest.at.getTime() <= SAMPLE_MAX_AGE_MS
     const before: AimState = (await capacity.slotAim()) ?? { target: deps.slots, quietSince: null }

@@ -138,8 +138,7 @@ export interface Admission {
   at: Date
   issue: string
   /**
-   * The load admission read when it decided (its `admitted` event). A tripped tripwire is cleared by a live reading under the
-   * ceiling (`withFreshLoad`), which no minute sample holds; absent or null (an event from before it was recorded, or a host
+   * The load admission read when it decided (its `admitted` event), which no minute sample holds; absent or null (an event from before it was recorded, or a host
    * that read none): the sample after stands in for it.
    */
   load?: number | null
@@ -149,8 +148,9 @@ const loadOver = (m: CapacityMinute, rules: AdmissionRules): boolean =>
   m.load !== null && m.loadCeiling !== null && rules.overLoad(m.load, m.loadCeiling)
 /**
  * Whether the load rule refused at `t`: admission reads the tripwire (`loadTrip`), the newest `samples` minute samples all over
- * their ceiling, never one peak, and the reading of the instant still over (a live reading back under the ceiling clears it at
- * once). With fewer fresh samples than that it falls back to the reading of the instant alone. The reading of the instant is
+ * their ceiling, never one peak, and the reading of the instant still over. A trip that admission holds after the load dipped under the
+ * ceiling (`held`, released only at 3/4 of it) is not judged here: the finding names a lead admitted into a load over the
+ * ceiling, which that rule refuses at every instant. With fewer fresh samples than that it falls back to the reading of the instant alone. The reading of the instant is
  * the one the admission recorded; for an admission that recorded none it is the sample after.
  */
 function loadRuleRefused(

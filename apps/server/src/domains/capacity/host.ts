@@ -59,12 +59,56 @@ export const SUSTAINED_LOAD_SAMPLES = 5
 /** The oldest of those samples may be at most this old: a gap in the minute samples is no reading. */
 export const SUSTAINED_SPAN_MS = (SUSTAINED_LOAD_SAMPLES + 1) * 60_000
 
-/** The tripwire's verdict: tripped with the loads that tripped it, clear, or unknown (too few fresh samples). */
-export type LoadTrip = { tripped: true; loads: number[] } | { tripped: false } | null
+/**
+ * A tripped tripwire lets go only when the load has fallen well under the ceiling, not when it dips just below it: the
+ * newest `RELEASE_LOAD_SAMPLES` minute samples must all be at most this share of the ceiling. Measured on the 1439 host
+ * samples of 2026-11-21/22 against the ceiling of 36: the gate reopened 42 times on a dip to 31–35 and 26 of those were
+ * followed within ten minutes by a load over 47 (up to 149), the admitted work arriving as the one-minute load lagged; with
+ * a release at 27 for 3 samples it reopened 19 times and 6 bounced.
+ */
+const LOAD_RELEASE_SHARE = 0.75
+const RELEASE_LOAD_SAMPLES = 3
+/** The minute samples a caller reads for the tripwire: the trip and its release are replayed over them. */
+export const LOAD_TRIP_HISTORY_SAMPLES = 30
+/** Two samples further apart than this are no run: the replay starts after the gap. */
+const HISTORY_GAP_MS = 3 * 60_000
+
+/**
+ * The tripwire's verdict: tripped with the newest loads (`held`: the load is back under the ceiling but has not yet fallen
+ * to the release line), clear, or unknown (too few fresh samples).
+ */
+export type LoadTrip = { tripped: true; loads: number[]; held?: true } | { tripped: false } | null
+
+/** Whether the replay of the minute samples (oldest first) ends tripped: five over the ceiling trip it, three at the release line clear it. */
+function tripsOver(runOldestFirst: readonly number[], ceiling: number): boolean {
+  const release = ceiling * LOAD_RELEASE_SHARE
+  let tripped = false
+  let over = 0
+  let calm = 0
+  for (const load of runOldestFirst) {
+    if (!tripped) {
+      over = load > ceiling ? over + 1 : 0
+      if (over >= SUSTAINED_LOAD_SAMPLES) {
+        tripped = true
+        calm = 0
+      }
+      continue
+    }
+    calm = load <= release ? calm + 1 : 0
+    if (calm >= RELEASE_LOAD_SAMPLES) {
+      tripped = false
+      over = 0
+    }
+  }
+  return tripped
+}
 
 /**
  * Whether the load has been over the ceiling in each of the newest `SUSTAINED_LOAD_SAMPLES` minute samples (newest
- * first) and still is by the reading now (a reading back under it clears the trip at once; an unread one does not).
+ * first) and still is by the reading now: tripped. A trip then stays (`held`) until the newest `RELEASE_LOAD_SAMPLES`
+ * samples are all at `LOAD_RELEASE_SHARE` of the ceiling or under; one reading back under the ceiling does not clear it,
+ * since the load of the work a reopened gate admits arrives minutes later. The replay runs over the unbroken run of
+ * samples the caller read (`LOAD_TRIP_HISTORY_SAMPLES`); a trip older than that run is not remembered.
  * Null when fewer samples are fresh: the caller falls back to the reading of the instant.
  */
 export function loadTrip(
@@ -79,13 +123,24 @@ export function loadTrip(
     return null
   const loads = window.map((s) => s.load)
   if (loads.some((load) => load === null)) return null
+  const newest = (loads as number[]).map((l) => Math.round(l * 10) / 10)
   const over = (loads as number[]).every((load) => load > ceiling) && (loadNow === null || loadNow > ceiling)
-  return over ? { tripped: true, loads: (loads as number[]).map((l) => Math.round(l * 10) / 10) } : { tripped: false }
+  if (over) return { tripped: true, loads: newest }
+  const run: number[] = []
+  for (const [i, sample] of samplesNewestFirst.entries()) {
+    const next = samplesNewestFirst[i + 1]
+    if (sample.load === null) break
+    run.push(sample.load)
+    if (!next || sample.at.getTime() - next.at.getTime() > HISTORY_GAP_MS) break
+  }
+  return tripsOver(run.reverse(), ceiling) ? { tripped: true, loads: newest, held: true } : { tripped: false }
 }
 
-/** The tripwire's words: `load over 36 in each of the last 5 minutes (41.2, 38, …)`. */
-export const describeTrip = (loads: readonly number[], ceiling: number): string =>
-  `load over ${ceiling} in each of the last ${loads.length} minutes (${loads.join(', ')})`
+/** The tripwire's words: `load over 36 in each of the last 5 minutes (41.2, 38, …)`, or, held, what it waits for. */
+export const describeTrip = (trip: { loads: readonly number[]; held?: true }, ceiling: number): string =>
+  trip.held
+    ? `load was over ${ceiling} and has not yet stayed at ${Math.round(ceiling * LOAD_RELEASE_SHARE)} or under for ${RELEASE_LOAD_SAMPLES} minutes (${trip.loads.join(', ')})`
+    : `load over ${ceiling} in each of the last ${trip.loads.length} minutes (${trip.loads.join(', ')})`
 
 /** The load ceiling of the throughput rule, in multiples of the host's cores: no new lead above 3x. */
 export const DEFAULT_LOAD_PER_CORE = 3

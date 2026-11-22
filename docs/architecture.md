@@ -252,7 +252,9 @@ so repair still runs.
 
 - **Grant**: a base count of slots and a cap above it. A step beyond the base waits while the load tripwire holds
   (`loadTrip`, `SUSTAINED_LOAD_SAMPLES` in `domains/capacity/host.ts`: over the lead ceiling in each of the newest
-  five minute samples). While swap grows or the tripwire holds, only the first step runs, base slots included.
+  five minute samples). A trip is held until the newest three samples are at three quarters of the ceiling or under: one
+  reading back under the ceiling reopens nothing (on 2026-11-21 the gate reopened 42 times on such a dip and 26 were
+  followed by a load over 47). While swap grows or the tripwire holds, only the first step runs, base slots included.
 - **Fit**: a step's peak is learned per project (`stepNameOf`, `domains/capacity/costs.ts`) as the p80 of its eight
   newest runs; a step with nothing learned is sized by a prior and never refused (`stepPrior`). Free memory is the
   kernel's (`freeMibOf`, `kernel_free_pct`).

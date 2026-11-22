@@ -57,9 +57,8 @@ export const PAYLOADS = {
     size: z.enum(ISSUE_SIZES).optional(),
   }),
   /**
-   * capacity lets a lead start: the next attempt. `load` is the reading admission decided with (null: none was read); a
-   * tripped load rule is cleared by a live reading under the ceiling, which no minute sample shows, so the self-watch
-   * judges a passed gate by this one (old events carry none).
+   * capacity lets a lead start: the next attempt. `load` is the reading admission decided with (null: none was read); no minute
+   * sample shows it, so the self-watch judges a passed gate by this one (old events carry none).
    */
   admitted: z.object({ load: z.number().nullable().optional() }),
   /** the attempt's lead runs in its terminal */

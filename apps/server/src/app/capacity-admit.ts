@@ -13,11 +13,11 @@ import { type LeadGrowth, leadGrowth, learnLeadCost } from '../domains/capacity/
 import { DISK_RAMP_MS, type DiskFit, diskHeadroomMib, learnedWorktreeMib } from '../domains/capacity/disk.ts'
 import {
   type LoadTrip,
+  LOAD_TRIP_HISTORY_SAMPLES,
   loadTrip,
   type MemoryCeilings,
   type MemoryReading,
   reservedOf,
-  SUSTAINED_LOAD_SAMPLES,
   sustainedSwapoutMb,
 } from '../domains/capacity/host.ts'
 import { testLineOf } from '../domains/capacity/slots.ts'
@@ -196,7 +196,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     ok({
       projects: deps.doctor ? await planning.projects() : [],
       latest: await capacity.latestHostSample(),
-      recent: await capacity.recentHostSamples(Math.max(ALLOWANCE_SAMPLES, SUSTAINED_LOAD_SAMPLES)),
+      recent: await capacity.recentHostSamples(Math.max(ALLOWANCE_SAMPLES, LOAD_TRIP_HISTORY_SAMPLES)),
       slots: await capacity.slots(),
       stepMs: await capacity.stepMedianMs(new Date(now.getTime() - STEP_WINDOW_MS)),
       peaks: await capacity.leadPeaks(now),
@@ -790,13 +790,13 @@ async function recordReadiness(deps: CapacityDeps, queue: readonly QueueEntry[],
 /**
  * The host readings with the load read now. A reading that fails keeps the pass's last one (`readHost` already noted a
  * failure), so a host that answered before is never admitted into without a load because of one slow `sysctl`. A
- * tripped tripwire is cleared by a reading now back under the ceiling, as `loadTrip` clears it.
+ * tripped tripwire is not cleared by one reading under the ceiling: `loadTrip` releases it only after the load has stayed
+ * at its release line for several minutes.
  */
 async function withFreshLoad(deps: CapacityDeps, host: HostInputs): Promise<HostInputs> {
   const load = await deps.host.load()
   if (!load.ok) return host
-  const cleared = host.loadTrip?.tripped && load.value <= deps.limits.loadCeiling
-  return { ...host, load: load.value, ...(cleared ? { loadTrip: { tripped: false } as const } : {}) }
+  return { ...host, load: load.value }
 }
 
 /** The most Issues one pass admits; the rest wait for the next. */

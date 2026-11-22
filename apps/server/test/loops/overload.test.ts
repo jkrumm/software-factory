@@ -190,11 +190,11 @@ test('gates_passed: the load rule is the tripwire: a lead admitted under a short
   expect(gatesPassedFindings(gap, [admit(2)], RULES, NOW)).toHaveLength(1)
 })
 
-test('gates_passed: the reading admission recorded decides, a live reading under the ceiling clears a tripped tripwire (issue 2626)', () => {
+test('gates_passed: the reading admission recorded decides: a lead admitted under the ceiling passed no gate (issue 2626)', () => {
   // five samples over the ceiling in a row, and 49.2 in the sample after: by the samples alone the rule refused
   const sustained = loads([10, 50, 50, 50, 50, 50, 49.2, 49.2], 36)
   expect(gatesPassedFindings(sustained, [admit(2)], RULES, NOW)).toHaveLength(1)
-  // admission read 35.1 live (the sample before was 36.1) and cleared the trip, as designed: the load of the next minute is not its reading
+  // admission read 35.1 live (the sample before was 36.1): it was admitted under the ceiling, and the load of the next minute is not its reading
   expect(gatesPassedFindings(sustained, [{ ...admit(2), load: 35.1 }], RULES, NOW)).toEqual([])
   // admission read the load over the ceiling and let the lead in: a passed gate
   const read = gatesPassedFindings(sustained, [{ ...admit(2), load: 49 }], RULES, NOW)

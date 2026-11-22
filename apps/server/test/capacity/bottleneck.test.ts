@@ -181,7 +181,29 @@ describe('the load tripwire', () => {
 
   test('trips after five minute samples on end over the ceiling, and the reading now still over it', () => {
     expect(loadTrip(samples([41, 40, 39, 38, 37]), 36, T, 42)).toEqual({ tripped: true, loads: [41, 40, 39, 38, 37] })
-    expect(loadTrip(samples([41, 40, 39, 38, 37]), 36, T, 20)).toEqual({ tripped: false })
+  })
+
+  test('a reading back under the ceiling does not clear it: it is held until three samples are at 3/4 of the ceiling or under', () => {
+    expect(loadTrip(samples([41, 40, 39, 38, 37]), 36, T, 20)).toEqual({
+      tripped: true,
+      loads: [41, 40, 39, 38, 37],
+      held: true,
+    })
+    // the dip of 2026-11-22 01:04: one sample at 35 after a run over the ceiling
+    expect(loadTrip(samples([35, 44, 43, 41, 40, 39, 38]), 36, T, 35)).toMatchObject({ tripped: true, held: true })
+    expect(loadTrip(samples([30, 31, 44, 43, 41, 40, 39, 38]), 36, T, 30)).toMatchObject({ tripped: true, held: true })
+    expect(loadTrip(samples([26, 27, 22, 44, 43, 41, 40, 39, 38]), 36, T, 26)).toEqual({ tripped: false })
+    // two calm minutes, then the load climbs again: still the same trip
+    expect(loadTrip(samples([40, 20, 25, 44, 43, 41, 40, 39, 38]), 36, T, 40)).toMatchObject({ tripped: true })
+  })
+
+  test('a trip is replayed over the unbroken run of samples only', () => {
+    const gap = [
+      ...samples([30, 31, 32, 33, 34]),
+      { at: new Date(T.getTime() - 20 * 60_000), load: 50 },
+      ...[1, 2, 3, 4, 5, 6].map((i) => ({ at: new Date(T.getTime() - (20 + i) * 60_000), load: 50 })),
+    ]
+    expect(loadTrip(gap, 36, T, 30)).toEqual({ tripped: false })
   })
 
   test('a peak, or four minutes over it, trips nothing: the longest run over the ceiling in three days was four', () => {
