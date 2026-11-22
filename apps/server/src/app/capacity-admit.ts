@@ -148,6 +148,9 @@ export interface QueueEntry {
   project: string | null
   kind: string
   prio: number
+  /** the owner's priority of its project, and whether the project priorities moved this Issue's place, ahead or behind */
+  projectPrio: number
+  byProjectPrio: boolean
   /** null: nothing keeps it out; it is admitted when it is its turn */
   reason: QueueReason | null
   /** the account it would run on, when nothing keeps it out */
@@ -550,7 +553,14 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
     size: i.size,
     since: i.since,
   }))
-  const ordered = orderQueue({ open, edges: snap.edges, prio: snap.prio, now: snap.now, modelOrder: snap.queueOrder })
+  const ordered = orderQueue({
+    open,
+    edges: snap.edges,
+    prio: snap.prio,
+    projectPrio: snap.states.prios,
+    now: snap.now,
+    modelOrder: snap.queueOrder,
+  })
   const claims = [...snap.claims]
   const taken = new Set(claims.map((s) => s.issue))
   const loaded = loadedAccounts(snap)
@@ -644,6 +654,8 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       project: issue.project,
       kind: issue.kind,
       prio: row.prio,
+      projectPrio: row.projectPrio,
+      byProjectPrio: row.byProjectPrio,
     }
     if (row.reason) {
       const reason = { ...row.reason, opensAt: null }

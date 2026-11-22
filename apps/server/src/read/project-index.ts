@@ -50,6 +50,9 @@ const PlanFile = z.object({ rows: z.array(z.object({ key: z.string(), issue: z.n
 const Filed = z.object({ project: z.string(), row_key: z.string(), issue_id: z.string(), state: z.string() })
 const Closed = z.object({ id: z.string() })
 const Seats = z.object({ seats: z.number().int() })
+/** from the least to the most restrictive: the one that applies to a project is the later of its own and the whole queue's */
+const QUEUE_STATE_ORDER = ['run', 'pace', 'drain'] as const
+const QueueScope = z.object({ project: z.string(), state: z.enum(['run', 'pace', 'drain']), prio: z.number().int() })
 const Latest = z.object({ project: z.string(), at: z.date(), digest: z.unknown() })
 const FindingPass = z.object({ repo: z.string(), at: z.date(), keys: z.unknown(), entries: z.unknown() })
 
@@ -264,6 +267,17 @@ export async function readProjectIndex(
   const seatRows: unknown[] = await sql`
     SELECT seats FROM factory.host_samples
     WHERE seats IS NOT NULL AND at >= ${new Date(now.getTime() - SEATS_MAX_AGE_MS)} ORDER BY at DESC LIMIT 1`
+  const queueRows: unknown[] = await sql`SELECT project, state, prio FROM factory.capacity_queue_states`
+  const queueScopes = queueRows.map((raw) => QueueScope.parse(raw))
+  const wholeQueue = queueScopes.find((row) => row.project === '')?.state ?? 'run'
+  const queueOf = (name: string): ProjectIndexRow['queue'] => {
+    const own = queueScopes.find((row) => row.project === name)
+    const ownState = own?.state ?? 'run'
+    return {
+      state: QUEUE_STATE_ORDER.indexOf(wholeQueue) >= QUEUE_STATE_ORDER.indexOf(ownState) ? wholeQueue : ownState,
+      prio: own?.prio ?? 0,
+    }
+  }
   const digestRows: unknown[] = await sql`
     SELECT DISTINCT ON (project) project, at, digest FROM factory.project_digests ORDER BY project, at DESC, id DESC`
   const digests = new Map(digestRows.map((raw) => Latest.parse(raw)).map((row) => [row.project, row]))
@@ -315,6 +329,7 @@ export async function readProjectIndex(
           running: own.filter((i) => i.state === 'working').length,
           cap: cap > 0 && cap < NO_LEAD_CAP ? cap : null,
         },
+        queue: queueOf(project.name),
         digest: digestOf(project.name),
       }
     }),

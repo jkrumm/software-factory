@@ -149,6 +149,8 @@ export const LANGUAGE = {
     'A test signal a lead marks (probe: true) so it is stored dismissed and never held; its ack is dropped, detail probe',
   project:
     "A repo the factory knows, described by its project.yaml (every key: docs/project.md). signals: says which automatic sources it listens to; a work repo listens to the owner only. host: names the host its alerts sit on (a key of config/infra.json's hosts), so its Kuma and HyperDX alerts join that host's incident. doctor: make doctor is the project saying whether this host can run it: a read-only command of seconds that exits non-zero with one line per missing prerequisite and its fix; while it is red the project's Issues stay queued (kind doctor, with those lines) and hygiene skips its check probe",
+  'project priority':
+    "The owner's integer for a project, -1000 to 1000, default 0, set with factory queue prio <n> --project <name> and stored beside the project's queue state. Among queued Issues that may start, the Issue's own prio decides first and the project's priority next: of equal Issue prio, the Issues of the higher project start first. A fix of a stopped line and an owed lead stay ahead of it. factory queue order says when it decided a place",
   promote:
     "A quarantined signal becomes work: the owner's, his orchestrator's (recorded as orchestrator) or the Judge's call",
   'quarantined signal':

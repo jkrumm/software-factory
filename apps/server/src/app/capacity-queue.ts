@@ -1,5 +1,10 @@
 import type { Relearn } from '../domains/capacity/ports.ts'
-import type { QueueState, QueueStates } from '../domains/capacity/queue-state.ts'
+import {
+  PROJECT_PRIO_MAX,
+  PROJECT_PRIO_MIN,
+  type QueueState,
+  type QueueStates,
+} from '../domains/capacity/queue-state.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import type { PlanningDeps } from './planning-deps.ts'
 
@@ -11,6 +16,23 @@ export async function setQueueState(
   return deps.uow.run(async ({ capacity }) => {
     await capacity.lock()
     await capacity.setQueueState(input.project, input.state, deps.clock.now())
+    return ok(await capacity.queueStates())
+  })
+}
+
+/** Sets a project's priority, an integer in an Issue's range; its queue state stays as it is. */
+export async function setProjectPrio(
+  deps: PlanningDeps,
+  input: { project: string; prio: number },
+): Promise<Result<QueueStates, PortError>> {
+  if (!Number.isInteger(input.prio) || input.prio < PROJECT_PRIO_MIN || input.prio > PROJECT_PRIO_MAX) {
+    return err(
+      portError('refused', `a project priority is a whole number from ${PROJECT_PRIO_MIN} to ${PROJECT_PRIO_MAX}`),
+    )
+  }
+  return deps.uow.run(async ({ capacity }) => {
+    await capacity.lock()
+    await capacity.setProjectPrio(input.project, input.prio, deps.clock.now())
     return ok(await capacity.queueStates())
   })
 }

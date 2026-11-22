@@ -35,6 +35,10 @@ export type ChainReason =
 export interface Ordered {
   issue: OpenIssue
   prio: number
+  /** the owner's priority of its project; 0 when none */
+  projectPrio: number
+  /** true when the project priorities put this Issue in another place, ahead or behind, than it would have with every project at 0 */
+  byProjectPrio: boolean
   /** set when the chain keeps this Issue out of the candidates */
   reason: ChainReason | null
   /** for an Issue its `after` edges hold: what would keep it out with those edges gone (null: nothing of the chain's) */
@@ -80,7 +84,7 @@ function throughputKey(issue: OpenIssue, now: Date | undefined): number {
 /**
  * The queued Issues in the order they are looked at, first rule first: the fix of a stopped line (an incident), then
  * dependencies (an Issue with an open blocker, or a filed Spec without a verdict, is no candidate: it follows the others, carrying its reason), then the
- * owner's `prio` (higher first, never overridden), then age (the lower Issue number). Each Issue carries the chain's
+ * owner's `prio` (higher first, never overridden), then the owner's priority of its project (higher first), then age (the lower Issue number). Each Issue carries the chain's
  * reason when it is not a candidate.
  *
  * Within one project and one prio the order is for throughput: what finishes sooner first (`throughputKey`, with
@@ -92,6 +96,8 @@ export function orderQueue(input: {
   open: readonly OpenIssue[]
   edges: readonly Edge[]
   prio: ReadonlyMap<IssueId, number>
+  /** the owner's priority per project name; a project not in it counts 0 */
+  projectPrio?: ReadonlyMap<string, number> | undefined
   now?: Date | undefined
   /** the position of each Issue in the newest order the queue model gave its repo */
   modelOrder?: ReadonlyMap<IssueId, number> | undefined
@@ -102,30 +108,49 @@ export function orderQueue(input: {
     .map((issue): Ordered => ({
       issue,
       prio: input.prio.get(issue.id) ?? 0,
+      projectPrio: issue.project === null ? 0 : (input.projectPrio?.get(issue.project) ?? 0),
+      byProjectPrio: false,
       reason: reasonOf(issue, input.edges, stopped),
       withoutEdges: reasonOf(issue, [], stopped),
     }))
   const rank = (row: Ordered): number => (row.reason !== null ? 2 : isFix(row.issue) ? 0 : 1)
-  rows.sort((a, b) => rank(a) - rank(b) || b.prio - a.prio || issueNumber(a.issue.id) - issueNumber(b.issue.id))
-
   const model = (row: Ordered): number => input.modelOrder?.get(row.issue.id) ?? Number.POSITIVE_INFINITY
   const sooner = (a: Ordered, b: Ordered): number =>
     throughputKey(a.issue, input.now) - throughputKey(b.issue, input.now) ||
     (model(a) === model(b) ? 0 : model(a) < model(b) ? -1 : 1) ||
     issueNumber(a.issue.id) - issueNumber(b.issue.id)
-  const groups = new Map<string, number[]>()
-  rows.forEach((row, at) => {
-    if (row.reason !== null) return
-    const groupKey = `${rank(row)}|${row.prio}|${row.issue.project ?? ''}`
-    groups.set(groupKey, [...(groups.get(groupKey) ?? []), at])
-  })
-  const placed = [...rows]
-  for (const places of groups.values()) {
-    const members = places.map((at) => rows[at] as Ordered).sort(sooner)
-    places.forEach((at, i) => {
-      placed[at] = members[i] as Ordered
+
+  /** The order the rules give, the project priority counted as `projectPrioOf` says. */
+  const place = (projectPrioOf: (row: Ordered) => number): Ordered[] => {
+    const sorted = [...rows].sort(
+      (a, b) =>
+        rank(a) - rank(b) ||
+        b.prio - a.prio ||
+        projectPrioOf(b) - projectPrioOf(a) ||
+        issueNumber(a.issue.id) - issueNumber(b.issue.id),
+    )
+    const groups = new Map<string, number[]>()
+    sorted.forEach((row, at) => {
+      if (row.reason !== null) return
+      const groupKey = `${rank(row)}|${row.prio}|${row.issue.project ?? ''}`
+      groups.set(groupKey, [...(groups.get(groupKey) ?? []), at])
     })
+    const placed = [...sorted]
+    for (const places of groups.values()) {
+      const members = places.map((at) => sorted[at] as Ordered).sort(sooner)
+      places.forEach((at, i) => {
+        placed[at] = members[i] as Ordered
+      })
+    }
+    return placed
   }
+
+  const placed = place((row) => row.projectPrio)
+  // The project priority decided a place when a row stands elsewhere than it would with every project at priority 0.
+  const without = new Map(place(() => 0).map((row, at) => [row.issue.id, at]))
+  placed.forEach((row, at) => {
+    row.byProjectPrio = without.get(row.issue.id) !== at
+  })
   return placed
 }
 

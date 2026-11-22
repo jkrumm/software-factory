@@ -160,6 +160,7 @@ describe('the policy table', () => {
       ['POST', '/issues/:id/answer'],
       ['POST', '/issues/:id/prio'],
       ['PUT', '/queue'],
+      ['PUT', '/queue/prio'],
       ['POST', '/v1/loops/:name/run'],
       ['POST', '/v1/artifacts/:id/verdict'],
       ...RELEASE_ROUTES,

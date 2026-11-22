@@ -55,7 +55,7 @@ const DAY_MS = 24 * 3_600_000
 /** the settled kind, else the filed one, as `open-issues.ts` reads it; an absent or unknown kind reads as a chore */
 const kindOf = (kind: string | null): FlowIssue['kind'] => ISSUE_KINDS.find((known) => known === kind) ?? 'chore'
 
-const QueueRow = z.object({ project: z.string(), state: z.enum(['run', 'pace', 'drain']) })
+const QueueRow = z.object({ project: z.string(), state: z.enum(['run', 'pace', 'drain']), prio: z.number().int() })
 
 const RECENT_MS = 24 * 3_600_000
 
@@ -148,7 +148,7 @@ export async function readFlow(
     WHERE i.state = 'closed' AND i.outcome IN ('done', 'healed')
       AND c.at > ${now}::timestamptz - interval '30 days' AND c.at <= ${now}
     GROUP BY bucket`
-  const scopes: unknown[] = await sql`SELECT project, state FROM factory.capacity_queue_states`
+  const scopes: unknown[] = await sql`SELECT project, state, prio FROM factory.capacity_queue_states`
 
   const seats = await readLeadSeats(
     sql,
@@ -252,6 +252,11 @@ export async function readFlow(
       // a work project's name is its words: under the read token its scope is not listed
       projects: Object.fromEntries(
         states.filter((row) => row.project !== '' && !hidden(row.project)).map((row) => [row.project, row.state]),
+      ),
+      prios: Object.fromEntries(
+        states
+          .filter((row) => row.project !== '' && row.prio !== 0 && !hidden(row.project))
+          .map((row) => [row.project, row.prio]),
       ),
     },
   }

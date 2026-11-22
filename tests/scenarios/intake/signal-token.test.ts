@@ -70,6 +70,7 @@ test('the signal token is refused on every other route, reads included', async (
     ['POST', '/signals/signal_1/promote'],
     ['POST', '/v1/issues/issue_1/close'],
     ['PUT', '/queue'],
+    ['PUT', '/queue/prio'],
     ['GET', '/capacity'],
   ] as const) {
     const response = await asSignal(path, method)

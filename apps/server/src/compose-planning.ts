@@ -15,7 +15,7 @@ import {
   queueView,
 } from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
-import { getQueueStates, setQueueState, setRelearn } from './app/capacity-queue.ts'
+import { getQueueStates, setProjectPrio, setQueueState, setRelearn } from './app/capacity-queue.ts'
 import { giveSlotBack, recordMergeWindow, recordStepCost, type SignalFiler, touchSlot } from './app/capacity-slots.ts'
 import { accountsView, clearAccountMode, setAccountMode } from './app/accounts-view.ts'
 import { capacityState, refreshState } from './app/capacity-view.ts'
@@ -31,7 +31,7 @@ import { applyReplan, fileReplan } from './app/planning-replan.ts'
 import { projectOf } from './domains/planning/sync.ts'
 import { type IssueId, issueId, issueNumber } from './kernel/ids.ts'
 import { key } from './kernel/keys.ts'
-import { ok, type PortError, type Result } from './kernel/result.ts'
+import { err, ok, type PortError, type Result } from './kernel/result.ts'
 
 /** The remote is asked for new commits this often; every other pass reads the default branch as last fetched. */
 const FETCH_EVERY_MS = 10 * 60_000
@@ -185,11 +185,35 @@ export function composePlanning(input: {
       queue: () => queueView(capacity),
       queueStates: async (project) => {
         const states = await getQueueStates(writes)
-        if (!states.ok || project === undefined) return states
+        if (!states.ok) return states
+        const known = await writes.uow.run(async ({ planning }) => ok((await planning.projects()).map((p) => p.name)))
+        if (!known.ok) return known
+        // every known project shows its priority, 0 when none was set
+        const prios = (names: readonly string[]) =>
+          new Map(names.map((n) => [n, states.value.prios.get(n) ?? 0] as const))
+        if (project === undefined) return ok({ ...states.value, prios: prios(known.value) })
         const name = await projectName(project)
         if (!name.ok) return name
         const own = states.value.projects.get(name.value)
-        return ok({ global: states.value.global, projects: new Map(own ? [[name.value, own]] : []) })
+        return ok({
+          global: states.value.global,
+          projects: new Map(own ? [[name.value, own]] : []),
+          prios: prios([name.value]),
+        })
+      },
+      setProjectPrio: async (request) => {
+        const name = await projectName(request.project)
+        if (!name.ok) return name
+        const known = await writes.uow.run(async ({ planning }) =>
+          ok((await planning.projects()).some((p) => p.name === name.value)),
+        )
+        if (!known.ok) return known
+        if (!known.value)
+          return err({
+            kind: 'unknown_project' as const,
+            detail: `no project named ${name.value}: the factory has not read its project.yaml`,
+          })
+        return setProjectPrio(writes, { ...request, project: name.value })
       },
       setQueueState: async (request) => {
         if (request.project === null) return setQueueState(writes, request)

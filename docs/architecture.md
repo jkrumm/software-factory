@@ -699,9 +699,12 @@ three answers the Throughput page opens on: `host`, `queue`, `cost`. Each read h
 
 Rules, one line each:
 
-- Queue order (`orderQueue`, `domains/planning/queue.ts`): inside one project and `prio`, Issues sort by size, aged
-  one size per `AGEING_STEP_MS`, then by the `factory-queue` order, then by number. Blockers and `prio` are never
-  changed.
+- Queue order (`orderQueue`, `domains/planning/queue.ts`): the fix of a stopped line, then candidates by the Issue's `prio`,
+  then the project's priority (`factory queue prio`, the `prio` column of `capacity_queue_states`, read by the same
+  snapshot as the queue state; owed leads never enter the order), then by number. Inside one project and `prio`, Issues
+  sort by size, aged one size per `AGEING_STEP_MS`, then by the `factory-queue` order, then by number. Blockers and
+  `prio` are never changed. `PUT /queue/prio` is owner only and not on the Console's `WRITES` list: the Projects
+  screen shows the Queue column and the lines to copy.
 - An edge the factory added comes back out when both Issues shipped with no shared path, or the blocker waited on the
   owner past `OWNER_WAIT_MS` (`domains/planning/edge-need.ts`); `checkQueue` (`domains/planning/queue-edges.ts`) runs
   it through `removeInferredEdge` (`app/planning-chain.ts`), which keeps each removal in

@@ -37,6 +37,7 @@ function row(name: string, over: Partial<ProjectIndexRow> = {}): ProjectIndexRow
     production: { incidents: 0, incidentAt: null, regressionAt: null },
     plan: { done: 0, total: 0 },
     leads: { running: 0, cap: null },
+    queue: { state: 'run', prio: 0 },
     digest: null,
     ...over,
   }

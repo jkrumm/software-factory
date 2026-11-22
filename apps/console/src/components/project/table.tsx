@@ -52,6 +52,7 @@ import {
   hourLabels,
   LastShipCell,
   LeadsCell,
+  QueueCell,
   MedianCell,
   NowCell,
   PlanCell,
@@ -115,6 +116,7 @@ const columns = helper.columns([
     sortUndefined: 'last',
   }),
   helper.accessor((row) => row.leads.running, { id: 'leads', header: 'Leads', sortDescFirst: true }),
+  helper.accessor((row) => row.queue.prio, { id: 'queue', header: 'Queue', sortDescFirst: true }),
 ])
 
 /** What each column answers, on hover of its header; the domain words carry their InfoHint. */
@@ -162,6 +164,12 @@ const HEADS: Record<ColumnId, { title: string; hint?: InfoWord; width: string; a
     hint: 'seat',
     width: '8rem',
     align: 'left',
+  },
+  queue: {
+    title:
+      'The queue state that applies (run, pace, drain) and the project priority: a higher project starts first among Issues of one priority',
+    width: '7.5rem',
+    align: 'right',
   },
 }
 
@@ -284,6 +292,8 @@ export function ProjectTable({ model, now }: { model: ProjectIndexModel; now: nu
         return <PlanCell row={row} />
       case 'leads':
         return <LeadsCell row={row} seats={model.seats} />
+      case 'queue':
+        return <QueueCell row={row} />
     }
   }
 

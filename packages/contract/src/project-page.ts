@@ -84,6 +84,8 @@ export const ProjectIndexRow = z
     plan: z.strictObject({ done: z.number().int().min(0), total: z.number().int().min(0) }),
     /** leads running in the project now (Issues `working`), and its own `leads:` cap; null: it states none */
     leads: z.strictObject({ running: z.number().int().min(0), cap: z.number().int().nullable() }),
+    /** the queue state that applies to the project now (its own and the whole queue's, the more restrictive) and its priority, the owner's: 0 when none */
+    queue: z.strictObject({ state: z.enum(['run', 'pace', 'drain']), prio: z.number().int() }),
     /** the project's newest digest; null: none made, or its newest digest does not read */
     digest: z
       .strictObject({

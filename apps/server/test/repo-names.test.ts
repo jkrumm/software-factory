@@ -59,6 +59,7 @@ describe('the migration that rewrites stored paths to names', () => {
     const events = await db.sql`SELECT payload->>'repo' AS repo FROM factory.issue_events ORDER BY id`
     expect(events.map((e: { repo: string }) => e.repo)).toEqual(Array(3).fill('software-factory'))
 
+    await migrate(db.sql, all) // the read is today's: it needs the columns of the later migrations
     const flow = FlowModel.parse(await readFlow(db.sql, { now: NOW }))
     expect(flow.perProject.map((p) => [p.repo, p.open, p.work.ready])).toEqual([['software-factory', 3, 3]])
   })

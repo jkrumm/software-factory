@@ -173,6 +173,7 @@ export const POLICY: readonly Rule[] = [
   rule('GET', '/queue/order', OWNER),
   rule('GET', '/queue', OWNER),
   rule('PUT', '/queue', OWNER),
+  rule('PUT', '/queue/prio', OWNER),
 ]
 
 /** `/x/` and `/x` are one route (a group's `/` route carries the prefix's trailing slash). */

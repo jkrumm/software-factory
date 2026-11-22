@@ -89,7 +89,7 @@ describe('the empty database', () => {
     expect(flow.trend.shippedHourly).toEqual(Array(168).fill(0))
     expect(flow.trend.shippedDaily30).toEqual(Array(30).fill(0))
     expect(flow.perProject).toEqual([])
-    expect(flow.queueStates).toEqual({ global: 'run', projects: {} })
+    expect(flow.queueStates).toEqual({ global: 'run', projects: {}, prios: {} })
 
     const chain = ChainModel.parse(await readChain(sql, NOW))
     expect(chain).toMatchObject({ nodes: [], edges: [], blocking: {} })
@@ -351,7 +351,7 @@ describe('the fixture', () => {
     ])
     expect(openOfWork(flow.work)).toBe(7)
     expect(flow.work).toMatchObject({ running: 1, paused: 4, held: 2 })
-    expect(flow.queueStates).toEqual({ global: 'drain', projects: { app: 'pace' } })
+    expect(flow.queueStates).toEqual({ global: 'drain', projects: { app: 'pace' }, prios: {} })
   })
 
   test('chain: open Issues and unfiled rows, edges with closed, what blocks each queued node', async () => {
