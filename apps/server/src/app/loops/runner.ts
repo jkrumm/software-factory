@@ -1,7 +1,7 @@
 import type { LoopName, LoopView } from '@software-factory/contract'
 import type { Clock } from '../../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
-import { errorAttrs, logEvent, quietly, tracePass } from '../../kernel/telemetry.ts'
+import { errorAttrs, logEvent, markActive, quietly, tracePass } from '../../kernel/telemetry.ts'
 
 /**
  * A loop (`docs/language.md`): a named tick with a trigger (an interval, or a kick when something changed), a budget (the
@@ -48,6 +48,8 @@ export function passLoop<P>(
     onChange?: boolean
     maxPasses?: number
     pass(): Promise<Result<P, PortError>>
+    /** whether the pass did something worth a span (its counts above zero); a pass that only looked records nothing */
+    active?(pass: P): boolean
     problems?(pass: P): readonly string[] | null
     summary(pass: P): string
   },
@@ -60,6 +62,7 @@ export function passLoop<P>(
     run: async () => {
       const pass = await spec.pass()
       if (!pass.ok) return pass
+      if (spec.active?.(pass.value)) markActive()
       const problems = spec.problems?.(pass.value)
       if (problems) wiring.said(spec.name, problems)
       return ok(spec.summary(pass.value))
