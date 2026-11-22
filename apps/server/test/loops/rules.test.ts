@@ -607,7 +607,10 @@ test('an edge needs the filed words to name its blocker: a shared topic is dropp
     ok: true,
     after: [],
     dropped: [
-      { issue: id(12), why: 'the filed words never name issue_12: a shared topic is no evidence it builds on it' },
+      {
+        issue: id(12),
+        why: 'the filed words never say they build on issue_12: a shared topic or a bare mention is no evidence',
+      },
     ],
     reason: 'builds on it',
     refinement: { kind: undefined, checkpoint: undefined },
@@ -628,6 +631,27 @@ test('an edge needs the filed words to name its blocker: a shared topic is dropp
   ).toMatchObject({
     after: [],
   })
+})
+
+test('a bare mention of the blocker is no order: where a problem was found or seen is dropped, a dependency stands', () => {
+  const dropped = (text: string) => checkSettle(shown, settling({ text }), triaged({ after: ['issue_12'] }), never)
+  // the three newest triage edges the ledger counted as not needed (2026-11-20 and 21)
+  expect(
+    dropped('Found while closing issue_12 (not in its scope). Verify against origin/master before fixing.'),
+  ).toMatchObject({ after: [] })
+  expect(
+    dropped('Three leads lost time to that with a wrong gh account (issue 12). Expected: land names the stderr.'),
+  ).toMatchObject({ after: [] })
+  expect(
+    dropped("Since issue 12 the Judge's back on a Decision is typed to a lead whose Issue still waits."),
+  ).toMatchObject({ after: [] })
+  // the dependency is in its own sentence, whatever else the text says
+  expect(
+    dropped('Found while closing issue_12. Builds on Issue 12: it reads the column that Issue adds.'),
+  ).toMatchObject({
+    after: [id(12)],
+  })
+  expect(dropped('Depends on issue_12.\nThe rest is context.')).toMatchObject({ after: [id(12)] })
 })
 
 test('an Issue the owner ranked at prio 400 or above is never chained by inference, even when it names the blocker', () => {
