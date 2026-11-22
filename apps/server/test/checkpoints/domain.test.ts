@@ -9,6 +9,7 @@ import {
   readSubmission,
   renderDecisionForm,
 } from '../../src/domains/checkpoints/artifact.ts'
+import { needOf } from '../../src/domains/errands/need.ts'
 import { srcHash } from '@software-factory/contract'
 import {
   defaultAt,
@@ -923,6 +924,56 @@ describe('the Errand screen', () => {
       })
     // an unrelated word that starts with op, and an op command addressed to no MacBook, are left to the screen
     expect(screenByNeed({ summary: 'List it', detail: null, command: 'ops item get x', host: 'macbook' })).toBeNull()
+    const protect = 'gh api -X PUT repos/jkrumm/free-planning-poker/branches/v1/protection --input p.json'
+    expect(screenByNeed({ summary: 'Protect v1', detail: null, command: protect, host: 'macbook' })).toMatchObject({
+      need: 'place',
+    })
+    expect(
+      screenByNeed({
+        summary: 'Add a ruleset',
+        detail: null,
+        command: 'gh api repos/o/r/rulesets -f name=x',
+        host: 'macbook',
+      }),
+    ).toMatchObject({ need: 'place' })
+    expect(
+      screenByNeed({
+        summary: 'Read rules',
+        detail: null,
+        command: 'gh api -X GET repos/o/r/rulesets',
+        host: 'macbook',
+      }),
+    ).toBeNull()
+    expect(
+      screenByNeed({
+        summary: 'Read protection',
+        detail: null,
+        command: 'gh api repos/o/r/branches/v1/protection',
+        host: 'macbook',
+      }),
+    ).toBeNull()
+    const quoted = "gh api -X PUT 'repos/jkrumm/x/branches/v1/protection' --input p.json"
+    expect(screenByNeed({ summary: 'Protect v1', detail: null, command: quoted, host: 'macbook' })).toMatchObject({
+      need: 'place',
+    })
+    const equalsForm = 'gh api -X=DELETE repos/o/r/rulesets/1'
+    expect(
+      screenByNeed({ summary: 'Drop a ruleset', detail: null, command: equalsForm, host: 'macbook' }),
+    ).toMatchObject({
+      need: 'place',
+    })
+    const lastMethod = 'gh api -X GET repos/o/r/rulesets -X DELETE repos/o/r/rulesets/1'
+    expect(
+      screenByNeed({ summary: 'Drop a ruleset', detail: null, command: lastMethod, host: 'macbook' }),
+    ).toMatchObject({ need: 'place' })
+    expect(
+      needOf({
+        summary: 'Ruleset for the browser release check',
+        detail: null,
+        command: 'gh api -X PUT repos/o/r/rulesets -f name=x',
+        host: 'macbook',
+      }),
+    ).toBe('place')
     expect(screenByNeed({ summary: 'List it', detail: null, command: command, host: 'portal' })).toBeNull()
   })
 
