@@ -222,9 +222,18 @@ function askForRelogins(reg: Registry, results: Record<string, RefreshResult>): 
 function cacheHealth(reg: Registry): void {
   try {
     const now = Date.now()
-    writeHealthCache(gradeBothMachines(reg, now).rows, now)
+    saveHealth(gradeBothMachines(reg, now).rows, now)
   } catch (e) {
     console.error(`claude-account: health cache skipped: ${(e as Error).message}`) // a courtesy, never a failure of the keepalive
+  }
+}
+
+/** The cache is a courtesy to the readers that cannot reach the peer: a write that fails never stops the verb that has the rows. */
+function saveHealth(rows: HealthRow[], now: number): void {
+  try {
+    writeHealthCache(rows, now)
+  } catch (e) {
+    console.error(`claude-account: health cache not written: ${(e as Error).message}`)
   }
 }
 
@@ -469,7 +478,7 @@ function gradeBothMachines(reg: Registry, now: number) {
 async function health(reg: Registry, argv: string[]): Promise<number> {
   const now = Date.now()
   const { m, theirs, rows } = gradeBothMachines(reg, now)
-  writeHealthCache(rows, now)
+  saveHealth(rows, now)
   // The plain-ssh read cannot see the peer's Keychain: say so, whatever the format (stderr keeps --json parseable).
   if (m.peer && theirs?.via === 'ssh' && m.peer.herdrCore) {
     const note = `NOTE ${m.peer.name}: its herdr-core was not reachable, so this read went over plain ssh; Keychain logins may show as unreadable here`

@@ -185,7 +185,9 @@ function loginWords(row: AccountHealthRow, now: Date): string {
   if (row.check !== 'login' || row.ends_at === undefined) return capital(row.detail)
   const date = shortDate(row.ends_at)
   if (new Date(row.ends_at) <= now) return `Expired ${date}`
-  const left = row.days_left === undefined ? '' : ` · ${row.days_left} d left`
+  // counted from the date, not from the figure stored at the read: the read may be an hour old, the date does not age
+  const days = Math.round(((new Date(row.ends_at).getTime() - now.getTime()) / 86_400_000) * 10) / 10
+  const left = ` · ${days} d left`
   return `${row.state === 'ok' ? 'Valid until' : 'Ends'} ${date}${left}`
 }
 

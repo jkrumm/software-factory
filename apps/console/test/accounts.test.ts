@@ -226,6 +226,9 @@ describe('the logins of an account', () => {
       ['macbook', 'Login', 'ok', 'good'],
     ])
     expect(lines[0]?.words).toMatch(/^Ends (Thu 26 Nov|Fri 27 Nov) · 6\.9 d left$/)
+    // the days follow the clock, not the figure stored at the read
+    const later = loginLines(view(rows), 'me', new Date('2026-11-22T09:00:00Z'))
+    expect(later[0]?.words).toMatch(/· 4 d left$/)
     expect(lines[1]?.words).toMatch(/^Valid until \w{3} \d+ Nov · 11 d left$/)
   })
 
