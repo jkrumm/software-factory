@@ -780,3 +780,14 @@ it happens through `selfwatch`, not this pass; `peak` is also the step target of
 - **A per-request identity on the Console listener:** accepted (NL25). The tailnet ACL is the perimeter; see
   Perimeter.
 - **Client work in other repos:** Argo's factory pages leaving for the Console; Iris rendering an artifact inside it.
+- **A lead on another agent program** (examined 2026-11-22; the owner deferred it). Leads run on Claude Code only. The three
+  subscriptions did about 9,270 dollars of work at API prices in 7 days (leads 7,020), roughly 13,000 dollars a month per
+  subscription. The free metered budget is about 300 dollars a month (a 500-dollar rolling 30-day cap; the inference gateway's
+  wallet gate refuses optional workflows from 400): under 100 lead-row Issues at Sonnet prices, or an estimated 400 to 600 on
+  the cheaper GPT tiers (third-party cost-per-task ratios, not measured on leads). The gateway serves those GPT tiers on its
+  OpenAI side only, and the Claude credit pools refuse Claude-Code-shaped requests, so either source needs another program.
+  Claude Code is assumed by the start command and resume (`apps/server/src/adapters/hc/terminals.ts`), the six hook events
+  (`apps/cli/src/hook.ts`, `integrations/claude-code/hooks.json`), the screen reader (`apps/server/src/adapters/hc/screen.ts`), the transcript
+  archive and the account environment. Outside this repo, the guard hooks (one of seven shell guards runs under OpenCode) and
+  `rd`, which refuses other agent kinds. It would reopen with a metered budget several times larger, or a need to run
+  without the one vendor.
