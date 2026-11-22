@@ -506,3 +506,15 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   first and changed after, by his comment or a Changes that makes the revision wait. Revert: make `specPathOf` return `owner`
   instead of `plan` and restore the screen's workflow call. Count after a week: Specs in Needs you (above: 88 of 113) down to
   the gates, filed Specs, revisions after Changes and plan-changing Replans; the hours Issues waited for his verdicts (215).
+
+- **NL54 A default is no ruling on a question that comes back (Issue 2955, 2026-11-22).** basalt-ui's expression cycles filed
+  their own successor for ten rounds (about 1,180 dollars in cycle runs and 880 in their fix rows, ten days). Cycle 10 asked
+  whether a cycle with no referenced case may converge on its other clauses; the Decision closed on its default (keep the
+  protocol), the owner has not ruled, and each later cycle logged the open question and filed the next. A default only ends the
+  asking Issue's wait. Decision: order 2 of the lead brief says a row that files its own successor is spend, so when what lets
+  its rounds end rests on a default or on silence, the lead asks again before the next round, with no default, the cost of the
+  last rounds and what stopping leaves undone; the notes of a default taken (the wait running out, `take-default`) say the same.
+  No detector: the factory cannot tell a recurring question from a new one by words, and a count of same-named Issues would file
+  weather. Cost: about 130 bytes of every brief, and one more owner question where a loop runs on a default. Revert: delete the
+  sentence in order 2 and the two note lines. Count after two weeks: Decisions asked with no default by a lead whose row files
+  its successor, and any repo whose same-named Issues pass five in ten days with no owner answer between them.
