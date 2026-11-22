@@ -51,6 +51,21 @@ const SSH_MINI = /^\s*ssh\s+(?:-\S+\s+(?:\S+\s+)?)*mini\s+([\s\S]+)$/
 /** The deploy gate's release of a commit: whoever types it, it is one yes of the owner's. */
 const GATE_RELEASE = /\bdeploy-release\b|\bgate\.py\s+release\b|\bgate\s+release\b/i
 
+/**
+ * A GitHub ruleset or branch-protection write: `gh api` on `…/rulesets` or `…/branches/<b>/protection` with a method other than GET
+ * (an explicit `-X`/`--method`, else a body field, which gh sends as POST). The lead's review-bypass hook (dotfiles
+ * `hooks/review-bypass-guard.ts`) reserves it for the owner's own hand, so it is his to run, not a token's.
+ */
+const RULE_ENDPOINT =
+  /\bgh\s+api\b[^;&|\n]*(?:\/rulesets(?:[\s/]|$)|\/branches\/[^\s/]+\/protection(?:[\s/]|$)|\/protected_branches)/i
+const METHOD = /(?:^|\s)(?:-X\s*|--method(?:=|\s+))(\w+)/i
+const BODY_FIELD = /(?:^|\s)(?:-[fF]|--field|--raw-field|--input)/
+export function isRuleWrite(command: string): boolean {
+  if (!RULE_ENDPOINT.test(command)) return false
+  const method = METHOD.exec(command)?.[1]
+  return method === undefined ? BODY_FIELD.test(command) : method.toUpperCase() !== 'GET'
+}
+
 /** The command as the mini runs it: `ssh <alias> 'x'` is `x` there. Null when the command is not addressed to the mini. */
 export function miniPart(command: string): string | null {
   return SSH_MINI.exec(command)?.[1]?.trim() ?? null

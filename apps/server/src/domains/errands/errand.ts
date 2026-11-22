@@ -5,7 +5,7 @@ import { WORKFLOWS } from '../../kernel/workflows.ts'
 import type { ErrandScreenAnswer, ErrandScreenRequest } from '@software-factory/contract'
 import type { MissingFields } from '../../kernel/missing-fields.ts'
 import { NEED_KEY_RE } from './match.ts'
-import { isApprovalCommand, namesPhysical, namesSecret, type Need, needByRule } from './need.ts'
+import { isApprovalCommand, isRuleWrite, namesPhysical, namesSecret, type Need, needByRule } from './need.ts'
 import { STATED_NEEDS, type StatedNeed } from './triage.ts'
 
 export type ErrandId = Id<'errand'>
@@ -298,6 +298,11 @@ export function screenByNeed(input: ErrandInput & { command: string | null; host
     return {
       need,
       note: "a step only the owner can take: it names a secret (1Password, a biometric, the mini's sudo password) on his MacBook",
+    }
+  if (isRuleWrite(input.command))
+    return {
+      need: 'place',
+      note: "a ruleset or branch-protection write: the lead's review-bypass hook reserves it for the owner's own hand, so it is his to run on his MacBook",
     }
   return null
 }
