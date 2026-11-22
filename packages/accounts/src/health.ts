@@ -60,6 +60,8 @@ function whyNoSample(e: UsageAcct['endpoint']): { why: string; relogin: boolean 
       return { why: 'no readable token in the Keychain', relogin: true }
     case 'no-weekly':
       return { why: 'the usage endpoint answered with no weekly window', relogin: false }
+    case 'ok':
+      return { why: 'the last usage endpoint call succeeded; no refresh has run since', relogin: false }
     case 'http':
       return { why: `usage endpoint HTTP ${e.status}`, relogin: false }
     case 'unreachable':

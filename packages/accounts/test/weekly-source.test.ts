@@ -250,6 +250,10 @@ describe('health says why there is no quota sample', () => {
       fix: null,
     })
     expect(row({ outcome: 'unreachable', status: null }).fix).toBeNull()
+    expect(row({ outcome: 'ok', status: 200 })).toMatchObject({
+      detail: expect.stringContaining('call succeeded'),
+      fix: null,
+    })
   })
   test('no recorded call (an older peer) makes no claim about the token', () => {
     for (const e of [null, undefined]) {
