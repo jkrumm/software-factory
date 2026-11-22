@@ -261,6 +261,64 @@ describe('factory land', () => {
     expect(await masterOf()).not.toBe(before)
   })
 
+  /** Master moves again, as another lead landing in the window does: a file the branch also adds, or one it does not touch. */
+  async function masterMoves(file: string, text: string): Promise<void> {
+    const other = join(dir, 'other')
+    await git(other, 'pull', '--quiet', '--rebase', 'origin', 'master')
+    await writeFile(join(other, file), text)
+    await git(other, 'add', '.')
+    await git(other, 'commit', '--quiet', '-m', `chore: ${file}`)
+    await git(other, 'push', '--quiet', 'origin', 'master')
+  }
+
+  test('a conflict with master is refused before the window is asked for, with the lock still held by another', async () => {
+    await masterMoves('feature.txt', 'theirs\n')
+    const holder = Bun.spawn(['sleep', '60'])
+    sleepers.push(holder)
+    await mkdir(locks, { recursive: true })
+    await symlink(String(holder.pid), join(locks, 'app.merge.lock'))
+    const before = await masterOf()
+    const result = await land().done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: rebase: refused: the rebase onto origin/master stopped on a conflict')
+    expect(result.err).not.toContain('lock: holding')
+    expect(await masterOf()).toBe(before)
+  })
+
+  test('master moving under a wait for the window: a clean move is rebased onto, a conflict ends the wait at once', async () => {
+    const holder = Bun.spawn(['sleep', '60'])
+    sleepers.push(holder)
+    await mkdir(locks, { recursive: true })
+    await symlink(String(holder.pid), join(locks, 'app.merge.lock'))
+    const run = land([], { FACTORY_LAND_REBASE_POLL_MS: '0' })
+    await Bun.sleep(1_500)
+    await masterMoves('second.txt', 'second\n')
+    await Bun.sleep(1_500)
+    expect(run.proc.exitCode).toBeNull()
+    await masterMoves('feature.txt', 'theirs\n')
+    const result = await run.done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: rebase: onto origin/master')
+    expect(result.err).toContain('land: rebase: refused: the rebase onto origin/master stopped on a conflict')
+    expect(result.err).not.toContain('lock: holding')
+  })
+
+  test('a clean move of master during the wait is landed on top of', async () => {
+    const holder = Bun.spawn(['sleep', '60'])
+    sleepers.push(holder)
+    await mkdir(locks, { recursive: true })
+    await symlink(String(holder.pid), join(locks, 'app.merge.lock'))
+    const run = land([], { FACTORY_LAND_REBASE_POLL_MS: '0' })
+    await Bun.sleep(1_500)
+    await masterMoves('second.txt', 'second\n')
+    await Bun.sleep(1_500)
+    holder.kill()
+    const result = await run.done
+    expect(result.code).toBe(0)
+    expect(await git(work, 'log', '-1', '--format=%s', 'HEAD~1')).toBe('chore: second.txt')
+    expect(await masterOf()).toBe(await git(work, 'rev-parse', 'HEAD'))
+  })
+
   test('a held lock past the wait is exit 75 and nothing moves', async () => {
     const holder = Bun.spawn(['sleep', '60'])
     sleepers.push(holder)
