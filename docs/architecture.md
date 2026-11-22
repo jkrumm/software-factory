@@ -130,7 +130,7 @@ Every input is one envelope (`source`, `kind`, `origin`, `trust`, `repo`, `finge
   files anew; no title match, no workflow call. Any other signal that clearly overlaps an open Issue's title amends it
   and reaches its lead as a note; otherwise, unless a fingerprint, subject or open incident settles it, the
   `factory-triage` workflow sees the repo's open Issues and those closed in the last day and answers amend `<Issue>`,
-  "already settled" (acked `dropped`, stored dismissed by the judge) or neither. `POST /signals` waits for it at most
+  "already settled" (acked `dropped`, stored dismissed by the judge) or neither; a `down` whose subject never reported `up` since its last Issue was filed is still firing, so that answer is ignored and it files. `POST /signals` waits for it at most
   `triageWaitMs` (8 s); later it files anew and the run goes on unwatched, and the same signal sent again rejoins it
   by its key. A signal with the retro marker (`Retro: <date> kpi=…`) skips both and files its own Issue. A `down`
   waits out a heal grace as `held`; an `up` inside it is `healed`, and a project's heal rule runs `make restart` in
