@@ -345,6 +345,13 @@ export const KpiPart = z
     label: z.string(),
     value: z.number(),
     unit: z.enum(KPI_UNITS),
+    /**
+     * Set on a part that is a share of its own group's answers (the asks): `count` of `n`. A share of a group of two and one of
+     * sixty-five do not compare, so the largest part of such a KPI is the one with the most `count`. Absent on a part that is
+     * the sum of others (the asks by kind: its Specs are the Specs by source) and on every other KPI's parts.
+     */
+    count: z.number().int().optional(),
+    n: z.number().int().optional(),
   })
   .meta({ id: 'KpiPart' })
 export type KpiPart = z.infer<typeof KpiPart>

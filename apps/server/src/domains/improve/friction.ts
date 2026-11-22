@@ -126,6 +126,18 @@ export const kpiFigure = (target: KpiTargetValue, value: number): number =>
 const OVER_ISSUES: ReadonlySet<Kpi['unit']> = new Set(['per_issue', 'per_100_issues'])
 
 /**
+ * Where to start in a KPI's breakdown. Parts that are shares of their own group's answers (`count` of `n`) are ranked by
+ * `count`: the share of a group of two says nothing next to one of sixty-five. The rest are ranked by value.
+ */
+function largestPart(parts: readonly KpiPart[]): KpiPart | null {
+  const counted = parts.filter((part) => part.count !== undefined)
+  if (counted.length > 0) {
+    return counted.toSorted((a, b) => (b.count ?? 0) - (a.count ?? 0) || b.value - a.value)[0] ?? null
+  }
+  return parts.toSorted((a, b) => b.value - a.value)[0] ?? null
+}
+
+/**
  * The KPIs off their target (`THRESHOLDS.kpis`) over a whole window, as patterns keyed `kpi:<key>`, each naming its largest
  * part: for avoidable touches, the touch kind to remove first. A window the counting epoch cut is not whole and judges none; a
  * KPI with no figure, a rate over fewer than `MIN_CLOSED` Issues, or no number for a target yet, is never a finding.
@@ -138,7 +150,7 @@ export function kpisOffTarget(readings: readonly KpiReading[], window: { whole: 
     // a rate over Issues stands on as many as a friction rate does; a share or a median has its own floor in the read
     if (OVER_ISSUES.has(reading.unit) && reading.n < MIN_CLOSED) continue
     if (meetsTarget(reading.target, reading.value) !== false) continue
-    const largest = reading.parts.toSorted((a, b) => b.value - a.value)[0] ?? null
+    const largest = largestPart(reading.parts)
     over.push({
       key: `kpi:${reading.key}`,
       group: 'kpi',
@@ -265,7 +277,7 @@ function kpiSignalText(
     `Window: ${facts.from} to ${facts.to} (${facts.days} days, whole)`,
     `Figure: ${valueWords(kpi.unit, kpi.value)} over ${kpi.n}, target ${target}; Issues filed in the window: ${facts.issues}, closed: ${facts.closed}`,
     kpi.largest
-      ? `Largest part: ${kpi.largest.label} (${kpi.largest.key}, ${valueWords(kpi.largest.unit, kpi.largest.value)})`
+      ? `Largest part: ${kpi.largest.label} (${kpi.largest.key}, ${valueWords(kpi.largest.unit, kpi.largest.value)}${kpi.largest.count === undefined ? '' : `, ${kpi.largest.count} of ${kpi.largest.n}`})`
       : 'Largest part: this KPI has no parts in the window.',
     ...(last === null ? [] : [last]),
     `Threshold: the KPI's target in THRESHOLDS.kpis (packages/contract/src/thresholds.ts), judged over a whole window. ${pattern.why}.`,
