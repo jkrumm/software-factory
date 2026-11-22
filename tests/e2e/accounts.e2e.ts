@@ -134,12 +134,54 @@ function seeded(base: AccountRow, count: number, now = Date.now()): AccountsView
   })
 }
 
+/** The health rows of the owner's state on 2026-11-22: the first account's login here ends in 6.9 d (warn), its MacBook peer has had no quota sample for 7 h; every other login is fine. */
+function seededHealth(view: AccountsView, ids: string[], now = Date.now()): NonNullable<AccountsView['health']> {
+  const peer = 'macbook'
+  const ends = (days: number) => new Date(now + days * 86_400_000).toISOString()
+  const rows = ids.flatMap((id, i): NonNullable<AccountsView['health']>['rows'] => {
+    const here = { machine: view.machine, id, check: 'login' as const, via: undefined }
+    const there = { machine: peer, id, check: 'login' as const }
+    const warn = i === 0
+    return [
+      warn
+        ? {
+            ...here,
+            state: 'warn',
+            detail: 'login ends in 6.9 d',
+            fix: `claude-relogin ${id} --machine ${view.machine}`,
+            ends_at: ends(6.9),
+            days_left: 6.9,
+          }
+        : { ...here, state: 'ok', detail: '22 d left', fix: null, ends_at: ends(22), days_left: 22 },
+      { ...there, state: 'ok', detail: '9 d left', fix: null, ends_at: ends(9), days_left: 9, via: 'core' },
+      ...(warn
+        ? [
+            {
+              machine: peer,
+              id,
+              check: 'quota' as const,
+              state: 'warn' as const,
+              detail: 'no quota sample for 7 h (token rejected?)',
+              fix: null,
+              via: 'core' as const,
+            },
+          ]
+        : []),
+    ]
+  })
+  return { at: new Date(now - 12 * 60_000).toISOString(), rows }
+}
+
 async function mockAccounts(page: Page, apiUrl: string, count: number) {
   const view = await api<AccountsView>(apiUrl, '/v1/accounts')
   const base = view.accounts.find((a) => a.enabled)
   if (!base) throw new Error('the world has no account in service')
   const accounts = [...seeded(base, count), ...view.accounts.filter((a) => !a.enabled)]
-  await page.route('**/v1/accounts', (route) => route.fulfill({ json: { ...view, accounts } }))
+  const health = seededHealth(
+    view,
+    accounts.filter((a) => a.enabled).map((a) => a.id),
+  )
+  await page.route('**/v1/accounts', (route) => route.fulfill({ json: { ...view, accounts, health } }))
   return accounts.filter((a) => a.enabled)
 }
 
@@ -178,6 +220,39 @@ for (const count of [1, 3, 8]) {
     }
   })
 }
+
+test.describe('logins', () => {
+  test('each machine shows its line with the date and days left; a warn marks the strip chip; the card header lists no Issue', async ({
+    page,
+    apiUrl,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'dark' })
+    const accounts = await mockAccounts(page, apiUrl, 3)
+    const first = accounts[0]
+    if (!first) throw new Error('no account in service')
+    await page.goto('/accounts')
+    const panel = page.getByRole('article', { name: `Account ${first.id}` })
+    const logins = panel.getByRole('region', { name: 'Logins' })
+    await expect(logins.getByRole('listitem')).toHaveCount(3)
+    await expect(logins.getByRole('listitem').filter({ hasText: 'Login' }).first()).toContainText(
+      /Ends .* · 6\.9 d left/,
+    )
+    await expect(logins.getByText('No quota sample for 7 h (token rejected?)')).toBeVisible()
+    await expect(logins.getByText(/Valid until .* · 9 d left/)).toBeVisible()
+    // an account whose logins are all fine shows its lines and no mark on the strip
+    const second = accounts[1]
+    if (!second) throw new Error('no second account')
+    const other = page.getByRole('article', { name: `Account ${second.id}` }).getByRole('region', { name: 'Logins' })
+    await expect(other.getByRole('listitem')).toHaveCount(2)
+    await expect(page.getByTestId('strip-login')).toHaveCount(1)
+    // the second account has a lead running: its header says how many seats are taken and names no Issue
+    const header = page.getByRole('article', { name: `Account ${second.id}` }).locator('header')
+    await expect(header).toContainText('1 of 3 leads allowed')
+    await expect(header).not.toContainText('Issue')
+    await page.waitForLoadState('networkidle')
+    await page.screenshot({ path: join(OUT, 'accounts-logins-dark.png'), fullPage: true, animations: 'disabled' })
+  })
+})
 
 test.describe('narrower viewports', () => {
   for (const { name, viewport } of [
