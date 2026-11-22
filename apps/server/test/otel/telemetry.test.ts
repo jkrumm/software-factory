@@ -7,7 +7,10 @@ import { installStampedConsole, lineStamper } from '../../src/adapters/otel/cons
 import { encodeLogs, encodeSpans } from '../../src/adapters/otel/otlp.ts'
 import { otelTelemetry } from '../../src/adapters/otel/telemetry.ts'
 import { runProcess } from '../../src/adapters/process.ts'
+import { createApp } from '../../src/api/app.ts'
 import { requestTelemetry } from '../../src/api/telemetry.ts'
+import { createLoopRunner } from '../../src/app/loops/runner.ts'
+import { fixedClock } from '../../src/kernel/clock.ts'
 import { key } from '../../src/kernel/keys.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
 import {
@@ -455,5 +458,55 @@ describe('the API', () => {
     expect(spans).toHaveLength(0)
     expect(logs.map((l) => [l.level, l.event])).toEqual([['warn', 'api.request_refused']])
     expect(logs[0]?.attrs).toMatchObject({ 'http.route': '/v1/signals', 'http.status': 400 })
+  })
+})
+
+describe('the wiring', () => {
+  test('a pass run by the loop runner is a loop span, a failed one an error span with its Result kind', async () => {
+    const runner = createLoopRunner({
+      loops: [
+        { name: 'host', intervalMs: 0, onChange: false, run: async () => err(portError('gone', TITLE)) },
+        {
+          name: 'leads',
+          intervalMs: 0,
+          onChange: false,
+          run: async () => {
+            markActive()
+            return ok('did something')
+          },
+        },
+        { name: 'queue', intervalMs: 0, onChange: false, run: async () => ok('nothing') },
+      ],
+      clock: fixedClock('2026-11-22T10:00:00Z'),
+      log: () => {},
+    })
+    await runner.runNow('host')
+    await runner.runNow('leads')
+    await runner.runNow('queue')
+    expect(spans.map((s) => [s.name, s.failed])).toEqual([
+      ['loop.host', true],
+      ['loop.leads', false],
+    ])
+    expect(logs.map((l) => l.event)).toEqual(['loop.pass_failed'])
+    expect(JSON.stringify([spans, logs])).not.toContain('Postgres')
+  })
+
+  test('createApp records a request that ends 500: one error span, the route pattern, an unexpected error with its type only', async () => {
+    const app = createApp({
+      health: {
+        read: async () => {
+          throw new RangeError(NOTE)
+        },
+      },
+      log: () => {},
+    })
+    const response = await app.handle(new Request('http://localhost/health'))
+    await Bun.sleep(10)
+    expect(response.status).toBe(500)
+    expect(spans.map((s) => [s.name, s.failed])).toEqual([['http.request', true]])
+    expect(spans[0]?.attrs).toMatchObject({ 'http.route': '/health', 'http.status': 500 })
+    expect(logs.map((l) => l.event).sort()).toEqual(['api.server_error', 'api.unexpected_error'])
+    expect(logs.find((l) => l.event === 'api.unexpected_error')?.attrs['error.type']).toBe('RangeError')
+    expect(JSON.stringify([spans, logs])).not.toContain('friday')
   })
 })
