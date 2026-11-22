@@ -31,7 +31,7 @@ import { applyReplan, fileReplan } from './app/planning-replan.ts'
 import { projectOf } from './domains/planning/sync.ts'
 import { type IssueId, issueId, issueNumber } from './kernel/ids.ts'
 import { key } from './kernel/keys.ts'
-import { err, ok, portError, type PortError, type Result } from './kernel/result.ts'
+import { err, ok, type PortError, type Result } from './kernel/result.ts'
 
 /** The remote is asked for new commits this often; every other pass reads the default branch as last fetched. */
 const FETCH_EVERY_MS = 10 * 60_000
@@ -209,7 +209,10 @@ export function composePlanning(input: {
         )
         if (!known.ok) return known
         if (!known.value)
-          return err(portError('gone', `no project named ${name.value}: the factory has not read its project.yaml`))
+          return err({
+            kind: 'unknown_project' as const,
+            detail: `no project named ${name.value}: the factory has not read its project.yaml`,
+          })
         return setProjectPrio(writes, { ...request, project: name.value })
       },
       setQueueState: async (request) => {

@@ -42,6 +42,12 @@ const queueReasonsMatch: [(typeof QUEUE_REASONS)[number]] extends [QueueReasonKi
   : never = true
 void queueReasonsMatch
 
+/** A project name the factory has not read: not a failure of a port, so it has its own kind. */
+export interface UnknownProject {
+  kind: 'unknown_project'
+  detail: string
+}
+
 /** The use cases the routes call, bound in `main.ts`. */
 export interface CapacityApi {
   limits: CapacityLimits & { slots: number; slotsMax: number }
@@ -59,7 +65,7 @@ export interface CapacityApi {
   /** `project` is a name or a path inside a source root; a path outside the roots is `refused` */
   setQueueState(input: { project: string | null; state: QueueState }): Promise<Result<QueueStates, PortError>>
   /** `project` is a name or a path inside a source root; the priority is -1000 to 1000, else `refused` */
-  setProjectPrio(input: { project: string; prio: number }): Promise<Result<QueueStates, PortError>>
+  setProjectPrio(input: { project: string; prio: number }): Promise<Result<QueueStates, PortError | UnknownProject>>
   /** `repo` is a name or a path inside a source root; `at` null: now. A point in the future is `refused`. */
   setRelearn(input: { repo: string; at: Date | null; actor: string }): Promise<Result<Relearn, PortError>>
   touchSlot(input: {
@@ -363,7 +369,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
         if (!api) return status(503, unbound)
         const states = await api.setProjectPrio(body)
         if (states.ok) return status(200, statesView(states.value))
-        if (states.error.kind === 'gone') return status(404, failure(states.error.detail, 'unknown_project'))
+        if (states.error.kind === 'unknown_project') return status(404, failure(states.error.detail, 'unknown_project'))
         return states.error.kind === 'refused'
           ? status(422, outsideRoots(states.error))
           : status(503, unavailable(states.error))

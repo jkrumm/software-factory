@@ -121,15 +121,14 @@ export function orderQueue(input: {
       b.projectPrio - a.projectPrio ||
       issueNumber(a.issue.id) - issueNumber(b.issue.id),
   )
-  // The project priority decided a place when the row stands ahead of one it would trail by its Issue number alone.
-  for (const row of rows) {
-    row.byProjectPrio = rows.some(
-      (other) =>
-        rank(other) === rank(row) &&
-        other.prio === row.prio &&
-        other.projectPrio < row.projectPrio &&
-        issueNumber(other.issue.id) < issueNumber(row.issue.id),
-    )
+  // The project priority decided a place when a row stands elsewhere in its band (one class, one Issue prio) than its Issue number alone would put it.
+  const bands = new Map<string, Ordered[]>()
+  for (const row of rows) bands.set(`${rank(row)}|${row.prio}`, [...(bands.get(`${rank(row)}|${row.prio}`) ?? []), row])
+  for (const band of bands.values()) {
+    const byNumber = [...band].sort((a, b) => issueNumber(a.issue.id) - issueNumber(b.issue.id))
+    band.forEach((row, at) => {
+      row.byProjectPrio = byNumber[at] !== row
+    })
   }
 
   const model = (row: Ordered): number => input.modelOrder?.get(row.issue.id) ?? Number.POSITIVE_INFINITY
