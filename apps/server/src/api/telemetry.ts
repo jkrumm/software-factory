@@ -15,11 +15,12 @@ export function requestTelemetry() {
     .onRequest(({ request }) => {
       if (telemetryOn()) began.set(request, Date.now())
     })
-    .onAfterResponse({ as: 'global' }, ({ request, route, set }) => {
+    .onAfterResponse({ as: 'global' }, ({ request, response, route, set }) => {
       const startMs = began.get(request)
       if (startMs === undefined) return
       began.delete(request)
-      const status = Number(set.status ?? 200)
+      // a handler's own `Response.json(…, { status })` never sets `set.status`: its answer is the status
+      const status = response instanceof Response ? response.status : Number(set.status ?? 200)
       const attrs = { method: request.method, route: route || 'unmatched', status }
       if (status >= 500) recordServerError({ ...attrs, startMs })
       else if (REFUSED.has(status)) {

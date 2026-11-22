@@ -432,6 +432,7 @@ describe('the API', () => {
     .get('/v1/issues/:id/note', ({ status }) => status(500, 'internal'))
     .post('/v1/signals', ({ status }) => status(400, 'bad'))
     .get('/v1/ok', () => 'fine')
+    .get('/v1/own-answer', () => Response.json({ error: 'database down' }, { status: 503 }))
   // Elysia runs `onAfterResponse` after the answer is handed back: give it a tick
   const call = async (path: string, method = 'GET') => {
     const response = await app.handle(new Request(`http://localhost${path}`, { method }))
@@ -450,6 +451,13 @@ describe('the API', () => {
     })
     expect(logs.map((l) => [l.level, l.event])).toEqual([['error', 'api.server_error']])
     expect(JSON.stringify([spans, logs])).not.toContain('issue_999')
+  })
+
+  test('a handler that builds its own Response is read by that status', async () => {
+    expect((await call('/v1/own-answer')).status).toBe(503)
+    expect(spans.map((s) => s.attrs['http.route'])).toEqual(['/v1/own-answer'])
+    expect(spans[0]?.attrs['http.status']).toBe(503)
+    expect(logs.map((l) => l.event)).toEqual(['api.server_error'])
   })
 
   test('a bad request is one warning, an ordinary answer nothing', async () => {
