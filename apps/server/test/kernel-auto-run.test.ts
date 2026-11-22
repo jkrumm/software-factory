@@ -11,6 +11,13 @@ describe('the auto-run evidence ask-human.sh writes when the MacBook gate ran a 
     expect(autoRunClassOf('ask-human: auto-run class secrets-seed (granted by the owner)')).toBe('secrets-seed')
   })
 
+  test('a claude-relogin close is an auto-run of its own class, stored the same way', () => {
+    const evidence =
+      'ask-human: auto-run class claude-relogin, granted by the owner on the MacBook, ran it with no dialog'
+    expect(autoRunClassOf(evidence)).toBe('claude-relogin')
+    expect(new RegExp(AUTO_RUN_NOTE_PATTERN).test(`${AUTO_RUN_NOTE}claude-relogin, ran it`)).toBe(true)
+  })
+
   test('anything else is not an auto-run', () => {
     expect(autoRunClassOf(null)).toBeNull()
     expect(autoRunClassOf(undefined)).toBeNull()
