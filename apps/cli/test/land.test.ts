@@ -119,9 +119,9 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-function land(args: string[] = [], env: Record<string, string> = {}) {
+function land(args: string[] = [], env: Record<string, string> = {}, cwd = work) {
   const proc = Bun.spawn(['bun', BIN, 'land', ...args], {
-    cwd: work,
+    cwd,
     env: {
       ...process.env,
       ...GIT_ENV,
@@ -476,6 +476,19 @@ describe('factory land', () => {
     await writeFile(join(dir, 'projects', 'work.yaml'), 'name: work\nship:\n  - { via: pr }\n')
     await writeFile(join(state, 'no-pr'), '')
     const result = await land().done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: pr: refused: no pull request for factory/7-1')
+  })
+
+  test('a worktree outside .claude/worktrees (the wtp layout) is named by its main checkout, so its host-local file is read', async () => {
+    await git(work, 'rm', '--quiet', 'project.yaml')
+    await git(work, 'commit', '--quiet', '-m', 'chore: the project file is host-local')
+    await writeFile(join(dir, 'projects', 'work.yaml'), 'name: work\nship:\n  - { via: pr }\n')
+    await writeFile(join(state, 'no-pr'), '')
+    const elsewhere = join(dir, 'wtp', 'work-factory-7-1')
+    await git(work, 'checkout', '--quiet', '--detach')
+    await git(work, 'worktree', 'add', '--quiet', elsewhere, BRANCH)
+    const result = await land([], {}, elsewhere).done
     expect(result.code).toBe(1)
     expect(result.err).toContain('land: pr: refused: no pull request for factory/7-1')
   })

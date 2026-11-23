@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { constants } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import {
   GREEN_READS,
   MERGE_METHODS,
@@ -177,24 +177,30 @@ function parseOptions(words: readonly string[]): Options {
   return options
 }
 
-/** The repo's name as the factory knows it: a worktree is named by its main checkout (`repoNameOf` on the server). */
-function repoNameOf(root: string): string {
-  const main = (root.split('/.claude/worktrees/')[0] ?? root).replace(/\/+$/, '')
-  return basename(main)
+/** The repo's name: the directory of its main checkout, so a worktree is named by its repo wherever it sits (wtp's layout too). */
+async function repoNameOf(sh: Shell): Promise<string> {
+  const common = await sh.read(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'])
+  return basename(dirname(common ?? sh.cwd))
 }
 
-/** The host-local project file of a repo, read where the server reads it: `FACTORY_PROJECTS_DIR`, else `$HOME/.config/software-factory/projects`. */
-function hostLocalPath(root: string): string | null {
+/** The host-local project file of a repo, read where the server reads it: `FACTORY_PROJECTS_DIR` (absolute, as the server requires), else `$HOME/.config/software-factory/projects`. */
+function hostLocalPath(repo: string): string | null {
+  const set = process.env.FACTORY_PROJECTS_DIR
+  if (set !== undefined && !set.startsWith('/'))
+    throw new Refused(
+      'setup',
+      `FACTORY_PROJECTS_DIR must be an absolute path, got: ${set}`,
+      'set FACTORY_PROJECTS_DIR to an absolute path, then factory land again',
+    )
   const home = process.env.HOME
-  const dir =
-    process.env.FACTORY_PROJECTS_DIR || (home?.startsWith('/') ? `${home}/.config/software-factory/projects` : null)
-  return dir ? join(dir, `${repoNameOf(root)}.yaml`) : null
+  const dir = set ?? (home?.startsWith('/') ? `${home}/.config/software-factory/projects` : null)
+  return dir ? join(dir, `${repo}.yaml`) : null
 }
 
 /** `ship:` with any `via: pr` lands through a pull request; no project file or only `via: push` pushes. A committed project.yaml wins, else the host-local one. */
-function readProject(root: string): { name?: string; mode: 'pr' | 'push' } {
+function readProject(root: string, repo: string): { name?: string; mode: 'pr' | 'push' } {
   const committed = join(root, 'project.yaml')
-  const path = existsSync(committed) ? committed : hostLocalPath(root)
+  const path = existsSync(committed) ? committed : hostLocalPath(repo)
   if (!path || !existsSync(path)) return { mode: 'push' }
   const doc = parse(readFileSync(path, 'utf8')) as { name?: unknown; ship?: unknown } | null
   const ship = Array.isArray(doc?.ship) ? (doc.ship as { via?: unknown }[]) : []
@@ -210,7 +216,7 @@ const notGitHub = (url: string): boolean =>
 
 async function readRepo(sh: Shell, options: Options): Promise<Repo> {
   const root = sh.cwd
-  const project = readProject(root)
+  const project = readProject(root, await repoNameOf(sh))
   const url = await sh.read(['git', 'remote', 'get-url', 'origin'])
   if (url === null)
     throw new Refused('setup', 'the repo has no origin remote', 'git remote add origin <url>, then factory land again')
