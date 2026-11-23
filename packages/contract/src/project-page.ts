@@ -44,9 +44,9 @@ export type ProjectMedian = z.infer<typeof ProjectMedian>
 export const ProjectIndexRow = z
   .strictObject({
     name: z.string(),
-    /** a work repo: no `project.yaml` of its own, or one that says `work: true` */
+    /** a work repo: no committed `project.yaml` of its own (none, or only a host-local one), or one that says `work: true` */
     work: z.boolean(),
-    /** `file`: the project has its own `project.yaml`; `defaults`: it has none */
+    /** `file`: the project has its own `project.yaml`; `local`: only a host-local project file; `defaults`: it has none */
     source: z.enum(['file', 'local', 'defaults']),
     branch: z.string().nullable(),
     /** the Herdr group the project's space is filed under (`Infra`, `Tooling`, …), from the groups file; `Other` when none lists it */
