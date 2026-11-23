@@ -113,7 +113,7 @@ const Deploy = z
       .default([])
       .meta(
         about(
-          'where a deploy is verified, one entry per place. Empty: the Watch runs `make verify` when the Makefile has it',
+          "where a deploy is verified, one entry per place. Empty: the Watch runs `make verify` when the Makefile has it. Listing `make <target>` alone runs that target instead: the way for a repo whose `verify` also reads state it does not own (another target's deploy gate) to be judged on its own",
           WATCH,
           { shownDefault: [] },
         ),

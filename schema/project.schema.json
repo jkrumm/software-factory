@@ -42,7 +42,7 @@
         },
         "targets": {
           "default": [],
-          "description": "where a deploy is verified, one entry per place. Empty: the Watch runs `make verify` when the Makefile has it",
+          "description": "where a deploy is verified, one entry per place. Empty: the Watch runs `make verify` when the Makefile has it. Listing `make <target>` alone runs that target instead: the way for a repo whose `verify` also reads state it does not own (another target's deploy gate) to be judged on its own",
           "consumer": "the Watch (apps/server/src/app/quality-projects.ts)",
           "type": "array",
           "items": {
