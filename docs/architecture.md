@@ -317,7 +317,9 @@ Ubuntu 24.04. The step host is the owner's setting ([settings](settings.md)). On
   (`app/quality-projects.ts`: deploy mode, `hold` as the window, the `make verify` target, URL targets, probes); a
   repo without one is read from its Makefile (`adapters/quality/projects.ts`). Only mode `make` reads `make version`.
   A red check is retried with a doubling delay before it is a regression; a regression returns the Issue to its lead,
-  twice, then it stalls. A checkout that cannot be read is rechecked, never passed.
+  twice, then it stalls. A checkout that cannot be read is rechecked, never passed. A `verify` that also reads state the repo does not own (a host-wide
+  deploy gate) is the repo's to narrow: `deploy.targets` naming `make <own target>` runs that one instead; the factory keeps no list of
+  other owners' lines.
 - **Inherited reds.** A `make` target that failed the same way (every failing line, numbers aside, among theirs) in
   the repo's last finished run before the ship, or in the last run of another Issue's watch that regressed in the last
   day and is unanswered, is stored `inherited`: it counts green, is never retried and stays on the Issue's page (one

@@ -216,7 +216,7 @@ list's entry, `<name>` a map's key.
 | `host` | string | — | the host the repo's alerts sit on, a key of config/infra.json's hosts (`macmini`), so its Kuma and HyperDX alerts join that host's incident |
 | `deploy` | object | `{}` | how a shipped change is deployed and watched |
 | `deploy.mode` | `auto`, `make`, `agentic`, `none` | `"none"` | how a shipped change reaches production. `auto`: a push to the default branch deploys (CI, Vercel, RollHook), the Watch asks no `make version`; `make`: the lead runs `make deploy` and `make version` reads the live sha; `agentic`: the lead deploys by its own steps; `none`: nothing deploys, done is merged with CI green |
-| `deploy.targets` | list of object | `[]` | where a deploy is verified, one entry per place. Empty: the Watch runs `make verify` when the Makefile has it |
+| `deploy.targets` | list of object | `[]` | where a deploy is verified, one entry per place. Empty: the Watch runs `make verify` when the Makefile has it. Listing `make <target>` alone runs that target instead: the way for a repo whose `verify` also reads state it does not own (another target's deploy gate) to be judged on its own |
 | `deploy.targets[].name` | string | required | the target's name, shown on the project page (`mini`, `prod`) |
 | `deploy.targets[].host` | string | — | the machine the target runs on (`mini`, `vps`, `homelab`). `mini` makes the weekly hygiene pass judge the repo against the run rules for the mini (`runrules`), which it otherwise does only for a repo with a root `mini-services.yaml` |
 | `deploy.targets[].verify` | string | required | how a deploy is proved: `make verify` (or another `make <target>`) run in the repo, or an http(s) URL the Watch GETs and expects 200 from |
