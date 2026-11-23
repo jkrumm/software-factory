@@ -180,13 +180,20 @@ function verbList(entries: readonly Entry[]): string[] {
   ]
 }
 
+/** What a whole group needs beyond its verbs: a group's every verb is refused the same way, so the help says it once. */
+const GROUP_NOTES: Readonly<Record<string, string>> = {
+  read: 'every read verb is a GET and needs a bearer token: FACTORY_READ_TOKEN (reads only) or FACTORY_TOKEN; with neither the server answers 401 (exit 3), except on a host with a deployed release and secrets-run, where the owner token is resolved from it',
+}
+
 /** `factory issue --help`: the verbs of one noun with their usage and summary; null when no verb has that noun. */
 function groupHelp(group: string, entries: readonly Entry[]): string | null {
   const own = entries.filter((entry) => entry.group === group).sort((a, b) => a.usage.localeCompare(b.usage))
   if (!own.length) return null
   const width = Math.max(...own.map((entry) => entry.usage.length)) + 2
+  const note = GROUP_NOTES[group]
   return [
     `usage: ${BIN} ${group} <verb> [flags]`,
+    ...(note ? ['', note] : []),
     '',
     ...own.map((e) => `  ${e.usage.padEnd(width)}${e.summary}`),
     '',
