@@ -81,6 +81,7 @@ beforeEach(async () => {
   state = join(dir, 'state')
   locks = join(dir, 'locks')
   await mkdir(state)
+  await mkdir(join(dir, 'projects'))
   await mkdir(join(dir, 'bin'))
   await writeFile(join(dir, 'bin', 'gh'), FAKE_GH)
   await writeFile(join(dir, 'bin', 'agw'), FAKE_AGW)
@@ -129,6 +130,7 @@ function land(args: string[] = [], env: Record<string, string> = {}) {
       LAND_ORIGIN: origin,
       LAND_BRANCH: BRANCH,
       FACTORY_DEPLOY_LOCK_DIR: locks,
+      FACTORY_PROJECTS_DIR: join(dir, 'projects'),
       FACTORY_DEPLOY_LOCK_POLL_MS: '20',
       FACTORY_LAND_POLL_MS: '20',
       FACTORY_URL: 'http://127.0.0.1:1',
@@ -466,6 +468,16 @@ describe('factory land', () => {
     expect(result.code).toBe(1)
     expect(result.err).toContain('land: pr: refused: no pull request for factory/7-1')
     expect(result.err).toContain('gh pr create --fill --base master')
+  })
+
+  test('a repo whose project file is host-local lands by pull request, as the file in FACTORY_PROJECTS_DIR says', async () => {
+    await git(work, 'rm', '--quiet', 'project.yaml')
+    await git(work, 'commit', '--quiet', '-m', 'chore: the project file is host-local')
+    await writeFile(join(dir, 'projects', 'work.yaml'), 'name: work\nship:\n  - { via: pr }\n')
+    await writeFile(join(state, 'no-pr'), '')
+    const result = await land().done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: pr: refused: no pull request for factory/7-1')
   })
 
   test('a gh failure is not "no pull request": it names gh stderr and GH_CONFIG_DIR first', async () => {

@@ -177,10 +177,25 @@ function parseOptions(words: readonly string[]): Options {
   return options
 }
 
-/** `ship:` with any `via: pr` lands through a pull request; no project.yaml or only `via: push` pushes. */
+/** The repo's name as the factory knows it: a worktree is named by its main checkout (`repoNameOf` on the server). */
+function repoNameOf(root: string): string {
+  const main = (root.split('/.claude/worktrees/')[0] ?? root).replace(/\/+$/, '')
+  return basename(main)
+}
+
+/** The host-local project file of a repo, read where the server reads it: `FACTORY_PROJECTS_DIR`, else `$HOME/.config/software-factory/projects`. */
+function hostLocalPath(root: string): string | null {
+  const home = process.env.HOME
+  const dir =
+    process.env.FACTORY_PROJECTS_DIR || (home?.startsWith('/') ? `${home}/.config/software-factory/projects` : null)
+  return dir ? join(dir, `${repoNameOf(root)}.yaml`) : null
+}
+
+/** `ship:` with any `via: pr` lands through a pull request; no project file or only `via: push` pushes. A committed project.yaml wins, else the host-local one. */
 function readProject(root: string): { name?: string; mode: 'pr' | 'push' } {
-  const path = join(root, 'project.yaml')
-  if (!existsSync(path)) return { mode: 'push' }
+  const committed = join(root, 'project.yaml')
+  const path = existsSync(committed) ? committed : hostLocalPath(root)
+  if (!path || !existsSync(path)) return { mode: 'push' }
   const doc = parse(readFileSync(path, 'utf8')) as { name?: unknown; ship?: unknown } | null
   const ship = Array.isArray(doc?.ship) ? (doc.ship as { via?: unknown }[]) : []
   return {
