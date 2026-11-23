@@ -64,6 +64,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_PRETRUST_BIN` | `$HOME/SourceRoot/dotfiles/scripts/claude-pretrust.sh` | the script that marks a lead's folder trusted before it starts | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_PROCESS_CAP` | `DEFAULT_PROCESS_CAP` | the cap on the host's process count | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_PROJECT_GROUPS_FILE` | unset | the owner's Herdr groups file; unset, the one the Herdr app reads | `apps/server/src/settings.ts` |
+| `FACTORY_PROJECTS_DIR` | unset | the directory of host-local project files (`<repo-name>.yaml`), read for a repo whose default branch has no project.yaml; default `$HOME/.config/software-factory/projects` | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_PS_BIN` | `'/bin/ps'` | the ps binary the host probe calls | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_QUEUE_GAP_MS` | `30 * 60_000` | a repo is asked about a new queue shape at most once in this long | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_QUIESCE_AFTER_MS` | `QUIESCE_AFTER_MS` | a waiting lead is dormant (its `claude` ended) after this long | `apps/server/src/adapters/leads/settings.ts` |

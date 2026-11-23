@@ -14,6 +14,8 @@ export type FileRead =
 export interface RepoRead {
   branch: string
   project: FileRead
+  /** the host-local project file of the repo (`FACTORY_PROJECTS_DIR`), read whatever the branch holds; absent when none is set up */
+  hostFile?: FileRead
   plan: FileRead
 }
 
@@ -29,8 +31,8 @@ export interface StoredProject {
   name: string
   /** the repo's absolute path */
   repo: string
-  /** `file`: the last valid `project.yaml`; `defaults`: there is none (or never was) */
-  source: 'file' | 'defaults'
+  /** `file`: the last valid `project.yaml` of the default branch; `local`: the last valid host-local file, for a repo with no committed one; `defaults`: there is none (or never was) */
+  source: 'file' | 'local' | 'defaults'
   /** the project in force, defaults filled in */
   project: ProjectFile
   projectSha: string | null
@@ -45,6 +47,9 @@ export interface StoredProject {
   branch: string | null
   syncedAt: Date | null
 }
+
+/** What `project show` says when both a committed `project.yaml` and a host-local file exist. */
+const SHADOWED = 'a host-local project file exists for this repo and is ignored: the committed project.yaml wins'
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
@@ -62,7 +67,8 @@ export function projectName(directory: string, path: string, taken: ReadonlyMap<
 
 /**
  * The stored project after a read of its repo. A file that does not parse keeps the last valid content and records the
- * error; no `project.yaml` puts the project back on the defaults; no plan means no plan.
+ * error; no `project.yaml` puts the project back on the defaults, unless the host holds a local file for the repo, which
+ * then stands in for it; a committed file always wins over the local one. No plan means no plan.
  */
 export function synced(input: {
   previous: StoredProject | null
@@ -90,7 +96,11 @@ export function synced(input: {
   }
   const next: StoredProject = { ...base, repo: input.repo, branch: read.branch, syncedAt: input.now }
 
-  const file = read.project
+  const local = read.hostFile ?? { state: 'absent' as const }
+  const committed = read.project
+  // a committed file wins; the local one speaks only for a repo whose default branch has none
+  const file = committed.state === 'absent' ? local : committed
+  const from = committed.state === 'absent' && local.state !== 'absent' ? 'local' : 'file'
   if (file.state === 'absent') {
     Object.assign(next, {
       source: 'defaults',
@@ -100,19 +110,25 @@ export function synced(input: {
       projectWarnings: [],
     })
   } else if (file.state === 'unreadable') {
-    next.projectError = { message: file.message, sha: file.sha }
+    next.projectError = {
+      message: from === 'local' ? `host-local project file: ${file.message}` : file.message,
+      sha: file.sha,
+    }
   } else {
     const parsed = parseProject(file.value, input.directory)
     if (parsed.ok) {
       Object.assign(next, {
-        source: 'file',
+        source: from,
         project: parsed.project,
         projectSha: file.sha,
         projectError: null,
-        projectWarnings: parsed.warnings,
+        projectWarnings: [...parsed.warnings, ...(from === 'file' && local.state !== 'absent' ? [SHADOWED] : [])],
       })
     } else {
-      next.projectError = { message: parsed.message, sha: file.sha }
+      next.projectError = {
+        message: from === 'local' ? `host-local project file: ${parsed.message}` : parsed.message,
+        sha: file.sha,
+      }
     }
   }
 

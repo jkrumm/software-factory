@@ -82,6 +82,11 @@ export function SetupForm({ model }: { model: ProjectSetupModel }) {
           The project.yaml on the default branch does not parse; this is the last valid one. {model.projectError}
         </p>
       ) : null}
+      {model.source === 'local' ? (
+        <p className="mb-4 text-[length:var(--vx-text-sm)] text-muted-foreground">
+          This project is read from a host-local file, not from the repo: the repo has no project.yaml of its own.
+        </p>
+      ) : null}
       {model.source === 'defaults' ? (
         <p className="mb-4 text-[length:var(--vx-text-sm)] text-muted-foreground">
           This project has no project.yaml of its own: every key is its default.

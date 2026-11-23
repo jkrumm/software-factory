@@ -4,7 +4,8 @@ A repo tells the factory how it ships in one file at its root, `project.yaml`. T
 branch, so a change counts once it is merged. Every key is typed: the schema lives in
 `packages/contract/src/project-file.ts`, and the JSON Schema, the editor hover and the key reference at the end of this page
 are generated from it. A repo without the file is a work repo: no deploy, ship by push, no cap on leads, and it hears the
-owner only.
+owner only. A repo that must not carry the file (colleagues review every PR) uses a host-local one: see "A host-local
+file" below.
 
 ## A new repo's file
 
@@ -40,8 +41,28 @@ the next reader learns why the value is not the default.
   parent key's line; and a `leads` below the default whose comment names a resource the factory already holds (a merge
   window or deploy queue, with a pointer to `factory merge-lock` or `deploy-lock`; disk) or says no reason was recorded.
 - `factory project schema` prints this page offline; `--format json` adds the JSON Schema.
+- `factory project check <file> --repo <dir>` judges a file that lives outside its repo (a host-local one) against that
+  checkout's Makefile and directory name; without `--repo` the Makefile is looked for beside the file.
 - `factory project sync --fetch true` reads the merged file now; `factory project show <repo>` prints what is in force,
   with `projectError` when the file on the default branch does not parse.
+
+## A host-local file
+
+A team repo whose colleagues review every PR should not carry factory config, and a gitignored file is invisible to the
+factory (it reads the default branch). For such a repo the owner keeps the same file on the host instead:
+`<projects dir>/<repo-directory-name>.yaml`, the directory being `FACTORY_PROJECTS_DIR` (default
+`$HOME/.config/software-factory/projects`, `docs/settings.md`). Same schema, same checks (`factory project check <file>
+--repo <repo checkout>`), same keys in force: `ship`, `leads`, `lanes`, `checks`, `doctor`, `deploy`.
+
+- **Only for a repo with no committed `project.yaml`.** When both exist the committed file wins, and `factory project show`
+  names the ignored local one in `projectWarnings`.
+- **`source` is `local`** in `factory project show`. Edits are picked up by the next sync (the planning pass, or
+  `factory project sync`); deleting the file puts the repo back on the defaults. A local file that does not parse keeps the last
+  valid content and files the same broken-file Issue, naming the host-local file.
+- **A local project is always a work project:** the read token never sees its words and it hears the owner only, whatever
+  `work` says. It is the one class of repo the owner does not alone own, so the safe reading is fixed. The weekly hygiene
+  sweep, the digests and the fix-cause reading, which read committed documents, skip it.
+- **A lead never writes or commits it.** It is the owner's host file, outside every repo.
 
 ## The editor
 

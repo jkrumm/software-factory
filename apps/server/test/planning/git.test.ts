@@ -110,6 +110,59 @@ describe('the git source', () => {
   })
 })
 
+describe('a host-local project file', () => {
+  test('is read beside the committed one, found by discover for a repo with none, and unreadable when it is not a file', async () => {
+    const own = await realpath(await mkdtemp('/tmp/factory-local-'))
+    const projects = join(own, 'projects')
+    try {
+      await mkdir(join(own, 'roots'), { recursive: true })
+      await mkdir(projects, { recursive: true })
+      const make = async (name: string, files: Record<string, string>) => {
+        const path = join(own, 'roots', name)
+        await mkdir(path, { recursive: true })
+        await git(path, 'init', '-q', '-b', 'main')
+        await writeFile(join(path, 'README.md'), 'hi')
+        for (const [file, text] of Object.entries(files)) await writeFile(join(path, file), text)
+        await git(path, 'add', '-A')
+        await git(path, 'commit', '-q', '-m', 'init')
+        return { directory: name, path }
+      }
+      const team = await make('team', {})
+      const both = await make('both', { 'project.yaml': 'apiVersion: factory/v2\nname: both\n' })
+      const plain = await make('plain', {})
+      await writeFile(join(projects, 'team.yaml'), 'apiVersion: factory/v2\nname: team\nship: [{ via: pr }]\n')
+      await writeFile(join(projects, 'both.yaml'), 'apiVersion: factory/v2\nname: both\nleads: 2\n')
+      const local = gitProjectSource({ roots: [join(own, 'roots')], projectsDir: projects, timeoutMs: 20_000 })
+      expect(value(await local.discover()).map((r) => r.directory)).toEqual(['both', 'team'])
+      expect(value(await local.read(team, { fetch: false }))).toMatchObject({
+        project: { state: 'absent' },
+        hostFile: { state: 'text', value: { name: 'team', ship: [{ via: 'pr' }] } },
+      })
+      expect(value(await local.read(both, { fetch: false }))).toMatchObject({
+        project: { state: 'text' },
+        hostFile: { state: 'text', value: { leads: 2 } },
+      })
+      expect(value(await local.read(plain, { fetch: false })).hostFile).toEqual({ state: 'absent' })
+      await mkdir(join(projects, 'plain.yaml'))
+      expect(value(await local.read(plain, { fetch: false })).hostFile).toMatchObject({
+        state: 'unreadable',
+        message: 'plain.yaml is not a regular file',
+      })
+      await rm(join(projects, 'plain.yaml'), { recursive: true })
+      await writeFile(join(projects, 'plain.yaml'), 'a: 1\na: 2\n')
+      expect(value(await local.read(plain, { fetch: false })).hostFile).toMatchObject({
+        state: 'unreadable',
+        message: expect.stringContaining('DUPLICATE_KEY'),
+      })
+      const none = gitProjectSource({ roots: [join(own, 'roots')], timeoutMs: 20_000 })
+      expect(value(await none.discover()).map((r) => r.directory)).toEqual(['both'])
+      expect(value(await none.read(team, { fetch: false })).hostFile).toEqual({ state: 'absent' })
+    } finally {
+      await rm(own, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('an allowed repo outside the roots', () => {
   test('discover and resolve see it and its worktrees, and no sibling of it', async () => {
     const outside = await mkdtemp('/tmp/factory-allow-')

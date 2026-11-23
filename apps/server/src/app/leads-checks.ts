@@ -20,7 +20,7 @@ export function storedChecks(
     env: (repo) =>
       uow.run(async ({ planning }) => {
         const project = projectOf(await planning.projects(), repo)
-        const work = project ? project.source === 'defaults' || project.project.work : false
+        const work = project ? project.source !== 'file' || project.project.work : false
         const account: Record<string, string> =
           work && options.workGhConfigDir ? { GH_CONFIG_DIR: options.workGhConfigDir } : {}
         return ok({ ...account, ...(project?.project.env ?? {}) })

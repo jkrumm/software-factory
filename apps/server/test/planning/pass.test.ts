@@ -54,6 +54,29 @@ describe('syncing the projects', () => {
     expect(app?.plan?.rows.map((r) => [r.key, r.state])).toEqual([['a', 'filable']])
   })
 
+  test('a repo with only a host-local file is stored as local with its keys; a committed file overrides it with a warning', async () => {
+    const local = PROJECT('team', '{"ship":[{"via":"pr"}],"leads":3,"checks":{"fast":"make check-fast"}}')
+    world.source.add('team', { hostFile: local })
+    expect(value(await syncProjects(world.deps, { fetch: false }))).toMatchObject({ synced: 1, broken: [], errors: [] })
+    const [only] = await states()
+    expect(only?.project).toMatchObject({ name: 'team', source: 'local', projectSha: 'sha-team', projectWarnings: [] })
+    expect(only?.project.project).toMatchObject({
+      leads: 3,
+      ship: [{ via: 'pr' }],
+      checks: { fast: 'make check-fast' },
+    })
+
+    world.source.set('team', { project: PROJECT('team', '{"leads":5}') })
+    value(await syncProjects(world.deps, { fetch: false }))
+    const [both] = await states()
+    expect(both?.project).toMatchObject({ source: 'file', projectWarnings: [expect.stringContaining('host-local')] })
+    expect(both?.project.project.leads).toBe(5)
+
+    world.source.set('team', { project: { state: 'absent' }, hostFile: { state: 'absent' } })
+    value(await syncProjects(world.deps, { fetch: false }))
+    expect((await states())[0]?.project).toMatchObject({ source: 'defaults', projectWarnings: [] })
+  })
+
   test('the repo an open Issue names is read even without a project.yaml: a project on the defaults', async () => {
     world.source.add('work')
     const issue = await world.file({ repo: 'work' })

@@ -118,6 +118,17 @@ describe('factory project check', () => {
     expect(out).not.toContain('the repo is')
   })
 
+  test('--repo judges a host-local file against that checkout, not the directory it sits in', async () => {
+    const file = await repo('team-app', { Makefile: 'check:\n\ttrue\ncheck-fast:\n\ttrue\n' })
+    const local = join(dir, 'local-team-app.yaml')
+    await writeFile(local, 'apiVersion: factory/v2\nname: team-app\nchecks: { fast: make check-fast } # reason\n')
+    const beside = await cli(['project', 'check', local, '--format', 'json'])
+    expect(beside.out).toContain('the factory refuses the file')
+    const withRepo = await cli(['project', 'check', local, '--repo', join(file, '..')])
+    expect(withRepo.out).toBe(`ok: ${local}\n`)
+    expect(withRepo.code).toBe(0)
+  })
+
   test("a step's make target the Makefile lacks is a warning", async () => {
     const file = await repo('stepper', {
       Makefile: 'test:\n\ttrue\n',

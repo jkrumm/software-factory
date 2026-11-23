@@ -54,7 +54,7 @@ export function projectFileProjects(deps: ProjectChecksDeps): Projects {
       const known = await deps.uow.run(async ({ planning }) => ok(await planning.projects()))
       if (!known.ok) return known
       const project = projectOf(known.value, repo)
-      if (project?.source !== 'file') return deps.fallback.checksOf(repo)
+      if (!project || project.source === 'defaults') return deps.fallback.checksOf(repo)
       const checks = checksOfFile(project.project)
       if (checks.makeVerify !== undefined) return ok({ ...checks, makeVerify: checks.makeVerify })
       const makefile = await deps.fallback.checksOf(repo)

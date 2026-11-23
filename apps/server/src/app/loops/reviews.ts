@@ -51,7 +51,7 @@ export async function reviewsPass(deps: ReviewsDeps): Out<ReviewsPass> {
   for (const wait of read.value.waits) {
     const project = projectOf(read.value.projects, wait.repo)
     const cwd = project?.repo ?? (wait.repo.startsWith('/') ? wait.repo : null)
-    const work = project ? project.source === 'defaults' || project.project.work : false
+    const work = project ? project.source !== 'file' || project.project.work : false
     const looked = await deps.port.look({ cwd, ref: wait.ref, work })
     if (!looked.ok) {
       pass.problems.push(`${wait.issue}: ${looked.error.detail}`.slice(0, 300))

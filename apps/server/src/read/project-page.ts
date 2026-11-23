@@ -85,7 +85,7 @@ type StoredProject = z.infer<typeof StoredProject>
 const ProjectRow = z.object({
   name: z.string(),
   repo: z.string(),
-  source: z.enum(['file', 'defaults']),
+  source: z.enum(['file', 'local', 'defaults']),
   project: z.unknown(),
   project_error: z.unknown(),
   branch: z.string().nullable(),
@@ -95,7 +95,7 @@ const ProjectRow = z.object({
 export interface Project {
   name: string
   repo: string
-  source: 'file' | 'defaults'
+  source: 'file' | 'local' | 'defaults'
   stored: StoredProject
   /** the stored project as the sync parsed it, defaults filled in; `{}` when no file was read */
   raw: Record<string, unknown>
@@ -128,7 +128,7 @@ export async function loadProjects(sql: SQL): Promise<Project[]> {
       error: messageOf(row.project_error),
       branch: row.branch,
       syncedAt: row.synced_at,
-      work: row.source === 'defaults' || stored.work,
+      work: row.source !== 'file' || stored.work,
     }
   })
 }

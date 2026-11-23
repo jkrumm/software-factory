@@ -119,4 +119,10 @@ test('the host tools default to the system ones, and a scenario points them else
     vmVolume: '/System/Volumes/VM',
   })
   expect(planningSettings({ FACTORY_PS_BIN: '/x/ps' }, { cores: 8 }).psBin).toBe('/x/ps')
+  expect(planningSettings({ HOME: '/home/me' }, { cores: 8 }).projectsDir).toBe(
+    '/home/me/.config/software-factory/projects',
+  )
+  expect(planningSettings({ HOME: '/home/me', FACTORY_PROJECTS_DIR: '/x/p' }, { cores: 8 }).projectsDir).toBe('/x/p')
+  expect(planningSettings({}, { cores: 8 }).projectsDir).toBeNull()
+  expect(() => planningSettings({ FACTORY_PROJECTS_DIR: 'rel' }, { cores: 8 })).toThrow('absolute')
 })

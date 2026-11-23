@@ -152,7 +152,7 @@ const view = ({ project, plan }: ProjectState): ProjectView =>
   })
 
 /** A work project: no `project.yaml` of its own, or one that says `work: true` (`read/work.ts`, the one rule). */
-const isWorkProject = ({ project }: ProjectState): boolean => project.source === 'defaults' || project.project.work
+const isWorkProject = ({ project }: ProjectState): boolean => project.source !== 'file' || project.project.work
 
 /** The projects the read token may and may not hear of: the stored ones with a `project.yaml` of their own, and the work ones. */
 interface Scope {

@@ -37,6 +37,8 @@ const Env = z.object({
     .optional(),
   /** the projects whose declared steps may run off the mini, space- or comma-separated (the owner's admission) */
   FACTORY_STEP_REMOTE_PROJECTS: z.string().optional(),
+  /** the directory of host-local project files (`<repo-name>.yaml`), read for a repo whose default branch has no project.yaml; default `$HOME/.config/software-factory/projects` */
+  FACTORY_PROJECTS_DIR: z.string().min(1).optional(),
   /** the host tools the host loop, the reaper and the capacity reads run (a scenario points them at fakes) */
   FACTORY_SYSCTL_BIN: z.string().min(1).optional(),
   /** the lsof binary the host probe calls */
@@ -57,6 +59,8 @@ const Env = z.object({
 
 export interface PlanningSettings {
   repoRoots: string[]
+  /** where a host-local project file lives: `<dir>/<repo-name>.yaml`; null: none is read */
+  projectsDir: string | null
   repoAllow: string[]
   gitTimeoutMs: number
   sysctlBin: string
@@ -106,6 +110,15 @@ function accountLeadsOf(text: string | undefined): Map<string, number> {
   return caps
 }
 
+/** `FACTORY_PROJECTS_DIR`, else `$HOME/.config/software-factory/projects`; throws on a relative path, null with neither set. */
+function projectsDirOf(setting: string | undefined, home: string | undefined): string | null {
+  if (setting !== undefined) {
+    if (!setting.startsWith('/')) throw new Error(`FACTORY_PROJECTS_DIR must be an absolute path, got: ${setting}`)
+    return setting
+  }
+  return home?.startsWith('/') ? `${home}/.config/software-factory/projects` : null
+}
+
 /**
  * The planning and capacity settings from the environment; throws one message naming every bad key. The repo roots and
  * the allowed repos are the leads' settings (`FACTORY_REPO_ROOTS`, `FACTORY_REPO_ALLOW`): this loader reads neither.
@@ -118,6 +131,7 @@ export function planningSettings(
   return {
     repoRoots: [...(options.repoRoots ?? [])],
     repoAllow: [...(options.repoAllow ?? [])],
+    projectsDir: projectsDirOf(e.FACTORY_PROJECTS_DIR, env.HOME),
     gitTimeoutMs: 20_000,
     sysctlBin: e.FACTORY_SYSCTL_BIN ?? '/usr/sbin/sysctl',
     lsofBin: e.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',

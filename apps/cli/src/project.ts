@@ -16,13 +16,19 @@ const formatOf = (value: string | undefined): Format => {
 }
 
 async function checkVerb(argv: readonly string[], io: Io): Promise<number> {
-  let parsed: ReturnType<typeof parseArgs<{ options: { format: { type: 'string' } }; allowPositionals: true }>>
+  let parsed: ReturnType<
+    typeof parseArgs<{ options: { format: { type: 'string' }; repo: { type: 'string' } }; allowPositionals: true }>
+  >
   try {
-    parsed = parseArgs({ args: [...argv], options: { format: { type: 'string' } }, allowPositionals: true })
+    parsed = parseArgs({
+      args: [...argv],
+      options: { format: { type: 'string' }, repo: { type: 'string' } },
+      allowPositionals: true,
+    })
   } catch (error) {
     throw usage(
       error instanceof Error ? error.message : String(error),
-      'factory project check [file] [--format json|plain]',
+      'factory project check [file] [--repo <dir>] [--format json|plain]',
     )
   }
   if (parsed.positionals.length > 1) throw usage('usage: project check [file]', 'factory project check project.yaml')
@@ -35,7 +41,10 @@ async function checkVerb(argv: readonly string[], io: Io): Promise<number> {
     throw usage(`cannot read ${file}: ${error instanceof Error ? error.message : String(error)}`)
   }
   const label = file === '-' ? '<stdin>' : file
-  const { problems, warnings } = await checkProject(text, file === '-' ? null : dirname(resolve(file)), io)
+  // a host-local file lives outside its repo: `--repo` names the checkout whose Makefile and name it is judged against
+  const repo =
+    parsed.values.repo !== undefined ? resolve(parsed.values.repo) : file === '-' ? null : dirname(resolve(file))
+  const { problems, warnings } = await checkProject(text, repo, io)
   const ok = problems.length === 0
   const lines = [
     ...problemLines(label, problems),
@@ -68,7 +77,7 @@ export async function projectVerb(argv: readonly string[], io: Io): Promise<numb
   if (argv[0] === 'schema') return schemaVerb(argv.slice(1), io)
   if (argv[0] === 'check') return await checkVerb(argv.slice(1), io)
   throw usage(
-    'usage: project schema | project check [file]',
-    'factory project schema; factory project check project.yaml',
+    'usage: project schema | project check [file] [--repo <dir>]',
+    'factory project schema; factory project check project.yaml; factory project check ~/.config/software-factory/projects/my-repo.yaml --repo ~/SourceRoot/my-repo',
   )
 }
