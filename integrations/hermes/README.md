@@ -6,8 +6,9 @@ answer to a Decision.
 
 ## Verbs
 
-- Read, under the read token: `factory read overview|needs|flow|chain|issues|issue|sessions|accounts|friction|health`.
+- Read, under the read token: `factory read overview|needs|flow|chain|issues|issue|sessions|friction|health`.
   Read-only; the server withholds the text of work repos (WorkRoot) under it.
+- Accounts, under the read token: `factory accounts status` (GET /v1/accounts).
 - Write, under the signal token: `factory signal file --from owner:hermes --repo <repo> --title … --text -`. One signal
   per distinct request; triage decides what it becomes.
 
