@@ -112,7 +112,7 @@ runs it); to reproduce one CI failure, run that suite alone inside a slot.
 
 Parallel leads share one master, so a lead lands its branch with `factory land` in its worktree
 (`apps/cli/src/land.ts`), started in the background with its exit code written out. `make check` runs locally before the
-first push and after every change the lead authors; a rebase that only brings in master's commits is not re-run locally,
+first push and after every change the lead authors; a rebase that only brings in master's commits or only resolves conflicts is not re-run locally;
 CI on the rebased head is that check (NL28). A new migration takes the next free number (`make check` prints it;
 `scripts/merge-guard.ts --next-migration` too).
 
