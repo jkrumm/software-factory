@@ -115,8 +115,7 @@ first push and after every change the lead authors; a rebase that only brings in
 CI on the rebased head is that check (NL28). A new migration takes the next free number (`make check` prints it;
 `scripts/merge-guard.ts --next-migration` too).
 
-The verb reads the ship mode from `project.yaml` (`ship:` with any `via: pr` lands by pull request; no file or only
-`via: push` pushes to the default branch) and runs, inside the repo's merge window:
+The verb reads the ship mode from `project.yaml`, else from the repo's host-local project file (`docs/project.md` "A host-local file"; a committed file wins). `ship:` with any `via: pr` lands by pull request; no file or only `via: push` pushes to the default branch. It runs, inside the repo's merge window:
 
 | Step | Pull request | Push |
 |-|-|-|

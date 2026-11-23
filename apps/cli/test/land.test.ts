@@ -493,6 +493,14 @@ describe('factory land', () => {
     expect(result.err).toContain('land: pr: refused: no pull request for factory/7-1')
   })
 
+  test('a relative FACTORY_PROJECTS_DIR is refused by name, as the server refuses it', async () => {
+    await git(work, 'rm', '--quiet', 'project.yaml')
+    await git(work, 'commit', '--quiet', '-m', 'chore: the project file is host-local')
+    const result = await land([], { FACTORY_PROJECTS_DIR: 'projects' }).done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('FACTORY_PROJECTS_DIR must be an absolute path, got: projects')
+  })
+
   test('a gh failure is not "no pull request": it names gh stderr and GH_CONFIG_DIR first', async () => {
     await writeFile(join(state, 'gh-fail'), '')
     const result = await land().done

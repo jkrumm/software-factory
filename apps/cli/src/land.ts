@@ -180,7 +180,8 @@ function parseOptions(words: readonly string[]): Options {
 /** The repo's name: the directory of its main checkout, so a worktree is named by its repo wherever it sits (wtp's layout too). */
 async function repoNameOf(sh: Shell): Promise<string> {
   const common = await sh.read(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'])
-  return basename(dirname(common ?? sh.cwd))
+  if (common === null) return basename(sh.cwd)
+  return basename(dirname(common))
 }
 
 /** The host-local project file of a repo, read where the server reads it: `FACTORY_PROJECTS_DIR` (absolute, as the server requires), else `$HOME/.config/software-factory/projects`. */
