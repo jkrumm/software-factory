@@ -21,7 +21,7 @@
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, seat, answer, prio, reopen, verdicts, projects, queue,
  *   capacity writes, loops, reading the door's registry; `GET /capacity` is the one capacity read a lead has). When in doubt, the owner alone.
  * - person: the owner's own judgment and hands, never the orchestrator's: `POST /v1/decisions/:id/worth-asking`,
- *   `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, and `POST /v1/errands/:id/approve` (his yes: the server runs the Errand's command on the mini).
+ *   `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, and `POST /v1/errands/:id/approve` (his yes: the server runs the Errand's command on the mini).
  * - Signal release (`POST /signals/:id/promote` and `/dismiss`) is an owner row: the orchestrator may release or refuse a quarantined signal (it may already file an Issue with any text), recorded as `orchestrator`, never `owner`. A lead and the outside callers still may not.
  * - Errand done (`POST /v1/errands/:id/done`) is an owner row: the orchestrator may close an Errand its operator confirmed, with `confirmedBy`
  *   and only as `done` (the server refuses the rest, 422), recorded as `orchestrator`, never `owner`. A `not_needed` stays the owner's.
@@ -108,8 +108,6 @@ export const POLICY: readonly Rule[] = [
   rule('GET', '/v1/artifact-collections', LEAD),
   rule('GET', '/v1/artifact-collections/:id', LEAD),
   rule('GET', '/v1/artifacts/:id', LEAD),
-  // the screen request carries the owner's verdict notes on other projects' Specs as precedents: his and his delegate's only
-  rule('GET', '/v1/artifacts/:id/screen', OWNER),
   rule('GET', '/v1/pages', LEAD),
   // tenant and repo names of work repos: the read token never sees them; a lead reads the figures with those names redacted
   rule('GET', '/v1/throughput', LEAD),
@@ -138,7 +136,6 @@ export const POLICY: readonly Rule[] = [
   rule('DELETE', '/v1/artifacts/:id/annotations/:annotationId', PERSON),
   // his delegate may give a Spec's verdict for him (not an owner gate's: `giveVerdict` refuses it), recorded as `orchestrator`; his own verdict replaces it
   rule('POST', '/v1/artifacts/:id/verdict', OWNER),
-  rule('POST', '/v1/artifacts/:id/needed', PERSON),
   // the orchestrator closes an Errand only with evidence, as `done`, recorded as itself (`finishErrand`); approve stays his
   rule('POST', '/v1/errands/:id/done', OWNER),
   rule('POST', '/v1/errands/:id/approve', PERSON),

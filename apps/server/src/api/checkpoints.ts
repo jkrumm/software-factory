@@ -24,12 +24,9 @@ import {
   ISSUE_ID_META,
   PageList,
   PassReply,
-  NeededBody,
   ReviseBody,
-  SpecScreenPreview,
   SubmitBody,
   VerdictBody,
-  VerdictView,
   TakeDefaultBody,
   WorthBody,
 } from '@software-factory/contract'
@@ -37,7 +34,6 @@ import { Elysia } from 'elysia'
 import * as z from 'zod'
 import { type CheckpointError, type ErrandWritten, PLAN_ANSWER } from '../app/checkpoints.ts'
 import type { CheckpointUses } from '../app/checkpoints-uses.ts'
-import { specScreenView } from '../app/checkpoints-specs.ts'
 import { ARTIFACT_KINDS, type ArtifactId } from '../domains/checkpoints/artifact.ts'
 import { defaultAt } from '../domains/checkpoints/decision.ts'
 import {
@@ -122,7 +118,6 @@ const verdictView = (v: VerdictRecord) => ({
   note: v.note,
   at: iso(v.at),
   by: v.by,
-  neededMe: v.neededMe,
 })
 
 const annotationView = (a: AnnotationRecord) => ({
@@ -462,7 +457,6 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
               .filter((a) => a.anchor === 'unanchored')
               .map((a) => annotationView(a.annotation)),
             verdicts: detail.verdicts.map(verdictView),
-            screen: specScreenView(detail.screen),
           }),
         )
       },
@@ -669,45 +663,6 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           operationId: 'artifact.verdict',
           summary:
             "the owner's verdict: looks_good, with_notes, changes or no_longer_applies; it reaches the lead as its next turn. The orchestrator may give it for him on a Spec that is no owner gate (recorded as its own; his verdict on the same revision replaces it)",
-        },
-      },
-    )
-    .post(
-      '/artifacts/:id/needed',
-      async ({ params, body }) => {
-        const id = idOf('artifact', params.id)
-        if (!id) return unknownId('artifact', params.id)
-        const result = await uses.needed({ artifactId: id, needed: body.needed, revision: body.revision ?? null })
-        if (!result.ok) return failed(result.error)
-        return Response.json(VerdictView.parse(verdictView(result.value)))
-      },
-      {
-        params: Id,
-        body: NeededBody,
-        response: RESPONSES(VerdictView, 400, 404, 422, 503),
-        detail: {
-          operationId: 'artifact.needed',
-          summary:
-            "the owner's mark on a verdict: did this Spec or Report need him; it teaches the Spec screen and triage",
-        },
-      },
-    )
-    .get(
-      '/artifacts/:id/screen',
-      async ({ params }) => {
-        const id = idOf('artifact', params.id)
-        if (!id) return unknownId('artifact', params.id)
-        const result = await uses.screen(id)
-        if (!result.ok) return failed(result.error)
-        return Response.json(SpecScreenPreview.parse(result.value))
-      },
-      {
-        params: Id,
-        response: RESPONSES(SpecScreenPreview, 400, 404, 422, 503),
-        detail: {
-          operationId: 'artifact.screen',
-          summary:
-            "the Spec screen's look at the latest revision, and the rule its next look would come to (no workflow reads a Spec, so `request` is null); writes nothing",
         },
       },
     )

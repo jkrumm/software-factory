@@ -59,7 +59,7 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     direction: 'lower',
     target: THRESHOLDS.kpis.asks_not_needed,
     targetSource:
-      'Carried over from the Spec screen’s line (#306, 2026-11-10: one ask in five wasted on him), now read from his answers: of 85 verdicts in the eight days to 2026-11-21, 27 carried no word from him while the mark said 6',
+      'Carried over from the earlier line for Specs alone (#306, 2026-11-10: one ask in five wasted on him), now read from his answers: of 85 verdicts in the eight days to 2026-11-21, 27 carried no word from him',
     numerator:
       'The owner’s own answers that changed nothing: a verdict of Looks good with no note and no comment, a Decision answered with the recommendation',
     denominator: 'The owner’s own verdicts on a Concept or Spec and Decisions he answered in the window',

@@ -10,14 +10,13 @@ shaped as it is: `docs/architecture.md` "Perimeter".
 gateway's). The tailnet publishes it on :8797 through dotfiles-private's serve row, not through `make deploy`. It starts
 whenever the Console is built.
 
-- It answers 405 to anything but `GET` and `HEAD`, bar the fifteen write verbs below.
+- It answers 405 to anything but `GET` and `HEAD`, bar the fourteen write verbs below.
 - It forwards only `/health` and `/v1/*` to the API. The owner token stays in the closure; the client's
   `authorization`, `cookie` and `tailscale-*` headers are dropped; an answer with no `cache-control` of its own gets
   `no-store`. Everything else is `apps/console/dist`.
-- The writes are the owner's eleven answer verbs, the pin and unpin of a collection and the set and clear of an account's mode, nothing else (405):
+- The writes are the owner's ten answer verbs, the pin and unpin of a collection and the set and clear of an account's mode, nothing else (405):
   - `decisions/:id/answer`
   - `artifacts/:id/verdict`
-  - `artifacts/:id/needed` (his needed-me mark)
   - `artifacts/:id/annotations` (`POST`), with `PATCH` and `DELETE` on `artifacts/:id/annotations/:annotationId`
   - `errands/:id/done` (the owner's click; the orchestrator closes through the API, with `confirmedBy`, recorded as itself)
   - `errands/:id/approve` (his yes on an `approval` Errand: the server runs its command on the mini)
@@ -38,7 +37,7 @@ whenever the Console is built.
 
 Residual, accepted (`docs/architecture.md` "Perimeter", NL25): there is no per-request identity and the ACL tag grant is
 the perimeter, so any tagged node granted :8797 and any process on the mini reads what the owner reads (including what
-the read token is denied) and can make those fifteen writes, promote among them (and so pause or drain an account until its mode ends or is cleared). The `origin` check compares with the
+the read token is denied) and can make those fourteen writes, promote among them (and so pause or drain an account until its mode ends or is cleared). The `origin` check compares with the
 request's own `Host`, so a page rebound to loopback in a browser on the mini passes it.
 
 The Console (`apps/console`, its README) holds no logic the API could hold, and `apps/console/test/no-raw-colour.test.ts`
@@ -208,7 +207,7 @@ there with the script; its failure message says what to do.
 - **Trust boundary.** `FACTORY_REPO_ALLOW` takes colon-separated absolute paths, each one repo and its worktrees, never its
   siblings (`adapters/git/repos.ts`). A linked worktree is never a project. The API is loopback only.
 - **The Console listener.** `FACTORY_CONSOLE_PORT`, default 7795 (7794 is the agw gateway's). It forwards only `/health` and
-  `/v1/*`, holds the owner token in its closure, and answers 405 to anything but `GET`/`HEAD` bar its fifteen `WRITES` verbs
+  `/v1/*`, holds the owner token in its closure, and answers 405 to anything but `GET`/`HEAD` bar its fourteen `WRITES` verbs
   (`api/console.ts`). Its verbs, guards and the accepted residual: "The Console listener" above.
 - **The door** holds only `FACTORY_DOOR_TOKEN` (caller `machine`: `POST /signals/alerts`, `POST /signals/feedback`,
   `POST /door/reports`) and no database credential; it takes the repo from `factory.door_routes`.

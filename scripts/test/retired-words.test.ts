@@ -39,6 +39,8 @@ const FIXTURES: Record<string, { failing: string; passing: string }> = {
   scorer: { failing: 'new Scorer()', passing: 'new Loop()' },
   babysitter: { failing: "'babysitter'", passing: "'steward'" },
   'specs not needed': { failing: 'specs_not_needed', passing: 'asks_not_needed' },
+  'spec screen': { failing: 'specScreen(deps)', passing: 'specPathOf(input) // a screen of signals' },
+  'needed me': { failing: 'needed_me', passing: 'asks_not_needed // he needed it; tell me' },
   'ask judge': { failing: 'FACTORY_ASK_JUDGE', passing: 'FACTORY_JUDGE // ask the Judge? no: ask, then judge' },
   'light review': { failing: 'lightReview', passing: 'standardReview' },
   'per-commit coverage': { failing: '// per-commit coverage', passing: '// per commit' },

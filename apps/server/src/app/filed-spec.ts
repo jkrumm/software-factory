@@ -85,6 +85,6 @@ export async function attachSpec(
     note: null,
     createdAt: at,
   })
-  // The owner is paged when the Spec screen passes it to him (`checkpoints-specs.ts`): a filed Spec passes by rule.
+  // The owner is paged when its path passes it to him (`checkpoints-specs.ts`): a filed Spec passes by rule.
   return ok(null)
 }

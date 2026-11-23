@@ -235,7 +235,7 @@ the rest: per direct dependent its Spec says in one line whether it needs the an
 dependent is freed only when its work stands under every answer the owner can give and a revert undoes it. A freed Issue
 is an edge removal; a freed row is the head taken out of its `after`, named in the block's `free` list (`plan` lists every
 other change to a row). A proposal whose `plan` is empty and that cancels nothing is settled by rule and applied at once,
-the plan edit through the ship path; any other change is screened for the owner. Needs you shows on each item what it
+the plan edit through the ship path; any other change goes to the owner. Needs you shows on each item what it
 holds, and on the head's card what went ahead without the answer. One is open per project at a time; asking again while it is open
 adds the words to it as a note. On a verdict of Looks good the lead edits `docs/plan.yaml` through the
 project's ship path and applies edge changes and cancellations with `factory issue replan <id> --attempt <n> --body '<json>'`. The server gates
@@ -380,12 +380,12 @@ request's review by someone else. Each rule is one line with the symbol that hol
 - Recheck: an Errand or Decision in front of the owner past `FACTORY_CHECKPOINT_RECHECK_MS` (6 h) is looked at again
   (`recheckOpen`, `withdrawalReason`); each look is a `checkpoint_rechecks` row.
 
-**Specs and Concepts** (`domains/checkpoints/spec-screen.ts`, `app/checkpoints-specs.ts`)
+**Specs and Concepts** (`domains/checkpoints/spec-path.ts`, `app/checkpoints-specs.ts`)
 - A Spec flag (`checkpoint: spec`, or `gate` for one only the owner's verdict ends) owes a Spec. `shipIssue`
   (`app/quality-ship.ts`) refuses the ship until one exists.
 - A Spec goes where `specPathOf` says, by rule alone (NL53): a lead's Spec is its plan, recorded at `artifact submit`
   (`recordedAsPlan`) as settled with no wait and no page; an owner gate's, a filed one, a revision after Changes and a
-  Replan that changes a plan row wait and are passed to the owner by `screenSpecs`. `factory-spec-screen` is not called.
+  Replan that changes a plan row wait and are passed to the owner by `routeSpecs`. No workflow reads a Spec.
 - No verdict within `SPEC_WAIT_HOURS` (24 h, `packages/contract/src/lane.ts`): `recheckReviews`
   (`app/checkpoints-reviews.ts`) defaults it to `looks_good` by the factory, or `no_longer_applies` when its Issue
   closed.
@@ -662,9 +662,9 @@ words are blanked for the read token.
 The API stays loopback. The door and the Console are published on the tailnet by dotfiles-private's `tailscale serve`
 rows (the Console on :8797, to its loopback listener); the perimeter is the tailnet ACL by device tag (`tag:mac` and
 `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25). There is no per-request identity: anything that reaches
-:8797 reads what the owner reads, plus the owner's fifteen write verbs and never a session start. The door holds only
-its own token; the Console proxy never uses the orchestrator's. The Console listener forwards exactly eleven answers
-(Decisions, artifact verdicts, marks and annotations, Errands done or approved, quarantined signals promoted or dismissed), a
+:8797 reads what the owner reads, plus the owner's fourteen write verbs and never a session start. The door holds only
+its own token; the Console proxy never uses the orchestrator's. The Console listener forwards exactly ten answers
+(Decisions, artifact verdicts and annotations, Errands done or approved, quarantined signals promoted or dismissed), a
 collection's pin and unpin and an account's mode set and clear, guarded against a cross-site page (JSON only bar a
 delete, no cross-site fetch metadata, no foreign `origin`, 64 KiB). It starts no session and cancels or reopens no
 Issue; promote files one only from a signal already held, dismiss files nothing. The artifact frame (`/frame.html`,
@@ -731,7 +731,7 @@ Rules, one line each:
 
 `apps/console` is the owner's window (NL1): Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
 Router, Query and Table, a PWA. The server's second loopback listener serves the build, published by
-dotfiles-private's serve row (`docs/operations.md` "The Console listener"). It is read-only apart from the fifteen
+dotfiles-private's serve row (`docs/operations.md` "The Console listener"). It is read-only apart from the fourteen
 verbs (Perimeter) and can never spawn a session. The screens are those of `apps/console/src/lib/screens.ts` plus the
 pages an Issue, a project, an artifact and a collection each have; `/checkpoints/<id>`, the link of the owner's pages,
 lands on its item. `apps/console/README.md` describes each screen and `apps/console/DESIGN.md` is the design bar.

@@ -665,7 +665,7 @@ Ten domains, each owning its tables. A domain imports only the kernel and itself
 
 - **A lead** is an interactive Claude Code session in a [herdr-core](integrations/README.md) terminal.
 - **A workflow** is an [agent-workflows](https://github.com/jkrumm/agent-workflows) (`agw`) run. The server holds no model SDK.
-- **The Console listener** is a second loopback port. It holds the owner's token on the server. Beside the reads it forwards fifteen write verbs and nothing else.
+- **The Console listener** is a second loopback port. It holds the owner's token on the server. Beside the reads it forwards fourteen write verbs and nothing else.
 - **One process.** A session-level Postgres advisory lock is taken first; a second copy waits, then exits.
 - **One contract.** Request, response and event shapes are zod schemas in `packages/contract`; the server builds every body through its schema and the CLI parses with the same one.
 

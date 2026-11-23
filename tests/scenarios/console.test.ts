@@ -35,7 +35,7 @@ test('the Console listener starts when the build exists and serves the read slic
   const index = await fetch(consoleUrl)
   expect(index.status).toBe(200)
   expect(await index.text()).toBe('<title>console</title>')
-  // a write that is not one of the fifteen verbs never passes, and the client's own token buys nothing here
+  // a write that is not one of the fourteen verbs never passes, and the client's own token buys nothing here
   const post = await fetch(`${consoleUrl}/v1/issues`, { method: 'POST', headers: bearer() })
   expect(post.status).toBe(405)
 })

@@ -1,5 +1,5 @@
-import type { ImageAnchor, SpecPrecedent, SpecSource } from '@software-factory/contract'
-import type { SpecOrigin } from './spec-screen.ts'
+import type { ImageAnchor, SpecSource } from '@software-factory/contract'
+import type { SpecOrigin } from './spec-path.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
@@ -154,14 +154,12 @@ export interface VerdictRecord {
   verdict: Verdict
   note: string | null
   at: Date
-  /** who gave it: the owner, the factory for him (the default after the wait, a Spec screen settle, a withdrawal), or his delegate */
+  /** who gave it: the owner, the factory for him (the default after the wait, a settle by rule, a withdrawal), or his delegate */
   by: 'owner' | 'factory' | 'orchestrator'
-  /** the owner's mark: did it need him; null while unmarked */
-  neededMe: boolean | null
 }
 
-/** The Spec screen's look at one revision (`spec-screen.ts`); `outcome` null while a failed call waits for its retry. */
-export interface SpecScreenRecord {
+/** Where one Spec revision went (`spec-path.ts`); `outcome` null while a failed read of its content waits for its retry. */
+export interface SpecPathRecord {
   artifactId: ArtifactId
   revision: number
   outcome: 'passed' | 'settled' | null
@@ -173,16 +171,17 @@ export interface SpecScreenRecord {
   at: Date
 }
 
-/** A Spec revision as the screen reads it: the artifact, the revision, where it came from, and what came before. */
-export interface UnscreenedSpec {
+/** A Spec revision as the rules read it: the artifact, the revision, where it came from, and what came before. */
+export interface UndecidedSpec {
   artifact: ArtifactRecord
   revision: RevisionRecord
   origin: SpecOrigin
-  /** a verdict on this revision already: the screen has nothing left to decide */
+  /** a verdict on this revision already: its path has nothing left to decide */
   answered: boolean
   /** the verdicts on its earlier revisions, oldest first */
   earlier: Verdict[]
-  screen: SpecScreenRecord | null
+  /** the path row of this revision; null before one is written */
+  recorded: SpecPathRecord | null
 }
 
 /** `failing`: unsent after the attempts a healthy line needs; it is still tried, and the error says why. */
@@ -271,26 +270,17 @@ export interface CheckpointStore {
   disposeAnnotation(id: string, disposition: Disposition, note: string, at: Date): Promise<boolean>
   insertVerdict(verdict: VerdictRecord & { key: Key }): Promise<boolean>
   verdictByKey(key: Key): Promise<VerdictRecord | null>
-  /** the owner's verdict in place of his delegate's on a revision: its mark is cleared; null when the revision has no delegate's verdict */
+  /** the owner's verdict in place of his delegate's on a revision; null when the revision has no delegate's verdict */
   replaceDelegatedVerdict(verdict: VerdictRecord): Promise<VerdictRecord | null>
   verdicts(id: ArtifactId): Promise<VerdictRecord[]>
-  /** the owner's mark on the verdict of a revision: `unchanged` when it had that value, `no_verdict` when the revision has none */
-  setNeededMe(
-    id: ArtifactId,
-    revision: number,
-    needed: boolean,
-    at: Date,
-  ): Promise<'set' | 'unchanged' | 'no_verdict' | 'unknown'>
 
-  /** the Spec revisions the screen has not decided, oldest first: the latest revision, no verdict, a retry that is due */
-  unscreenedSpecs(now: Date, limit: number): Promise<{ artifact: ArtifactId; revision: number }[]>
-  /** one Spec revision with what the screen reads, its row locked (`lock: false` for a read that writes nothing); null when it is not the latest Spec revision */
-  lockSpecRevision(id: ArtifactId, revision: number, options?: { lock: boolean }): Promise<UnscreenedSpec | null>
-  specScreen(id: ArtifactId, revision: number): Promise<SpecScreenRecord | null>
-  /** writes the screen's look; false when the revision was decided already */
-  recordSpecScreen(screen: SpecScreenRecord): Promise<boolean>
-  /** the owner's newest marks on Specs, newest first: the screen's and triage's precedents */
-  specPrecedents(limit: number): Promise<SpecPrecedent[]>
+  /** the Spec revisions whose path is not decided, oldest first: the latest revision, no verdict, a retry that is due */
+  undecidedSpecs(now: Date, limit: number): Promise<{ artifact: ArtifactId; revision: number }[]>
+  /** one Spec revision with what the rules read, its row locked (`lock: false` for a read that writes nothing); null when it is not the latest Spec revision */
+  lockSpecRevision(id: ArtifactId, revision: number, options?: { lock: boolean }): Promise<UndecidedSpec | null>
+  specPath(id: ArtifactId, revision: number): Promise<SpecPathRecord | null>
+  /** writes the revision's path; false when it was decided already */
+  recordSpecPath(path: SpecPathRecord): Promise<boolean>
 
   /**
    * The checkpoints at the owner since `reachedBefore` or earlier: open Decisions whose `owner` step is `open`, open Errands

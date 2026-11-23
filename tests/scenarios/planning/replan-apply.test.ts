@@ -113,7 +113,7 @@ test('an approved Replan Spec lets its lead change the chain and cancel, inside 
       ])
     ).json,
   )
-  // a Spec reaches Needs you once the Spec screen passes it (the fake agw passes it)
+  // a Spec reaches Needs you once the rules pass it to him
   await must(lab, ['checkpoint', 'pass'])
   expect((await needs()).items.find((item) => item.id === submitted.artifact.id)).toMatchObject({ kind: 'review' })
 

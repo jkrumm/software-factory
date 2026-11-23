@@ -181,7 +181,7 @@ export const SCREEN_BATCH = 10
 
 - [`app/intake-quarantine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-quarantine.ts#L33-L84): `hold` and `outsideIn`, the quarantine and its one exception
 - [`domains/intake/screen.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/screen.ts#L1-L61): the screen's limits, the backoff, the request the workflow sees
-- [`kernel/workflows.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/workflows.ts#L158-L167): the `screen` entry, `factory-screen` through the agw port
+- [`kernel/workflows.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/workflows.ts#L147-L156): the `screen` entry, `factory-screen` through the agw port
 
 ## The door
 

@@ -11,7 +11,7 @@ import {
   type Window,
 } from './kpis.ts'
 import { frictionWindow } from './friction.ts'
-import { specSourceSql } from './spec-screen.ts'
+import { specSourceSql } from './spec-path.ts'
 import { refusalKind } from './refusal-kind.ts'
 
 /** Refs shown per pattern. */

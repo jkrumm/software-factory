@@ -27,9 +27,9 @@ const artifact = async (id: string, kind: string, source: string | null) => {
     await sql`INSERT INTO factory.spec_screens (artifact_id, revision, outcome, by, source, at)
       VALUES (${id}, 1, 'passed', 'rule', ${source}, ${ago(99)})`
 }
-const verdict = (id: string, verdict: string, note: string | null, by = 'owner', needed: boolean | null = null) =>
-  sql`INSERT INTO factory.verdicts (artifact_id, revision, key, verdict, note, at, by, needed_me)
-    VALUES (${id}, 1, ${`verdict_${id}`}, ${verdict}, ${note}, ${ago(10)}, ${by}, ${needed})`
+const verdict = (id: string, verdict: string, note: string | null, by = 'owner') =>
+  sql`INSERT INTO factory.verdicts (artifact_id, revision, key, verdict, note, at, by)
+    VALUES (${id}, 1, ${`verdict_${id}`}, ${verdict}, ${note}, ${ago(10)}, ${by})`
 const decision = (id: string, answer: string, by: string, at: Date) =>
   sql`INSERT INTO factory.decisions
     (id, key, issue_id, repo, attempt, question, recommendation, checked, options, no_answer, asked_at, answer, settled_by, answered_at)
@@ -50,10 +50,10 @@ beforeAll(async () => {
   await artifact('s7', 'spec', 'filer')
   await artifact('c1', 'concept', null)
   await artifact('r1', 'report', null)
-  // changed nothing: Looks good with no word (one carries the old mark that said it did need him: the mark is not read)
+  // changed nothing: Looks good with no word
   await verdict('s1', 'looks_good', null)
   await verdict('s2', 'looks_good', null)
-  await verdict('c1', 'looks_good', null, 'owner', true)
+  await verdict('c1', 'looks_good', null)
   // changed something: a note, a comment on the revision, Changes
   await verdict('s3', 'looks_good', 'fewer words')
   await verdict('s4', 'looks_good', null)

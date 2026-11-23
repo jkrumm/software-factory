@@ -9,7 +9,7 @@ import { CHECK_BROKEN_NOTE, RUN_STATUSES, STILL_NEEDED_NOTE, triedLine } from '.
 import { hostOf } from '../kernel/hands.ts'
 import { readLongWaits } from './long-waits.ts'
 import { type SeatTable, readLeadSeats } from './seats.ts'
-import { screenPassed } from './spec-screen.ts'
+import { specAtOwner } from './spec-path.ts'
 import { DEFAULT_LONG_WAIT_MS } from './needs-settings.ts'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, type OpenProject, REDACTED_SUMMARY, REDACTED_TITLE } from './work.ts'
@@ -221,7 +221,7 @@ export async function readNeeds(
       ) e ON true
       LEFT JOIN factory.artifacts a ON a.id = e.wait->'holds'->>'id'
       WHERE i.state = 'waiting' AND i.wait_reason = 'review' AND e.wait->>'verdictGiven' IS NULL
-        AND ${screenPassed(sql)}
+        AND ${specAtOwner(sql)}
       UNION ALL
       SELECT i.id AS issue_id, i.repo, a.id AS artifact_id, a.title, a.kind, NULL::text AS summary, r.created_at AS at,
         (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin,
@@ -233,7 +233,7 @@ export async function readNeeds(
       ) r ON true
       WHERE a.key LIKE 'filed-spec:%'
         AND NOT EXISTS (SELECT 1 FROM factory.verdicts v WHERE v.artifact_id = a.id AND v.revision = r.n)
-        AND ${screenPassed(sql)}
+        AND ${specAtOwner(sql)}
     ) reviews
     ORDER BY at DESC, issue_id DESC`
   const errands: unknown[] = await sql`

@@ -15,7 +15,6 @@ import {
   listArtifacts,
   listErrands,
   listPages,
-  markNeeded,
   markWorthAsking,
   raiseErrand,
   reviseArtifact,
@@ -27,7 +26,7 @@ import { type PageDeps, runCheckpointPass, sendDuePages } from './checkpoints-pa
 import { approveErrand } from './checkpoints-approve.ts'
 import { checkErrandNow } from './checkpoints-check.ts'
 import { assignNeeds, screenErrands } from './checkpoints-errands.ts'
-import { previewSpecScreen, screenSpecs } from './checkpoints-specs.ts'
+import { routeSpecs } from './checkpoints-specs.ts'
 import { recheckOpen } from './checkpoints-recheck.ts'
 import { recheckReviews } from './checkpoints-reviews.ts'
 import { type CheckpointLoopDeps, tryAnswerOpen } from './checkpoints-loop.ts'
@@ -48,8 +47,6 @@ export function checkpointUses(deps: CheckpointLoopDeps & PageDeps) {
     replyAnnotation: (input: Parameters<typeof replyAnnotation>[1]) => replyAnnotation(deps, input),
     deleteAnnotation: (input: Parameters<typeof deleteAnnotation>[1]) => deleteAnnotation(deps, input),
     verdict: (input: Parameters<typeof giveVerdict>[1]) => giveVerdict(deps, input),
-    needed: (input: Parameters<typeof markNeeded>[1]) => markNeeded(deps, input),
-    screen: (id: Parameters<typeof previewSpecScreen>[1]) => previewSpecScreen(deps, id),
     artifact: (input: Parameters<typeof showArtifact>[1]) => showArtifact(deps, input),
     artifacts: (filter: Parameters<typeof listArtifacts>[1]) => listArtifacts(deps, filter),
     raiseErrand: (input: Parameters<typeof raiseErrand>[1]) => raiseErrand(deps, input),
@@ -71,7 +68,7 @@ export function checkpointUses(deps: CheckpointLoopDeps & PageDeps) {
       const decisions = await tryAnswerOpen(deps)
       const errands = await screenErrands(deps)
       await assignNeeds(deps)
-      const specs = await screenSpecs(deps)
+      const specs = await routeSpecs(deps)
       if (!decisions.ok) return decisions
       return errands.ok ? specs : errands
     },

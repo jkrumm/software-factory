@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { JudgeCase } from './case-file.ts'
-import { DECISION_CLASSES, SPEC_SCREEN_PRECEDENTS, SpecPrecedent } from './checkpoints.ts'
+import { DECISION_CLASSES } from './checkpoints.ts'
 import { ISSUE_KINDS, ISSUE_SIZES } from './vocab.ts'
 
 /**
@@ -152,8 +152,6 @@ export const TriageSettleRequest = z.object({
     kind: z.enum(ISSUE_KINDS),
     origin: z.string().min(1).max(40),
   }),
-  /** the owner's newest needed-me marks on Specs (data): what made a Spec owed that did not need him, and what did */
-  precedents: z.array(SpecPrecedent).max(SPEC_SCREEN_PRECEDENTS).default([]),
   case: JudgeCase.optional(),
 })
 

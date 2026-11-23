@@ -43,7 +43,7 @@ field. The address logic is pure (`lib/peek.ts`); the panel's content is its own
 
 ## Accounts
 
-`/accounts` (`routes/accounts.tsx`, the words in `lib/accounts.ts`) reads `GET /v1/accounts` and holds no rule: the package's state, lanes, forecast, reset ledger and order, worded. It shows the order the chosen lane (`?lane=`, default bulk) gives now with each place's reason, the KPI quota used at reset over the last six weeks (from `GET /v1/kpis`), and one panel per account: plan, mode with its expiry and source, each limit as a meter with its reset, the forecast in words, per lane whether it takes work and why not, the seats, the weekly percent at the last eight resets, and the four intents (Fill first, Hold for a model, Pause, Back to normal) with their expiry. The intents are `POST` and `DELETE /v1/accounts/:id/mode`, two of the listener's fifteen verbs. The strip shows a mode beside the account's meter when it is not normal.
+`/accounts` (`routes/accounts.tsx`, the words in `lib/accounts.ts`) reads `GET /v1/accounts` and holds no rule: the package's state, lanes, forecast, reset ledger and order, worded. It shows the order the chosen lane (`?lane=`, default bulk) gives now with each place's reason, the KPI quota used at reset over the last six weeks (from `GET /v1/kpis`), and one panel per account: plan, mode with its expiry and source, each limit as a meter with its reset, the forecast in words, per lane whether it takes work and why not, the seats, the weekly percent at the last eight resets, and the four intents (Fill first, Hold for a model, Pause, Back to normal) with their expiry. The intents are `POST` and `DELETE /v1/accounts/:id/mode`, two of the listener's fourteen verbs. The strip shows a mode beside the account's meter when it is not normal.
 
 ## Overview
 
@@ -172,8 +172,8 @@ The server's second listener serves `apps/console/dist` as static files and forw
 API with the owner token; an extension-less path falls back to `index.html`. So the app calls same-origin `/v1/...`, with no
 auth header and no base URL, and every response is parsed with the schema from `@software-factory/contract`. The service
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
-invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly fifteen writes, the owner's answers, a collection's pin and unpin and an account's mode set and clear (a Decision's answer, an
-artifact's verdict and its needed-me mark (the app no longer posts the mark, the route stays), a comment and the edit or deletion of one, an Errand done, an Errand approved, a quarantined signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
+invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly fourteen writes, the owner's answers, a collection's pin and unpin and an account's mode set and clear (a Decision's answer, an
+artifact's verdict, a comment and the edit or deletion of one, an Errand done, an Errand approved, a quarantined signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the queries a change can alter (`affected` in `src/lib/policy.ts`: a frame's `kind`, `ref` and `detail` name them; a frame that does not parse, or has an unknown kind, alters all but the strip's readings); while it is not open the
 queries poll every 15 s and the strip's Live says `Polling`, and while it is open they still poll once a minute, because the
 stream's keepalive is an SSE comment `EventSource` cannot see: a watchdog (`src/lib/live.ts`) also replaces the connection
@@ -350,7 +350,7 @@ log in words as a StepRail per attempt. Evidence: each ship with its commits, re
 the evidence. Checkpoints: Decisions with their options, artifacts, the notes you sent; the tab shows how many wait on you.
 The pure model (tabs, groups, series, chain links, tones) is `src/lib/issue-page.ts`. Every figure is the API's, only
 phrased; no id is on screen. A Needs you card and an Overview row link to it. It is read-only on purpose: the listener forwards
-fifteen verbs (eleven answers, pin and unpin, an account's mode) and none of them is a note or a cancel, and the Console never cancels an Issue or starts a session. An open
+fourteen verbs (ten answers, pin and unpin, an account's mode) and none of them is a note or a cancel, and the Console never cancels an Issue or starts a session. An open
 Decision links to `/needs-you?item=<id>`, an artifact to `/artifacts/<id>`, where the answer is given.
 `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
 

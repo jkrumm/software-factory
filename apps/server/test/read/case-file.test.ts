@@ -191,7 +191,6 @@ function requests(repo: string, w: World): Record<WorkflowName, unknown> {
     errandScreen: { ...fixture.errand.input, issue: { ...fixture.errand.input.issue, id: w.subject, repo } },
     errandNeeded: { ...fixture.errandNeeded.input, errand: { ...fixture.errandNeeded.input.errand, id: w.errand } },
     hygiene: fixture.hygiene.input,
-    specScreen: fixture.specScreen.input,
   }
 }
 
@@ -268,8 +267,7 @@ describe('the case file', () => {
     // the Judge also gets the Issue as filed and the checkout it reads with its tools
     expect(sent.get('judge')?.facts).toContain('the server logs nothing')
     expect(sent.get('judge')?.checkout).toBe(checkout)
-    // the Spec screen and the hygiene judge take no case
-    expect(sent.get('specScreen')).not.toHaveProperty('case')
+    // the hygiene judge takes no case
     expect(sent.get('hygiene')).not.toHaveProperty('case')
   })
 

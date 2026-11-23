@@ -3,7 +3,6 @@ import {
   type IssueSize,
   REFINED_KINDS,
   type RefinedKind,
-  type SpecPrecedent,
   type TriageAnswer,
   type TriageCandidate,
   type TriageRequest,
@@ -75,7 +74,6 @@ export function settleRequest(
   facts: SettlingFacts,
   candidates: readonly TriageCandidate[],
   clean: (text: string) => string,
-  precedents: readonly SpecPrecedent[] = [],
 ): Extract<TriageRequest, { mode: 'settle' }> {
   return {
     mode: 'settle',
@@ -88,11 +86,6 @@ export function settleRequest(
       kind: facts.kind,
       origin: facts.origin,
     },
-    precedents: precedents.map((p) => ({
-      ...p,
-      title: clean(p.title).slice(0, 200),
-      note: p.note === null ? null : clean(p.note).slice(0, 2000),
-    })),
   }
 }
 

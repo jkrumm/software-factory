@@ -23,7 +23,7 @@ import {
 } from '../domains/checkpoints/decision.ts'
 import { picturesRefusal } from '../domains/checkpoints/pictures.ts'
 import { specFormRefusal } from '../domains/checkpoints/spec-form.ts'
-import { PLAN_REASON, specPathOf, specSourceOf } from '../domains/checkpoints/spec-screen.ts'
+import { PLAN_REASON, specPathOf, specSourceOf } from '../domains/checkpoints/spec-path.ts'
 import {
   type ErrandId,
   type ErrandRaised,
@@ -72,7 +72,6 @@ import type {
   DecisionRecord,
   PageRecord,
   RevisionRecord,
-  SpecScreenRecord,
   VerdictRecord,
 } from '../domains/checkpoints/ports.ts'
 import type { CheckRunner, ErrandJoin, ErrandRecord, ErrandStore } from '../domains/errands/ports.ts'
@@ -757,9 +756,9 @@ function planRefused(issue: Issue, attempt: number, verb: 'artifact submit' | 'a
 
 /**
  * Whether a Spec revision just stored is the lead's plan (Issue 2732), decided by rule (`specPathOf`) inside the transaction
- * that stored it. A plan records its screen row at once, settled by rule with its reason, so the screen pass and Needs you
+ * that stored it. A plan records its path row at once, settled by rule with its reason, so the path pass and Needs you
  * skip it: nothing waits, nobody is paged. Anything else (and a revision of a Spec its Issue still waits on) is left to
- * `submitted` and the screen pass, as before. A plan from a lead the machine would not hear is refused, and rolls back.
+ * `submitted` and the path pass, as before. A plan from a lead the machine would not hear is refused, and rolls back.
  */
 async function recordedAsPlan(
   checkpoints: CheckpointStore,
@@ -779,7 +778,7 @@ async function recordedAsPlan(
   const refused = planRefused(input.issue, input.attempt, input.revision === 1 ? 'artifact submit' : 'artifact revise')
   if (refused) return err({ kind: 'machine_refused', detail: refused })
   return ok(
-    await checkpoints.recordSpecScreen({
+    await checkpoints.recordSpecPath({
       artifactId: input.artifactId,
       revision: input.revision,
       outcome: 'settled',
@@ -797,7 +796,7 @@ async function recordedAsPlan(
  * `factory artifact submit`: the lead hands over a Concept, a Spec or a Report. A Concept records `submitted`, which makes
  * the Issue wait for the owner's verdict, and pages him once; a Report never waits and pages no one. A Spec is the lead's
  * plan and does not wait either (Issue 2732), unless a rule makes it the owner's (`specPathOf`: an owner gate, a Replan that
- * changes a plan row or cancels an Issue); then it waits like a Concept and the screen pass pages him. The same hand-over
+ * changes a plan row or cancels an Issue); then it waits like a Concept and the path pass pages him. The same hand-over
  * again is the same artifact.
  */
 export async function submitArtifact(
@@ -827,7 +826,7 @@ export async function submitArtifact(
     if (!issue) return err({ kind: 'unknown_issue', issueId: input.issueId })
     const existing = await checkpoints.artifactByKey(submitKey)
     if (existing) {
-      const plan = existing.kind === 'spec' && (await checkpoints.specScreen(existing.id, 1))?.note === PLAN_REASON
+      const plan = existing.kind === 'spec' && (await checkpoints.specPath(existing.id, 1))?.note === PLAN_REASON
       return ok({ ...(await written(checkpoints, existing.id, 'replayed', moveOf(issue))), plan })
     }
 
@@ -883,7 +882,7 @@ export async function submitArtifact(
       if (!recorded.ok) return recorded
       move = moveOf(recorded.value.issue, recorded.value.effects)
     }
-    // A Spec is paged by the screen once it passes it to the owner (`checkpoints-specs.ts`); a Concept at once.
+    // A Spec is paged by its path pass once it goes to the owner (`checkpoints-specs.ts`); a Concept at once.
     if (submission.kind === 'concept') {
       await checkpoints.planPage(
         reviewPage({
@@ -968,7 +967,7 @@ export async function reviseArtifact(
         : err({ kind: 'invalid', detail: `revision ${n} of ${artifact.id} was written by a concurrent request` })
     }
     // A revision of the lead's plan does not wait either, unless it answers the owner's Changes; one of a Spec its Issue
-    // still waits on keeps the wait, and the screen pass settles or passes it.
+    // still waits on keeps the wait, and the path pass settles or passes it.
     const recorded =
       reviewed &&
       artifact.kind === 'spec' &&
@@ -1002,7 +1001,7 @@ export async function reviseArtifact(
       if (!recorded.ok) return recorded
       move = moveOf(recorded.value.issue, recorded.value.effects)
     }
-    // A Spec revision is paged by the screen once it passes it to the owner (`checkpoints-specs.ts`); a Concept at once.
+    // A Spec revision is paged by its path pass once it goes to the owner (`checkpoints-specs.ts`); a Concept at once.
     if (artifact.kind === 'concept' && issue) {
       await checkpoints.planPage(
         reviewPage({
@@ -1234,7 +1233,7 @@ async function delegateRefusal(
   return null
 }
 
-/** A verdict inside a transaction the caller holds: the Spec screen gives its looks_good with its own record in one. */
+/** A verdict inside a transaction the caller holds: the path pass gives its looks_good with its own record in one. */
 export async function verdictIn(
   { work, checkpoints }: CheckpointStores,
   deps: CheckpointDeps,
@@ -1282,7 +1281,7 @@ export async function verdictIn(
 
     const at = deps.clock.now()
     const note = input.note?.trim() || null
-    const record: VerdictRecord = { artifactId: artifact.id, revision, verdict, note, at, by, neededMe: null }
+    const record: VerdictRecord = { artifactId: artifact.id, revision, verdict, note, at, by }
     if (reopens) {
       const replaced = await checkpoints.replaceDelegatedVerdict(record)
       if (!replaced)
@@ -1351,35 +1350,6 @@ export async function verdictIn(
   }
 }
 
-/**
- * The owner's one-click mark on a verdict of a Spec, Concept or Report: did it need him. Stored like a Decision's
- * worth-asking flag; the newest marks are the Spec screen's and triage's precedents. No KPI reads it: whether an ask
- * needed him is read from his answer. The revision defaults to the latest one with a verdict.
- */
-export function markNeeded(
-  deps: CheckpointDeps,
-  input: { artifactId: ArtifactId; needed: boolean; revision: number | null },
-): Promise<CheckpointResult<VerdictRecord>> {
-  return deps.uow.run(async ({ checkpoints }) => {
-    const artifact = await checkpoints.artifact(input.artifactId)
-    if (!artifact) return err(notFound('artifact', input.artifactId))
-    if (artifact.kind === 'decision') {
-      return err({ kind: 'invalid', detail: 'a Decision is marked worth asking: factory decision worth-asking <id>' })
-    }
-    const verdicts = await checkpoints.verdicts(artifact.id)
-    const revision = input.revision ?? verdicts.at(-1)?.revision ?? null
-    if (revision === null) return err({ kind: 'invalid', detail: `${artifact.id} has no verdict to mark yet` })
-    const set = await checkpoints.setNeededMe(artifact.id, revision, input.needed, deps.clock.now())
-    if (set === 'unknown') return err(notFound('artifact', input.artifactId))
-    if (set === 'no_verdict') {
-      return err({ kind: 'invalid', detail: `revision ${revision} of ${artifact.id} has no verdict to mark` })
-    }
-    const marked = (await checkpoints.verdicts(artifact.id)).find((v) => v.revision === revision)
-    if (!marked) throw new Error(`the verdict of ${artifact.id} revision ${revision} vanished inside its transaction`)
-    return ok(marked)
-  })
-}
-
 export interface ArtifactDetail {
   artifact: ArtifactRecord
   revisions: RevisionRecord[]
@@ -1390,8 +1360,6 @@ export interface ArtifactDetail {
   annotations: { annotation: AnnotationRecord; anchor: Anchor }[]
   verdicts: VerdictRecord[]
   links: IssueId[]
-  /** the Spec screen's look at the revision shown; null for a Concept, a Report, and a Spec not looked at yet */
-  screen: SpecScreenRecord | null
 }
 
 /** An artifact with one revision's content and its annotations sorted into anchored and "Unanchored" by that content. */
@@ -1411,11 +1379,10 @@ export async function showArtifact(
       annotations: await checkpoints.annotations(artifact.id),
       verdicts: await checkpoints.verdicts(artifact.id),
       links: (await checkpoints.artifactLinks([artifact.id])).get(artifact.id) ?? [],
-      screen: artifact.kind === 'spec' ? await checkpoints.specScreen(artifact.id, shown) : null,
     })
   })
   if (!rows.ok) return rows
-  const { artifact, revisions, annotations, verdicts, links, shown, screen } = rows.value
+  const { artifact, revisions, annotations, verdicts, links, shown } = rows.value
   const revision = revisions.find((candidate) => candidate.n === shown)
   if (!revision) return err({ kind: 'invalid', detail: `${artifact.id} has no revision ${shown}` })
   const content = await deps.blobs.get(revision.blob)
@@ -1433,7 +1400,6 @@ export async function showArtifact(
     })),
     verdicts,
     links,
-    screen,
   })
 }
 

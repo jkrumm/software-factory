@@ -6,7 +6,7 @@ import type { OwnerWaitKind, ReplanTrigger } from './replan.ts'
 import type { RepoRead, StoredProject } from './sync.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { QueueApplied, QueueIssue } from './queue-edges.ts'
-import type { IssueKind, SpecPrecedent, TriageCandidate } from '@software-factory/contract'
+import type { IssueKind, TriageCandidate } from '@software-factory/contract'
 import type { HeldEdge } from './edge-need.ts'
 import type { EdgeNeed } from '../../kernel/edge-need.ts'
 
@@ -250,6 +250,4 @@ export interface PlanningLoopReads {
   edgeNeed(window: { from: Date; to: Date }): Promise<EdgeNeed[]>
   /** working or watching Issues with an open edge to one of `queued` (still queued, same repo): the claim deadlock */
   claimHolders(queued: readonly IssueId[], limit: number): Promise<ClaimHolder[]>
-  /** the owner's newest needed-me marks on Specs, newest first: triage's precedents for the `spec` flag */
-  specPrecedents(limit: number): Promise<SpecPrecedent[]>
 }

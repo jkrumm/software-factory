@@ -44,6 +44,8 @@ export const RETIRED: Retired[] = [
     use: 'asks not needed (the KPI asks_not_needed)',
   },
   { term: 'taste gate', pattern: 'taste\\s+gates?', use: 'checkpoint' },
+  { term: 'spec screen', pattern: 'spec\\s+screens?', use: 'a Spec path (where the rules send a Spec revision)' },
+  { term: 'needed me', pattern: 'needed\\s+me', use: "the owner's answer itself (asks not needed)" },
   { term: 'decision card', pattern: 'decision\\s+cards?', use: 'Decision' },
   { term: 'hands-only', pattern: 'hands\\s+only', use: 'errand' },
   { term: 'human queue', pattern: 'human\\s+queues?', use: 'errand' },

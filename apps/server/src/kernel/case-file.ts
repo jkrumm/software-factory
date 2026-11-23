@@ -3,7 +3,7 @@ import type { PortError, Result } from './result.ts'
 
 /**
  * The judges of the factory that take the case file (agw's `factory-case.ts`): the Judge, the steward, triage, the queue,
- * the screen of quarantined signals and the two Errand screens. The Spec screen and the hygiene judge take none.
+ * the screen of quarantined signals and the two Errand screens. The hygiene judge takes none.
  */
 export type CaseJudge = 'judge' | 'steward' | 'triage' | 'queue' | 'screen' | 'errand' | 'errandNeeded'
 

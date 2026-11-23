@@ -953,3 +953,18 @@ rows:
         factory read chain --format json on 2026-11-21 08:15 UTC: 92 plan rows waiting; 26 of them rooted at one owner gate held since 2026-11-18. REPLAN_TRIGGERS in apps/server/src/domains/planning/replan.ts: owner, stalled (a timed wait with Issues behind it), held.
       direction: |-
         Settled with the owner in the planning session of 2026-11-21, from his words that day (spelling corrected): "What is yours is a Decision ... sufficient context, if needed, needs to be there and well presented, with a good concept of how to visualize and express that change sharply." "Sometimes a Spec stops the queue for a reason, which is ok, but other items could go already with some reordering, that don't actually depend on the lead and the Spec; some requeueing would make sense." On the Spec screen (one call, cheapest seat, no tools, no facts): "This was severely badly designed. Those agw flows should be very enabled and have all at hand to do good decisions." This row owes no Spec and no Decision: its choices are made below. Build it.
+  - key: ask-screen-columns-drop
+    kind: chore
+    after: [ask-screen-leaves]
+    after_needs: shipped
+    after_days: 2
+    title: "The needed-me columns and the Spec screen's table name leave the database"
+    facts:
+      why: |-
+        ask-screen-leaves stopped every reader and writer of verdicts.needed_me and verdicts.needed_at; the table factory.spec_screens still stores each Spec revision's path (passed, settled by rule, a lead's plan) and who made it owed, but its name is the retired word. Migrations are expand then contract: the columns and the name go only once the release that stopped using them has run for two days.
+      what: |-
+        One migration, the next free number: drop the two verdicts columns, rename factory.spec_screens to factory.spec_paths (the table, its primary key and its partial index). Every SQL string that names the table (adapters/postgres/checkpoint-store.ts, read/spec-path.ts, read/kpis.ts, read/friction.ts, read/friction-evidence.ts and the two tests that seed it), and the lines of scripts/retired-words.allow that let those files through.
+      change: |-
+        rg shows no needed_me and no spec_screens outside migrations before the migration is written; then write it. The rename follows through every query in the same commit.
+      acceptance: |-
+        rg finds no spec_screens and no needed_me outside migrations; the allow lines for them are gone. make check-fast passes; make verify passes after the deploy.
