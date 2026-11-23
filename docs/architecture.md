@@ -235,7 +235,7 @@ the rest: per direct dependent its Spec says in one line whether it needs the an
 dependent is freed only when its work stands under every answer the owner can give and a revert undoes it. A freed Issue
 is an edge removal; a freed row is the head taken out of its `after`, named in the block's `free` list (`plan` lists every
 other change to a row). A proposal whose `plan` is empty and that cancels nothing is settled by rule and applied at once,
-the plan edit through the ship path; any other change is screened for the owner. Needs you shows on each item what it
+the plan edit through the ship path; any other change goes to the owner. Needs you shows on each item what it
 holds, and on the head's card what went ahead without the answer. One is open per project at a time; asking again while it is open
 adds the words to it as a note. On a verdict of Looks good the lead edits `docs/plan.yaml` through the
 project's ship path and applies edge changes and cancellations with `factory issue replan <id> --attempt <n> --body '<json>'`. The server gates
