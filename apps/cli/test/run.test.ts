@@ -482,6 +482,12 @@ describe('the command line of a generated command', () => {
     for (const op of OPERATIONS) expect(full).toContain(op.command.join(' '))
   })
 
+  test('the read group says its verbs need a token, so a tokenless caller reads it before it sends', async () => {
+    const out = (await cli(['read', '--help'])).out
+    expect(out).toContain('FACTORY_READ_TOKEN')
+    expect(out).toContain('401')
+  })
+
   test('a group --help lists its verbs with their summaries, filtered like the top-level help', async () => {
     const session = (await cli(['issue', '--help'], { FACTORY_SESSION: 'lead-12-1' })).out
     expect(session).toContain('issue ship <id>')
