@@ -136,25 +136,6 @@ export function Composer({
   )
 }
 
-/** What the Spec screen did with the revision shown, one quiet line; a pass says nothing. */
-export function ScreenLine({ detail }: { detail: ArtifactDetail }) {
-  const { screen } = detail
-  if (!screen || screen.outcome === 'passed') return null
-  // a rule's look (a lead's plan, a Replan that only frees) answered nothing on the owner's behalf: it says what decided it
-  const lead =
-    screen.outcome !== 'settled'
-      ? 'The Spec screen holds it'
-      : screen.by === 'rule'
-        ? 'Decided by rule'
-        : 'Answered by the Spec screen'
-  return (
-    <p className="basis-full text-xs text-muted-foreground">
-      {lead}
-      {screen.note ? `: ${screen.note}` : '.'}
-    </p>
-  )
-}
-
 const VERDICT_TONE: Record<keyof typeof VERDICT_WORDS, Tone> = {
   looks_good: 'good',
   with_notes: 'good',
@@ -239,7 +220,7 @@ export function VerdictControl({ detail, now }: { detail: ArtifactDetail; now: n
             <p>{VERDICT_WORDS[given.verdict]}</p>
             {given.by === 'factory' ? (
               <p className="text-xs text-muted-foreground">
-                The factory gave this for you (no answer in time, a screen settle or a withdrawal). It is not your
+                The factory gave this for you (no answer in time, a settle by rule or a withdrawal). It is not your
                 verdict.
               </p>
             ) : null}

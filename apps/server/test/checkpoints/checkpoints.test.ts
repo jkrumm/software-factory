@@ -32,7 +32,7 @@ import { lookAtReview, recheckReviews } from '../../src/app/checkpoints-reviews.
 import { requestErrand } from '../../src/app/checkpoints.ts'
 import { attachSpec, storeSpecBlob } from '../../src/app/filed-spec.ts'
 import { screenErrands } from '../../src/app/checkpoints-errands.ts'
-import { screenSpecs } from '../../src/app/checkpoints-specs.ts'
+import { routeSpecs } from '../../src/app/checkpoints-specs.ts'
 import { type CheckpointLoopDeps, tryAnswer, tryAnswerOpen } from '../../src/app/checkpoints-loop.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import { readNeeds } from '../../src/read/needs.ts'
@@ -142,7 +142,6 @@ beforeEach(async () => {
     agw: fakeAgw({
       judge,
       errandScreen: (request, key) => errandScreen(request, key),
-      specScreen: () => Promise.resolve(ok({ verdict: 'pass', reason: "the owner's to read" })),
     }),
     recheckAfterMs: 0,
     notifier,
@@ -1072,7 +1071,7 @@ describe('artifacts', () => {
     const reopened = value(
       await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: 'Name the lock.', revision: null }),
     )
-    expect(reopened).toMatchObject({ result: 'applied', verdict: { verdict: 'changes', by: 'owner', neededMe: null } })
+    expect(reopened).toMatchObject({ result: 'applied', verdict: { verdict: 'changes', by: 'owner' } })
     const notes =
       await db.sql`SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' AND result = 'applied' ORDER BY version`
     expect(notes).toHaveLength(2)
@@ -1154,7 +1153,7 @@ describe('artifacts', () => {
     const { artifact } = submitted
     // the lead's plan does not wait and is never screened or paged
     expect(submitted).toMatchObject({ issue: null, plan: true })
-    expect(value(await screenSpecs(deps))).toEqual([])
+    expect(value(await routeSpecs(deps))).toEqual([])
     // his Changes reaches the lead as a note; with no wait to end, the Issue works on
     const changes = value(
       await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: 'Name the lock.', revision: null }),
@@ -1172,7 +1171,7 @@ describe('artifacts', () => {
     // the revision he asked for is his to read: it waits, and the screen passes it to him by rule
     expect(revised).toMatchObject({ issue: { state: 'waiting', waitReason: 'review' } })
     expect(revised.plan).toBe(false)
-    expect(value(await screenSpecs(deps))).toMatchObject([{ revision: 2, outcome: 'passed' }])
+    expect(value(await routeSpecs(deps))).toMatchObject([{ revision: 2, outcome: 'passed' }])
     expect(revised.artifact.id).toBe(artifact.id)
     expect(await rows('artifact_revisions')).toBe(2)
     expect(await rows('checkpoint_pages')).toBe(1)
@@ -1199,8 +1198,8 @@ describe('artifacts', () => {
     const issueId = await workingIssue('example', { checkpoint: 'gate' })
     value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
     expect(value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))).toMatchObject({ result: 'replayed' })
-    value(await screenSpecs(deps))
-    value(await screenSpecs(deps))
+    value(await routeSpecs(deps))
+    value(await routeSpecs(deps))
     expect(await rows('artifacts')).toBe(1)
     expect(await rows('checkpoint_pages')).toBe(1)
     expect(value(await sendDuePages(deps)).sent).toHaveLength(1)
@@ -1742,7 +1741,7 @@ describe('artifacts', () => {
     expect(revised.revisions).toHaveLength(2)
     expect(await eventsOf(id)).toEqual(['filed', 'settled'])
     // the owner sees the new revision: the screen passes it, and it is the one he reads and gives his verdict on
-    expect(value(await screenSpecs(deps))).toMatchObject([{ revision: 2, outcome: 'passed' }])
+    expect(value(await routeSpecs(deps))).toMatchObject([{ revision: 2, outcome: 'passed' }])
     expect(value(await showArtifact(deps, { artifactId, revision: null }))).toMatchObject({ revision: 2 })
     expect(
       errorOf(await giveVerdict(deps, { artifactId, verdict: 'looks_good', note: null, revision: 1 })),
@@ -1802,7 +1801,7 @@ describe('a Decision raised during a review', () => {
   async function reviewed() {
     const issueId = await workingIssue('example', { checkpoint: 'gate' })
     const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
-    value(await screenSpecs(deps))
+    value(await routeSpecs(deps))
     return { issueId, artifactId: artifact.id }
   }
   const verdictOf = (artifactId: ArtifactId) =>

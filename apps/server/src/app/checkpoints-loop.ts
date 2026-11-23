@@ -33,7 +33,7 @@ import {
 import { kindAttrs, reportLine } from '../kernel/telemetry.ts'
 
 export interface CheckpointLoopDeps extends CheckpointDeps {
-  /** the Judge, the Errand screen and the Spec screen are workflows of this one port */
+  /** the Judge and the Errand screen are workflows of this one port */
   agw: AgwPort
   /** the MacBook's fixed verbs, which run a report or a pull for an Errand with no dialog; absent: every such Errand reaches the owner as before */
   macbook?: MacbookVerbPort

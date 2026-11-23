@@ -125,14 +125,14 @@ A Replan is an Issue whose lead rereads a project's plan against its open and re
 export const REPLAN_TRIGGERS = ['owner', 'stalled', 'held'] as const
 ```
 
-issue_1197, `factory issue show issue_1197`, 2026-11-17: filed on 2026-11-14 at 16:11:33 with trigger `stalled`. The head was issue_1178, shipped and waiting only on a measurement timer, with issue_1196 behind it. A lead was admitted at 16:21:42 and started on sonnet at high effort at 16:21:59. It handed over a Spec at 16:22:19, "Replan: free issue_1196 from the shipped issue_1178". The owner did not read it. The Spec screen settled it by rule: a Replan that changes no plan row and cancels nothing only reorders open Issues. The verdict was Looks good at 16:22:26. The Issue closed at 16:23:18, twelve minutes after it was filed, with:
+issue_1197, `factory issue show issue_1197`, 2026-11-17: filed on 2026-11-14 at 16:11:33 with trigger `stalled`. The head was issue_1178, shipped and waiting only on a measurement timer, with issue_1196 behind it. A lead was admitted at 16:21:42 and started on sonnet at high effort at 16:21:59. It handed over a Spec at 16:22:19, "Replan: free issue_1196 from the shipped issue_1178". The owner did not read it. The Spec's path settled it by rule: a Replan that changes no plan row and cancels nothing only reorders open Issues. The verdict was Looks good at 16:22:26. The Issue closed at 16:23:18, twelve minutes after it was filed, with:
 
 "Replan applied: edge an Issue after an Issue removed (1178 shipped, waits only on a measurement timer); no plan row or code change, nothing to deploy".
 
 **Example files:**
 
 - [`replan.ts` L1-L50](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/replan.ts#L1-L50): triggers, inputs and the lead's playbook.
-- [`spec-screen.ts` L93-L142](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L93-L142): the rule that settles a Replan which only frees Issues.
+- [`spec-path.ts` L89-L138](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-path.ts#L89-L138): the rule that settles a Replan which only frees Issues.
 
 ## Defer
 

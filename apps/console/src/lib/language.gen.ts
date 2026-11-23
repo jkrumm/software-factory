@@ -121,8 +121,6 @@ export const LANGUAGE = {
     "The kernel's own verdict on memory: normal, warning or critical. It is the one memory figure that says the host is struggling now: a host can hold 90 % of its RAM at normal pressure. What to do: at warning or critical, read Memory by class on Throughput to see what holds the memory; no new lead is admitted until it is normal again",
   'memory used':
     "The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes. What to do: nothing at normal pressure; read Memory pressure before acting on a high figure",
-  'needed me':
-    "The owner's mark on a verdict of a Spec or Report: did it need him (set through the API or the CLI; the Console no longer offers it). The newest marks teach triage the next time; no KPI reads it any more (the answer itself does, see Asks not needed)",
   needs:
     'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, quarantined signals, long waits',
   'not measured':
@@ -135,7 +133,7 @@ export const LANGUAGE = {
     "The Console's home screen (/): what needs the owner, production, what shipped in a day, the host and the queue's binding reason, then the flow's counts and trend. It was the Flow screen",
   owed: 'Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. An owed lead counts in the leads of the account it resumes on, and the account cap never refuses its resume. A note refused for a claim for 15 minutes while a claim would be granted to that lead now is a steward stall; a herd waiting its turn is not',
   'owner gate':
-    "An Issue filed with the checkpoint gate, the one way a filer makes the owner read: it owes the same Spec as spec, but that Spec waits, and only the owner's own verdict ends the wait. No default after 24 hours, no Spec screen pass. A gate holds what needs its answer: after two hours with work behind it a Replan frees the rest (what stands under every answer and a revert undoes), and what needs the answer is released by him alone. Only a filer sets it, never triage",
+    "An Issue filed with the checkpoint gate, the one way a filer makes the owner read: it owes the same Spec as spec, but that Spec waits, and only the owner's own verdict ends the wait. No default after 24 hours, no settle by rule. A gate holds what needs its answer: after two hours with work behind it a Replan frees the rest (what stands under every answer and a revert undoes), and what needs the answer is released by him alone. Only a filer sets it, never triage",
   page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is answered",
   pass: 'One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored',
   pause:
@@ -200,9 +198,7 @@ export const LANGUAGE = {
     'How many Issues closed done in the last 7 days across all projects, against the 7 days before. What to do: a fall while Issues are Ready means something holds them; open Throughput and read what keeps Issues from starting',
   signal: 'Anything that arrives and may become work. Has a kind, an origin and a trust level',
   size: "Triage's judgment of how much work an Issue is: small, medium, large. Kept on the Issue when triage settles it; none for an Issue the rules settled",
-  spec: "The lead's plan, written before the code it governs: Build, then Decided, and it fits a page (at most 4000 characters outside details blocks, fenced code and images; submit refuses more, and a Build over eight lines). It does not wait and pages no one; the owner may comment at any time, and the lead hears it as a note. Four wait for his verdict: an owner gate's, one its filer attached, a revision after his Changes, and a Replan that changes a plan row or cancels an Issue",
-  'spec screen':
-    "The rules a Spec revision meets when it is handed over, with no workflow (issue_2732): an owner gate's Spec, a filed one, a revision after Changes and a Replan that changes a plan row or cancels an Issue pass to the owner; a Replan that does neither is answered with the factory's looks_good and its reason; every other Spec is the lead's plan and never waits. Both of the last are stored as the outcome settled",
+  spec: "The lead's plan, written before the code it governs: Build, then Decided, and it fits a page (at most 4000 characters outside details blocks, fenced code and images; submit refuses more, and a Build over eight lines). It does not wait and pages no one; the owner may comment at any time, and the lead hears it as a note. Four wait for his verdict: an owner gate's, one its filer attached, a revision after his Changes, and a Replan that changes a plan row or cancels an Issue; a Replan that does neither is answered by the factory's looks_good and its reason, both stored as the outcome settled",
   stale: 'A Needs you item that has waited more than 24 hours',
   stall: "A wait with a machine cause, the steward's to end",
   started: 'The Issues a lead began: Running and Paused',
@@ -240,7 +236,7 @@ export const LANGUAGE = {
   turns:
     'How many times a lead was prompted and worked until it stopped: the brief, each note, each wake. What to do: many turns on a small Issue means the lead was steered a lot; read the notes in Activity',
   verdict:
-    'The answer on an artifact: Looks good (with an optional note; the lead applies the note and every open comment), Changes, No longer applies. With notes is retired: the API and the CLI still accept with_notes, store it as looks_good, and a stored one reads as Looks good. Every verdict says who gave it (by): the owner; the factory for him (the default after 24 hours, a Spec screen pass, a withdrawal); or the orchestrator, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his',
+    'The answer on an artifact: Looks good (with an optional note; the lead applies the note and every open comment), Changes, No longer applies. With notes is retired: the API and the CLI still accept with_notes, store it as looks_good, and a stored one reads as Looks good. Every verdict says who gave it (by): the owner; the factory for him (the default after 24 hours, a settle by rule, a withdrawal); or the orchestrator, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his',
   verified:
     'A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue',
   verify: 'The check that ends the watch: make verify, probes',

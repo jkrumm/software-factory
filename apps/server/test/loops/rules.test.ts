@@ -356,31 +356,6 @@ test('a Spec checkpoint is flagged by triage for any asked Issue of a session or
   expect(flagOf({}, 'spec', null)).toBeUndefined()
 })
 
-test('the settle request carries the owner’s newest needed-me marks, cleaned', () => {
-  const request = settleRequest(settling({}), [], (t) => t.replace(/abcd\w+/g, '[x]'), [
-    {
-      title: 'Raise the limit token=abcd1234',
-      repo: 'example',
-      source: 'triage',
-      screened: 'passed',
-      needed: false,
-      verdict: 'looks_good',
-      note: 'not needed abcdefgh',
-    },
-  ])
-  expect(request.precedents).toEqual([
-    {
-      title: 'Raise the limit token=[x]',
-      repo: 'example',
-      source: 'triage',
-      screened: 'passed',
-      needed: false,
-      verdict: 'looks_good',
-      note: 'not needed [x]',
-    },
-  ])
-})
-
 test('the settle request shows at most 40 open Issues, cleaned, and the Issue’s own words', () => {
   const many = Array.from({ length: 60 }, (_, i) => ({
     id: id(100 + i),

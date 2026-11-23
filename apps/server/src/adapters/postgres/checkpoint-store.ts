@@ -23,13 +23,12 @@ import {
   type DecisionRecord,
   type PageRecord,
   type RevisionRecord,
-  type SpecScreenRecord,
+  type SpecPathRecord,
   STEP_OUTCOMES,
   type Step,
   type VerdictRecord,
 } from '../../domains/checkpoints/ports.ts'
 import { DECISION_CLASSES, Exhibit, ImageAnchor, SPEC_SOURCES } from '@software-factory/contract'
-import { readSpecPrecedents } from '../../read/spec-screen.ts'
 import type { RecheckCandidate } from '../../domains/checkpoints/recheck.ts'
 import { type IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
@@ -146,7 +145,6 @@ const VerdictRow = z.object({
   note: z.string().nullable(),
   at: z.date(),
   by: z.enum(['owner', 'factory', 'orchestrator']),
-  needed_me: z.boolean().nullable().optional(),
 })
 
 const PageRow = z.object({
@@ -262,11 +260,10 @@ const verdictOf = (raw: unknown): VerdictRecord => {
     note: row.note,
     at: row.at,
     by: row.by,
-    neededMe: row.needed_me ?? null,
   }
 }
 
-const SpecScreenRow = z.object({
+const SpecPathRow = z.object({
   artifact_id: z.string(),
   revision: z.number().int(),
   outcome: z.enum(['passed', 'settled']).nullable(),
@@ -278,8 +275,8 @@ const SpecScreenRow = z.object({
   at: z.date(),
 })
 
-const specScreenOf = (raw: unknown): SpecScreenRecord => {
-  const row = SpecScreenRow.parse(raw)
+const specPathRowOf = (raw: unknown): SpecPathRecord => {
+  const row = SpecPathRow.parse(raw)
   return {
     artifactId: row.artifact_id as ArtifactId,
     revision: row.revision,
@@ -623,7 +620,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async replaceDelegatedVerdict(v) {
       const [row] = await tx`
         UPDATE factory.verdicts
-        SET verdict = ${v.verdict}, note = ${v.note}, at = ${v.at}, by = ${v.by}, needed_me = NULL, needed_at = NULL
+        SET verdict = ${v.verdict}, note = ${v.note}, at = ${v.at}, by = ${v.by}
         WHERE artifact_id = ${v.artifactId} AND revision = ${v.revision} AND by = 'orchestrator'
         RETURNING *`
       return row ? verdictOf(row) : null
@@ -639,20 +636,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       return rows.map(verdictOf)
     },
 
-    async setNeededMe(id, revision, needed, at) {
-      const [artifact] = await tx`SELECT id FROM factory.artifacts WHERE id = ${id}`
-      if (!artifact) return 'unknown'
-      const [row]: { needed_me: boolean | null }[] = await tx`
-        SELECT needed_me FROM factory.verdicts WHERE artifact_id = ${id} AND revision = ${revision} FOR UPDATE`
-      if (!row) return 'no_verdict'
-      if (row.needed_me === needed) return 'unchanged'
-      await tx`
-        UPDATE factory.verdicts SET needed_me = ${needed}, needed_at = ${at}
-        WHERE artifact_id = ${id} AND revision = ${revision}`
-      return 'set'
-    },
-
-    async unscreenedSpecs(now, limit) {
+    async undecidedSpecs(now, limit) {
       const rows: unknown[] = await tx`
         SELECT a.id, r.n
         FROM factory.artifacts a
@@ -705,7 +689,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       const verdicts: unknown[] = await tx`
         SELECT * FROM factory.verdicts WHERE artifact_id = ${id} ORDER BY revision`
       const all = verdicts.map(verdictOf)
-      const [screenRow] = await tx`
+      const [pathRow] = await tx`
         SELECT * FROM factory.spec_screens WHERE artifact_id = ${id} AND revision = ${revision}`
       return {
         artifact,
@@ -719,16 +703,16 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
         },
         answered: all.some((v) => v.revision === revision),
         earlier: all.filter((v) => v.revision < revision).map((v) => v.verdict),
-        screen: screenRow ? specScreenOf(screenRow) : null,
+        recorded: pathRow ? specPathRowOf(pathRow) : null,
       }
     },
 
-    async specScreen(id, revision) {
+    async specPath(id, revision) {
       const [row] = await tx`SELECT * FROM factory.spec_screens WHERE artifact_id = ${id} AND revision = ${revision}`
-      return row ? specScreenOf(row) : null
+      return row ? specPathRowOf(row) : null
     },
 
-    async recordSpecScreen(s) {
+    async recordSpecPath(s) {
       const rows: unknown[] = await tx`
         INSERT INTO factory.spec_screens (artifact_id, revision, outcome, by, source, note, tries, retry_at, at)
         VALUES (${s.artifactId}, ${s.revision}, ${s.outcome}, ${s.by}, ${s.source}, ${s.note?.slice(0, 300) ?? null},
@@ -740,8 +724,6 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
         RETURNING revision`
       return rows.length === 1
     },
-
-    specPrecedents: (limit) => readSpecPrecedents(tx, limit),
 
     async recheckCandidates({ reachedBefore, limit }) {
       const rows: unknown[] = await tx`

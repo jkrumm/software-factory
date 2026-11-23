@@ -22,7 +22,7 @@ describe('the README of this checkout', () => {
     expect(facts.screens).toContain('Needs you')
     expect(facts.domains.length).toBe(10)
     expect(facts.consolePort).toBe(7795)
-    expect(facts.consoleWrites).toBe(15)
+    expect(facts.consoleWrites).toBe(14)
   })
 })
 
@@ -55,7 +55,7 @@ describe('drift the check catches', () => {
     )
     expect(checkReadme(README, withFacts({ consolePort: 7801 }), exists).join('\n')).toContain('the code has 7801')
     expect(checkReadme(README, withFacts({ consoleWrites: 16 }), exists).join('\n')).toContain(
-      'the Console writes says 15, the code has 16',
+      'the Console writes says 14, the code has 16',
     )
   })
 
@@ -71,7 +71,7 @@ describe('drift the check catches', () => {
       'no statement of event kinds',
     )
     expect(
-      checkReadme(README.replace(/forwards\s+fifteen\s+write\s+verbs/, 'forwards writes'), facts, exists).join('\n'),
+      checkReadme(README.replace(/forwards\s+fourteen\s+write\s+verbs/, 'forwards writes'), facts, exists).join('\n'),
     ).toContain('no statement of the Console writes')
   })
 })

@@ -41,7 +41,6 @@ const AGW_FIXTURE = join(
 const EXAMPLES = {
   judge: { request: fixture.judge.input, answer: fixture.judge.output },
   errandScreen: { request: fixture.errand.input, answer: fixture.errand.output },
-  specScreen: { request: fixture.specScreen.input, answer: fixture.specScreen.output },
   errandNeeded: { request: fixture.errandNeeded.input, answer: fixture.errandNeeded.output },
   steward: { request: fixture.steward.input, answer: fixture.steward.output },
   settle: { request: fixture.triage.settleInput, answer: fixture.triage.settleOutput },
@@ -123,7 +122,6 @@ test('the table sends agw the names it always has, and every key starts with its
   expect(Object.fromEntries(names.map((name) => [name, WORKFLOWS[name].agw]))).toEqual({
     judge: 'factory-ask',
     errandScreen: 'factory-errand',
-    specScreen: 'factory-spec-screen',
     errandNeeded: 'factory-errand-needed',
     steward: 'factory-steward',
     settle: 'factory-triage',

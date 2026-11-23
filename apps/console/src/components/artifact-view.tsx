@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type PanelSize, useDefaultLayout, usePanelRef } from 'react-resizable-panels'
 import { Annotations, type Focus } from '@/components/artifact-comments'
 import { CollapseButton, PANE, PANES_KEY, Rail, ReadingSizeControl } from '@/components/artifact-panes'
-import { Composer, ScreenLine, VerdictControl } from '@/components/artifact-panel'
+import { Composer, VerdictControl } from '@/components/artifact-panel'
 import { TocBar, TocColumn } from '@/components/artifact-toc'
 import { ArtifactContent, type Selected } from '@/components/artifact-content'
 import { Ago } from '@/components/issue/ago'
@@ -299,7 +299,6 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
             </nav>
             <ReadingSizeControl size={reading} onChange={setReadingSize} />
             {reviewable ? <VerdictControl key={detail.revision} detail={detail} now={now} /> : null}
-            <ScreenLine detail={detail} />
           </div>
         </div>
       </header>

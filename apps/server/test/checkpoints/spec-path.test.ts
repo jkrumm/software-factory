@@ -10,21 +10,20 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresUnitOfWork } from '../../src/adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import { postgresQualityStore } from '../../src/adapters/quality/store.ts'
-import { annotateArtifact, giveVerdict, markNeeded, submitArtifact } from '../../src/app/checkpoints.ts'
+import { annotateArtifact, giveVerdict, submitArtifact } from '../../src/app/checkpoints.ts'
 import type { PageDeps } from '../../src/app/checkpoints-pages.ts'
 import { recheckReviews } from '../../src/app/checkpoints-reviews.ts'
-import { previewSpecScreen, screenSpecs } from '../../src/app/checkpoints-specs.ts'
+import { routeSpecs } from '../../src/app/checkpoints-specs.ts'
 import type { CheckpointLoopDeps } from '../../src/app/checkpoints-loop.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import type { ArtifactId } from '../../src/domains/checkpoints/artifact.ts'
 import {
-  checkSpecScreen,
   PLAN_REASON,
   replanBlockOf,
-  screenSpecByRule,
+  routeSpecByRule,
   specPathOf,
   specSourceOf,
-} from '../../src/domains/checkpoints/spec-screen.ts'
+} from '../../src/domains/checkpoints/spec-path.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
 import { readFriction } from '../../src/read/friction.ts'
 import { readFrictionEvidence } from '../../src/read/friction-evidence.ts'
@@ -52,12 +51,12 @@ describe('the rules', () => {
     expect(path({ revision: 3, earlier: ['changes', 'with_notes'] })).toBe('owner')
     expect(path({ origin: { ...ORIGIN, filedSpec: true } })).toBe('owner')
     expect(path({ origin: { ...ORIGIN, replan: true, gate: true } })).toBe('owner')
-    // the screen pass settles a plan that waits all the same, and passes what is his
-    expect(screenSpecByRule({ revision: 1, earlier: [], origin: ORIGIN, content: '' })).toEqual({
+    // the path pass settles a plan that waits all the same, and passes what is his
+    expect(routeSpecByRule({ revision: 1, earlier: [], origin: ORIGIN, content: '' })).toEqual({
       outcome: 'settled',
       reason: PLAN_REASON,
     })
-    expect(screenSpecByRule({ revision: 1, earlier: [], origin: { ...ORIGIN, gate: true }, content: '' }).outcome).toBe(
+    expect(routeSpecByRule({ revision: 1, earlier: [], origin: { ...ORIGIN, gate: true }, content: '' }).outcome).toBe(
       'passed',
     )
   })
@@ -96,7 +95,7 @@ describe('the rules', () => {
     const block = (body: unknown) => `# Replan\n\n\`\`\`replan\n${JSON.stringify(body)}\n\`\`\`\n`
     const none = { plan: [], free: [], edges: { add: [], remove: [] }, cancel: [] }
     expect(
-      screenSpecByRule({ revision: 1, earlier: [], origin: replan, content: block({ ...none, free: ['dev-host'] }) }),
+      routeSpecByRule({ revision: 1, earlier: [], origin: replan, content: block({ ...none, free: ['dev-host'] }) }),
     ).toEqual({
       outcome: 'settled',
       reason:
@@ -107,7 +106,7 @@ describe('the rules', () => {
       free: ['dev-host', 'db-server'],
       edges: { add: [], remove: [{ issue: 'issue_7', after: ['issue_5'] }] },
     })
-    expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content: both })?.reason).toBe(
+    expect(routeSpecByRule({ revision: 1, earlier: [], origin: replan, content: both })?.reason).toBe(
       'a Replan that changes a plan row only by a removed after and cancels nothing: it only frees an Issue and 2 plan rows from their waits',
     )
     // a row named in `plan` changes otherwise, even when it is also freed: it is the owner's to read
@@ -116,7 +115,7 @@ describe('the rules', () => {
       block({ ...none, free: ['dev-host'], plan: ['dev-host'] }),
       block({ ...none, free: 'dev-host' }),
     ]) {
-      expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content }).outcome).toBe('passed')
+      expect(routeSpecByRule({ revision: 1, earlier: [], origin: replan, content }).outcome).toBe('passed')
     }
   })
 
@@ -126,18 +125,6 @@ describe('the rules', () => {
     expect(specSourceOf({ ...ORIGIN, triaged: true })).toBe('triage')
     expect(specSourceOf({ ...ORIGIN, filedWithCheckpoint: true })).toBe('filer')
     expect(specSourceOf(ORIGIN)).toBe('lead')
-  })
-
-  test('a settle needs a reason; the reason is one line', () => {
-    expect(checkSpecScreen({ verdict: 'settle', reason: 'a constant\n raise' })).toEqual({
-      action: 'settle',
-      reason: 'a constant raise',
-    })
-    expect(checkSpecScreen({ verdict: 'settle', reason: '   ' })).toMatchObject({ action: 'refused' })
-    expect(checkSpecScreen({ verdict: 'pass', reason: 'an unseen screen' })).toEqual({
-      action: 'pass',
-      note: 'an unseen screen',
-    })
   })
 })
 
@@ -156,14 +143,11 @@ afterAll(async () => {
 
 const clock: FixedClock = fixedClock('2026-11-14T08:00:00Z')
 let deps: CheckpointLoopDeps & PageDeps
-/** every call of the `factory-spec-screen` workflow: none since Issue 2732 */
-let calls: string[]
 
 beforeEach(async () => {
   await db.sql`DROP SCHEMA IF EXISTS factory CASCADE`
   await migrate(db.sql, await loadMigrations())
   clock.set(new Date('2026-11-14T08:00:00Z'))
-  calls = []
   const uow = postgresUnitOfWork(db.sql, (tx) => ({
     work: postgresWorkStore(tx),
     checkpoints: postgresCheckpointStore(tx),
@@ -176,13 +160,8 @@ beforeEach(async () => {
     blobs: fileBlobStore(blobDir),
     consoleUrl: 'https://console.example.test',
     checks: { run: async () => ({ exit: 0, timedOut: false, output: '' }) },
-    // the Judge and the Errand screen are not scripted: a call of either fails; the Spec screen is counted
-    agw: fakeAgw({
-      specScreen: (_request, callKey) => {
-        calls.push(callKey)
-        return Promise.resolve(ok({ verdict: 'pass', reason: 'a screen the owner has not seen' }))
-      },
-    }),
+    // no workflow reads a Spec: a call of any fails
+    agw: fakeAgw({}),
     recheckAfterMs: 0,
     notifier: { send: () => Promise.resolve(ok(undefined)) },
   }
@@ -250,7 +229,7 @@ const pages = async (): Promise<number> =>
 const reviewsAtOwner = async (): Promise<string[]> =>
   (await readNeeds(db.sql, clock.now())).items.filter((item) => item.kind === 'review').map((item) => item.id)
 
-const screenOf = async (artifactId: ArtifactId) =>
+const pathOf = async (artifactId: ArtifactId) =>
   (await db.sql`SELECT outcome, by, source, note, tries FROM factory.spec_screens WHERE artifact_id = ${artifactId}`)[0]
 
 const stateOf = async (issueId: IssueId) =>
@@ -273,7 +252,7 @@ describe("a lead's Spec is its plan", () => {
     expect(handed).toMatchObject({ result: 'applied', issue: null, plan: true })
     expect(await stateOf(issueId)).toMatchObject({ state: 'working', wait_reason: null })
     expect(await eventsOf(issueId)).toEqual(['filed', 'settled', 'admitted', 'lead_started'])
-    expect(await screenOf(spec)).toMatchObject({
+    expect(await pathOf(spec)).toMatchObject({
       outcome: 'settled',
       by: 'rule',
       source: 'filer',
@@ -282,8 +261,8 @@ describe("a lead's Spec is its plan", () => {
     })
     expect(await reviewsAtOwner()).toEqual([])
     expect(await pages()).toBe(0)
-    // the screen pass has nothing left to look at, and gives no verdict for him
-    expect(value(await screenSpecs(deps))).toEqual([])
+    // the path pass has nothing left to decide, and gives no verdict for him
+    expect(value(await routeSpecs(deps))).toEqual([])
     expect(await db.sql`SELECT 1 FROM factory.verdicts WHERE artifact_id = ${spec}`).toHaveLength(0)
     // the ship check counts it as the Spec the checkpoint owes
     expect(await postgresQualityStore(db.sql).specSubmitted(issueId)).toBe(true)
@@ -295,7 +274,6 @@ describe("a lead's Spec is its plan", () => {
     clock.set(new Date(clock.now().getTime() + 25 * 3_600_000))
     expect(value(await recheckReviews(deps))).toEqual([])
     expect(await db.sql`SELECT 1 FROM factory.verdicts WHERE artifact_id = ${spec}`).toHaveLength(0)
-    expect(calls).toEqual([])
   })
 
   test('a plan is refused like any lead verb from another attempt or a closed Issue, and nothing is stored', async () => {
@@ -323,7 +301,7 @@ describe("a lead's Spec is its plan", () => {
   test("the owner's comment and his verdict reach the lead as notes, and the Issue never waits", async () => {
     const issueId = await workingIssue({ triaged: true })
     const spec = await submit(issueId, 'Raise the plan file limit', '# Limit\n\nOne constant.')
-    expect(await screenOf(spec)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'triage' })
+    expect(await pathOf(spec)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'triage' })
 
     value(
       await annotateArtifact(deps, {
@@ -368,30 +346,28 @@ describe("a lead's Spec is its plan", () => {
     })
     expect(await stateOf(issueId)).toMatchObject({ state: 'waiting', wait_reason: 'review' })
 
-    expect(value(await screenSpecs(deps))).toEqual([{ artifact: spec, revision: 1, outcome: 'settled' }])
-    expect(await screenOf(spec)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'lead' })
+    expect(value(await routeSpecs(deps))).toEqual([{ artifact: spec, revision: 1, outcome: 'settled' }])
+    expect(await pathOf(spec)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'lead' })
     const [verdict] = await db.sql`SELECT verdict, by, note FROM factory.verdicts WHERE artifact_id = ${spec}`
     expect(verdict).toMatchObject({ verdict: 'looks_good', by: 'factory' })
     expect(String(verdict.note)).toContain(PLAN_REASON)
     expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
     expect(await pages()).toBe(0)
-    expect(calls).toEqual([])
   })
 })
 
 describe('the Specs that wait', () => {
-  test("an owner gate's Spec waits, reaches Needs you and pages him once the screen passes it by rule", async () => {
+  test("an owner gate's Spec waits, reaches Needs you and pages him once its path passes it by rule", async () => {
     const issueId = await workingIssue({ checkpoint: 'gate' })
     const handed = await handOver(issueId, 'A product gate', '# Gate')
     expect(handed).toMatchObject({ issue: { state: 'waiting', waitReason: 'review' }, plan: false })
     expect(await reviewsAtOwner()).toEqual([])
-    expect(value(await screenSpecs(deps))).toEqual([{ artifact: handed.artifact.id, revision: 1, outcome: 'passed' }])
-    expect(await screenOf(handed.artifact.id)).toMatchObject({ outcome: 'passed', by: 'rule', source: 'filer' })
+    expect(value(await routeSpecs(deps))).toEqual([{ artifact: handed.artifact.id, revision: 1, outcome: 'passed' }])
+    expect(await pathOf(handed.artifact.id)).toMatchObject({ outcome: 'passed', by: 'rule', source: 'filer' })
     expect(await reviewsAtOwner()).toEqual([handed.artifact.id])
     expect(await pages()).toBe(1)
     // a decided revision is never looked at again
-    expect(value(await screenSpecs(deps))).toEqual([])
-    expect(calls).toEqual([])
+    expect(value(await routeSpecs(deps))).toEqual([])
   })
 
   test('a Replan that changes a plan row waits for the owner; one that only frees an Issue is settled by rule', async () => {
@@ -411,33 +387,25 @@ describe('the Specs that wait', () => {
     )
     expect(freed).toMatchObject({ issue: { state: 'waiting', waitReason: 'review' }, plan: false })
 
-    expect(value(await screenSpecs(deps))).toEqual([
+    expect(value(await routeSpecs(deps))).toEqual([
       { artifact: changing.artifact.id, revision: 1, outcome: 'passed' },
       { artifact: freed.artifact.id, revision: 1, outcome: 'settled' },
     ])
-    expect(await screenOf(freed.artifact.id)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'replan' })
+    expect(await pathOf(freed.artifact.id)).toMatchObject({ outcome: 'settled', by: 'rule', source: 'replan' })
     expect(await stateOf(freeing)).toMatchObject({ state: 'working' })
     expect(await stateOf(rows)).toMatchObject({ state: 'waiting', wait_reason: 'review' })
     expect(await reviewsAtOwner()).toEqual([changing.artifact.id])
-    expect(calls).toEqual([])
   })
 
-  test('his answer counts in the KPI and friction, not a mark; the preview names the rule and sends no request', async () => {
+  test('his answer counts in the KPI and friction; a plan records its path and has no answer', async () => {
     const first = await workingIssue({ checkpoint: 'gate' })
     const gate = await submit(first, 'A product gate', '# Gate')
-    value(await screenSpecs(deps))
+    value(await routeSpecs(deps))
     value(await giveVerdict(deps, { artifactId: gate, verdict: 'looks_good', note: null, revision: null }))
-    // a plan has no verdict to mark
+    // a plan has no verdict: it counts in neither
     const second = await workingIssue({ title: 'A new tile' })
     const tile = await submit(second, 'A new tile', '# Tile')
-    expect((await markNeeded(deps, { artifactId: tile, needed: true, revision: null })).ok).toBe(false)
-
-    expect(value(await previewSpecScreen(deps, tile))).toMatchObject({
-      revision: 1,
-      screen: { outcome: 'settled', by: 'rule' },
-      rule: { outcome: 'settled', reason: PLAN_REASON },
-      request: null,
-    })
+    expect(await pathOf(tile)).toMatchObject({ outcome: 'settled', by: 'rule', note: PLAN_REASON })
 
     // a window ends before its `now`: read a minute later
     clock.set(new Date(clock.now().getTime() + 60_000))
@@ -457,6 +425,5 @@ describe('the Specs that wait', () => {
     expect(await readFrictionEvidence(db.sql, { now: clock.now(), days: 7 }, ['ask_unneeded:filer'])).toEqual({
       'ask_unneeded:filer': [first],
     })
-    expect(calls).toEqual([])
   })
 })

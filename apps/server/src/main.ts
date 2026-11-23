@@ -244,7 +244,7 @@ async function main(env: Environment): Promise<void> {
     commands: shellCheckRunner(undefined, APPROVED_RUN_HANG_GUARD_MS),
     queuedAsks: queuedAsksIn(askQueueDir(env, { home: leadSettings.home })),
     notifier: makeNotifier(checkpointSettings.line),
-    // The Judge, the Errand screen and the Spec screen are workflows of the one agw port.
+    // The Judge and the Errand screen are workflows of the one agw port.
     agw,
     // an Errand that is exactly a report or a pull of the MacBook's fixed verbs runs through them, with no dialog
     macbook: askHumanVerbs({ host: loopSettings.askHumanHost }),
@@ -513,7 +513,7 @@ async function main(env: Environment): Promise<void> {
     })
 
   // The Console's listener: loopback too, published on the tailnet by the dotfiles-private serve row; the perimeter is the
-  // tailnet ACL, there is no per-request identity. Only reads and the owner's fifteen verbs (eleven answers, pin and unpin, an account's mode set and clear) (`WRITES` in console.ts) pass,
+  // tailnet ACL, there is no per-request identity. Only reads and the owner's fourteen verbs (ten answers, pin and unpin, an account's mode set and clear) (`WRITES` in console.ts) pass,
   // and the owner token is held by this closure alone. It starts whenever the Console is built. It binds before
   // the loops start, so a bad port or a taken one refuses the boot before any pass has run.
   const consoleSettings = loadConsoleSettings(env)

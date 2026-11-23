@@ -1,7 +1,7 @@
 import { type ReadAsk, UNSTARTED_ISSUE_STATES } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { cut, fallbackWords } from './plain.ts'
-import { screenPassed } from './spec-screen.ts'
+import { specAtOwner } from './spec-path.ts'
 import { loadBriefs, issueNumberOf } from './sessions.ts'
 
 /** An ask older than this is stale. */
@@ -37,7 +37,7 @@ export async function readAsks(sql: SQL, now: Date): Promise<{ asks: ReadAsk[]; 
         SELECT 1 FROM factory.verdicts v
         WHERE v.artifact_id = a.id
           AND v.revision = (SELECT max(r.n) FROM factory.artifact_revisions r WHERE r.artifact_id = a.id))
-      AND ${screenPassed(sql)}
+      AND ${specAtOwner(sql)}
     ORDER BY a.created_at, a.id`
   const errands: { id: string; issue_id: string | null; summary: string; raised_at: Date }[] = await sql`
     SELECT id, issue_id, summary, raised_at FROM factory.errands

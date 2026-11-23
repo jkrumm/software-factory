@@ -21,7 +21,7 @@ const JUDGE_FACTS_MAX = 8_000
 /** A checkout path agw takes: plain path characters, at most this long. */
 const CHECKOUT_MAX = 500
 
-/** What a judgment request is about, as the case file reads it; null for a workflow that takes no case (Spec screen, hygiene). */
+/** What a judgment request is about, as the case file reads it; null for a workflow that takes no case (hygiene). */
 function subjectOf<N extends WorkflowName>(name: N, request: WorkflowRequest<N>): CaseSubject | null {
   switch (name) {
     case 'judge': {

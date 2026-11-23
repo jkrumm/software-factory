@@ -1,19 +1,15 @@
-import type { SpecScreenAnswer, SpecSource } from '@software-factory/contract'
+import type { SpecSource } from '@software-factory/contract'
 import * as z from 'zod'
-import { WORKFLOWS } from '../../kernel/workflows.ts'
 import type { Verdict } from './artifact.ts'
 
 /**
- * The Spec screen (Issue 1096, made rules-only by Issue 2732): a Spec revision reaches the owner only when it is his to read.
- * A lead's Spec is its plan and never waits; four kinds wait for him by rule (`specPathOf`). The `factory-spec-screen`
- * workflow is no longer called; its answer check below leaves with it in a later change.
+ * Where a Spec revision goes, by rule alone (Issue 1096, Issue 2732): a lead's Spec is its plan and never waits; four kinds
+ * wait for the owner (`specPathOf`). No workflow reads a Spec.
  */
 
-/** Failed calls before the Spec reaches the owner unscreened; the wait between them. */
-export const SPEC_SCREEN_MAX_TRIES = WORKFLOWS.specScreen.retry.tries
-export const SPEC_SCREEN_BACKOFF_MS = WORKFLOWS.specScreen.retry.backoffMs
-
-const REASON_MAX = 300
+/** Reads of a revision's content that fail before it reaches the owner unread; the wait between them. */
+export const SPEC_PATH_MAX_TRIES = 3
+export const SPEC_PATH_BACKOFF_MS = 5 * 60_000
 
 /** What the factory holds about where a Spec came from. */
 export interface SpecOrigin {
@@ -87,7 +83,7 @@ export type RuleOutcome = { outcome: 'passed' | 'settled'; reason: string }
  */
 export type SpecPath = { path: 'owner' | 'settled' | 'plan'; reason: string }
 
-/** The reason a lead's Spec carries: what `artifact submit` answers and the screen row records. */
+/** The reason a lead's Spec carries: what `artifact submit` answers and its path row records. */
 export const PLAN_REASON = "a lead's Spec is its plan: it does not wait for the owner"
 
 /**
@@ -142,28 +138,14 @@ export function specPathOf(input: RuleInput): SpecPath {
 }
 
 /**
- * The screen's look at a revision that waits: the owner's pass, or the factory's settle. A lead's plan that waits all the
+ * The path of a revision that waits: the owner's pass, or the factory's settle. A lead's plan that waits all the
  * same (handed over before Issue 2732, or revised while its Issue still waited on it) is settled, so its Issue works again.
  */
-export function screenSpecByRule(input: RuleInput): RuleOutcome {
+export function routeSpecByRule(input: RuleInput): RuleOutcome {
   const { path, reason } = specPathOf(input)
   return { outcome: path === 'owner' ? 'passed' : 'settled', reason }
 }
 
-export type SpecScreenChecked =
-  | { action: 'pass'; note: string }
-  | { action: 'settle'; reason: string }
-  /** an answer that cannot be acted on: counted as a failed call */
-  | { action: 'refused'; why: string }
-
-/** The answer is held to its shape before anything is done: a settle needs the reason the lead hears. */
-export function checkSpecScreen(answer: SpecScreenAnswer): SpecScreenChecked {
-  const reason = answer.reason.trim().replace(/\s+/g, ' ').slice(0, REASON_MAX)
-  if (answer.verdict === 'pass') return { action: 'pass', note: reason }
-  if (reason !== '') return { action: 'settle', reason }
-  return { action: 'refused', why: 'a settle without a reason' }
-}
-
-/** The note the lead hears when the screen settles its Spec. */
+/** The note the lead hears when the factory settles its Spec by rule. */
 export const settledNote = (reason: string): string =>
-  `The Spec screen settled it without the owner: ${reason}. Build on your defaults; the owner can still overrule them with a note.`
+  `The factory settled it without the owner: ${reason}. Build on your defaults; the owner can still overrule them with a note.`

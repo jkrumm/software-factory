@@ -186,9 +186,6 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   }).toPass()
   await page.keyboard.press('Escape')
 
-  // The needed-me mark left the page: the verdict is the whole answer.
-  await expect(page.getByRole('group', { name: 'Needed me' })).toHaveCount(0)
-
   // The API holds both, and the Issue moved on: the verdict ends its wait on the Spec.
   const shown = await detail(apiUrl, spec)
   expect(await api(apiUrl, `/v1/issues/${shown.artifact.issueId}`)).toMatchObject({ state: 'working' })

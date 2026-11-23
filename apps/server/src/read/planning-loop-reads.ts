@@ -2,7 +2,6 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import { ISSUE_KINDS, ISSUE_SIZES, LEAD_ACTIVE_ISSUE_STATES, OPEN_ISSUE_STATES } from '@software-factory/contract'
 import { readEdgeNeed, readHeldEdges, readRemovedEdges } from './edge-need.ts'
-import { readSpecPrecedents } from './spec-screen.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import type { PlanningLoopReads } from '../domains/planning/ports.ts'
 
@@ -176,7 +175,5 @@ export function planningLoopReads(tx: SQL): PlanningLoopReads {
         return { issue: row.id as IssueId, state: row.state, blockers: row.blockers as IssueId[] }
       })
     },
-
-    specPrecedents: (limit) => readSpecPrecedents(tx, limit),
   }
 }

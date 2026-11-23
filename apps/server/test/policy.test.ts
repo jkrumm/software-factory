@@ -43,7 +43,6 @@ async function routes(): Promise<{ method: string; route: string }[]> {
 
 const PERSON_ROUTES = [
   ['POST', '/v1/decisions/:id/worth-asking'],
-  ['POST', '/v1/artifacts/:id/needed'],
   ['POST', '/v1/artifacts/:id/annotations'],
   ['PATCH', '/v1/artifacts/:id/annotations/:annotationId'],
   ['DELETE', '/v1/artifacts/:id/annotations/:annotationId'],
@@ -282,7 +281,7 @@ describe('the auth plugin over HTTP', () => {
   })
 
   test('the orchestrator is refused on a PERSON row over HTTP, and an unset token is no caller', async () => {
-    for (const path of ['/v1/decisions/d1/worth-asking', '/v1/artifacts/a1/needed', '/v1/errands/e1/approve']) {
+    for (const path of ['/v1/decisions/d1/worth-asking', '/v1/artifacts/a1/annotations', '/v1/errands/e1/approve']) {
       const response = await call('POST', path, TOKENS.orchestrator)
       expect(response.status).toBe(403)
     }

@@ -14,7 +14,7 @@ import {
   verdictChangedNothing,
   type Window,
 } from './kpis.ts'
-import { specSourceSql } from './spec-screen.ts'
+import { specSourceSql } from './spec-path.ts'
 import { per, windowOf } from './stats.ts'
 import { refusalKind } from './refusal-kind.ts'
 import { isCut } from '../kernel/epoch.ts'

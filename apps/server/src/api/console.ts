@@ -6,7 +6,7 @@ import { compressResponse } from './compress.ts'
 export interface ConsoleHandlerOptions {
   /** the Console build */
   dir: string
-  /** answers `/health`, `/v1/*` and the fifteen verbs (`WRITES`) from the API; the caller decides what credentials it carries */
+  /** answers `/health`, `/v1/*` and the fourteen verbs (`WRITES`) from the API; the caller decides what credentials it carries */
   forward: (request: Request) => Promise<Response>
   /** hosts the page may load images from over https (`FACTORY_CONSOLE_IMAGE_HOSTS`, already validated); none by default */
   imageHosts?: readonly string[]
@@ -103,11 +103,10 @@ export function apiForward(options: {
 
 const forwarded = (path: string): boolean => path === '/health' || path === '/v1' || path.startsWith('/v1/')
 
-/** The owner's fifteen verbs, his eleven answers, the pin and unpin of a collection and the set and clear of an account's mode: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a quarantined signal, dismiss files nothing; a pin moves one timestamp; a mode ends at its time or when cleared, and `claude-account mode` shows and clears it. */
+/** The owner's fourteen verbs, his ten answers, the pin and unpin of a collection and the set and clear of an account's mode: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a quarantined signal, dismiss files nothing; a pin moves one timestamp; a mode ends at its time or when cleared, and `claude-account mode` shows and clears it. */
 const WRITES: { method: string; path: RegExp }[] = [
   { method: 'POST', path: /^\/v1\/decisions\/[^/]+\/answer$/ },
   { method: 'POST', path: /^\/v1\/artifacts\/[^/]+\/verdict$/ },
-  { method: 'POST', path: /^\/v1\/artifacts\/[^/]+\/needed$/ },
   { method: 'POST', path: /^\/v1\/artifacts\/[^/]+\/annotations$/ },
   { method: 'PATCH', path: /^\/v1\/artifacts\/[^/]+\/annotations\/[^/]+$/ },
   { method: 'DELETE', path: /^\/v1\/artifacts\/[^/]+\/annotations\/[^/]+$/ },
@@ -183,7 +182,7 @@ function fileOf(dir: string, rawPath: string): string | null {
 
 /**
  * The Console listener's handler. No per-request identity: the perimeter is the tailnet ACL. Gates in a fixed order, for
- * every path: a read method (or one of the fifteen verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
+ * every path: a read method (or one of the fourteen verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
  * (`/health`, `/v1/*`, the verbs) or a static file. Nothing else that writes or starts a session passes. A text answer to a GET is
  * compressed (br or gzip, whatever the client accepts), a static file once; the event stream is never touched.
  */
@@ -233,7 +232,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     })
   }
 
-  /** One of the fifteen verbs: a same-origin JSON body of at most 64 KiB (a DELETE has none), forwarded verbatim. */
+  /** One of the fourteen verbs: a same-origin JSON body of at most 64 KiB (a DELETE has none), forwarded verbatim. */
   const write = async (request: Request): Promise<Response> => {
     const json = (request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')
     if (request.method !== 'DELETE' && !json) {
@@ -251,7 +250,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     const rawPath = new URL(request.url).pathname
     if (isWrite(request, rawPath)) return write(request)
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return errorResponse(405, 'the Console listener reads, and takes fifteen verbs', 'method_not_allowed', {
+      return errorResponse(405, 'the Console listener reads, and takes fourteen verbs', 'method_not_allowed', {
         allow: 'GET, HEAD',
       })
     }
