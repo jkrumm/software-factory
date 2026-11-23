@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readdir, realpath, stat } from 'node:fs/promises'
+import { readdir, readFile as readHostFile, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, sep } from 'node:path'
 import { firstLine, parseYamlText } from '@software-factory/contract/plan'
 import { MAX_PLAN_BYTES } from '../../domains/planning/plan.ts'
@@ -14,6 +14,8 @@ export interface GitProjectsOptions {
   roots: readonly string[]
   /** single repos outside the roots (`FACTORY_REPO_ALLOW`): each is a repo itself, not a directory of repos */
   allow?: readonly string[]
+  /** the directory of host-local project files, `<directory>/<repo-name>.yaml`; null or unset: none is read */
+  projectsDir?: string | null
   timeoutMs: number
 }
 
@@ -92,6 +94,38 @@ export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
     )
   }
 
+  /** The host-local project file of a repo, read from disk whatever the branch holds; absent when no directory is set or no file is there. */
+  async function readLocal(directory: string): Promise<FileRead> {
+    if (!options.projectsDir) return { state: 'absent' }
+    const path = join(options.projectsDir, `${directory}.yaml`)
+    const info = await stat(path).catch(() => null)
+    if (!info) return { state: 'absent' }
+    const name = `${directory}.yaml`
+    if (!info.isFile()) return { state: 'unreadable', sha: null, message: `${name} is not a regular file` }
+    if (info.size > PROJECT_FILE.max) {
+      return { state: 'unreadable', sha: null, message: `${name} is larger than ${PROJECT_FILE.max} bytes` }
+    }
+    const text = await readHostFile(path, 'utf8').catch((error: unknown) =>
+      error instanceof Error ? error : new Error(String(error)),
+    )
+    if (text instanceof Error) return { state: 'unreadable', sha: null, message: `${name}: ${text.message}` }
+    const sha = sha256(text)
+    const parsed = parseYamlText(text)
+    return parsed.ok
+      ? { state: 'text', sha, value: parsed.value }
+      : { state: 'unreadable', sha, message: parsed.message }
+  }
+
+  /** Whether a repo has a project file the factory reads: one committed on its default branch, or a host-local one. */
+  async function hasProjectFile(path: string, directory: string): Promise<boolean> {
+    const branch = await defaultBranch(path)
+    if (branch) {
+      const file = await git(path, ['ls-tree', branch, '--', PROJECT_FILE.path])
+      if (file.code === 0 && file.stdout.trim()) return true
+    }
+    return (await readLocal(directory)).state !== 'absent'
+  }
+
   /** A repo has its own git directory. A linked worktree has a `.git` file pointing at another repo's, so it is not one. */
   const isRepo = async (path: string): Promise<boolean> =>
     (await stat(join(path, '.git')).catch(() => null))?.isDirectory() === true
@@ -130,18 +164,12 @@ export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
           if (!entry.isDirectory() || entry.name.startsWith('.') || !isProjectDirName(entry.name)) continue
           const path = await realpath(join(root, entry.name)).catch(() => null)
           if (!path || !(await isRepo(path))) continue
-          const branch = await defaultBranch(path)
-          if (!branch) continue
-          const file = await git(path, ['ls-tree', branch, '--', PROJECT_FILE.path])
-          if (file.code === 0 && file.stdout.trim()) found.push({ directory: entry.name, path })
+          if (await hasProjectFile(path, entry.name)) found.push({ directory: entry.name, path })
         }
       }
       for (const path of await realAllow()) {
         if (!isProjectDirName(basename(path)) || !(await isRepo(path))) continue
-        const branch = await defaultBranch(path)
-        if (!branch) continue
-        const file = await git(path, ['ls-tree', branch, '--', PROJECT_FILE.path])
-        if (file.code === 0 && file.stdout.trim()) found.push({ directory: basename(path), path })
+        if (await hasProjectFile(path, basename(path))) found.push({ directory: basename(path), path })
       }
       return ok(found)
     },
@@ -181,7 +209,12 @@ export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
       if (!project.ok) return project
       const plan = await readFile(repo.path, branch, PLAN_FILE)
       if (!plan.ok) return plan
-      const read: RepoRead = { branch, project: project.value, plan: plan.value }
+      const read: RepoRead = {
+        branch,
+        project: project.value,
+        hostFile: await readLocal(repo.directory),
+        plan: plan.value,
+      }
       return ok(read)
     },
   }

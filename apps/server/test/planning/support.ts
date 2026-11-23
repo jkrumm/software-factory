@@ -55,7 +55,13 @@ class FakeSource implements ProjectSource {
 
   async discover() {
     return ok(
-      [...this.repos.values()].filter((e) => e.read !== 'fail' && e.read.project.state !== 'absent').map((e) => e.ref),
+      [...this.repos.values()]
+        .filter(
+          (e) =>
+            e.read !== 'fail' &&
+            (e.read.project.state !== 'absent' || (e.read.hostFile?.state ?? 'absent') !== 'absent'),
+        )
+        .map((e) => e.ref),
     )
   }
 

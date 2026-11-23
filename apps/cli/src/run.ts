@@ -90,8 +90,8 @@ const HAND_WRITTEN: readonly [string, string][] = [
   ],
   ['project schema', "the project file's author page, docs/project.md, with the generated key reference (offline)"],
   [
-    'project check [file]',
-    'check a project.yaml (default project.yaml, - is stdin) with line numbers; warns on retired keys, missing make targets, a name that is not the repo and a comment citing a missing document; exit 2 on a problem (offline)',
+    'project check [file] [--repo <dir>]',
+    'check a project.yaml (default project.yaml, - is stdin) with line numbers; --repo judges a host-local file against that checkout; warns on retired keys, missing make targets, a name that is not the repo and a comment citing a missing document; exit 2 on a problem (offline)',
   ],
   [
     'plan merge <base> <ours> <theirs>',

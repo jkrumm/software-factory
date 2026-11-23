@@ -44,10 +44,10 @@ export type ProjectMedian = z.infer<typeof ProjectMedian>
 export const ProjectIndexRow = z
   .strictObject({
     name: z.string(),
-    /** a work repo: no `project.yaml` of its own, or one that says `work: true` */
+    /** a work repo: no committed `project.yaml` of its own (none, or only a host-local one), or one that says `work: true` */
     work: z.boolean(),
-    /** `file`: the project has its own `project.yaml`; `defaults`: it has none */
-    source: z.enum(['file', 'defaults']),
+    /** `file`: the project has its own `project.yaml`; `local`: only a host-local project file; `defaults`: it has none */
+    source: z.enum(['file', 'local', 'defaults']),
     branch: z.string().nullable(),
     /** the Herdr group the project's space is filed under (`Infra`, `Tooling`, …), from the groups file; `Other` when none lists it */
     group: z.string(),
@@ -168,7 +168,7 @@ export const ProjectPageModel = z
     /** the repo text Issues of the project carry (its path): Flow's cards name a project by it when its name was taken */
     repo: z.string(),
     work: z.boolean(),
-    source: z.enum(['file', 'defaults']),
+    source: z.enum(['file', 'local', 'defaults']),
     branch: z.string().nullable(),
     syncedAt: at.nullable(),
     /** the `project.yaml` now on the default branch does not parse; the setup is the last valid one */
@@ -351,7 +351,7 @@ export const ProjectSetupModel = z
   .strictObject({
     at,
     project: z.string(),
-    source: z.enum(['file', 'defaults']),
+    source: z.enum(['file', 'local', 'defaults']),
     /** the `project.yaml` now on the default branch does not parse; the fields are the last valid one's */
     projectError: z.string().nullable(),
     /** the keys in the schema's order; a key with children is followed by them */

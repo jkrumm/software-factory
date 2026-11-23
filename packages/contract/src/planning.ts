@@ -72,8 +72,8 @@ export const ProjectView = z
     /** the repo directory's name (`<name>~<hash>` for a second directory of that name) */
     name: z.string(),
     repo: z.string(),
-    /** `file`: the last valid `project.yaml`; `defaults`: there is none */
-    source: z.enum(['file', 'defaults']),
+    /** `file`: the last valid `project.yaml`; `local`: the last valid host-local project file, for a repo with no committed one; `defaults`: there is none */
+    source: z.enum(['file', 'local', 'defaults']),
     branch: z.string().nullable(),
     syncedAt: z.string().nullable(),
     /** how many leads may work in the repo at once */

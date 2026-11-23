@@ -14,7 +14,7 @@ export interface OpenProject {
 
 const Project = z.object({ name: z.string(), repo: z.string() })
 
-/** The projects with a `project.yaml` of their own that do not say `work: true`. */
+/** The projects with a committed `project.yaml` of their own that do not say `work: true` (a host-local project is always a work project). */
 export async function loadOpenProjects(sql: SQL): Promise<OpenProject[]> {
   const rows: unknown[] = await sql`SELECT name, repo FROM factory.planning_projects
     WHERE source = 'file' AND COALESCE(project->>'work', 'false') <> 'true'`
@@ -22,7 +22,7 @@ export async function loadOpenProjects(sql: SQL): Promise<OpenProject[]> {
 }
 
 /**
- * Whether a repo is a work repo: it belongs to no project with a `project.yaml` of its own (a project with defaults, a
+ * Whether a repo is a work repo: it belongs to no project with a `project.yaml` of its own (a project with defaults or a host-local file, a
  * project that says `work: true`, or a repo the factory does not know). Fails closed: text of a repo nobody listed is not shown to the read token. This is
  * the one rule; the SQL in `issues.ts` and `sessions.ts` says the same thing in a WHERE clause (a literal prefix, no LIKE wildcards) and `work-rule.test.ts` holds them equal.
  */

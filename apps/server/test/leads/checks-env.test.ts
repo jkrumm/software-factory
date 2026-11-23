@@ -3,7 +3,11 @@ import { defaultProject } from '@software-factory/contract/project'
 import { storedChecks } from '../../src/app/leads-checks.ts'
 import type { StoredProject } from '../../src/domains/planning/sync.ts'
 
-const stored = (name: string, source: 'file' | 'defaults', patch: Record<string, unknown> = {}): StoredProject =>
+const stored = (
+  name: string,
+  source: 'file' | 'local' | 'defaults',
+  patch: Record<string, unknown> = {},
+): StoredProject =>
   ({
     name,
     repo: `/src/${name}`,
@@ -31,6 +35,7 @@ describe("a lead's session env", () => {
   const projects = [
     stored('own', 'file', { env: { ORB_FORMAT: 'json' } }),
     stored('plain', 'defaults'),
+    stored('team', 'local', { env: { ORB_FORMAT: 'json' } }),
     stored('flagged', 'file', { work: true }),
     stored('claimed', 'file', { work: true, env: { GH_CONFIG_DIR: '/own/gh' } }),
   ]
@@ -39,6 +44,13 @@ describe("a lead's session env", () => {
     const checks = checksOf(projects, '/cfg/gh-work')
     expect(await envOf(checks, '/src/plain')).toEqual({ GH_CONFIG_DIR: '/cfg/gh-work' })
     expect(await envOf(checks, '/src/flagged')).toEqual({ GH_CONFIG_DIR: '/cfg/gh-work' })
+  })
+
+  test('a host-local project is a work repo too, and keeps its own env', async () => {
+    expect(await envOf(checksOf(projects, '/cfg/gh-work'), '/src/team')).toEqual({
+      GH_CONFIG_DIR: '/cfg/gh-work',
+      ORB_FORMAT: 'json',
+    })
   })
 
   test("the project's own GH_CONFIG_DIR wins", async () => {

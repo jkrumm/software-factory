@@ -266,7 +266,11 @@ export function healthOf({
       return { ...base, tone: 'bad', text: 'The plan does not parse; its rows are the last valid plan’s' }
     if (page.source === 'defaults') return { ...base, tone: 'neutral', text: 'No project.yaml: the defaults apply' }
     const read = page.syncedAt ? `read ${ageWords(Math.max(0, now - Date.parse(page.syncedAt)))}` : 'not read yet'
-    return { ...base, tone: 'good', text: `project.yaml ${read}` }
+    return {
+      ...base,
+      tone: 'good',
+      text: `${page.source === 'local' ? 'host-local project file' : 'project.yaml'} ${read}`,
+    }
   })()
 
   return [productionCell, checksCell, filesCell]

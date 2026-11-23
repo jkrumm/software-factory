@@ -137,7 +137,10 @@ async function fileBrokenProject(
       kind: 'filed',
       payload: {
         repo: repoTextOf(project),
-        title: `project.yaml of ${project.name} does not parse`,
+        title:
+          project.source === 'local'
+            ? `host-local project file of ${project.name} does not parse`
+            : `project.yaml of ${project.name} does not parse`,
         kind: 'chore',
         origin: 'factory',
       },

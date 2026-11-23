@@ -213,9 +213,10 @@ describe('project.yaml', () => {
 })
 
 describe('sync', () => {
-  const read = (project: unknown, plan: unknown = { state: 'absent' }) => ({
+  const read = (project: unknown, plan: unknown = { state: 'absent' }, local?: unknown) => ({
     branch: 'origin/main',
     project: project as never,
+    ...(local === undefined ? {} : { hostFile: local as never }),
     plan: plan as never,
   })
   const at = new Date('2026-11-07T10:00:00Z')
@@ -227,6 +228,64 @@ describe('sync', () => {
     expect(stored).toMatchObject({ source: 'defaults', projectError: null, plan: null, branch: 'origin/main' })
     expect(stored.project).toEqual(defaultProject('x'))
     expect(stored.project.leads).toBe(64)
+  })
+
+  describe('a host-local project file', () => {
+    const text = (sha: string, extra = '') => ({
+      state: 'text',
+      sha,
+      value: {
+        apiVersion: 'factory/v2',
+        name: 'x',
+        ship: [{ via: 'pr' }],
+        checks: { fast: 'make check-fast' },
+        ...(extra ? { leads: 2 } : {}),
+      },
+    })
+    const absent = { state: 'absent' }
+
+    test('stands in for a repo with no committed file: source local, its keys in force', () => {
+      const stored = sync(null, read(absent, absent, text('l1')))
+      expect(stored).toMatchObject({ source: 'local', projectSha: 'l1', projectError: null, projectWarnings: [] })
+      expect(stored.project.ship).toEqual([{ via: 'pr' }])
+      expect(stored.project.checks).toEqual({ fast: 'make check-fast', full: 'make check', ci: false })
+    })
+
+    test('the committed file wins and the project says the local one is ignored', () => {
+      const committed = { state: 'text', sha: 'c1', value: { apiVersion: 'factory/v2', name: 'x', leads: 5 } }
+      const stored = sync(null, read(committed, absent, text('l1')))
+      expect(stored).toMatchObject({ source: 'file', projectSha: 'c1' })
+      expect(stored.project.leads).toBe(5)
+      expect(stored.project.ship).toEqual([{ via: 'push' }])
+      expect(stored.projectWarnings).toEqual([expect.stringContaining('host-local project file')])
+    })
+
+    test('an edit is picked up, a deleted file puts the repo back on the defaults, a broken one keeps the last valid and says where', () => {
+      const first = sync(null, read(absent, absent, text('l1')))
+      const edited = sync(first, read(absent, absent, text('l2', 'leads')))
+      expect(edited).toMatchObject({ source: 'local', projectSha: 'l2' })
+      expect(edited.project.leads).toBe(2)
+      const broken = sync(
+        edited,
+        read(absent, absent, { state: 'text', sha: 'l3', value: { apiVersion: 'factory/v2', name: 'x', leads: 0 } }),
+      )
+      expect(broken.project.leads).toBe(2)
+      expect(broken.projectError).toMatchObject({
+        sha: 'l3',
+        message: expect.stringContaining('host-local project file'),
+      })
+      const unreadable = sync(
+        edited,
+        read(absent, absent, { state: 'unreadable', sha: null, message: 'x.yaml is not a regular file' }),
+      )
+      expect(unreadable.projectError?.message).toBe('host-local project file: x.yaml is not a regular file')
+      expect(sync(edited, read(absent, absent, absent))).toMatchObject({ source: 'defaults', projectSha: null })
+    })
+
+    test('a local file is a work project: the committed file alone opens a repo to the read token', () => {
+      const local = { ...sync(null, read(absent, absent, text('l1'))), source: 'local' as const }
+      expect(signalsView(local).work).toBe(true)
+    })
   })
 
   test('a project that states no leads gets 64 (no cap beyond the host); the bound is 64 for the repo and for a lane', () => {
@@ -316,7 +375,7 @@ describe('sync', () => {
 })
 
 describe('what intake hears', () => {
-  const stored = (raw: unknown, source: 'file' | 'defaults' = 'file'): StoredProject => {
+  const stored = (raw: unknown, source: 'file' | 'local' | 'defaults' = 'file'): StoredProject => {
     const parsed = parseProject(raw, 'x')
     if (!parsed.ok) throw new Error(parsed.message)
     return { name: 'x', repo: '/src/x', source, project: parsed.project } as StoredProject

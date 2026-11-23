@@ -12,7 +12,7 @@ const FileErrorColumn = z.object({ message: z.string(), sha: z.string().nullable
 const ProjectRow = z.object({
   name: z.string(),
   repo: z.string(),
-  source: z.enum(['file', 'defaults']),
+  source: z.enum(['file', 'local', 'defaults']),
   project: z.unknown(),
   project_sha: z.string().nullable(),
   project_error: z.unknown(),

@@ -50,6 +50,18 @@ test('deploy mode auto: the file’s mode and hold, and make verify from its tar
   })
 })
 
+test('a host-local project is read like a committed file: its mode and hold apply, not the Makefile’s', async () => {
+  const projects = projectsOf(
+    stored('local', {
+      deploy: { mode: 'auto', hold: '10m', targets: [{ name: 'prod', host: 'vps', verify: 'make verify' }] },
+    }),
+  )
+  expect(await projects.checksOf('/roots/app')).toEqual({
+    ok: true,
+    value: { windowMs: 600_000, deployMode: 'auto', makeVerify: true, probes: [] },
+  })
+})
+
 test('a worktree below the repo is the repo; a URL target and the file’s probes are probes', async () => {
   const projects = projectsOf(
     stored('file', {

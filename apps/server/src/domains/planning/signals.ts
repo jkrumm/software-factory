@@ -39,7 +39,7 @@ export function signalsView(project: StoredProject): RepoSignalsView {
   ]
   return {
     repo: repoTextOf(project),
-    work: project.source === 'defaults' || file.work,
+    work: project.source !== 'file' || file.work,
     host: file.host ?? null,
     sources,
     github: github

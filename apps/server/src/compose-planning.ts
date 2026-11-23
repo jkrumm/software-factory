@@ -75,6 +75,7 @@ export function composePlanning(input: {
     source: gitProjectSource({
       roots: settings.repoRoots,
       allow: settings.repoAllow,
+      projectsDir: settings.projectsDir,
       timeoutMs: settings.gitTimeoutMs,
     }),
   }
