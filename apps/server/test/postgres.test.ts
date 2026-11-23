@@ -44,6 +44,21 @@ describe('migrate', () => {
     expect(String(schema?.comment)).toContain('software-factory')
   })
 
+  test('the tables the cycle stopped using are dropped and the ledgers that took their rows stay', async () => {
+    await migrate(db.sql, await loadMigrations())
+    const names = [
+      'import_issues',
+      'import_events',
+      'admission_shadow',
+      'selfwatch_findings',
+      'throughput_findings',
+      'queue_asks',
+    ]
+    const present: { table_name: string }[] =
+      await db.sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'factory' AND table_name IN ${db.sql([...names, 'loop_findings', 'loop_calls'])}`
+    expect(present.map((r) => r.table_name).sort()).toEqual(['loop_calls', 'loop_findings'])
+  })
+
   test('two copies at once: the advisory lock serializes them, each migration applies once', async () => {
     const migrations = [m('0001_a.sql', 'CREATE TABLE factory.a (id int)')]
     const [first, second] = await Promise.all([migrate(db.sql, migrations), migrate(db.sql, migrations)])
