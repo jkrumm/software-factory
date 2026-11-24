@@ -1057,6 +1057,20 @@ export async function windowOf(
   })
 }
 
+/**
+ * Whether the account's own limit is reached by its newest reading: a rate limit it hit (`exhaustedUntil`) or a window at
+ * 100 %. The package closes an account earlier than that (the weekly ceiling, the 5-hour maximum), and Claude Code still takes
+ * prompts there: only a spent account refuses one. No reading: not spent.
+ */
+export async function spentOf(deps: PlanningDeps, account: string): Promise<Result<boolean, PortError>> {
+  return deps.uow.run(async ({ capacity }) => {
+    const reading = (await capacity.latestReadings()).find((r) => r.account === account)
+    if (!reading) return ok(false)
+    const hit = reading.exhaustedUntil !== null && reading.exhaustedUntil > deps.clock.now()
+    return ok(hit || (reading.fiveHourUsed ?? 0) >= 100 || (reading.weeklyUsed ?? 0) >= 100)
+  })
+}
+
 export interface AccountMove {
   from: string
   to: string

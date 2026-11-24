@@ -943,6 +943,30 @@ describe('the ports other packages take', () => {
     expect(value(await port.windows.wall('nobody'))).toEqual({ resetAt: null })
   })
 
+  test('an account is spent only at its own limit: a closed one below it is not', async () => {
+    const port = capacityForLeads(world.deps)
+    world.accounts.rows = [
+      // the factory's ceiling: closed at 99 %, the account still takes prompts
+      account('ceiling', {
+        weeklyUsed: 99,
+        fiveHourUsed: 40,
+        open: false,
+        closedWhy: 'weekly at 99 %, at its ceiling of 98 %',
+      }),
+      closedAccount('window'),
+      account('week', { weeklyUsed: 100, fiveHourUsed: null, open: false }),
+      account('hit', { open: false, exhaustedUntil: new Date(world.clock.now().getTime() + 3_600_000) }),
+      account('open'),
+    ]
+    value(await admissionPass(world.deps))
+    expect(value(await port.windows.spent('ceiling'))).toBe(false)
+    expect(value(await port.windows.spent('window'))).toBe(true)
+    expect(value(await port.windows.spent('week'))).toBe(true)
+    expect(value(await port.windows.spent('hit'))).toBe(true)
+    expect(value(await port.windows.spent('open'))).toBe(false)
+    expect(value(await port.windows.spent('nobody'))).toBe(false)
+  })
+
   test('the queue last moved when its newest event happened: none before there is one', async () => {
     expect(await queueMovedAt(world.db.sql)).toBeNull()
     await world.queued({ repo: 'solo' })

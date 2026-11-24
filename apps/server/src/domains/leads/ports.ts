@@ -212,6 +212,11 @@ export interface Windows {
    * limit to reset; a reading sampled after it that shows the account open means it is open.
    */
   wall(account: string, since?: Date): Promise<Result<{ resetAt: Date | null }>>
+  /**
+   * whether the account's own limit is reached (a window at 100 % or a rate limit it hit), not only the ceiling the factory
+   * keeps below it: Claude Code accepts a prompt up to the first, so a closed account that is not spent still works.
+   */
+  spent(account: string): Promise<Result<boolean>>
 }
 
 /** What the end of a session's transcript says of its last turn when that turn ended on an API error. */

@@ -179,7 +179,9 @@ list; the two that pin a step are named under Steps off the mini. Each rule name
   admits nothing.
 
 **Walls and moves.** A lead that runs into an account's limit (`limit_stop`) stalls as `wall` and waits for the
-window's reset (`wallResetAt`, `windowOf`). While its account is closed and another is open with room, the steward
+window's reset (`wallResetAt`, `windowOf`). A turn that goes quiet on an account the factory closed below its own limit (the
+weekly ceiling, the 5-hour maximum) is a lead working, not a wall: the held sweep (`holdWalledLeads`) stalls it only when
+the account is `spentOf` (a window at 100 % or a rate limit hit). While its account is closed and another is open with room, the steward
 moves the lead (`seats.move`, `moveWalled`, `noteLead`): the same session resumes under the other account's
 `CLAUDE_CONFIG_DIR`.
 

@@ -220,6 +220,8 @@ export interface World {
   /** the account the fake capacity gives every attempt */
   seatAccount: string
   windowReset: Date | null
+  /** the account's own limit is reached, not only the factory's ceiling */
+  windowSpent: boolean
   /** files, settles and admits an Issue in the repo `example`; returns its id */
   admitted(
     notes?: string[],
@@ -286,6 +288,7 @@ export async function startWorld(): Promise<World> {
     seatError: null,
     seatAccount: 'default',
     windowReset: null,
+    windowSpent: true,
     deps: undefined as unknown as LeadDeps,
     admitted: async () => {
       throw new Error('not ready')
@@ -322,7 +325,10 @@ export async function startWorld(): Promise<World> {
     seat: async () => (world.seatError ? err(world.seatError) : ok({ account: world.seatAccount })),
     move: async () => ok(null),
   }
-  const windows: Windows = { wall: async () => ok({ resetAt: world.windowReset }) }
+  const windows: Windows = {
+    wall: async () => ok({ resetAt: world.windowReset }),
+    spent: async () => ok(world.windowSpent),
+  }
   world.deps = {
     uow,
     clock,
@@ -391,6 +397,7 @@ export async function startWorld(): Promise<World> {
     world.seatError = null
     world.seatAccount = 'default'
     world.windowReset = null
+    world.windowSpent = true
     world.deps.ids = sequentialIds()
     clock.at_(0)
   }

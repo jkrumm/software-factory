@@ -101,6 +101,18 @@ describe('a turn the account wall refused', () => {
     expect(await issueRow(issue)).toEqual({ state: 'working', wait_reason: null })
   })
 
+  test('an account the factory closed below its own limit is no wall: the quiet turn is a lead working', async () => {
+    const issue = await running()
+    await recordHook(w.deps, line('turn_started', 2))
+    w.windowReset = new Date(BASE + 3_600_000)
+    w.windowSpent = false
+    w.clock.at_(2 + afterHeld + 1)
+    expect(await holdWalledLeads(w.deps)).toBe(0)
+    expect(await issueRow(issue)).toEqual({ state: 'working', wait_reason: null })
+    w.windowSpent = true
+    expect(await holdWalledLeads(w.deps)).toBe(1)
+  })
+
   test('a lead that is idle at its prompt is not held, and the turn that starts later wakes the stall', async () => {
     const issue = await running()
     await recordHook(w.deps, line('turn_started', 2))
