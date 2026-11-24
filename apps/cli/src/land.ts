@@ -302,9 +302,9 @@ async function checksOf(sh: Shell, ref: string, head: string): Promise<{ checks:
 const isWorkflowRun = (check: Check): boolean =>
   check.bucket !== 'skipping' && check.link?.includes('/actions/runs/') === true
 
-/** The gap before the next CI read: the base for the first reads, growing by a quarter of it per read up to `POLL_CAP` times it; the cap at once after a rate-limited read. */
-export function pollGap(base: number, polls: number, limited: boolean): number {
-  return limited ? base * POLL_CAP : Math.min(base * POLL_CAP, base * (1 + polls / 4))
+/** The gap before the next CI read: the base for the first reads, growing by a quarter of it per read up to `POLL_CAP` times it; the cap at once when this round's failed reads (`said`) name a rate limit. */
+export function pollGap(base: number, polls: number, said: string): number {
+  return RATE_LIMITED.test(said) ? base * POLL_CAP : Math.min(base * POLL_CAP, base * (1 + polls / 4))
 }
 
 class Lander {
@@ -494,10 +494,10 @@ class Lander {
       if (stopped !== null) return stopped
       // the verb's first read already told a wrong account from a missing pull request; a later failure is a blip, so poll again
       let blip = false
-      let limited = false
+      let said = ''
       const blipped = (why: string) => {
         blip = true
-        limited ||= RATE_LIMITED.test(why)
+        said += ` ${why}`
         if (why !== unread) this.out(`${why}; polling again`)
         unread = why
       }
@@ -571,7 +571,7 @@ class Lander {
       if (state !== previous) this.out(`ci: ${state}`)
       previous = state
       polls += 1
-      await sleep(pollGap(this.pollMs, polls, limited))
+      await sleep(pollGap(this.pollMs, polls, said))
     }
   }
 

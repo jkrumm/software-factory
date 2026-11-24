@@ -580,13 +580,18 @@ describe('factory land', () => {
 
 describe('pollGap', () => {
   test('grows from the base to four times it, and no further', () => {
-    expect(pollGap(15_000, 0, false)).toBe(15_000)
-    expect(pollGap(15_000, 4, false)).toBe(30_000)
-    expect(pollGap(15_000, 12, false)).toBe(60_000)
-    expect(pollGap(15_000, 100, false)).toBe(60_000)
+    expect(pollGap(15_000, 0, '')).toBe(15_000)
+    expect(pollGap(15_000, 4, '')).toBe(30_000)
+    expect(pollGap(15_000, 12, '')).toBe(60_000)
+    expect(pollGap(15_000, 100, '')).toBe(60_000)
+  })
+
+  test('a secondary limit and abuse detection read as rate limited too', () => {
+    expect(pollGap(15_000, 1, 'You have exceeded a secondary rate limit')).toBe(60_000)
+    expect(pollGap(15_000, 1, 'abuse detection mechanism')).toBe(60_000)
   })
 
   test('a rate-limited read waits the longest gap at once', () => {
-    expect(pollGap(15_000, 1, true)).toBe(60_000)
+    expect(pollGap(15_000, 1, 'gh: API rate limit exceeded for user ID 1')).toBe(60_000)
   })
 })
