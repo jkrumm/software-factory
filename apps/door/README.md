@@ -56,8 +56,8 @@ lines follow (derived on the server by `healthLines` in `app/intake.ts`; serving
 
 A file with a looser mode, one that does not parse, a missing file and one with no source all make the door refuse to start,
 with the reason on stderr (the service's error log). `newToken` in `src/tokens.ts` writes a fresh token (32 random bytes,
-base64url) into the file; the CLI verb that calls it comes with the CLI package, and until then the file is written by
-hand. The door reads the file at start, so restart it after a rotation. The owner seeds the tokens into 1Password. A
+base64url) into the file; `factory door token new <source> [--rotate]` (apps/cli/src/door.ts) calls it and prints the token once.
+The door reads the file at start, so restart it after a rotation. The owner seeds the tokens into 1Password. A
 deploy creates none.
 
 ## Feedback
