@@ -142,7 +142,7 @@ test: test-unit test-scenarios
 # UNIT_SHARD=1/2 runs the first of two shards (CI: `static` runs the first beside the checks, `unit (2/2)` the second); unset, all of them.
 test-unit:
 	@echo "==> unit tests (bun test apps packages scripts integrations$(if $(UNIT_SHARD), --shard=$(UNIT_SHARD)))"
-	@$(SLOT_UNIT) bun test $(call JUNIT,unit) $(TEST_TIMEOUT) $(if $(UNIT_SHARD),--shard=$(UNIT_SHARD)) ./apps ./packages ./scripts ./integrations
+	@$(SLOT_UNIT) bun test $(call JUNIT,unit) $(TEST_TIMEOUT) $(UNIT_PARALLEL) $(if $(UNIT_SHARD),--shard=$(UNIT_SHARD)) ./apps ./packages ./scripts ./integrations
 
 # The unit tests of what the branch changed (bun follows the imports from each changed file; committed and uncommitted
 # changes against the merge base with origin/master). CHECK_FAST_ALL=1 (CI's `static` job) runs every unit test.
@@ -150,11 +150,14 @@ test-unit:
 # its minutes were a third of the slot time of failed software-factory runs (Issue 2375; the failing test itself takes seconds).
 # `make check-fast UNIT_BAIL=` lists every failure in one run, as CI does.
 UNIT_BAIL ?= --bail
+# The unit files run in 4 worker processes: each file starts its own Postgres and touches nothing shared, so the files do not meet. The whole suite took
+# 419 s serial and 124 s with 4 workers on the mini (4201 tests, all green; Issue 3190), and a slot's minutes are wall time. `UNIT_PARALLEL=` runs them serially.
+UNIT_PARALLEL ?= --parallel=4
 UNIT_BASE = $(shell git merge-base HEAD origin/master 2>/dev/null)
 test-unit-changed:
 	@if [ -n "$(CHECK_FAST_ALL)" ] || [ -z "$(UNIT_BASE)" ]; then $(MAKE) --no-print-directory test-unit; else \
 	  echo "==> unit tests of the changed files (bun test --changed=$(UNIT_BASE))"; \
-	  $(SLOT) bun test $(call JUNIT,unit-changed) $(TEST_TIMEOUT) $(UNIT_BAIL) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
+	  $(SLOT) bun test $(call JUNIT,unit-changed) $(TEST_TIMEOUT) $(UNIT_PARALLEL) $(UNIT_BAIL) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
 
 # SHARD=1/3 runs the files scripts/shard.ts plans for the first of three shards of the scenarios (CI's matrix; seconds per file in
 # tests/scenarios/shard-weights.json); unset, all of them.
