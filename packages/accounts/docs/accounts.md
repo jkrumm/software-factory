@@ -60,7 +60,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | `health.ts`, `health-cache.ts` | Pure grading of one machine's `usage` and `expiry` into health rows (a login row carries `ends_at` and `days_left`); the last rows of both machines as `health.json` in the cache directory |
 | `registry.ts`, `paths.ts`, `store.ts` | The registry file, every path, the per-account cache files, the claim and stamp files and the override state file |
 | `ports.ts` | The ports: `Spawner`, `HttpGet`, `PeerUsage` |
-| `keychain.ts`, `oauth.ts`, `claude-auth.ts`, `spawn.ts` | The adapters: the login item through `security`, the usage endpoint, `claude auth status`, processes with a deadline that returns |
+| `keychain.ts`, `oauth.ts`, `claude-auth.ts`, `spawn.ts` | The adapters: the login item through `security`, the usage endpoint, `claude auth status` (the login verdict) and `claude mcp list` (renews an expired token), processes with a deadline that returns |
 | `refresh.ts`, `relogin.ts` | The orchestration over the ports: claim, sample, record; the re-login asks |
 | `host.ts`, `owner.ts` | The host block (§The host block): its checks, this machine, the command templates; the adapters behind it: the peer over ssh, the wake push and notification |
 | `onboard.ts` | `add`, `verify`, `remove` (§Onboarding): the registry edit, the three checks, what a removal leaves |

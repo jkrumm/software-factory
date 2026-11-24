@@ -1,4 +1,4 @@
-// The refresh orchestration: claim, sample (peer, usage endpoint, `claude auth status`), record. Ports in, files out.
+// The refresh orchestration: claim, sample (peer, usage endpoint; a 401 renews the token via `claude mcp list`), login verdict (`claude auth status`), record. Ports in, files out.
 import { loginVerdict, refreshEnv, renewToken, type LoginVerdict } from './claude-auth.ts'
 import { type KeychainDeps, keychainToken } from './keychain.ts'
 import { fetchUsage } from './oauth.ts'
