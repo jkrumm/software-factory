@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { pollGap } from '../src/land.ts'
 
 /**
  * `factory land` against a scratch repo: a bare origin, a clone on a factory branch, and a fake `gh` and `agw` on PATH
@@ -574,5 +575,18 @@ describe('factory land', () => {
     expect(await masterOf()).toBe(await git(work, 'rev-parse', 'HEAD'))
     expect(result.err).toContain('land: push:')
     expect(await calls()).not.toContain('gh pr')
+  })
+})
+
+describe('pollGap', () => {
+  test('grows from the base to four times it, and no further', () => {
+    expect(pollGap(15_000, 0, false)).toBe(15_000)
+    expect(pollGap(15_000, 4, false)).toBe(30_000)
+    expect(pollGap(15_000, 12, false)).toBe(60_000)
+    expect(pollGap(15_000, 100, false)).toBe(60_000)
+  })
+
+  test('a rate-limited read waits the longest gap at once', () => {
+    expect(pollGap(15_000, 1, true)).toBe(60_000)
   })
 })
