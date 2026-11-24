@@ -328,6 +328,18 @@ describe('check probe', () => {
     expect(findings(report, 'check')).toEqual([])
   })
 
+  test('the throwaway checkout installs its packages when the deps probe does not run: a gate that needs them is green', async () => {
+    const installing = join(fake, `bun-install-${++counter}`)
+    writeFileSync(
+      installing,
+      `#!/bin/sh\ncase "$1" in\n  install) mkdir -p node_modules ;;\n  *) exec "${process.execPath}" "$@" ;;\nesac\n`,
+    )
+    chmodSync(installing, 0o755)
+    const { name } = makeRepo({ 'package.json': '{}', Makefile: 'check:\n\t@test -d node_modules\n' })
+    const report = await sweep(name, { bun: installing, skip: [{ probe: 'deps', reason: 'opted out for this test' }] })
+    expect(run(report, 'check')?.outcome).toBe('clean')
+  })
+
   test('a daily sweep runs only the probes the catalogue marks daily, no check, no declared probe, no documents to judge', async () => {
     const repo = makeRepo({ 'a.txt': 'x', 'docs/guide.md': '[x](missing.md)\n' })
     const report = await sweep(repo.name, { scope: 'daily', probes: [{ name: 'first', target: 'one' }] })
