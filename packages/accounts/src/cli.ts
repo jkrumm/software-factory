@@ -4,7 +4,7 @@
 // Every verb and flag is in VERBS below; `claude-account --help` prints them, `claude-account <verb> --help` one in full.
 //
 // Idle-account samples: one read-only GET of the OAuth usage endpoint with the account's own Keychain token
-// (never copied, logged or written back; on HTTP 401 `claude auth status` renews it first, one retry); `claude -p /usage` no longer refreshes cachedUsageUtilization (2.1.310).
+// (never copied, logged or written back; on HTTP 401 `claude mcp list` renews it first, one retry); `claude -p /usage` no longer refreshes cachedUsageUtilization (2.1.310).
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'

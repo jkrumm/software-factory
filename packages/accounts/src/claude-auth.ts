@@ -1,4 +1,4 @@
-// The `claude auth status` adapter (0 tokens): the login verdict, and the environment the binary runs in.
+// The `claude` adapter (0 tokens): the login verdict (`auth status`), the token renewal (`mcp list`), and the environment the binary runs in.
 import type { Spawner } from './ports.ts'
 
 /** Credentials that would make the spawned binary bill API credits or bypass the account's own login. */
@@ -11,6 +11,19 @@ export function refreshEnv(base: Record<string, string | undefined>, dir: string
   if (dir === null) delete env.CLAUDE_CONFIG_DIR
   else env.CLAUDE_CONFIG_DIR = dir
   return env
+}
+
+/**
+ * Makes the binary renew an expired Keychain access token (0 tokens): `claude mcp list` does, `claude auth status` no
+ * longer does (2.1.311 and later; seen 2026-11-24 on 2.1.331). Returns the start failure, if any; the caller re-reads the token.
+ */
+export function renewToken(
+  d: { spawn: Spawner; claudeBin: string },
+  env: Record<string, string>,
+): { startFailed?: string } {
+  const r = d.spawn(d.claudeBin, ['mcp', 'list'], { env, timeoutMs: 30_000 })
+  if (r.error && r.error.code !== 'ETIMEDOUT') return { startFailed: `${r.error.code ?? 'error'}: ${r.error.message}` }
+  return {}
 }
 
 export type LoginVerdict = { loggedIn: boolean | null; startFailed?: string }

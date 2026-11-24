@@ -1536,20 +1536,26 @@ describe('runRefresh', () => {
   })
 })
 
-describe('runRefresh: HTTP 401 renews the token via `claude auth status`', () => {
+describe('runRefresh: HTTP 401 renews the token via `claude mcp list`', () => {
   const OLD = 'oat-OLD-EXPIRED-TOKEN'
   const NEW = 'oat-NEW-RENEWED-TOKEN'
   const creds = (t: string) => JSON.stringify({ claudeAiOauth: { accessToken: t, refreshToken: 'r', expiresAt: 1 } })
   const bearer = (h: Record<string, string>) => h.Authorization.slice('Bearer '.length)
 
-  /** `renews`: whether `auth status` actually swaps the Keychain token (an expired login renews nothing). */
+  /** `renews`: whether `mcp list` actually swaps the Keychain token (an expired login renews nothing). */
   async function run(o: { renews: boolean; loggedIn?: boolean; id?: string; seed?: Sample }) {
     const dir = tmp()
     const id = o.id ?? 'me'
     claimRefresh(reg(), [id], NOW, cacheOf(sample(1, 1, { age: 11 * 60_000 }), sample(1, 1, { age: 11 * 60_000 })), dir)
     if (o.seed) saveSample(id, o.seed, dir)
     let renewed = false
-    const calls: { cmd: string; args: string[]; configDir: string | undefined }[] = []
+    const calls: {
+      cmd: string
+      args: string[]
+      configDir: string | undefined
+      baseUrl: string | undefined
+      timeoutMs: number
+    }[] = []
     const gets: string[] = []
     const logs: string[] = []
     const results = await runRefresh({
@@ -1561,9 +1567,18 @@ describe('runRefresh: HTTP 401 renews the token via `claude auth status`', () =>
       dir,
       log: (m) => logs.push(m),
       spawn: (cmd, args, e) => {
-        calls.push({ cmd, args, configDir: e.env.CLAUDE_CONFIG_DIR })
+        calls.push({
+          cmd,
+          args,
+          configDir: e.env.CLAUDE_CONFIG_DIR,
+          baseUrl: e.env.ANTHROPIC_BASE_URL,
+          timeoutMs: e.timeoutMs,
+        })
         if (cmd === '/usr/bin/security') return { status: 0, stdout: creds(renewed ? NEW : OLD), stderr: '' }
-        renewed = o.renews
+        if (args[0] === 'mcp') {
+          renewed = o.renews
+          return { status: 0, stdout: '', stderr: '' }
+        }
         return { status: 0, stdout: JSON.stringify({ loggedIn: o.loggedIn ?? true }), stderr: '' }
       },
       httpGet: async (_u, h) => {
@@ -1585,21 +1600,28 @@ describe('runRefresh: HTTP 401 renews the token via `claude auth status`', () =>
     }
   }
 
-  test("401 -> auth status -> new token -> 200 gives a fresh sample, one status call, under the account's own dir", async () => {
+  test("401 -> mcp list -> new token -> 200 gives a fresh sample; the renew runs under the account's own dir, then the verdict is not needed", async () => {
     const h = await run({ renews: true })
     expect(h.results).toEqual({ me: 'fresh' })
     expect(h.cache.samples.me).toMatchObject({ s: 3, w: 89, s_ts: NOW, src: 'oauth' })
     expect(h.gets).toEqual([OLD, NEW])
-    expect(h.calls.map((c) => c.args[0])).toEqual(['find-generic-password', 'auth', 'find-generic-password'])
-    expect(h.calls[1]).toMatchObject({ args: ['auth', 'status'], configDir: '/home/x/.claude-me' })
+    expect(h.calls.map((c) => c.args[0])).toEqual(['find-generic-password', 'mcp', 'find-generic-password'])
+    expect(h.calls[1]).toMatchObject({
+      cmd: 'claude',
+      args: ['mcp', 'list'],
+      configDir: '/home/x/.claude-me',
+      baseUrl: '',
+      timeoutMs: 30_000,
+    })
     expect(h.logs.join('\n')).toContain('HTTP 401')
     noSecrets(h)
   })
-  test('401 twice: no sample, the auth-status verdict still decides, and it is not run a second time', async () => {
+  test('401 twice: no sample, the auth-status verdict still decides; one renew, one verdict', async () => {
     const ok = await run({ renews: false, seed: sample(1, 1, { age: 2 * H * 1000 }) })
     expect(ok.results).toEqual({ me: 'auth-ok' })
     expect(ok.gets).toEqual([OLD, OLD]) // exactly one retry
     expect(ok.calls.filter((c) => c.args[0] === 'auth')).toHaveLength(1)
+    expect(ok.calls.filter((c) => c.args[0] === 'mcp')).toHaveLength(1)
     expect(ok.cache.auth_failed.me).toBeUndefined()
     const dead = await run({ renews: false, loggedIn: false })
     expect(dead.results).toEqual({ me: 'auth-failed' })
@@ -1613,7 +1635,7 @@ describe('runRefresh: HTTP 401 renews the token via `claude auth status`', () =>
     expect(h.results).toEqual({ iu: 'fresh' })
     expect(h.calls[1].configDir).toBeUndefined()
   })
-  test('other failures (429) never run auth status for the retry', async () => {
+  test('other failures (429) never run the renew for the retry', async () => {
     const dir = tmp()
     claimRefresh(
       reg(),
