@@ -22,8 +22,12 @@ import { exitCodeOf } from './slot.ts'
 
 const USAGE = 'usage: land [--pr <n>] [--method squash|rebase|merge] [--allow-red] [--no-ci] [--project <name>]'
 type Method = MergeMethod
-/** How often the CI wait looks again (`FACTORY_LAND_POLL_MS`). */
+/** How often the CI wait first looks again (`FACTORY_LAND_POLL_MS`); the gap then grows to `POLL_CAP` times it. */
 const DEFAULT_POLL_MS = 15_000
+/** The longest CI poll gap, in poll intervals: every land shares the host's one GitHub token, so a long wait must cost few reads. */
+const POLL_CAP = 4
+/** A read gh refused for the token's budget (primary or secondary limit): the next look waits the longest gap. */
+const RATE_LIMITED = /rate limit|abuse detection|secondary rate/i
 /** A head with no check this long after its push has no CI coming (`FACTORY_LAND_NO_RUN_MS`). */
 const DEFAULT_NO_RUN_MS = 3 * 60_000
 /** How often the wait for the merge window looks for a moved default branch (`FACTORY_LAND_REBASE_POLL_MS`). */
@@ -298,6 +302,11 @@ async function checksOf(sh: Shell, ref: string, head: string): Promise<{ checks:
 const isWorkflowRun = (check: Check): boolean =>
   check.bucket !== 'skipping' && check.link?.includes('/actions/runs/') === true
 
+/** The gap before the next CI read: the base for the first reads, growing by a quarter of it per read up to `POLL_CAP` times it; the cap at once when this round's failed reads (`said`) name a rate limit. */
+export function pollGap(base: number, polls: number, said: string): number {
+  return RATE_LIMITED.test(said) ? base * POLL_CAP : Math.min(base * POLL_CAP, base * (1 + polls / 4))
+}
+
 class Lander {
   private readonly out: (line: string) => void
   private readonly pollMs: number
@@ -479,13 +488,16 @@ class Lander {
     let previous = ''
     let unread = ''
     let greens = 0
+    let polls = 0
     for (;;) {
       const stopped = this.stopped()
       if (stopped !== null) return stopped
       // the verb's first read already told a wrong account from a missing pull request; a later failure is a blip, so poll again
       let blip = false
+      let said = ''
       const blipped = (why: string) => {
         blip = true
+        said += ` ${why}`
         if (why !== unread) this.out(`${why}; polling again`)
         unread = why
       }
@@ -558,7 +570,8 @@ class Lander {
         )
       if (state !== previous) this.out(`ci: ${state}`)
       previous = state
-      await sleep(this.pollMs)
+      polls += 1
+      await sleep(pollGap(this.pollMs, polls, said))
     }
   }
 

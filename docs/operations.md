@@ -131,8 +131,8 @@ The verb reads the ship mode from `project.yaml`, else from the repo's host-loca
 A refusal is exit 1 with `land: <step>: refused: <why>` and `land: next: <command>`, the lock released and nothing
 merged. Every step is safe to repeat, so a second run resumes (a rebased branch is not rebased again, a pushed head is not
 pushed again, a merged pull request prints its commit and exits 0). It does not deploy and does not ship. A remote that is
-not GitHub is refused with the by-hand steps. `FACTORY_LAND_POLL_MS`, `FACTORY_LAND_NO_RUN_MS` and
-`FACTORY_LAND_CI_MINUTES` tune the CI wait; `FACTORY_LAND_REBASE_POLL_MS` (60 s) sets how often the wait for the lock looks for a moved default branch.
+not GitHub is refused with the by-hand steps. `FACTORY_LAND_POLL_MS` (15 s), `FACTORY_LAND_NO_RUN_MS` and
+`FACTORY_LAND_CI_MINUTES` tune the CI wait; the CI poll gap grows from the first to four times `FACTORY_LAND_POLL_MS` (60 s after twelve reads) and jumps to that cap after a rate-limited read, because every land on the host shares one GitHub token's budget; `FACTORY_LAND_REBASE_POLL_MS` (60 s) sets how often the wait for the lock looks for a moved default branch.
 
 The lock is `factory merge-lock --project <repo> -- <cmd>`'s (`apps/cli/src/deploy-lock.ts`, the deploy lock's mechanism
 under `<project>.merge.lock`, closed; the finished window is reported to `POST /merge-windows` afterwards, best effort, and
