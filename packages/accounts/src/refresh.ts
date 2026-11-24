@@ -1,5 +1,5 @@
 // The refresh orchestration: claim, sample (peer, usage endpoint, `claude auth status`), record. Ports in, files out.
-import { loginVerdict, refreshEnv, type LoginVerdict } from './claude-auth.ts'
+import { loginVerdict, refreshEnv, renewToken, type LoginVerdict } from './claude-auth.ts'
 import { type KeychainDeps, keychainToken } from './keychain.ts'
 import { fetchUsage } from './oauth.ts'
 import {
@@ -60,14 +60,14 @@ export interface RefreshDeps extends KeychainDeps {
  * Sample from the OAuth usage endpoint with the account's own Keychain token (read-only, 0 tokens, no window
  * priming). Every failure (locked Keychain, HTTP error incl. 429, bad body) is just "no sample": none of them
  * proves anything about the login. The one exception to "just fail" is HTTP 401: the access token of an idle
- * account expires and nothing renews it, but `claude auth status` (0 tokens) makes the binary renew it in the
- * Keychain, so a 401 runs it (`status`, shared with the caller's verdict), re-reads the token and retries the GET
- * once. The token is never logged or stored.
+ * account expires and nothing renews it, but `claude mcp list` (0 tokens; `claude auth status` no longer does) makes
+ * the binary renew it in the Keychain, so a 401 runs it under the account's `env`, re-reads the token and retries the
+ * GET once. The login verdict stays `claude auth status`. The token is never logged or stored.
  */
 async function oauthSample(
   d: RefreshDeps,
   id: string,
-  status: () => LoginVerdict,
+  env: Record<string, string>,
 ): Promise<{ sample: Sample | null; call: EndpointCall }> {
   const at = d.now()
   const noToken = { sample: null, call: { at, status: null, outcome: 'no-token' } as const }
@@ -79,8 +79,8 @@ async function oauthSample(
   })
   const first = await fetchUsage(d, id, token)
   if (first.status !== 401) return done(first)
-  d.log?.(`refresh ${id}: usage endpoint HTTP 401, renewing the access token via \`claude auth status\``)
-  if (status().startFailed) return done(first)
+  d.log?.(`refresh ${id}: usage endpoint HTTP 401, renewing the access token via \`claude mcp list\``)
+  if (renewToken(d, env).startFailed) return done(first)
   const renewed = keychainToken(d, id)
   return renewed ? done(await fetchUsage(d, id, renewed)) : done(first)
 }
@@ -101,7 +101,7 @@ function unverified(d: RefreshDeps, id: string): RefreshResult {
 
 /**
  * Quota is per account, not per machine, so the peer machine's samples are as good as ours: an idle login whose
- * Keychain access token expired gets 401 on every usage GET (and `claude auth status` no longer renews it), while the
+ * Keychain access token expired gets 401 on every usage GET (and `claude auth status` no longer renews it, `claude mcp list` does), while the
  * peer, where the account is busy, has fresh numbers. Each locally registered, enabled row of the peer's `usage --json`
  * becomes a `peer` sample (window timestamps rebuilt from the row's ages, so the original age is never laundered) and a
  * future `exhausted_until` becomes a mark; `mergeSample` keeps whichever window is newer. Auth state is never imported:
@@ -215,7 +215,7 @@ export async function runRefresh(d: RefreshDeps): Promise<Record<string, Refresh
               : unverified(d, id)
       continue
     }
-    const { sample, call } = await oauthSample(d, id, status)
+    const { sample, call } = await oauthSample(d, id, env)
     recordEndpoint(id, call, d.dir)
     if (sample) {
       saveSample(id, sample, d.dir, hasSessionLimit(required(d.reg.accounts, id)), d.now(), d.history)

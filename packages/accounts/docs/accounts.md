@@ -146,10 +146,11 @@ written into `~/.cache/claude-accounts/` as one small file per account and kind 
    never an auth mark: a locked Keychain or a 429 proves nothing about the login, so the run falls through to the
    `claude auth status` verdict (§Operate, Login keepalive). One failure is repaired instead: **HTTP 401**. The Keychain
    access token of an idle account expires and nothing renews it (seen live 2026-10-25: `me` idle 01:01 to 08:27, sample
-   8.5 h old, out of routing). `claude auth status` for that account's `CLAUDE_CONFIG_DIR` (0 tokens) makes the binary
-   renew the token in the Keychain, so a 401 runs it, re-reads the token and retries the GET once; a second failure is
-   plain "no sample". That one `auth status` is also the run's login verdict (never run twice), so the auth mark logic is
-   unchanged: only a verdict, a sample or a statusline record moves it, and no token reaches a log or a file. A refresh runs
+   8.5 h old, out of routing). `claude mcp list` for that account's `CLAUDE_CONFIG_DIR` (`ANTHROPIC_BASE_URL` empty, 30 s
+   deadline, 0 tokens) makes the binary renew the token in the Keychain, so a 401 runs it, re-reads the token and retries the
+   GET once; a second failure is plain "no sample". `claude auth status` no longer renews anything (seen 2026-11-24 on 2.1.331:
+   `me` idle 8 h, every GET 401, the sample aged out and the keepalive went red hourly), so it stays the run's login verdict
+   only (never run twice) and the auth mark logic is unchanged: only a verdict, a sample or a statusline record moves it, and no token reaches a log or a file. A refresh runs
    only when an account's newest sample is older than 10 minutes, at most once every 5 minutes per account (the claim,
    unchanged), because the endpoint rate-limits per token (a 429 can block for up to an hour: claude-swap, ClaudeBar). `claude -p "/usage"` was the source until Claude
    Code 2.1.310; it now prints an analysis and no longer updates `cachedUsageUtilization`, so it is gone.
@@ -157,7 +158,7 @@ written into `~/.cache/claude-accounts/` as one small file per account and kind 
    timestamp wins).
 4. **Peer machine (import, refresh only):** quota is per account, not per machine, so the other machine's numbers are as
    good as ours. Seen 2026-10-27: a laptop's `me` had no sample for 36 h (idle Keychain access token expired, every GET 401,
-   and `claude auth status` in 2.1.311 no longer renews it) while the server, where `me` is busy, had fresh ones.
+   and `claude auth status` in 2.1.311 no longer renews it; `claude mcp list` does) while the server, where `me` is busy, had fresh ones.
    `runRefresh` (keepalive `--all` and the detached pick-time refresh) first fetches the peer's `claude-account usage
    --json` once (ssh, 20 s cap; §The host block) and turns each row of a locally registered, enabled account into a sample (`src: peer`).
    Each window's timestamp is rebuilt from the row's age (now minus `*_age_s`; null age, null timestamp), so an old
