@@ -262,6 +262,32 @@ test('landed: a squashed branch is the squash commit, found by content past late
   expect(value(await read(repo, found.commits, { branch: 'factory/1-1', cut })).commits).toContain(squashed)
 })
 
+test('landed: a branch rebased onto a master that changed the same file is found by patch, at its newest commit', async () => {
+  const repo = await fresh()
+  await repo.commit('shared.ts', 'a\nb\nc\nd\ne\nf\ng\nh\ni\nj\n', 'feat: shared')
+  await repo.git('push', '-q', 'origin', 'master')
+  const cut = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', '-b', 'factory/1-1')
+  await Bun.write(`${repo.path}/shared.ts`, 'a\nB\nc\nd\ne\nf\ng\nh\ni\nj\n')
+  await repo.git('commit', '-q', '-am', 'mine one')
+  await Bun.write(`${repo.path}/shared.ts`, 'a\nB\nc\nd\ne\nf\ng\nh\ni\nJ\n')
+  await repo.git('commit', '-q', '-am', 'mine two')
+  await repo.git('checkout', '-q', 'master')
+  const other = await repo.other()
+  await other.commit('shared.ts', 'a\nb\nc\nd\nE\nf\ng\nh\ni\nj\n', 'theirs')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  // the rebase merge: copies of the branch's commits on master; the branch itself stays as it was
+  await repo.git('checkout', '-q', '-b', 'copy', 'factory/1-1')
+  await repo.git('rebase', '-q', 'master')
+  const newest = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', 'master')
+  await repo.git('merge', '-q', '--ff-only', 'copy')
+  await repo.git('push', '-q', 'origin', 'master')
+  const found = value(await landed(repo, [{ branch: 'factory/1-1', cut }]))
+  expect(found.commits).toEqual([newest])
+  expect(value(await read(repo, found.commits, { branch: 'factory/1-1', cut })).commits).toContain(newest)
+})
+
 test('landed: a branch that merged the default branch in and was squashed is the squash, never the merged-in commits', async () => {
   const repo = await fresh()
   const { cut } = await branchWith(repo, 'factory/1-1', 'mine.ts')

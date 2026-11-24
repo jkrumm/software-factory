@@ -133,7 +133,73 @@ async function landedAs(
   return [...own].every((path) => differing.some((set) => !set?.has(path)))
 }
 
-/** Whether all a branch holds is on the base: by commit, by content (a merge that changes nothing), or as the commits reported. */
+/**
+ * What each commit of `range` changes, hashed over its added and removed lines alone (no hunk headers, no context), as
+ * `git patch-id` does but without the context lines a neighbouring change of someone else would alter. Newest first;
+ * a commit whose diff on `paths` is empty has none.
+ */
+async function patchesOf(
+  repo: string,
+  range: string[],
+  paths: readonly string[],
+  options: GitOptions,
+): Promise<{ sha: string; patch: string }[]> {
+  const log = await gitIn(
+    repo,
+    [
+      '-c',
+      'core.quotePath=false',
+      '--literal-pathspecs',
+      'log',
+      '--no-merges',
+      '--no-renames',
+      '--no-color',
+      '-p',
+      '-U0',
+      '--format=@@@%H',
+      ...range,
+      '--',
+      ...paths,
+    ],
+    options,
+  )
+  if (log.exitCode !== 0) throw new Error(`git log failed (exit ${log.exitCode})`)
+  const patches: { sha: string; patch: string }[] = []
+  for (const block of log.stdout.split('@@@').filter(Boolean)) {
+    const [sha = '', ...body] = block.split('\n')
+    const changed = body.filter((line) => line.startsWith('+') || line.startsWith('-')).join('\n')
+    if (changed) patches.push({ sha: sha.trim(), patch: new Bun.CryptoHasher('sha1').update(changed).digest('hex') })
+  }
+  return patches
+}
+
+/**
+ * Where a rebase (or a cherry-pick) landed the branch's own commits: the newest commit of `base` since the fork that
+ * carries the same change as one of the branch's, once every one of the branch's commits has an equivalent on `base`.
+ * Null where one has none, or where the branch has no commit of its own. A change survives what others did around it,
+ * which file content does not.
+ */
+async function landedByPatch(repo: string, ref: string, base: string, options: GitOptions): Promise<string | null> {
+  const fork = await gitIn(repo, ['merge-base', base, ref], options)
+  if (fork.exitCode !== 0) return null
+  const paths = await gitIn(
+    repo,
+    ['-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', fork.stdout.trim(), ref],
+    options,
+  )
+  if (paths.exitCode !== 0) return null
+  const changed = paths.stdout.split('\0').filter(Boolean)
+  if (changed.length === 0) return null
+  const own = await patchesOf(repo, [ref, '--not', base], changed, options)
+  if (own.length === 0) return null
+  const there = await patchesOf(repo, [`${fork.stdout.trim()}..${base}`], changed, options)
+  const onBase = new Set(there.map(({ patch }) => patch))
+  if (!own.every(({ patch }) => onBase.has(patch))) return null
+  const wanted = new Set(own.map(({ patch }) => patch))
+  return there.find(({ patch }) => wanted.has(patch))?.sha ?? null
+}
+
+/** Whether all a branch holds is on the base: by commit, by content (a merge that changes nothing), by patch, or as the commits reported. */
 async function branchOnBase(
   repo: string,
   branch: string,
@@ -149,6 +215,7 @@ async function branchOnBase(
   const merged = await git(['merge-tree', '--write-tree', base, ref])
   const tree = await git(['rev-parse', `${base}^{tree}`])
   if (merged.exitCode === 0 && merged.stdout.trim() === tree.stdout.trim()) return true
+  if (await landedByPatch(repo, ref, base, options)) return true
   return landedAs(repo, ref, base, reported, options)
 }
 
@@ -217,7 +284,8 @@ export class GitCommits implements Commits {
         const paths = await this.changedSinceFork(repo, ref, base)
         if (paths.length === 0) continue
         held = true
-        const holder = await this.holderOf(repo, ref, base, paths)
+        const holder =
+          (await landedByPatch(repo, ref, base, this.options)) ?? (await this.holderOf(repo, ref, base, paths))
         if (holder) found.push(holder)
         continue
       }
