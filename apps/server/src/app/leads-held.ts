@@ -14,7 +14,7 @@ export const HELD_AFTER_MS = 2 * 60_000
  * then show a turn that never ends, so the lead counts as working and nothing wakes it (a resumed lead's first message
  * is the usual case, issue 2414). A working lead whose turn has been silent for `HELD_AFTER_MS`, with no process in its
  * tree (a tool that runs is silent to the hooks too, and a move of the lead would end it), on an account that
- * capacity reads as closed is recorded as the limit stop the hook missed: the same fact, so the Issue stalls as a `wall`
+ * capacity reads as closed and spent (its own limit reached, not only the ceiling the factory keeps below it) is recorded as the limit stop the hook missed: the same fact, so the Issue stalls as a `wall`
  * and the steward wakes it when the window opens (or moves it to an open account). Once per turn (the key carries it);
  * a turn that starts later clears the wall as any turn does. Returns how many leads it recorded.
  */
@@ -41,6 +41,10 @@ export async function holdWalledLeads(deps: LeadDeps): Promise<number> {
     // Capacity is asked outside any transaction. No `since`: the newest reading decides, so a lead is never held on a window that is open.
     const window = await deps.windows.wall(account)
     if (!window.ok || !window.value.resetAt || window.value.resetAt <= now) continue
+    // Closed is not refused: the factory keeps accounts below their limit (the weekly ceiling, the 5-hour maximum), and Claude
+    // Code takes prompts up to it. A quiet turn there is a lead thinking, and holding it stalled a working lead every two minutes.
+    const spent = await deps.windows.spent(account)
+    if (!spent.ok || !spent.value) continue
     // Fresh, and last before the record: a table that cannot be read says nothing of what runs, so nothing is held on a guess.
     const processes = await deps.processTable?.().catch(() => null)
     if (!processes || runsAChild(processes, name)) continue
