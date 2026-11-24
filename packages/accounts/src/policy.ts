@@ -23,6 +23,8 @@ export const WEEKLY_MAX_EXPIRING = 98
 export const WEEKLY_MAX_FINAL = 100
 export const FINAL_S = 3 * 3600
 export const FRESH_MS = 10 * 60_000
+/** 5 h reset times this close are one window (the statusline rounds to the second, the endpoint does not). */
+export const SAME_WINDOW_S = 120
 export const STALE_OK_MS = 6 * 3600_000
 /** a dead login is re-probed (in the background) at most this often */
 export const AUTH_RETRY_MS = 30 * 60_000
@@ -276,10 +278,20 @@ export const weeklySource = (x: Sample): string => (x.w_src === 'limits' ? 'oaut
  * unless the stored one has a newer timestamp. Exception: a full endpoint answer (`src: "oauth"`) that carries a
  * weekly window but no 5 h one means the account has no session window now (Ultra, or an idle Max), so the stored
  * session value is dropped instead of living on frozen, unless that session reading is newer than the answer (a delayed reply).
+ * A 5 h reading of the window already stored that is LOWER than the stored one is never taken, whatever its timestamp: usage
+ * only rises inside a window, and a Claude session that has not refreshed its numbers still feeds the statusline with an
+ * old figure under a fresh timestamp (me2 read 100 %, then 35 % from such a session, and a pick chose it on the 35).
  */
 export function mergeSample(prev: Sample | null, inc: Sample): Sample {
   if (!prev) return settleWeekly(inc)
-  const takeS = hasS(inc) && !(hasS(prev) && (prev.s_ts ?? 0) > (inc.s_ts ?? 0))
+  const lagging =
+    hasS(inc) &&
+    hasS(prev) &&
+    inc.s_reset !== null &&
+    prev.s_reset !== null &&
+    Math.abs(inc.s_reset - prev.s_reset) <= SAME_WINDOW_S &&
+    inc.s! < prev.s!
+  const takeS = hasS(inc) && !lagging && !(hasS(prev) && (prev.s_ts ?? 0) > (inc.s_ts ?? 0))
   const takeW = hasW(inc) && !(hasW(prev) && (prev.w_ts ?? 0) > (inc.w_ts ?? 0))
   const dropS = inc.src === 'oauth' && !hasS(inc) && hasW(inc) && (inc.w_ts ?? 0) >= (prev.s_ts ?? 0)
   return settleWeekly({
@@ -620,14 +632,20 @@ export function weeklyCeiling(wReset: number | null, nowMs: number, drain = fals
 
 const weeklyMax = (x: Sample, nowMs: number, drain = false): number => weeklyCeiling(x.w_reset, nowMs, drain)
 
+/** The sample's 5 h window ended before `nowMs`: its percent belongs to a window that is over, and the next one starts at 0 with the first message. */
+export const sessionRolled = (x: Sample | undefined, nowMs: number): boolean =>
+  !!x && hasS(x) && x.s_reset !== null && x.s_reset * 1000 <= nowMs
+
 /**
  * The account's 5 h percent when it can be judged: the plan has a session limit and the window is younger than
  * STALE_OK_MS. Null otherwise: a plan without a session window (Ultra) is never limited by a leftover sample.
+ * A window whose reset has passed reads 0, not the number it ended on.
  */
-function sessionPct(reg: Registry, cache: Cache, id: string, nowMs: number): number | null {
+export function sessionPct(reg: Registry, cache: Cache, id: string, nowMs: number): number | null {
   const x = cache.samples[id]
   const a = Object.hasOwn(reg.accounts, id) ? reg.accounts[id] : undefined
-  return a && hasSessionLimit(a) && x && hasS(x) && nowMs - (x.s_ts ?? 0) < STALE_OK_MS ? x.s : null
+  if (!(a && hasSessionLimit(a) && x && hasS(x) && nowMs - (x.s_ts ?? 0) < STALE_OK_MS)) return null
+  return sessionRolled(x, nowMs) ? 0 : x.s
 }
 
 /** Enabled, logged in, not exhausted, and every window young enough to judge (< 6 h) is below its threshold. Each window is judged by its own timestamp. */

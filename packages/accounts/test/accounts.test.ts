@@ -27,11 +27,14 @@ import {
   boundedSpawnSync,
   claimRefresh,
   dueIds,
+  eligible,
   emptyCache,
   homeIds,
   loadCache,
   markExhausted,
   mergeSample,
+  sessionPct,
+  sessionRolled,
   newestAge,
   pick,
   rank,
@@ -1025,6 +1028,24 @@ describe('helpers', () => {
     const merged = mergeSample({ ...full, s_ts: NOW - 5000, w_ts: NOW - 5000 }, onlyS)
     expect(merged).toMatchObject({ s: 20, s_ts: NOW, w: 85, w_ts: NOW - 5000 })
   })
+  test('mergeSample: a lower 5h reading of the same window is a lagging session, never taken, whatever its timestamp', () => {
+    const prev = { ...sample(100, 37), s_ts: NOW - 10 * 60_000 }
+    const lag = { ...sample(35, 28), s_ts: NOW, w_ts: NOW, s_reset: prev.s_reset! + 1 }
+    expect(mergeSample(prev, lag)).toMatchObject({ s: 100, s_ts: NOW - 10 * 60_000, w: 28, w_ts: NOW })
+    // a higher reading of the window, and any reading of a later window, are taken
+    expect(mergeSample(prev, { ...lag, s: 100 })).toMatchObject({ s: 100, s_ts: NOW })
+    expect(mergeSample(prev, { ...lag, s_reset: prev.s_reset! + 5 * 3600 })).toMatchObject({ s: 35, s_ts: NOW })
+  })
+  test('a 5h window whose reset has passed reads 0 for the picker and for usage, not the number it ended on', () => {
+    const old = { ...sample(32, 50), s_reset: NOW / 1000 - 3600, s_ts: NOW - 2 * 3600_000, w_ts: NOW - 2 * 3600_000 }
+    expect(sessionRolled(old, NOW)).toBe(true)
+    expect(sessionPct(reg(), cacheOf(old, undefined), 'iu', NOW)).toBe(0)
+    expect(sessionRolled({ ...old, s_reset: NOW / 1000 + 60 }, NOW)).toBe(false)
+    // a rolled 5h at 95 % no longer takes the account out of the rank
+    const walled = { ...sample(95, 10), s_reset: NOW / 1000 - 60 }
+    expect(eligible(reg(), cacheOf(walled), 'iu', NOW)).toBe(true)
+    expect(eligible(reg(), cacheOf({ ...walled, s_reset: NOW / 1000 + 3600 }), 'iu', NOW)).toBe(false)
+  })
   test('mergeSample: an older window never overwrites a newer one', () => {
     const m = mergeSample(sample(50, 50), { ...sample(1, 1), s_ts: NOW - 120_000, w_ts: NOW - 120_000 })
     expect(m).toMatchObject({ s: 50, w: 50 })
@@ -1086,7 +1107,7 @@ describe('per-account files', () => {
     recordSample('iu', { s: 20, s_reset: 5 }, NOW, dir)
     const x = loadCache(dir).samples.iu
     expect(x).toMatchObject({ s: 20, s_ts: NOW, w: 40, w_ts: NOW - 60_000, w_reset: NOW / 1000 + 9, src: 'statusline' })
-    recordSample('iu', { s: 1, w: 2, s_reset: 3, w_reset: 4 }, NOW + 1000, dir)
+    recordSample('iu', { s: 1, w: 2, s_reset: 5000, w_reset: 4 }, NOW + 1000, dir) // a later window: a lower figure is only taken from one
     expect(loadCache(dir).samples.iu).toMatchObject({ s: 1, w: 2, w_ts: NOW + 1000 })
     rmSync(dir, { recursive: true })
   })
