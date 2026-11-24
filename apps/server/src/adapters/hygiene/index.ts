@@ -137,10 +137,12 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       }),
     ])
     const outcomes = new Map<Probe, Outcome>(results)
-    // A pass that reads the installed tree (`check`, `deadcode`) without the `deps` probe (a steady one) installs the packages itself, once.
+    // A pass that reads the installed tree (`check`, `deadcode`) and does not run the `deps` probe installs the packages itself, once:
+    // a steady pass, an `only` re-sweep and a project that opts out of `deps` all leave it out.
     const readsPackages =
       (runsIn('check', scope) && wanted('check')) || (runsIn('deadcode', scope) && wanted('deadcode'))
-    const installFailure = runsIn('deps', scope) || !readsPackages ? undefined : await installPackages(tools, path)
+    const depsInstalls = names.includes('deps') && !optOut.has('deps')
+    const installFailure = depsInstalls || !readsPackages ? undefined : await installPackages(tools, path)
     // After `deps`, never beside it: both install the checkout's packages, and two installs in one tree break each other.
     if (runsIn('deadcode', scope) && wanted('deadcode')) {
       const reason = optOut.get('deadcode')
