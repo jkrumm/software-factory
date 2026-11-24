@@ -172,7 +172,7 @@ written into `~/.cache/claude-accounts/` as one small file per account and kind 
 ## The picker
 
 ```
-claude-account pick --lane <lane>   # prints "export CLAUDE_CONFIG_DIR=…" or "unset CLAUDE_CONFIG_DIR"; no headroom: prints "spill", exit 3
+claude-account pick --lane <lane>   # prints "export CLAUDE_CONFIG_DIR=…" or "unset CLAUDE_CONFIG_DIR"; no headroom: prints "spill", exit 3 (the interactive lane lands on the default account instead, step 6, with a warning on stderr)
 claude-account rank --lane <lane> [--json]   # the deterministic order of every eligible account (iterated `pick --dry`), a pure read
 claude-account usage [--json]       # every account: 5h % (not for Ultra), 7d %, resets, auth ok; a file read
 claude-account expiry [--json] [--ids a,b]   # when each login ends (refresh token), graded PASS / WARN / FAIL
@@ -215,7 +215,7 @@ pick(lane):
                       # balance the 5h windows
   4. eligible(home) → home
   5. share(eligible x ∧ ¬overPace(x), else eligible)   # spill to the accounts with the most room, calm ones first (v1.7)
-  6. interactive → iu (Claude Code shows the limit itself)
+  6. interactive → iu (Claude Code shows the limit itself; `pick` says so on stderr)
      bulk        → "spill": the caller spills to its IU path
                    (`rd` pauses — Herdr work never spills to IU, agw steps keep their IU path)
 ```

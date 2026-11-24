@@ -20,6 +20,7 @@ import {
   reserveBudget,
   reserveHold,
   newestAge,
+  sessionRolled,
   weeklySource,
   POLICY_NAMES,
   isPolicyName,
@@ -278,7 +279,8 @@ function usage(reg0: Registry, json: boolean): void {
       plan: planTier(a.plan),
       session_limit: hasSessionLimit(a),
       enabled: a.enabled,
-      five_hour: x?.s ?? null,
+      // a window whose reset has passed reads 0: the number it ended on is not the account's state now
+      five_hour: sessionRolled(x, now) ? 0 : (x?.s ?? null),
       seven_day: x?.w ?? null,
       five_hour_resets_at: x?.s_reset ?? null,
       seven_day_resets_at: x?.w_reset ?? null,
@@ -309,7 +311,7 @@ function usage(reg0: Registry, json: boolean): void {
   const reset = (e: number | null) => (e ? new Date(e * 1000).toISOString().slice(5, 16).replace('T', ' ') : '-')
   for (const r of rows) {
     console.log(
-      `${r.id} ${r.plan}${r.enabled ? '' : ' (disabled)'}  ${r.session_limit ? `5h ${r.five_hour ?? '-'}% ↺${reset(r.five_hour_resets_at)}  ` : ''}7d ${r.seven_day ?? '-'}% ↺${reset(r.seven_day_resets_at)}  age ${r.age_s ?? '-'}s  auth ${r.auth_ok ? 'ok' : 'FAILED'}${r.exhausted_until ? '  EXHAUSTED' : ''}`,
+      `${r.id} ${r.plan}${r.enabled ? '' : ' (disabled)'}  ${r.session_limit ? `5h ${r.five_hour ?? '-'}%${r.five_hour_resets_at !== null && r.five_hour_resets_at * 1000 <= now ? ' (window over)' : ''} ↺${reset(r.five_hour_resets_at)}  ` : ''}7d ${r.seven_day ?? '-'}% ↺${reset(r.seven_day_resets_at)}  age ${r.age_s ?? '-'}s  auth ${r.auth_ok ? 'ok' : 'FAILED'}${r.exhausted_until ? '  EXHAUSTED' : ''}`,
     )
   }
 }
@@ -955,6 +957,10 @@ export async function main(argv: string[]): Promise<number> {
         }
       }
       const line = shellLine(reg, p)
+      if (p.reason === 'interactive-fallback')
+        console.error(
+          `claude-account: no account has headroom for lane '${lane}'; landing on ${p.picked} anyway (the interactive fallback); \`rank --lane ${lane}\` and \`status\` say why`,
+        )
       console.log(line ?? SPILL)
       if (rest.includes('--why')) console.log(`# picked=${p.picked} reason=${p.reason} stale=${p.stale}`)
       return line === null ? SPILL_EXIT : 0

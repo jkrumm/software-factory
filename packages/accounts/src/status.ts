@@ -16,6 +16,7 @@ import {
   rank,
   required,
   ruleTag,
+  sessionRolled,
   reserveBudget,
   weeklyCeiling,
   weeklySource,
@@ -142,7 +143,13 @@ const limitsOf = (x: Sample | undefined, hasSession: boolean, nowMs: number): Re
   const age = (ts: number | null | undefined) => (isNum(ts) ? Math.round((nowMs - ts) / 1000) : null)
   const out: Record<string, unknown>[] = []
   if (hasSession && x.s !== null)
-    out.push({ kind: 'session', percent: x.s, resets_at: isoS(x.s_reset), age_s: age(x.s_ts), source: x.src })
+    out.push({
+      kind: 'session',
+      percent: sessionRolled(x, nowMs) ? 0 : x.s,
+      resets_at: isoS(x.s_reset),
+      age_s: age(x.s_ts),
+      source: x.src,
+    })
   if (x.w !== null)
     out.push({
       kind: 'weekly_all',
