@@ -39,6 +39,13 @@ export const DEFAULT_TENANT_BUDGET_MIB = 6144
 export const DEFAULT_TENANT_PROJECT = 'dotfiles'
 /** A tenant whose 24 h average footprint is this far above its own median of the 14 days before has grown. */
 export const TENANT_GROWTH_MIB = 1024
+/**
+ * Whether a tenant is a VM (`vm:<instance>`, `domains/capacity/classes.ts`). A vz guest never returns memory while it runs
+ * (dotfiles `docs/devhost-health.md`), so the host footprint of a VM climbs to its configured ceiling: a rise of a VM that
+ * already ran is that ceiling being used, or a deliberate raise of it, and the growth rule does not read it. The class
+ * budget still counts every VM.
+ */
+export const isVmTenant = (tenant: string): boolean => tenant.startsWith('vm:')
 /** The hours the regression rule averages a tenant over, and the buckets of that length its median is taken from. */
 export const TENANT_DAY_HOURS = 24
 /** A tenant's median is read only from this many buckets of sampled hours: fewer is too short a past to call growth. */

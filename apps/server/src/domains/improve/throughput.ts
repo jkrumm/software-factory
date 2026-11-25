@@ -18,6 +18,7 @@ import {
   isKernelTask,
   isSharedMemoryProgram,
   isTransientScanner,
+  isVmTenant,
   WAIT_SUBJECTS,
   type WaitSubject,
 } from '../../kernel/throughput-limits.ts'
@@ -300,6 +301,8 @@ function tenantCandidates(facts: WindowFacts, policy: TenantPolicy): Candidate[]
   }
   for (const t of tenants.day) {
     if (t.medianMib === null || t.mib - t.medianMib < TENANT_GROWTH_MIB) continue
+    // a VM that ran in the past fills up to its ceiling (`isVmTenant`); one that was not there (median 0) is new memory
+    if (isVmTenant(t.tenant) && t.medianMib > 0) continue
     found.push({
       project: policy.project,
       kpi: 'tenant_growth_mib',
@@ -533,7 +536,7 @@ export function improvementText(c: Candidate, input: { date: string; reopens: Fi
     lines.push(
       c.kpi === 'tenant_class_mib'
         ? `The memory is the host's, not this repo's: a tenant is a launchd job or a VM this repo configures. The target is the tenant class's budget (${DEFAULT_TENANT_BUDGET_MIB} MiB). The cost counts the excess as slot-minutes: the minutes a test slot of ${SLOT_MEMORY_MIB} MiB could have held it over ${RANK_DAYS} days.`
-        : `The memory is the host's, not this repo's: a tenant is a launchd job or a VM this repo configures. The rule needs no list of tenants: a tenant ${TENANT_GROWTH_MIB} MiB or more above its own median fires it, and the target is that median. The cost counts the excess as slot-minutes over the ${TENANT_DAY_HOURS} hours.`,
+        : `The memory is the host's, not this repo's: a tenant is a launchd job or a VM this repo configures. The rule needs no list of tenants: a tenant ${TENANT_GROWTH_MIB} MiB or more above its own median fires it (a VM only when it was not there before: one that ran fills up to its configured ceiling), and the target is that median. The cost counts the excess as slot-minutes over the ${TENANT_DAY_HOURS} hours.`,
     )
   if (input.reopens) {
     lines.push(
