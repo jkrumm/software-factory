@@ -525,15 +525,24 @@ describe('standing memory of the tenant class', () => {
 
   test('a tenant 1 GiB above its own median is a finding; a short past, a smaller rise and no policy are not', () => {
     const day = [
-      { tenant: 'vm:colima', mib: 6656, medianMib: 5632 },
-      { tenant: 'vm:docker', mib: 4000, medianMib: 3500 },
+      { tenant: 'svc.grower', mib: 6656, medianMib: 5632 },
+      { tenant: 'svc.steady', mib: 4000, medianMib: 3500 },
       { tenant: 'new', mib: 3000, medianMib: null },
     ]
     const ranked = rankCandidates(tenants({ day }), policy)
     expect(ranked.map((c) => [c.kpi, c.subject, c.value, c.target, c.costMinutes])).toEqual([
-      ['tenant_growth_mib', 'vm:colima', 6656, 5632, (1024 / 2048) * 24 * 60],
+      ['tenant_growth_mib', 'svc.grower', 6656, 5632, (1024 / 2048) * 24 * 60],
     ])
     expect(rankCandidates(tenants({ day }))).toEqual([])
+  })
+
+  test('a VM that ran filling up to a raised ceiling is no growth; a VM that was not there is', () => {
+    const day = [
+      // the measured case: the ceiling raised from 2.5 to 4 GiB
+      { tenant: 'vm:colima', mib: 3944, medianMib: 2693 },
+      { tenant: 'vm:second', mib: 2048, medianMib: 0 },
+    ]
+    expect(rankCandidates(tenants({ day }), policy).map((c) => c.subject)).toEqual(['vm:second'])
   })
 
   test('the after is the same figure over another window; a window with no reading has none', () => {
@@ -593,7 +602,7 @@ describe('standing memory of the tenant class', () => {
         for (const [tenant, base] of [
           ['vm:colima', 5632 + (back <= 24 ? 1500 : 0)],
           ['vm:docker', 4000],
-          ['homebrew.mxcl.postgresql', 2100],
+          ['homebrew.mxcl.postgresql', 2100 + (back <= 24 ? 1500 : 0)],
           ['svc.small', 500],
         ] as const) {
           rows.push({
@@ -614,14 +623,14 @@ describe('standing memory of the tenant class', () => {
     test('the window reads the class mean, each tenant and the median of the 14 days before the newest day', async () => {
       const read = (await facts(T1, 7)).tenants
       expect(read.hours).toBe(168)
-      // colima: six days at 5632 and one at 7132
+      // colima and postgres: six days at their base and one 1500 above
       expect(read.members.map((m) => [m.tenant, m.mib])).toEqual([
         ['vm:colima', 5846],
         ['vm:docker', 4000],
-        ['homebrew.mxcl.postgresql', 2100],
+        ['homebrew.mxcl.postgresql', 2314],
         ['svc.small', 500],
       ])
-      expect(read.classMib).toBe(12_446)
+      expect(read.classMib).toBe(12_660)
       expect(read.day.find((d) => d.tenant === 'vm:colima')).toEqual({
         tenant: 'vm:colima',
         mib: 7132,
@@ -639,9 +648,9 @@ describe('standing memory of the tenant class', () => {
         ['dotfiles', 'tenant_class_mib', '*'],
       ])
       const body = filed.find((f) => f.repo === 'dotfiles')
-      expect(body?.text).toContain('vm:colima 5.7 GiB, vm:docker 3.9 GiB, homebrew.mxcl.postgresql 2.1 GiB')
-      expect(body?.text).toContain('Measured before: 12446 MiB')
-      expect(RETRO_MARKER.exec(body?.text ?? '')?.slice(2, 5)).toEqual(['tenant_class_mib', '12446', 'down'])
+      expect(body?.text).toContain('vm:colima 5.7 GiB, vm:docker 3.9 GiB, homebrew.mxcl.postgresql 2.3 GiB')
+      expect(body?.text).toContain('Measured before: 12660 MiB')
+      expect(RETRO_MARKER.exec(body?.text ?? '')?.slice(2, 5)).toEqual(['tenant_class_mib', '12660', 'down'])
       const again = await throughputPass(deps('dotfiles', 6144))
       expect(again.ok && again.value.filed).toEqual([])
       expect(again.ok && again.value.held).toEqual(['dotfiles'])
@@ -650,7 +659,7 @@ describe('standing memory of the tenant class', () => {
     test('a tenant that grew is filed with no budget set, once, and a project that is not followed is named', async () => {
       const pass = await throughputPass(deps('hostcfg', 1_000_000))
       expect(pass.ok && pass.value.filed.map((f) => [f.project, f.kpi, f.subject, f.costMinutes])).toEqual([
-        ['hostcfg', 'tenant_growth_mib', 'vm:colima', 1054.7],
+        ['hostcfg', 'tenant_growth_mib', 'homebrew.mxcl.postgresql', 1054.7],
       ])
       const again = await throughputPass(deps('hostcfg', 1_000_000))
       expect(again.ok && again.value.filed).toEqual([])

@@ -761,7 +761,10 @@ throughput rows of `loop_findings`) ranks once a day, with no model, what cost t
   edge, a stopped line, a Spec, a drain, the boot grace or the load is not ranked.
 - `tenant_class_mib` and `tenant_growth_mib`: launchd jobs and VMs, from the hourly `host_class_hours` rollups, filed
   on the repo that owns the host's configuration (`DEFAULT_TENANT_PROJECT`): the class's 7-day mean over its budget
-  (`DEFAULT_TENANT_BUDGET_MIB`), and a tenant whose newest 24 hours run 1 GiB above its own 14-day median.
+  (`DEFAULT_TENANT_BUDGET_MIB`), and a tenant whose newest 24 hours run 1 GiB above its own 14-day median. A VM (`vm:*`) with a median above 0 is
+  never a growth finding (`isVmTenant`): its host footprint climbs to its configured ceiling and stays, so a rise below
+  it, or a deliberate raise, is no leak. A VM that was not there (median 0) still is one, and every VM counts in the
+  class budget.
 
 A cost under 30 minutes is not a finding; a cost the newest 3 days already left behind is not filed; at most 5 a pass
 (`kernel/signal-budget.ts`); a project holds one open improvement. The signal carries the measured before, a target
