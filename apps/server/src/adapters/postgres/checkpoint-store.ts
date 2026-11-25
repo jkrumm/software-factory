@@ -644,7 +644,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
         JOIN LATERAL (
           SELECT n, created_at FROM factory.artifact_revisions WHERE artifact_id = a.id ORDER BY n DESC LIMIT 1
         ) r ON true
-        LEFT JOIN factory.spec_screens s ON s.artifact_id = a.id AND s.revision = r.n
+        LEFT JOIN factory.spec_paths s ON s.artifact_id = a.id AND s.revision = r.n
         WHERE a.kind = 'spec' AND i.state <> 'closed'
           AND NOT EXISTS (SELECT 1 FROM factory.verdicts v WHERE v.artifact_id = a.id AND v.revision = r.n)
           AND (s.artifact_id IS NULL OR (s.outcome IS NULL AND (s.retry_at IS NULL OR s.retry_at <= ${now})))
@@ -690,7 +690,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
         SELECT * FROM factory.verdicts WHERE artifact_id = ${id} ORDER BY revision`
       const all = verdicts.map(verdictOf)
       const [pathRow] = await tx`
-        SELECT * FROM factory.spec_screens WHERE artifact_id = ${id} AND revision = ${revision}`
+        SELECT * FROM factory.spec_paths WHERE artifact_id = ${id} AND revision = ${revision}`
       return {
         artifact,
         revision: latest,
@@ -708,19 +708,19 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     },
 
     async specPath(id, revision) {
-      const [row] = await tx`SELECT * FROM factory.spec_screens WHERE artifact_id = ${id} AND revision = ${revision}`
+      const [row] = await tx`SELECT * FROM factory.spec_paths WHERE artifact_id = ${id} AND revision = ${revision}`
       return row ? specPathRowOf(row) : null
     },
 
     async recordSpecPath(s) {
       const rows: unknown[] = await tx`
-        INSERT INTO factory.spec_screens (artifact_id, revision, outcome, by, source, note, tries, retry_at, at)
+        INSERT INTO factory.spec_paths (artifact_id, revision, outcome, by, source, note, tries, retry_at, at)
         VALUES (${s.artifactId}, ${s.revision}, ${s.outcome}, ${s.by}, ${s.source}, ${s.note?.slice(0, 300) ?? null},
                 ${s.tries}, ${s.retryAt}, ${s.at})
         ON CONFLICT (artifact_id, revision) DO UPDATE SET
           outcome = EXCLUDED.outcome, by = EXCLUDED.by, source = EXCLUDED.source, note = EXCLUDED.note,
           tries = EXCLUDED.tries, retry_at = EXCLUDED.retry_at, at = EXCLUDED.at
-        WHERE factory.spec_screens.outcome IS NULL
+        WHERE factory.spec_paths.outcome IS NULL
         RETURNING revision`
       return rows.length === 1
     },
@@ -771,7 +771,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
             SELECT 1 FROM factory.checkpoint_rechecks c WHERE c.checkpoint_id = a.id AND c.through_version = r.n)
           -- a lead's plan (settled by rule when handed over, with no verdict) waited for no one: nothing to default or withdraw
           AND NOT EXISTS (
-            SELECT 1 FROM factory.spec_screens s WHERE s.artifact_id = a.id AND s.revision = r.n AND s.outcome = 'settled')
+            SELECT 1 FROM factory.spec_paths s WHERE s.artifact_id = a.id AND s.revision = r.n AND s.outcome = 'settled')
           -- an owner gate waits for his own verdict: no default after the hours (it is looked at only once it is closed)
           AND NOT EXISTS (
             SELECT 1 FROM factory.issues gi JOIN factory.issue_events ge ON ge.issue_id = gi.id

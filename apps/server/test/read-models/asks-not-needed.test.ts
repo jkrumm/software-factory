@@ -24,7 +24,7 @@ const artifact = async (id: string, kind: string, source: string | null) => {
   await sql`INSERT INTO factory.artifact_revisions (artifact_id, n, key, blob, sha256, bytes, created_at)
     VALUES (${id}, 1, ${`rev_${id}`}, 'blob', 'sha', 1, ${ago(100)})`
   if (source)
-    await sql`INSERT INTO factory.spec_screens (artifact_id, revision, outcome, by, source, at)
+    await sql`INSERT INTO factory.spec_paths (artifact_id, revision, outcome, by, source, at)
       VALUES (${id}, 1, 'passed', 'rule', ${source}, ${ago(99)})`
 }
 const verdict = (id: string, verdict: string, note: string | null, by = 'owner') =>

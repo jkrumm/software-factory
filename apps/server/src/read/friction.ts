@@ -260,7 +260,7 @@ async function countsOf(
     SELECT ${specSourceSql(sql)} AS key, NULL::text AS detail, count(*) AS n
     FROM factory.verdicts v
     JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
-    LEFT JOIN factory.spec_screens s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
+    LEFT JOIN factory.spec_paths s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
     WHERE ${askVerdict(sql, w)} AND ${verdictChangedNothing(sql)}
     GROUP BY 1`)
   for (const [source, label] of Object.entries(SPEC_SOURCES_SAID)) {
