@@ -1,5 +1,6 @@
 import { Elysia } from 'elysia'
 import type { RouteLatency } from '../domains/improve/selfwatch-model.ts'
+import { reportLine } from '../kernel/telemetry.ts'
 
 /** The window the p95 is read over: `GET /health`'s `routeP95Ms`. */
 export const ROUTE_WINDOW_MS = 5 * 60_000
@@ -11,6 +12,12 @@ export const ROUTE_WINDOW_MS = 5 * 60_000
  * truly hung is still caught: every request begun after the grace counts, answered or not.
  */
 export const ROUTE_WARMUP_MS = 120_000
+
+/**
+ * An answer this slow is logged as it ends, the outside monitor's own p95 limit: the snapshot is memory only and the
+ * monitor's message names no route, so without the line nobody can say afterwards which routes lifted the p95 (2026-11-25).
+ */
+export const SLOW_ANSWER_MS = 2_000
 
 /** The most answers kept; the oldest go first. A busy server answers a few hundred in five minutes. */
 const MAX_SAMPLES = 20_000
@@ -111,12 +118,22 @@ export function routeTimer(options: { windowMs?: number; warmupMs?: number; now?
         const began = now()
         if (began >= timedFrom && !untimed(request)) pending.set(request, began)
       })
-      .onAfterResponse({ as: 'global' }, ({ request }) => {
+      .onAfterResponse({ as: 'global' }, ({ request, route }) => {
         const began = pending.get(request)
         if (began === undefined) return
         pending.delete(request)
         const at = now()
-        answered.push({ endedAt: at, ms: at - began, route: routeLabel(request) })
+        const ms = at - began
+        answered.push({ endedAt: at, ms, route: routeLabel(request) })
+        if (ms >= SLOW_ANSWER_MS) {
+          // the route pattern, never the path: a path may name a work repo, and the record leaves the host
+          const pattern = route || 'unmatched'
+          reportLine('warn', `slow answer: ${request.method} ${pattern} took ${ms} ms`, 'api.slow_answer', {
+            'http.method': request.method,
+            'http.route': pattern,
+            'duration.ms': ms,
+          })
+        }
         if (answered.length > MAX_SAMPLES * 2) prune(at)
       }),
   }
