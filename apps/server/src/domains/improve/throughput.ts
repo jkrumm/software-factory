@@ -223,13 +223,15 @@ export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null 
     })
   }
   for (const p of facts.processes) {
-    // a tenant's growth is `tenant_growth_mib`'s, filed on the repo that owns the host's configuration
+    // a tenant's growth is `tenant_growth_mib`'s, filed on the repo that owns the host's configuration; an owner's process
+    // (an app, a terminal's `npm` or `bun`) runs no code of a repo here, so no Issue can shrink it
     if (
       p.grownMib < PROCESS_GROWTH_MIB ||
       isSharedMemoryProgram(p.name) ||
       isKernelTask(p.name) ||
       isTransientScanner(p.name) ||
-      p.class === 'tenant'
+      p.class === 'tenant' ||
+      p.class === 'owner'
     )
       continue
     found.push({
