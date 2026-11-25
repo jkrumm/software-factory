@@ -230,7 +230,7 @@ const reviewsAtOwner = async (): Promise<string[]> =>
   (await readNeeds(db.sql, clock.now())).items.filter((item) => item.kind === 'review').map((item) => item.id)
 
 const pathOf = async (artifactId: ArtifactId) =>
-  (await db.sql`SELECT outcome, by, source, note, tries FROM factory.spec_screens WHERE artifact_id = ${artifactId}`)[0]
+  (await db.sql`SELECT outcome, by, source, note, tries FROM factory.spec_paths WHERE artifact_id = ${artifactId}`)[0]
 
 const stateOf = async (issueId: IssueId) =>
   (await db.sql`SELECT state, wait_reason FROM factory.issues WHERE id = ${issueId}`)[0]
@@ -295,7 +295,7 @@ describe("a lead's Spec is its plan", () => {
     })
     expect(closed.ok ? null : closed.error).toMatchObject({ kind: 'machine_refused' })
     expect(await db.sql`SELECT 1 FROM factory.artifacts WHERE issue_id = ${issueId}`).toHaveLength(0)
-    expect(await db.sql`SELECT 1 FROM factory.spec_screens`).toHaveLength(0)
+    expect(await db.sql`SELECT 1 FROM factory.spec_paths`).toHaveLength(0)
   })
 
   test("the owner's comment and his verdict reach the lead as notes, and the Issue never waits", async () => {
@@ -338,7 +338,7 @@ describe("a lead's Spec is its plan", () => {
     const issueId = await workingIssue()
     const spec = await submit(issueId, 'A Spec', '# A Spec')
     // as a Spec handed over before Issue 2732 stands: waiting, and not looked at
-    await db.sql`DELETE FROM factory.spec_screens WHERE artifact_id = ${spec}`
+    await db.sql`DELETE FROM factory.spec_paths WHERE artifact_id = ${spec}`
     await record(issueId, 'submitted', {
       kind: 'submitted',
       payload: { attempt: 1, artifact: { id: spec, summary: 'A Spec' } },

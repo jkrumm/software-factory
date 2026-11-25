@@ -54,12 +54,6 @@ apps/server/src/domains/improve/retro.ts seat-hours  # the retro brief names the
 apps/server/test/read-models/retro-capacity.test.ts idle seat  # reads the stored figure keys `idle_seat_hours_*`
 apps/server/test/read-models/retro-capacity.test.ts seat-hours  # reads the stored figure keys `idle_seat_hours_*`
 apps/server/migrations/1065_loop_pass_names.sql fix class  # moves the stored loop name `fix-classes` to `fix-causes`
-apps/server/migrations/1029_spec_screen.sql *  # an applied migration: its checksum refuses an edit; the table and column it made are dropped by the contract migration that follows
+apps/server/migrations/1029_spec_screen.sql *  # an applied migration, never edited (checksum)
+apps/server/migrations/1075_spec_paths.sql *  # the contract migration names the table and columns it renames and drops
 apps/server/migrations/1051_verdict_by.sql spec screen  # an applied migration, never edited
-apps/server/src/adapters/postgres/checkpoint-store.ts spec screen  # the table `factory.spec_screens` holds each Spec revision's path; its rename comes with the contract migration
-apps/server/src/read/friction-evidence.ts spec screen  # the table `factory.spec_screens`, see the checkpoint store
-apps/server/src/read/friction.ts spec screen  # the table `factory.spec_screens`, see the checkpoint store
-apps/server/src/read/kpis.ts spec screen  # the table `factory.spec_screens`, see the checkpoint store
-apps/server/src/read/spec-path.ts spec screen  # the table `factory.spec_screens`, see the checkpoint store
-apps/server/test/checkpoints/spec-path.test.ts spec screen  # reads and seeds the table `factory.spec_screens`
-apps/server/test/read-models/asks-not-needed.test.ts spec screen  # seeds the table `factory.spec_screens`

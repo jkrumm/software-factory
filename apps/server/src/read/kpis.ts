@@ -116,7 +116,7 @@ async function askAnswers(sql: SQL, w: Window): Promise<{ n: number; count: numb
     UNION ALL
     SELECT 'source:' || ${specSourceSql(sql)}, count(*), count(*) FILTER (WHERE ${verdictChangedNothing(sql)})
     FROM factory.verdicts v JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
-    LEFT JOIN factory.spec_screens s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
+    LEFT JOIN factory.spec_paths s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
     WHERE ${ownerVerdict(sql, w)} GROUP BY 1
     UNION ALL
     SELECT 'kind:decision', count(*), count(*) FILTER (WHERE ${decisionChangedNothing(sql)})

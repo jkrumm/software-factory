@@ -126,7 +126,7 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
     return issueIds(sql`
       SELECT a.issue_id FROM factory.verdicts v
       JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
-      LEFT JOIN factory.spec_screens s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
+      LEFT JOIN factory.spec_paths s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
       WHERE ${askVerdict(sql, w)} AND ${verdictChangedNothing(sql)} AND ${specSourceSql(sql)} = ${tail}
       ORDER BY v.at DESC`)
   }
