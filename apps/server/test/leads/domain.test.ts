@@ -321,6 +321,11 @@ describe('the brief', () => {
     notesMore: 3,
   }
 
+  test('a reopened attempt names its own review thread, so its round never reuses an earlier attempt’s', () => {
+    expect(buildBrief(input)).toContain("Order 6's `--thread` for this attempt is `factory-7-a2`.")
+    expect(buildBrief({ ...input, attempt: 1 })).toContain("Order 6's `--thread` for this attempt is `factory-7`.")
+  })
+
   test('the standing orders open every brief byte for byte, whatever the Issue', () => {
     // A hash of the text was pinned here once; it conflicted on every brief edit by any lead and
     // staled their reviews. The property that matters is a prefix no input can change.

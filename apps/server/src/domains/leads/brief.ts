@@ -1,4 +1,4 @@
-import { SPEC_VISIBLE_MAX } from '@software-factory/contract'
+import { SPEC_VISIBLE_MAX, reviewThread } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { BriefSignal, BriefSpec, CheckTiers } from './ports.ts'
 
@@ -178,7 +178,7 @@ export function buildBrief(input: BriefInput): string {
     STANDING_ORDERS,
     `# This Issue
 
-You are the lead of attempt ${input.attempt} of Issue ${issue.number} (\`${issue.id}\`), in repo \`${issue.repo}\`. Your worktree is \`${input.worktree.path}\` on branch \`${input.worktree.branch}\`.
+You are the lead of attempt ${input.attempt} of Issue ${issue.number} (\`${issue.id}\`), in repo \`${issue.repo}\`. Your worktree is \`${input.worktree.path}\` on branch \`${input.worktree.branch}\`. Order 6's \`--thread\` for this attempt is \`${reviewThread(issue.number, input.attempt)}\`.
 
 ## As filed
 

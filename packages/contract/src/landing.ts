@@ -33,6 +33,14 @@ export const GREEN_READS = 2
 export const nextGreens = (greens: number, reading: CiReading): number => (reading.state === 'green' ? greens + 1 : 0)
 
 /** The merge methods in the order a repo's allowed one is chosen: squash, else rebase, else merge. */
+/**
+ * The review thread of one attempt of an Issue: `factory-<issue>` for the first attempt, `factory-<issue>-a<attempt>` for a
+ * reopened one, so its round never reviews the commits that other Issues landed on the thread's last reviewed head. The
+ * brief and `factory land` read this one rule.
+ */
+export const reviewThread = (issue: number | string, attempt: number): string =>
+  attempt > 1 ? `factory-${issue}-a${attempt}` : `factory-${issue}`
+
 export const MERGE_METHODS = ['squash', 'rebase', 'merge'] as const
 export type MergeMethod = (typeof MERGE_METHODS)[number]
 

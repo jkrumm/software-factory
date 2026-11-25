@@ -12,6 +12,7 @@ import {
   probeGuard,
   readChecks,
   redRun,
+  reviewThread,
   scanGuard,
 } from '@software-factory/contract'
 import { parse } from 'yaml'
@@ -258,14 +259,14 @@ async function readRepo(sh: Shell, options: Options): Promise<Repo> {
   const dirty = await sh.read(['git', 'status', '--porcelain', '--untracked-files=no'])
   if (dirty === null || dirty !== '')
     throw new Refused('setup', 'the worktree has uncommitted changes', 'commit them, then factory land again')
-  const issue = /(?:^|\/)(\d+)-\d+$/.exec(branch)?.[1]
+  const [, issue, attempt] = /(?:^|\/)(\d+)-(\d+)$/.exec(branch) ?? []
   return {
     root,
     project: options.project ?? project.name ?? basename(url).replace(/\.git$/, ''),
     mode,
     base,
     branch,
-    thread: `factory-${issue ?? '<issue number>'}`,
+    thread: issue && attempt ? reviewThread(issue, Number(attempt)) : 'factory-<issue number>',
   }
 }
 
