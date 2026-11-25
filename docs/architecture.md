@@ -655,7 +655,9 @@ words are blanked for the read token.
   `routeP95Ms` and `routeSamples` (`api/route-timer.ts`: the p95 of the server's own routes over 5 minutes; routes
   that wait on a port by design, the report reads and the first 120 s after a start are not timed), since `/health`
   alone answered on 2026-11-14 while every database route timed out. The reader outside the server is the dev host's
-  Uptime Kuma push monitor, the one filer of slow routes.
+  Uptime Kuma push monitor, the one filer of slow routes. Its message names no route: a timed answer of 2 s or more
+  (`SLOW_ANSWER_MS`) is logged as it ends (`slow answer: <method> <route pattern> took <ms> ms` in the server's log,
+  `api.slow_answer` in the telemetry), so look there first.
 - The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, stdout empty bar the
   compaction line) is the hook's, not the API's.
 

@@ -1,7 +1,15 @@
 import { expect, test } from 'bun:test'
 import { Elysia } from 'elysia'
 import { createApp } from '../src/api/app.ts'
-import { p95Of, ROUTE_WARMUP_MS, ROUTE_WINDOW_MS, routeLabel, routeTimer } from '../src/api/route-timer.ts'
+import {
+  p95Of,
+  ROUTE_WARMUP_MS,
+  ROUTE_WINDOW_MS,
+  routeLabel,
+  routeTimer,
+  SLOW_ANSWER_MS,
+} from '../src/api/route-timer.ts'
+import { installTelemetry, type LogRecord } from '../src/kernel/telemetry.ts'
 import { healthOf } from '../src/read/health.ts'
 
 test('p95Of: nearest rank, null without a value', () => {
@@ -152,4 +160,35 @@ test('routeTimer: the report reads (retro, throughput, kpis) are not timed; the 
   await app.handle(new Request('http://localhost/v1/capacity-loop'))
   await app.handle(new Request('http://localhost/v1/friction'))
   expect(timer.snapshot().samples).toBe(3)
+})
+
+test('routeTimer: an answer at the slow limit is logged with its route pattern, a faster one is not', async () => {
+  let clock = 0
+  let took = 0
+  const logs: LogRecord[] = []
+  const restore = installTelemetry({ span: () => {}, log: (record) => logs.push(record) })
+  const timer = routeTimer({ now: () => clock, warmupMs: 0 })
+  const app = new Elysia().use(timer.plugin).get('/v1/projects/:name', () => {
+    clock += took
+    return 'ok'
+  })
+  const get = async (ms: number) => {
+    took = ms
+    await app.handle(new Request('http://localhost/v1/projects/some-repo'))
+    await Bun.sleep(5)
+  }
+  try {
+    await get(SLOW_ANSWER_MS - 1)
+    expect(logs).toEqual([])
+    await get(SLOW_ANSWER_MS)
+    expect(logs.map(({ level, event, attrs }) => ({ level, event, attrs }))).toEqual([
+      {
+        level: 'warn',
+        event: 'api.slow_answer',
+        attrs: { 'http.method': 'GET', 'http.route': '/v1/projects/:name', 'duration.ms': SLOW_ANSWER_MS },
+      },
+    ])
+  } finally {
+    restore()
+  }
 })
