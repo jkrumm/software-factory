@@ -755,7 +755,7 @@ throughput rows of `loop_findings`) ranks once a day, with no model, what cost t
 - `step_peak_mib`: a step tier whose p90 peak memory is over the project's `budgets.peak` (2 GiB when unset).
 - `process_growth_mib`: a process whose footprint grew 1 GiB or more between its first and last notable minute (not
   `postgres`, `kernel_task` or transient scanners: `SHARED_MEMORY_PROGRAMS`, `isKernelTask`, `isTransientScanner`;
-  tenants are read below).
+  tenants are read below; nor a process of the owner's own apps and terminals, class `owner`).
 - `queued_minutes`: the minutes queued Issues waited, one candidate per binding reason (`WAIT_SUBJECTS`, `waitFacts`):
   `memory` and `account` on this repo, `claim` and `lane` on the repo whose Issues waited. A wait behind an `after`
   edge, a stopped line, a Spec, a drain, the boot grace or the load is not ranked.

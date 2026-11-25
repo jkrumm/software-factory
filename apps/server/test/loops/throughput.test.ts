@@ -90,6 +90,7 @@ describe('the ranking', () => {
           { name: 'small', class: 'other', project: 'a', grownMib: 100, minutes: 900 },
           { name: 'kernel_task', class: 'system', project: 'software-factory', grownMib: 6023, minutes: 900 },
           { name: 'postgres', class: 'tenant', project: 'software-factory', grownMib: 1700, minutes: 900 },
+          { name: 'npm', class: 'owner', project: 'software-factory', grownMib: 3680, minutes: 900 },
           {
             name: 'com.apple.Virtualization.VirtualMachine',
             class: 'tenant',
