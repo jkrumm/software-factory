@@ -149,6 +149,7 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
     makeVerify: project.value.makeVerify,
     ...(project.value.makeTargets?.length ? { makeTargets: project.value.makeTargets } : {}),
     probes: project.value.probes,
+    ...(ship?.commits?.base ? { base: ship.commits.base } : {}),
     ...(project.value.deployMode === 'make' && ship?.commits?.deploys !== false
       ? { version: versionOf(ship, project.value.deployPaths) }
       : {}),

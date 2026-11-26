@@ -12,6 +12,13 @@ export const QualityIssue = z
   })
   .meta({ id: 'QualityIssue' })
 
+/** A git branch name as a ship or land names it: no leading dash, no space, nothing git reads as an option or a revision range. */
+export const BRANCH_NAME = /^[A-Za-z0-9_][A-Za-z0-9._/-]{0,199}$/
+const BranchName = z
+  .string()
+  .regex(BRANCH_NAME)
+  .refine((name) => !name.includes('..') && !name.endsWith('/') && !name.endsWith('.lock'), 'not a branch name')
+
 const Range = z.object({ base: z.string(), head: z.string() })
 
 const CommitsEvidence = z.object({
@@ -21,6 +28,8 @@ const CommitsEvidence = z.object({
   /** the commit CI is read for (the one that merged the change); absent on evidence recorded before it existed */
   mergedSha: z.string().nullable().optional(),
   mergedAt: z.iso.datetime({ offset: true }).nullable(),
+  /** the branch the change landed on, when it is not the remote's default (a fix on a release branch); absent: the default branch */
+  base: z.string().optional(),
   /** whether any path is one a deploy carries: docs, text and tests are not */
   deploys: z.boolean(),
   paths: z.array(z.string()),
@@ -107,6 +116,8 @@ export const ShipBody = z
     commits: z.array(z.string().min(1)).max(50).optional(),
     /** the flag form `--commit <sha>` (repeatable), joined with `commits` */
     commit: z.array(z.string().min(1)).max(50).optional(),
+    /** the branch the change landed on, when it is not the remote's default branch (a fix on a branch that runs production): git reads the landed commits, the review ranges and the Watch's deployed commit against `origin/<base>` */
+    base: BranchName.optional(),
     /** one line per acceptance criterion, `met: <what shows it>` or `not met: <why>`; a record, never a gate. A line over 500 characters is cut when recorded, not refused. */
     acceptance: z.array(z.string().min(1).max(4000)).max(20).optional(),
   })

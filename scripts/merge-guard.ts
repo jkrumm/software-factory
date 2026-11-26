@@ -51,7 +51,12 @@ const names = (listing: string | null): string[] =>
     .filter((name) => number(name) !== null)
 
 /** The next number nothing uses: past the highest of the migrations on `ref` (when it exists) and in the working tree. */
-export function nextFree(ports: GuardPorts, ref = 'origin/master'): string {
+/** The branch the change lands on (`MERGE_GUARD_BASE`, set by `factory land`): master unless a fix lands on another branch. */
+const BASE = /^[A-Za-z0-9_][A-Za-z0-9._/-]*$/.test(process.env.MERGE_GUARD_BASE ?? '')
+  ? (process.env.MERGE_GUARD_BASE as string)
+  : 'master'
+
+export function nextFree(ports: GuardPorts, ref = `origin/${BASE}`): string {
   const onMaster = names(ports.git(['ls-tree', '--name-only', ref, `${MIGRATIONS_PATH}/`]))
   const here = names(ports.git(['ls-files', `${MIGRATIONS_PATH}/`]))
   const highest = [...onMaster, ...here].reduce((max, name) => Math.max(max, Number(number(name))), 0)
@@ -119,20 +124,21 @@ export function evaluate(ports: GuardPorts, options: { allowRed?: boolean } = {}
   const refusals: string[] = []
   const next = nextFree(ports)
 
-  if (ports.git(['rev-parse', '--verify', '-q', 'origin/master']) === null) {
-    refusals.push('origin/master is unknown: git fetch origin master')
+  const origin = `origin/${BASE}`
+  if (ports.git(['rev-parse', '--verify', '-q', origin]) === null) {
+    refusals.push(`${origin} is unknown: git fetch origin ${BASE}`)
     return { refusals, nextMigration: next }
   }
-  if (ports.git(['merge-base', '--is-ancestor', 'origin/master', 'HEAD']) === null) {
+  if (ports.git(['merge-base', '--is-ancestor', origin, 'HEAD']) === null) {
     refusals.push(
-      'master moved: this branch does not contain origin/master. git fetch origin master && git rebase origin/master, then make check again',
+      `${BASE} moved: this branch does not contain ${origin}. git fetch origin ${BASE} && git rebase ${origin}, then make check again`,
     )
   } else {
     const added = names(
-      ports.git(['diff', '--name-only', '--diff-filter=A', 'origin/master...HEAD', '--', `${MIGRATIONS_PATH}/`]),
+      ports.git(['diff', '--name-only', '--diff-filter=A', `${origin}...HEAD`, '--', `${MIGRATIONS_PATH}/`]),
     )
     const onMaster = new Set(
-      names(ports.git(['ls-tree', '--name-only', 'origin/master', `${MIGRATIONS_PATH}/`])).map((n) => number(n)),
+      names(ports.git(['ls-tree', '--name-only', origin, `${MIGRATIONS_PATH}/`])).map((n) => number(n)),
     )
     const seen = new Set<string>()
     for (const name of added) {
@@ -179,7 +185,7 @@ function realPorts(): GuardPorts {
       const out = spawnSync('git', args, { encoding: 'utf8' })
       return out.status === 0 ? out.stdout.trim() : null
     },
-    ciRuns: () => ghRuns(['--branch', 'master']),
+    ciRuns: () => ghRuns(['--branch', BASE]),
     headRuns: (sha) => ghRuns(['--commit', sha]),
   }
 }
@@ -207,7 +213,7 @@ if (import.meta.main) {
     process.exit(2)
   }
   const ports = realPorts()
-  if (!rest.includes('--no-fetch')) ports.git(['fetch', '--quiet', 'origin', 'master'])
+  if (!rest.includes('--no-fetch')) ports.git(['fetch', '--quiet', 'origin', BASE])
   if (rest.includes('--next-migration')) {
     console.log(nextFree(ports))
     process.exit(0)
@@ -225,6 +231,6 @@ if (import.meta.main) {
     process.exit(1)
   }
   console.log(
-    `merge-guard: clear (rebased on origin/master, migrations distinct, the head's CI is green); next free migration number ${verdict.nextMigration}`,
+    `merge-guard: clear (rebased on origin/${BASE}, migrations distinct, the head's CI is green); next free migration number ${verdict.nextMigration}`,
   )
 }

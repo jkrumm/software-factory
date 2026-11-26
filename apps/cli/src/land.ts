@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { constants } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import {
+  BRANCH_NAME,
   GREEN_READS,
   MERGE_METHODS,
   METHOD_FIELDS,
@@ -20,7 +21,8 @@ import { usage } from './exit.ts'
 import type { Io } from './operation.ts'
 import { exitCodeOf } from './slot.ts'
 
-const USAGE = 'usage: land [--pr <n>] [--method squash|rebase|merge] [--allow-red] [--no-ci] [--project <name>]'
+const USAGE =
+  'usage: land [--pr <n>] [--base <branch>] [--method squash|rebase|merge] [--allow-red] [--no-ci] [--project <name>]'
 type Method = MergeMethod
 /** How often the CI wait first looks again (`FACTORY_LAND_POLL_MS`); the gap then grows to `POLL_CAP` times it. */
 const DEFAULT_POLL_MS = 15_000
@@ -37,6 +39,7 @@ const DEFAULT_CI_MINUTES = 45
 
 interface Options {
   pr?: string
+  base?: string
   method?: Method
   allowRed: boolean
   noCi: boolean
@@ -65,7 +68,10 @@ interface Repo {
   root: string
   project: string
   mode: 'pr' | 'push'
+  /** the branch the change lands on: `--base`, else the pull request's base, else origin's default branch */
   base: string
+  /** origin's default branch, when it is known: a base that differs is shipped with `factory issue ship --base` */
+  defaultBase?: string
   branch: string
   thread: string
 }
@@ -75,6 +81,7 @@ interface PullRequest {
   state: string
   url: string
   headRefOid: string
+  baseRefName?: string
   mergeCommit?: { oid: string } | null
 }
 
@@ -170,6 +177,11 @@ function parseOptions(words: readonly string[]): Options {
       const pr = value()
       if (!/^[1-9]\d*$/.test(pr)) throw usage(`land: --pr needs a pull request number, not ${pr}`, USAGE)
       options.pr = pr
+    } else if (flag === '--base') {
+      const base = value()
+      if (!BRANCH_NAME.test(base) || base.includes('..'))
+        throw usage(`land: --base needs a branch name, not ${base}`, USAGE)
+      options.base = base
     } else if (flag === '--method') {
       const method = value()
       if (!(MERGE_METHODS as readonly string[]).includes(method))
@@ -229,11 +241,12 @@ async function readRepo(sh: Shell, options: Options): Promise<Repo> {
     /^origin\//,
     '',
   )
-  const base =
+  const defaultBase =
     fromOrigin ||
     json<{ defaultBranchRef?: { name?: string } }>(
       (await sh.read(['gh', 'repo', 'view', '--json', 'defaultBranchRef'])) ?? '',
     )?.defaultBranchRef?.name
+  const base = options.base ?? defaultBase
   if (!base)
     throw new Refused(
       'setup',
@@ -264,6 +277,7 @@ async function readRepo(sh: Shell, options: Options): Promise<Repo> {
     project: options.project ?? project.name ?? basename(url).replace(/\.git$/, ''),
     mode,
     base,
+    ...(defaultBase ? { defaultBase } : {}),
     branch,
     thread: `factory-${issue ?? '<issue number>'}`,
   }
@@ -275,7 +289,7 @@ const NO_CHECKS = /no checks reported/i
 
 /** The pull request, or null when gh read the repo and found none; any other gh failure refuses with gh's own words. */
 async function pullRequest(sh: Shell, ref: string): Promise<PullRequest | null> {
-  const ran = await sh.run(['gh', 'pr', 'view', ref, '--json', 'number,state,url,headRefOid,mergeCommit'])
+  const ran = await sh.run(['gh', 'pr', 'view', ref, '--json', 'number,state,url,headRefOid,baseRefName,mergeCommit'])
   if (ran.code === 0) return json<PullRequest>(ran.out)
   const said = ran.err.trim() || ran.out.trim()
   if (NO_PULL_REQUEST.test(said)) return null
@@ -602,7 +616,10 @@ class Lander {
     if (has) {
       const ran = await this.sh.run(['make', '-C', this.repo.root, 'merge-guard'], {
         inherit: true,
-        ...(this.options.allowRed ? { env: { MERGE_GUARD_ARGS: '--allow-red' } } : {}),
+        env: {
+          MERGE_GUARD_BASE: this.repo.base,
+          ...(this.options.allowRed ? { MERGE_GUARD_ARGS: '--allow-red' } : {}),
+        },
       })
       if (ran.code !== 0)
         throw new Refused(
@@ -693,6 +710,10 @@ class Lander {
     const log = (await this.sh.read(['git', 'log', '--oneline', `${before}..${after}`])) ?? ''
     this.out(`landed on ${this.repo.base}:`)
     for (const line of log.split('\n').filter(Boolean)) this.sh.io.out(`  ${line}\n`)
+    if (this.repo.defaultBase !== undefined && this.repo.base !== this.repo.defaultBase)
+      this.out(
+        `report: this is not the default branch (${this.repo.defaultBase}): ship with factory issue ship <id> --base ${this.repo.base}`,
+      )
     if (this.repo.mode === 'push' || before === after) return
     try {
       for (const commit of await this.uncovered(`${before}..${after}`, 'report'))
@@ -783,10 +804,20 @@ export async function landVerb(words: readonly string[], io: Io): Promise<number
     const top = await new Shell(process.cwd(), io).read(['git', 'rev-parse', '--show-toplevel'])
     if (!top) throw new Refused('setup', 'not inside a git work tree', 'cd <your worktree>, then factory land again')
     const sh = new Shell(top, io)
-    const repo = await readRepo(sh, options)
+    let repo = await readRepo(sh, options)
     let pr: PullRequest | null = null
     if (repo.mode === 'pr') {
       pr = await pullRequest(sh, options.pr ?? repo.branch)
+      // a pull request aimed at another branch (a fix for the branch that runs production) lands there; `--base` must agree with it
+      if (pr?.baseRefName && pr.baseRefName !== repo.base) {
+        if (options.base)
+          throw new Refused(
+            'pr',
+            `--base ${options.base} but #${pr.number} is aimed at ${pr.baseRefName}: gh pr merge would merge into ${pr.baseRefName}`,
+            `gh pr edit ${pr.number} --base ${options.base}, or drop --base, then factory land again`,
+          )
+        repo = { ...repo, base: pr.baseRefName }
+      }
       if (!pr)
         throw new Refused(
           'pr',

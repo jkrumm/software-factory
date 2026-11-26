@@ -17,12 +17,14 @@ export interface Commits {
     since: string | null
     /** the commits the ship names, as the lead wrote them, or as `landed` found them */
     reported: readonly string[]
+    /** the branch the change landed on when it is not the remote's default; unset: the default branch */
+    base?: string
   }): Promise<Result<CommitRead>>
   /**
    * For a ship that names no commit: what of the Issue's branches is on the remote's default branch, every attempt's
    * branch that landed, newest attempt first. Empty `commits` with `held`: some branch has work, none of it landed.
    */
-  landed(input: { repo: string; branches: readonly BranchCut[] }): Promise<Result<LandedRead>>
+  landed(input: { repo: string; branches: readonly BranchCut[]; base?: string }): Promise<Result<LandedRead>>
 }
 
 /** An attempt's branch and the commit its worktree was cut from. */
@@ -80,6 +82,8 @@ export interface ProofInput {
    */
   ci?: { landedAt: string; mergedSha?: string | null; mergedAt: string | null; now: string }
   probes: ProjectChecks['probes']
+  /** the branch the shipped change landed on when it is not the remote's default: the checkout and the scratch worktree follow `origin/<it>` */
+  base?: string
 }
 
 export interface Proof {

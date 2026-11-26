@@ -128,6 +128,8 @@ The verb reads the ship mode from `project.yaml`, else from the repo's host-loca
 | merge | `gh pr merge --<method> --match-head-commit <head>` by the method GitHub allows (squash, then rebase, then merge; `--method` overrides), never `--admin` | none |
 | report | the landed commits on stdout, and a squash commit `agw review covered` lists stale with the `/review` command for it; a failed fetch after the merge is a warning, never exit 1 | the landed commits |
 
+A fix for a branch that is not the default (production runs from `v1` until a cutover) lands where its pull request is aimed: the base is `--base <branch>`, else the pull request's base, else origin's default, and the rebase, the CI guard and `make merge-guard` (`MERGE_GUARD_BASE`) all read it. `land` prints `factory issue ship <id> --base <branch>` when the base is not the default: the ship reads the landed commits, review ranges and `landedAt` against `origin/<branch>`, records the base on its commits evidence, and the Watch's checkout sync and scratch worktree follow it. Unset, everything reads the default branch as before.
+
 A refusal is exit 1 with `land: <step>: refused: <why>` and `land: next: <command>`, the lock released and nothing
 merged. Every step is safe to repeat, so a second run resumes (a rebased branch is not rebased again, a pushed head is not
 pushed again, a merged pull request prints its commit and exits 0). It does not deploy and does not ship. A remote that is

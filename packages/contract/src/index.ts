@@ -72,6 +72,7 @@ export {
   TRIPWIRE_Z,
 } from './roles.ts'
 export {
+  BRANCH_NAME,
   QualityEvidence,
   QualityIssue,
   QualityView,

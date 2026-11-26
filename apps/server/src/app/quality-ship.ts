@@ -58,6 +58,8 @@ export interface ShipInput {
   call: string
   /** the merged commits the lead names; empty: the ones of the Issue's branches git finds on the default branch */
   commits: readonly string[]
+  /** the branch the change landed on when it is not the remote's default; unset: the default branch */
+  base?: string
   /** what the lead states against each acceptance line; empty when it states nothing */
   acceptance: AcceptanceEvidence
 }
@@ -135,7 +137,11 @@ async function shipCommits(
   const branch = where.branch ?? "the lead's branch"
   const none = `ship names no merged commit and ${branch} holds none since its cut: commit the work and land it (order 7 of the brief), or close the Issue with \`factory issue close\` if it needs no commit; work already on the default branch under a sha git cannot tie to the branch ships with \`--commit <sha>\``
   if (where.branches.length === 0) return err(none)
-  const found = await deps.commits.landed({ repo: where.repo, branches: where.branches })
+  const found = await deps.commits.landed({
+    repo: where.repo,
+    branches: where.branches,
+    ...(input.base ? { base: input.base } : {}),
+  })
   if (!found.ok) {
     const { kind, detail } = found.error
     return err(kind === 'refused' ? detail : `the landed commits could not be read: ${detail}`)
@@ -217,6 +223,7 @@ async function judge(
     cut: checkout.value.cut,
     since: checkout.value.issueCut,
     reported,
+    ...(input.base ? { base: input.base } : {}),
   })
   // agw is asked only for what git found on the default branch; any failure of it is a recorded absence, never a refusal (NL23).
   // The review (agw, minutes under load) and the CI (GitHub) are independent: asked together, so a slow review keeps the
@@ -266,6 +273,7 @@ async function judge(
         repo,
         makeVerify: false,
         probes: [],
+        ...(input.base ? { base: input.base } : {}),
         version: {
           landedAt: deployedAt,
           ...(project.value.deployPaths ? { deployPaths: project.value.deployPaths } : {}),
