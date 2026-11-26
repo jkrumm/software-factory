@@ -86,13 +86,13 @@ The reasons, as the code words them:
 <!-- snippet: scripts/merge-guard.ts evaluate -->
 ```ts
     refusals.push(
-      'master moved: this branch does not contain origin/master. git fetch origin master && git rebase origin/master, then make check again',
+      `${BASE} moved: this branch does not contain ${origin}. git fetch origin ${BASE} && git rebase ${origin}, then make check again`,
     )
 // …
         refusals.push(`migration ${name} takes ${n}, which master already uses: rename it to ${next}_<words>.sql`)
 ```
 
-A master run still running is not a refusal: the head contains `origin/master`, and its green CI proved that exact combination. A refusal prints as `merge-guard: refused: <reason>`.
+`BASE` is `master` unless `factory land` lands a fix on another branch (`MERGE_GUARD_BASE`). A master run still running is not a refusal: the head contains `origin/master`, and its green CI proved that exact combination. A refusal prints as `merge-guard: refused: <reason>`.
 
 **Example files:**
 
@@ -105,6 +105,7 @@ A master run still running is not a refusal: the head contains `origin/master`, 
 A ship is the lead's report that its change landed and deployed. The ship gate checks it against git, not against the lead. It answers `accepted` or `refused`; the exit codes belong to the commands above.
 
 - **Git finds the commits.** A ship that names no commit ships what the Issue's branches landed: each attempt's branch, newest first, read by content: the first commit of the default branch since the branch forked that holds every file the branch changed as the branch has it (a squash or a rebase), or, for a branch the default branch already holds and the lead made a commit on, the commit that brought it in (a merge, or its tip). Commits named with `--commit` are read as they are. Either way git must find them on the default branch and newer than the Issue's cut, its first attempt's, so a later attempt ships what an earlier one landed. A branch with work and nothing landed is refused with the merge window to take (`factory merge-lock`); with no work at all, as `ship refused: ship names no merged commit`; each refusal is counted as friction.
+- **A fix on another branch names it.** `--base <branch>` makes git look for the commits, the review ranges and the landed commit on `origin/<branch>`; the evidence records it and the Watch follows it. Unset, the default branch.
 - **Acceptance lines are stated, not judged.** One `--acceptance` per line of the Issue, each starting `met: ` or `not met: `. A `not met` is honest and never refuses; a ship stating nothing is counted as friction like an unreviewed one.
 - **CI is recorded** as `green`, `red`, `running`, `missing` or `unknown`, and a red or missing one is counted as friction.
 - **A red CI that a Watch regressed on refuses.** After a Watch regressed on the default branch's CI, a ship is refused while that CI is still red for the commit it lands at: the same commit reads the same red. A fix or a revert, or a re-run that turns it green, goes through; a CI that cannot be read never refuses.

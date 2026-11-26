@@ -72,7 +72,7 @@ locally only for a change to the test layout, the Makefile or CI itself. Reprodu
 in a slot. Tiers and slot rules: `docs/operations.md` "Check tiers" and `docs/project.md` "Check tiers".
 
 Changes land through a pull request (`project.yaml` `ship:`), conventional commits, no AI attribution. A lead lands with
-`factory land` (rebase before queueing and again whenever the branch moves during the wait, so a conflict shows at once; merge lock, rebase, review check, push, CI, `make merge-guard`, merge). `--allow-red` is for the one change
+`factory land` (rebase before queueing and again whenever the branch moves during the wait, so a conflict shows at once; merge lock, rebase, review check, push, CI, `make merge-guard`, merge). `--base <branch>` (or a pull request aimed at another branch) lands a fix on a non-default branch, and `issue ship --base <branch>` ships it; `--allow-red` is for the one change
 that fixes a red master. `make deploy`, `make rollback` and `make verify` act on the mini only (`DRY_RUN=1` prints the plan,
 `FACTORY_REF=<branch>` proves a branch live before it merges). Refusals and deploy variables: `docs/operations.md` "Merging" and "Deploy".
 

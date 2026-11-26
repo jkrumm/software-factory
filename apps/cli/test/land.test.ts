@@ -48,15 +48,15 @@ case "$1 $2" in
     [ -f "$S/gh-fail" ] && { echo "GraphQL: Could not resolve to a Repository with the name 'o/app'." >&2; exit 1; }
     head=$(git --git-dir="$LAND_ORIGIN" rev-parse "refs/heads/$LAND_BRANCH" 2>/dev/null)
     if [ -f "$S/merged" ]; then
-      printf '{"number":7,"state":"MERGED","url":"https://github.com/o/app/pull/7","headRefOid":"%s","mergeCommit":{"oid":"%s"}}' "$head" "$(cat "$S/merged")"
+      printf '{"number":7,"state":"MERGED","url":"https://github.com/o/app/pull/7","headRefOid":"%s","baseRefName":"%s","mergeCommit":{"oid":"%s"}}' "$head" "\${LAND_BASE:-master}" "$(cat "$S/merged")"
     else
-      printf '{"number":7,"state":"OPEN","url":"https://github.com/o/app/pull/7","headRefOid":"%s","mergeCommit":null}' "$head"
+      printf '{"number":7,"state":"OPEN","url":"https://github.com/o/app/pull/7","headRefOid":"%s","baseRefName":"%s","mergeCommit":null}' "$head" "\${LAND_BASE:-master}"
     fi ;;
   "pr checks") [ -f "$S/checks-none" ] && { echo "no checks reported on the 'factory/7-1' branch" >&2; exit 1; }; [ -f "$S/checks-none-out" ] && { echo "no checks reported on the 'factory/7-1' branch"; exit 1; }; [ -f "$S/checks-blip" ] && [ "$(grep -c '^gh pr checks' "$S/calls")" = 2 ] && { echo "dial tcp: i/o timeout" >&2; exit 1; }; cat "$S/checks" ;;
   "pr merge")
     sha=""; prev=""
     for a in "$@"; do [ "$prev" = "--match-head-commit" ] && sha="$a"; prev="$a"; done
-    git --git-dir="$LAND_ORIGIN" update-ref refs/heads/master "$sha" || exit 1
+    git --git-dir="$LAND_ORIGIN" update-ref "refs/heads/\${LAND_BASE:-master}" "$sha" || exit 1
     echo "$sha" > "$S/merged"
     [ -f "$S/break-origin" ] && mv "$LAND_ORIGIN" "$LAND_ORIGIN.gone"
     exit 0 ;;
@@ -176,6 +176,53 @@ describe('factory land', () => {
     expect(result.out).toMatch(/^ {2}[0-9a-f]+ feat: the feature\n$/)
     expect(await calls()).toContain(`gh pr merge 7 --squash --match-head-commit ${head}`)
     expect(await Bun.file(join(locks, 'app.merge.lock')).exists()).toBe(false)
+  })
+
+  /** origin's `v1`, a branch that runs production: the commit the factory branch was cut from. */
+  async function releaseBranch(): Promise<string> {
+    const cut = await git(work, 'rev-parse', `${BRANCH}~1`)
+    await git(origin, 'update-ref', 'refs/heads/v1', cut)
+    return cut
+  }
+
+  test('--base lands onto another branch: rebased on it, merged into it, master untouched, and the ship is named', async () => {
+    const cut = await releaseBranch()
+    const master = await masterOf()
+    const result = await land(['--base', 'v1'], { LAND_BASE: 'v1' }).done
+    expect(result.err).not.toContain('refused')
+    expect(result.code).toBe(0)
+    const head = await git(work, 'rev-parse', 'HEAD')
+    expect(await git(origin, 'rev-parse', 'refs/heads/v1')).toBe(head)
+    expect(await git(work, 'rev-parse', 'HEAD~1')).toBe(cut)
+    expect(await masterOf()).toBe(master)
+    expect(result.err).toContain('land: rebase: already on origin/v1')
+    expect(result.err).toContain('land: landed on v1:')
+    expect(result.err).toContain('factory issue ship <id> --base v1')
+    expect(await calls()).toContain('gh run list --branch v1')
+  })
+
+  test('a pull request aimed at another branch lands there without --base', async () => {
+    await releaseBranch()
+    const master = await masterOf()
+    const result = await land([], { LAND_BASE: 'v1' }).done
+    expect(result.code).toBe(0)
+    expect(await git(origin, 'rev-parse', 'refs/heads/v1')).toBe(await git(work, 'rev-parse', 'HEAD'))
+    expect(await masterOf()).toBe(master)
+    expect(result.err).toContain('land: landed on v1:')
+  })
+
+  test('the default branch is landed on with no ship hint', async () => {
+    const result = await land().done
+    expect(result.code).toBe(0)
+    expect(result.err).not.toContain('--base')
+  })
+
+  test('--base names a branch, not an option or a range', async () => {
+    for (const bad of ['-x', 'a..b']) {
+      const result = await land(['--base', bad]).done
+      expect(result.code).not.toBe(0)
+      expect(result.err).toContain('land: --base needs a branch name')
+    }
   })
 
   test('an unreviewed range is refused with the review command, and nothing is pushed or merged', async () => {

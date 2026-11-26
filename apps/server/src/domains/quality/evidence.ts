@@ -31,6 +31,8 @@ export interface CommitRead {
   mergedAt: Date | null
   /** the Issue's own commits as ranges of the default branch, oldest first: what a review judges */
   reviewRanges: ReviewRange[]
+  /** the branch asked for, when it was not the default */
+  base?: string
 }
 
 /** One commit a review does not cover, with the review level agw says it needs. */
@@ -69,6 +71,8 @@ export interface LedgerThread {
 export interface CommitsEvidence {
   commits: string[]
   landedAt: string | null
+  /** the branch the change landed on, when it is not the remote's default; absent: the default branch */
+  base?: string
   /** the commit CI is read for; absent on evidence recorded before it existed, where `landedAt` stands in */
   mergedSha?: string | null
   mergedAt: string | null

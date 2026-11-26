@@ -45,7 +45,7 @@ export class MakeAndProbes implements Proof {
   constructor(
     private readonly options: {
       run?: Run
-      sync?: (repo: string, signal: AbortSignal) => Promise<CheckoutSync>
+      sync?: (repo: string, signal: AbortSignal, base?: string) => Promise<CheckoutSync>
       fetch?: typeof fetch
       /** GitHub's CI, for a project that ships by pull request; without it that check is left out */
       ci?: Ci
@@ -53,8 +53,8 @@ export class MakeAndProbes implements Proof {
   ) {}
 
   async run(input: ProofInput, signal: AbortSignal): Promise<Result<Check[]>> {
-    const { repo, makeVerify, makeTargets = [], version, probes, ci } = input
-    const sync = makeVerify || makeTargets.length > 0 || version ? await this.sync(repo, signal) : undefined
+    const { repo, makeVerify, makeTargets = [], version, probes, ci, base } = input
+    const sync = makeVerify || makeTargets.length > 0 || version ? await this.sync(repo, signal, base) : undefined
     const [ciChecks, checks] = await Promise.all([
       this.ci(repo, ci),
       Promise.all(probes.map((probe) => this.probe(probe, signal))),
@@ -117,10 +117,10 @@ export class MakeAndProbes implements Proof {
     ]
   }
 
-  private async sync(repo: string, signal: AbortSignal): Promise<CheckoutSync> {
+  private async sync(repo: string, signal: AbortSignal, base?: string): Promise<CheckoutSync> {
     try {
-      if (this.options.sync) return await this.options.sync(repo, signal)
-      return await syncCheckout(repo, { run: this.options.run, signal })
+      if (this.options.sync) return await this.options.sync(repo, signal, base)
+      return await syncCheckout(repo, { run: this.options.run, signal, ...(base ? { base } : {}) })
     } catch (error) {
       // A git that timed out cannot say whether the tree is the shipped one: blocked, looked at again, and the probes still report.
       return { state: 'blocked', detail: `${repo}: ${error instanceof Error ? error.message : String(error)}` }

@@ -23,7 +23,12 @@ const fetchOrigin = async (repo: string, options: GitOptions): Promise<boolean> 
  * The remote's default branch as last fetched, `origin/<it>`. Never the local branch: a checkout that is behind says
  * nothing about what was merged.
  */
-async function originDefault(repo: string, options: GitOptions): Promise<string | undefined> {
+async function originDefault(repo: string, options: GitOptions, onto?: string): Promise<string | undefined> {
+  if (onto) {
+    const named = `origin/${onto}`
+    const found = await gitIn(repo, ['rev-parse', '-q', '--verify', `refs/remotes/${named}`], options)
+    return found.exitCode === 0 ? named : undefined
+  }
   const head = await gitIn(repo, ['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD'], options)
   if (head.exitCode === 0 && head.stdout.trim()) return head.stdout.trim()
   for (const candidate of ['origin/master', 'origin/main']) {
@@ -264,14 +269,21 @@ export class GitCommits implements Commits {
   private async landedOrThrow({
     repo,
     branches,
+    base: onto,
   }: {
     repo: string
     branches: readonly BranchCut[]
+    base?: string
   }): Promise<LandedRead> {
     const git = (args: string[]) => gitIn(repo, args, this.options)
     await fetchOrigin(repo, this.options)
-    const base = await originDefault(repo, this.options)
-    if (!base) throw new CommitsRefused(`${repo} has no origin default branch to look for the commits on`)
+    const base = await originDefault(repo, this.options, onto)
+    if (!base)
+      throw new CommitsRefused(
+        onto
+          ? `${repo} has no origin/${onto} to look for the commits on: is ${onto} pushed to origin?`
+          : `${repo} has no origin default branch to look for the commits on`,
+      )
     let held = false
     const found: string[] = []
     for (const { branch, cut } of branches) {
@@ -362,6 +374,7 @@ export class GitCommits implements Commits {
     cut,
     since,
     reported,
+    base: onto,
   }: Parameters<Commits['read']>[0]): Promise<CommitRead> {
     const git = (args: string[]) => gitIn(repo, args, this.options)
     let fetched = false
@@ -383,12 +396,15 @@ export class GitCommits implements Commits {
       full.push(known.stdout.trim())
     }
 
-    const onBranch = branch && cut ? await this.branchCommits(repo, branch, cut) : []
+    const onBranch = branch && cut ? await this.branchCommits(repo, branch, cut, onto) : []
     const needsBase = onBranch.length > 0
     /** Which of what must be on the base is not; every call looks at the base as it is now. */
     const lacking = async (): Promise<string | undefined> => {
-      const base = await originDefault(repo, this.options)
-      if (!base) return `${repo} has no origin default branch to check the commits against`
+      const base = await originDefault(repo, this.options, onto)
+      if (!base)
+        return onto
+          ? `${repo} has no origin/${onto} to check the commits against: is ${onto} pushed to origin?`
+          : `${repo} has no origin default branch to check the commits against`
       for (const sha of full) {
         if ((await git(['merge-base', '--is-ancestor', sha, base])).exitCode !== 0)
           return `commit ${sha.slice(0, 12)} is not on ${base}: merge it first`
@@ -411,7 +427,7 @@ export class GitCommits implements Commits {
         )
     }
 
-    const base = await originDefault(repo, this.options)
+    const base = await originDefault(repo, this.options, onto)
     const tip = base ? await git(['rev-parse', '-q', '--verify', `${base}^{commit}`]) : undefined
     const landedAt = tip?.exitCode === 0 ? tip.stdout.trim() : null
 
@@ -421,7 +437,15 @@ export class GitCommits implements Commits {
     const from = issueCut ?? (await this.parentOfOldest(repo, full))
     const reviewRanges = landedAt && from ? await this.rangesOf(repo, from, landedAt, commits, onBranch) : []
     const mergedSha = landedAt && from ? await this.mergedCommit(repo, from, landedAt, full) : null
-    return { landedAt, mergedSha, commits, paths, mergedAt: await this.newestOf(repo, full), reviewRanges }
+    return {
+      landedAt,
+      mergedSha,
+      commits,
+      paths,
+      mergedAt: await this.newestOf(repo, full),
+      reviewRanges,
+      ...(onto ? { base: onto } : {}),
+    }
   }
 
   /**
@@ -618,7 +642,7 @@ export class GitCommits implements Commits {
    * of an earlier onto and what was made on the branch. A merge of the default branch into the branch, or a
    * fast-forward to it, and what it brought in, is theirs too. A reflog that cannot be read, or no rebase in it, leaves the whole range.
    */
-  private async branchCommits(repo: string, branch: string, cut: string): Promise<string[]> {
+  private async branchCommits(repo: string, branch: string, cut: string, onto?: string): Promise<string[]> {
     const ref = `refs/heads/${branch}`
     const found = await gitIn(repo, ['rev-parse', '-q', '--verify', ref], this.options)
     // One is what `--verify -q` says of a ref that is not there; anything else is a git that failed.
@@ -628,7 +652,7 @@ export class GitCommits implements Commits {
     if (listed.exitCode !== 0) throw new Error(`git rev-list failed (exit ${listed.exitCode})`)
     const all = lines(listed.stdout)
     if (all.length === 0) return all
-    const own = await this.ownByReflog(repo, ref, cut, all)
+    const own = await this.ownByReflog(repo, ref, cut, all, onto)
     return own ? all.filter((sha) => own.has(sha)) : all
   }
 
@@ -637,12 +661,13 @@ export class GitCommits implements Commits {
     ref: string,
     cut: string,
     all: readonly string[],
+    onto?: string,
   ): Promise<Set<string> | undefined> {
     const reflog = await gitIn(repo, ['reflog', 'show', '--format=%H %gs', ref], this.options)
     if (reflog.exitCode !== 0) return undefined
     const { made, rebased, forwarded } = readReflog(reflog.stdout)
     if (rebased.length === 0) return undefined
-    const merged = await this.defaultMergedIn(repo, ref, cut, forwarded)
+    const merged = await this.defaultMergedIn(repo, ref, cut, forwarded, onto)
     if (!merged) return undefined
     const theirs = await gitIn(
       repo,
@@ -671,8 +696,9 @@ export class GitCommits implements Commits {
     ref: string,
     cut: string,
     forwarded: readonly string[],
+    onto?: string,
   ): Promise<{ merges: string[]; tips: string[] } | undefined> {
-    const base = await originDefault(repo, this.options)
+    const base = await originDefault(repo, this.options, onto)
     if (!base) return { merges: [], tips: [] }
     const listed = await gitIn(repo, ['rev-list', '--merges', '--parents', `${cut}..${ref}`], this.options)
     if (listed.exitCode !== 0) return undefined
@@ -722,11 +748,15 @@ const firstLine = (text: string): string => text.trim().split('\n')[0]?.trim() ?
  * lacks is the owner's and is never touched (`blocked`). No remote answer is `unknown`, and the check goes on with
  * what is there.
  */
-export async function syncCheckout(repo: string, options: GitOptions = {}): Promise<CheckoutSync> {
+export async function syncCheckout(
+  repo: string,
+  { base: onto, ...options }: GitOptions & { base?: string } = {},
+): Promise<CheckoutSync> {
   const git = (args: string[]) => gitIn(repo, args, options)
   if (!(await fetchOrigin(repo, options))) return { state: 'unknown', detail: `could not fetch origin for ${repo}` }
-  const remote = await originDefault(repo, options)
-  if (!remote) return { state: 'unknown', detail: `${repo} has no origin default branch` }
+  const remote = await originDefault(repo, options, onto)
+  if (!remote)
+    return { state: 'unknown', detail: onto ? `${repo} has no origin/${onto}` : `${repo} has no origin default branch` }
   const count = async (range: string): Promise<number | undefined> => {
     const done = await git(['rev-list', '--count', range])
     const n = Number(done.stdout.trim())

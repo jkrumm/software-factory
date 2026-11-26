@@ -65,6 +65,7 @@ export function judgeShip(input: {
     commits: {
       commits: read.commits.slice(0, MAX_RECORDED),
       landedAt: read.landedAt,
+      ...(read.base ? { base: read.base } : {}),
       mergedSha: read.mergedSha,
       mergedAt: read.mergedAt?.toISOString() ?? null,
       deploys: deploys(read.paths, input.deployPaths),

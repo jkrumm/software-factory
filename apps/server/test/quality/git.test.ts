@@ -16,8 +16,13 @@ const fresh = async () => {
   return repo
 }
 
-const read = (repo: GitRepo, reported: string[], extra: { branch?: string; cut?: string; since?: string } = {}) =>
+const read = (
+  repo: GitRepo,
+  reported: string[],
+  extra: { branch?: string; cut?: string; since?: string; base?: string } = {},
+) =>
   new GitCommits().read({
+    ...(extra.base ? { base: extra.base } : {}),
     repo: repo.path,
     branch: extra.branch ?? null,
     cut: extra.cut ?? null,
@@ -25,8 +30,8 @@ const read = (repo: GitRepo, reported: string[], extra: { branch?: string; cut?:
     reported,
   })
 
-const landed = (repo: GitRepo, branches: { branch: string; cut: string }[]) =>
-  new GitCommits().landed({ repo: repo.path, branches })
+const landed = (repo: GitRepo, branches: { branch: string; cut: string }[], base?: string) =>
+  new GitCommits().landed({ repo: repo.path, branches, ...(base ? { base } : {}) })
 
 /** A branch cut from master's tip with one commit of `file`; master stays checked out. Returns the cut and the commit. */
 async function branchWith(repo: GitRepo, branch: string, file: string): Promise<{ cut: string; sha: string }> {
@@ -582,4 +587,57 @@ test('a detached HEAD has no branch', async () => {
 
 test('a directory that is no repo throws', async () => {
   expect(readMainCheckout('/tmp/factory-no-such-repo')).rejects.toThrow()
+})
+
+/** A fix made on a branch of its own and fast-forwarded into origin's v1, a branch that is not the default. */
+async function fixOnV1(repo: GitRepo): Promise<{ cut: string; sha: string }> {
+  await repo.git('push', '-q', 'origin', 'master:v1')
+  await repo.git('fetch', '-q', 'origin')
+  const made = await branchWith(repo, 'fix/v1', 'fix.ts')
+  await repo.git('checkout', '-q', '-b', 'v1', 'origin/v1')
+  await repo.git('merge', '-q', '--ff-only', 'fix/v1')
+  await repo.git('push', '-q', 'origin', 'v1')
+  await repo.git('checkout', '-q', 'master')
+  return made
+}
+
+test('a fix on another branch is evidence against that branch, and the evidence names it', async () => {
+  const repo = await fresh()
+  const { cut, sha } = await fixOnV1(repo)
+  const tip = await repo.git('rev-parse', 'origin/v1')
+  const got = value(await read(repo, [sha], { branch: 'fix/v1', cut, base: 'v1' }))
+  expect(got).toMatchObject({ landedAt: tip, commits: [sha], paths: ['fix.ts'], base: 'v1' })
+  expect(got.reviewRanges).toEqual([{ base: cut, head: sha }])
+  // the default branch does not hold it: without the base the same ship is refused, as before
+  const refused = await read(repo, [sha], { branch: 'fix/v1', cut })
+  expect(refused.ok).toBe(false)
+  expect(value(await read(repo, [await repo.git('rev-parse', 'master')])).base).toBeUndefined()
+})
+
+test('a ship that names no commit finds the landing on the base it names', async () => {
+  const repo = await fresh()
+  const { cut, sha } = await fixOnV1(repo)
+  expect(value(await landed(repo, [{ branch: 'fix/v1', cut }], 'v1'))).toMatchObject({
+    commits: [sha],
+    base: 'origin/v1',
+  })
+  expect(value(await landed(repo, [{ branch: 'fix/v1', cut }]))).toMatchObject({ commits: [], held: true })
+})
+
+test('a base origin does not have is refused with its name', async () => {
+  const repo = await fresh()
+  const sha = await repo.commit('a.ts', '1\n')
+  const refused = await read(repo, [sha], { base: 'nope' })
+  expect(refused.ok ? '' : refused.error.detail).toContain('no origin/nope')
+  const none = await landed(repo, [{ branch: 'x', cut: sha }], 'nope')
+  expect(none.ok).toBe(false)
+})
+
+test('syncCheckout follows the base it is given', async () => {
+  const repo = await fresh()
+  await fixOnV1(repo)
+  await repo.git('checkout', '-q', 'v1')
+  await repo.git('reset', '-q', '--hard', 'HEAD~1')
+  expect(await syncCheckout(repo.path, { base: 'v1' })).toMatchObject({ state: 'advanced' })
+  expect(await syncCheckout(repo.path, { base: 'v1' })).toMatchObject({ state: 'current' })
 })

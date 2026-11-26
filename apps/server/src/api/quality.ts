@@ -106,6 +106,7 @@ export const qualityRoutes = (writes: QualityWrites) =>
           attempt: body.attempt,
           call: body.call,
           commits: [...(body.commits ?? []), ...(body.commit ?? [])],
+          ...(body.base ? { base: body.base } : {}),
           acceptance: acceptance.evidence,
         })
         if (!shipped.ok) {
