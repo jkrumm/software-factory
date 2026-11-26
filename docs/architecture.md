@@ -220,8 +220,9 @@ Errand.
 
 **Backoffs** (`kernel/backoff.ts`). An answer to a steward's Decision that reads as a backoff (it begins with hold, wait, pause or defer, or is "park", "park it/this/the issue" or "park until ...") makes
 the wait a timer: one hour, doubling per backoff, at most twelve. The Judge's words may be free; anyone else's must be an
-option, with no note. A block after the first backoff of an attempt is the awaited event not come: it raises no new
-Decision when it follows the wake, and does not count towards moving the lead up. An awaited event with no Issue and no
+option, with no note (a default's note is the factory's own). A block after the first backoff of an attempt is the awaited
+event not come: it raises no new Decision when it comes straight after the wake or reads like the stall already answered,
+and does not count towards moving the lead up. An awaited event with no Issue and no
 pull request is `issue defer --until`, never a block.
 
 ### Replan
