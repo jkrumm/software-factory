@@ -67,7 +67,7 @@ const HAND_WRITTEN: readonly [string, string][] = [
     'run <cmd> holding the host-local merge lock of <name>, the one rebase-push-CI-merge window of a repo (waits up to 90 min for a live holder; exit 75: no lock in time or unreadable, closed)',
   ],
   [
-    'land [--pr <n>] [--method squash|rebase|merge] [--allow-red] [--no-ci] [--project <name>]',
+    'land [--pr <n>] [--base <branch>] [--method squash|rebase|merge] [--allow-red] [--no-ci] [--project <name>]',
     "land the worktree's branch inside the repo's merge window: rebase, review check, push, CI, merge guard, merge, the landed commits; a refusal names the step and the next command, a rerun resumes (exit 1: refused, 75: no window in time)",
   ],
   [
