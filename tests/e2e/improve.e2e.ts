@@ -161,6 +161,8 @@ test('one card per KPI in the order the Console shows, each the figures the API 
   }
   const counts = await top.getByLabel('Count').allTextContents()
   expect(counts.map(Number)).toEqual([...counts.map(Number)].toSorted((x, y) => y - x))
+  // the tail's fold comes with the friction query, which can answer after the folds above were opened
+  await openFolds(page)
   if (ranking.tail.length > 0)
     await expect(page.getByRole('list', { name: 'Friction, the rest' }).getByRole('listitem')).toHaveCount(
       ranking.tail.length,
