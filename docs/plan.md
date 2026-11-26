@@ -155,7 +155,7 @@ state):
 
 | Row state | Change the edge by |
 |-|-|
-| `waiting` or `filable` (no Issue yet) | editing the row's `after` in `docs/plan.yaml`, `factory plan check`, push, `factory project sync --fetch true` |
+| `waiting` or `filable` (no Issue yet) | editing the row's `after` in `docs/plan.yaml`, `factory plan check`, push, `factory project sync --fetch true` (the owner's; a lead waits for the planning pass) |
 | `open` (its Issue exists) | `factory planning after --issue <id> --after <id>` / `factory planning unafter --issue <id> --after <id>` on the Issue; editing the row's `after` changes nothing now |
 
 The Issue's edges are not in `factory issue show`; `factory read chain --format plain` lists what blocks each Issue
@@ -173,6 +173,10 @@ The Issue's edges are not in `factory issue show`; `factory read chain --format 
   is the owner's, so `factory issue new` is 403 for a lead's token): an acceptance line never asks the lead to file one. A
   proof that needs a filed Issue names who files it, an Errand for the owner's hands or a row of its own, or states a check
   the lead can run (a scenario test, a read of the deployed read model).
+- A lead splits its own work into ordered follow-ups here, not by signal: a signal carries no `after`. It commits rows to
+  its repo's plan (a row's `repo` may target another project) and lands them with its change; the server files them, and
+  the lead reads them back with `factory project plan <name>` (`project sync` and `show` are the owner's). To order them
+  after an existing Issue, adopt it as a stub row (`key` and `issue`) and name that key in `after`.
 - The `facts` carry everything the lead needs. It cannot see this plan or the session that wrote it: exact paths, scope
   limits and any research already verified go in.
 - A row that asks the owner for a verdict on how something looks waits until enough is built to judge: place it `after`
