@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { constants } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import {
@@ -73,7 +73,10 @@ interface Repo {
   /** origin's default branch, when it is known: a base that differs is shipped with `factory issue ship --base` */
   defaultBase?: string
   branch: string
+  /** the review thread of this ship range */
   thread: string
+  /** the file of the heads this Issue has landed, when the branch names an Issue */
+  lands?: string
 }
 
 interface PullRequest {
@@ -227,6 +230,20 @@ function readProject(root: string, repo: string): { name?: string; mode: 'pr' | 
   }
 }
 
+/** The heads an Issue has landed, one per line. */
+const landedHeads = (file: string | undefined): string[] =>
+  file && existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean) : []
+
+/**
+ * The review thread of the range about to land: agw caps the fix rounds of one thread, and a range that follows a
+ * landed one is a new change, so it takes a thread of its own.
+ */
+function threadOf(issue: string | undefined, file: string | undefined): string {
+  const landed = landedHeads(file).length
+  const first = `factory-${issue ?? '<issue number>'}`
+  return landed === 0 ? first : `${first}-ship${landed + 1}`
+}
+
 /** A remote URL on a forge (not a local path) whose host is not GitHub. */
 const notGitHub = (url: string): boolean =>
   /^(?:[a-z+]+:\/\/|[^/@\s]+@[^:/\s]+:)/i.test(url) && !/github\.com[:/]/i.test(url)
@@ -272,6 +289,9 @@ async function readRepo(sh: Shell, options: Options): Promise<Repo> {
   if (dirty === null || dirty !== '')
     throw new Refused('setup', 'the worktree has uncommitted changes', 'commit them, then factory land again')
   const issue = /(?:^|\/)(\d+)-\d+$/.exec(branch)?.[1]
+  // the common git dir, so a later attempt in another worktree counts the same lands
+  const common = await sh.read(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'])
+  const lands = issue && common ? join(common, 'factory-landed', issue) : undefined
   return {
     root,
     project: options.project ?? project.name ?? basename(url).replace(/\.git$/, ''),
@@ -279,7 +299,8 @@ async function readRepo(sh: Shell, options: Options): Promise<Repo> {
     base,
     ...(defaultBase ? { defaultBase } : {}),
     branch,
-    thread: `factory-${issue ?? '<issue number>'}`,
+    thread: threadOf(issue, lands),
+    ...(lands ? { lands } : {}),
   }
 }
 
@@ -726,6 +747,21 @@ class Lander {
     }
   }
 
+  /** Counts a landed head once; the merge is done, so a failed write warns and never refuses. */
+  private landed(head: string): void {
+    const file = this.repo.lands
+    if (!file) return
+    try {
+      if (landedHeads(file).includes(head)) return
+      mkdirSync(dirname(file), { recursive: true })
+      appendFileSync(file, `${head}\n`)
+    } catch (error) {
+      this.out(
+        `report: the landed head is not recorded (${error instanceof Error ? error.message : String(error)}): review a later range on a new --thread`,
+      )
+    }
+  }
+
   private stopped(): number | null {
     const signal = this.sh.held?.stopped()
     return signal ? 128 + (constants.signals[signal] ?? 1) : null
@@ -750,6 +786,7 @@ class Lander {
     if (this.options.noCi) await this.check()
     await this.push(head)
     if (this.repo.mode === 'push' || !pr) {
+      this.landed(head)
       await this.report(base)
       return 0
     }
@@ -759,12 +796,15 @@ class Lander {
       await this.guard()
     }
     await this.merge(pr, head)
+    this.landed(head)
     await this.report(base)
     return 0
   }
 
   async alreadyMerged(pr: PullRequest): Promise<number> {
     this.out(`pr: #${pr.number} is already merged`)
+    // a run that died after the merge did not count it
+    this.landed(pr.headRefOid)
     const oid = pr.mergeCommit?.oid
     if (oid && (await this.fetchAfterMerge()) !== null) {
       const line = await this.sh.read(['git', 'log', '--oneline', '-1', oid])

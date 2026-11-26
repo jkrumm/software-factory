@@ -7,6 +7,7 @@ A lead cannot ship by saying so. The merge window, the merge guard, the deploy l
 A review is the lead's own check of its change, run once per ship range through agw, standard or deep.
 
 - **The lead runs it, the factory never does.** `/review <merge-base>..HEAD --thread factory-<issue number>` runs on the lead's own session. Order 6 of the brief makes it a duty before the window.
+- **One thread per ship range.** agw refuses a fourth fix round on a thread (`needs-human`). A range that follows a landed one (a fix forward) is new code, so it takes `factory-<issue number>-ship2`, then `-ship3`. `factory land` records each landed head under the repo's git directory (`factory-landed/<issue>`) and prints the thread of the current range.
 - **`agw review covered` proves a range.** Run it with `--range origin/master..HEAD --format json`. A range is covered when `uncovered` lists no sha whose entry in `commits` is `required` standard or deep. A light commit needs no review.
 - **A held review is a wait, never a downgrade.** When agw answers `held` (the deep cap), the lead runs `factory issue defer --until <reset time>` and reviews then. A ship without the review is not an option.
 - **A squash lands as one commit.** The squash patch matches only a single round of the review. After the merge the lead runs `covered` on the landed range and reviews a stale commit on a `-landed` thread.

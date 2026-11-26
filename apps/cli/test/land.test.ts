@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pollGap } from '../src/land.ts'
 
@@ -634,6 +634,30 @@ describe('factory land', () => {
     expect(await masterOf()).toBe(await git(work, 'rev-parse', 'HEAD'))
     expect(result.err).toContain('land: push:')
     expect(await calls()).not.toContain('gh pr')
+  })
+
+  test('a range after a landed one is reviewed on a thread of its own', async () => {
+    await writeFile(join(work, 'project.yaml'), 'name: app\nship:\n  - { via: push }\n')
+    await git(work, 'commit', '--quiet', '-am', 'chore: ship by push')
+    expect((await land().done).code).toBe(0)
+    await writeFile(join(work, 'fix.txt'), 'fix\n')
+    await git(work, 'add', '.')
+    await git(work, 'commit', '--quiet', '-m', 'fix: forward')
+    await writeFile(
+      join(state, 'covered'),
+      '{"covered":false,"commits":[{"sha":"c","required":"standard","coveredBy":null}],"uncovered":["c"]}',
+    )
+    const result = await land().done
+    expect(result.code).toBe(1)
+    expect(result.err).toMatch(/land: next: \/review [0-9a-f]{40}\.\.HEAD --thread factory-7-ship2,/)
+  })
+
+  test('a merged pull request counts once, however often the land is run again', async () => {
+    const heads = async () => (await readFile(join(work, '.git', 'factory-landed', '7'), 'utf8')).trim().split('\n')
+    expect((await land().done).code).toBe(0)
+    expect(await heads()).toEqual([await git(work, 'rev-parse', 'HEAD')])
+    expect((await land().done).code).toBe(0)
+    expect(await heads()).toHaveLength(1)
   })
 })
 
