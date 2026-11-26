@@ -161,10 +161,13 @@ test('one card per KPI in the order the Console shows, each the figures the API 
   }
   const counts = await top.getByLabel('Count').allTextContents()
   expect(counts.map(Number)).toEqual([...counts.map(Number)].toSorted((x, y) => y - x))
-  if (ranking.tail.length > 0)
+  if (ranking.tail.length > 0) {
+    // this fold arrives with the friction answer, which can be after the folds were opened above
+    await openFolds(page)
     await expect(page.getByRole('list', { name: 'Friction, the rest' }).getByRole('listitem')).toHaveCount(
       ranking.tail.length,
     )
+  }
 })
 
 test('the KPIs with a history draw it: a tooltip per point names its window and what was counted', async ({
