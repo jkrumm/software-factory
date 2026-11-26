@@ -51,7 +51,7 @@ The brief is what the factory types into a lead first: the operating contract, t
 Two orders carry the shipping rules. Order 6 on review, as the lead reads it:
 
 ```text
-Review your own change once per ship range, standard or deep, before you land it: `/review <merge-base>..HEAD --thread factory-<issue number>`. `factory land` refuses a range with a commit uncovered at standard or deep and prints the /review command to run …
+Review your own change once per ship range, standard or deep, before you land it: `/review <merge-base>..HEAD --thread factory-<issue number>` (after a land: `-ship2`, `-ship3`). `factory land` refuses an uncovered range and prints the /review command …
 ```
 
 Order 7 on shipping:
