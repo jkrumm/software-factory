@@ -653,10 +653,11 @@ describe('factory land', () => {
   })
 
   test('a merged pull request counts once, however often the land is run again', async () => {
+    const heads = async () => (await readFile(join(work, '.git', 'factory-landed', '7'), 'utf8')).trim().split('\n')
     expect((await land().done).code).toBe(0)
+    expect(await heads()).toEqual([await git(work, 'rev-parse', 'HEAD')])
     expect((await land().done).code).toBe(0)
-    const heads = await readFile(join(work, '.git', 'factory-landed', '7'), 'utf8')
-    expect(heads.trim().split('\n')).toHaveLength(1)
+    expect(await heads()).toHaveLength(1)
   })
 })
 
