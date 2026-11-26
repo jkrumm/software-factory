@@ -466,7 +466,7 @@ export async function answerIn(
     isBackoff(answering.text) &&
     (answering.by === 'judge' ||
       ((answering.by === 'default' || !answering.note) &&
-        fresh.form.options.some((option) => option.label === answering.text)))
+        fresh.form.options.some((option) => option.label.toLowerCase() === answering.text.trim().toLowerCase())))
   if (waitsOut) {
     const history = await work.history(fresh.issueId)
     backoff = backoffUntil(at, history ? backoffsIn(history) : 0)

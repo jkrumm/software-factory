@@ -725,7 +725,9 @@ describe('settling, in turn', () => {
 
   test('the owner choosing the same option waits too; an option that moves the work wakes the lead', async () => {
     const parked = await stalledAsk()
-    expect(value(await answerDecision(deps, { decisionId: parked.decision.id, answer: PARK }))).toMatchObject({
+    expect(
+      value(await answerDecision(deps, { decisionId: parked.decision.id, answer: PARK.toLowerCase() })),
+    ).toMatchObject({
       issue: { state: 'waiting' },
     })
     const dropped = await stalledAsk()
