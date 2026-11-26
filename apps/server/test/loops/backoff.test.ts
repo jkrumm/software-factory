@@ -2,9 +2,16 @@ import { expect, test } from 'bun:test'
 import { isBackoff, withoutAwaitedBlocks } from '../../src/kernel/backoff.ts'
 
 test('an answer that says to wait for it reads as a backoff', () => {
-  for (const answer of ['Park until image-gateway ships portrait', 'Hold until the update lands', 'Wait'])
+  for (const answer of [
+    'Park until image-gateway ships portrait',
+    'Parked until the release',
+    'Park the Issue',
+    'Hold until the update lands',
+    'Wait',
+  ])
     expect(isBackoff(answer)).toBe(true)
-  expect(isBackoff('Drop the Issue')).toBe(false)
+  for (const answer of ['Drop the Issue', 'Park the old route and ship the new one'])
+    expect(isBackoff(answer)).toBe(false)
 })
 
 const record = (kind: string, payload: Record<string, unknown> = {}, actor = 'lead') => ({ kind, payload, actor })

@@ -682,7 +682,7 @@ describe('settling, in turn', () => {
   })
 
   const PARK = 'Park until image-gateway ships portrait'
-  async function stalledAsk() {
+  async function stalledAsk(noAnswer: Record<string, unknown> = { consequence: 'stays stalled' }) {
     const issueId = await workingIssue()
     await record(issueId, 'stalled', {
       kind: 'stalled',
@@ -697,7 +697,7 @@ describe('settling, in turn', () => {
       await askDecision(deps, {
         issueId,
         attempt: 1,
-        form: { ...FORM, options, recommendation: PARK, noAnswer: { consequence: 'stays stalled' } },
+        form: { ...FORM, options, recommendation: PARK, noAnswer },
         by: 'steward',
       }),
     )
@@ -712,6 +712,15 @@ describe('settling, in turn', () => {
     expect(shown).toMatchObject({ settledBy: 'judge', answer: PARK })
     const [row] = await db.sql`SELECT payload FROM factory.issue_events WHERE kind = 'answered'`
     expect(row.payload.hold).toBe('2026-03-01T13:00:00.000Z')
+  })
+
+  test('the same option taken as the default waits too', async () => {
+    const { decision } = await stalledAsk({ consequence: 'stays stalled', default: PARK, waitMinutes: 30 })
+    value(await tryAnswer(deps, decision.id))
+    clock.advance(31 * 60_000)
+    value(await tryAnswer(deps, decision.id))
+    const [row] = await db.sql`SELECT payload FROM factory.issue_events WHERE kind = 'answered'`
+    expect(row.payload.hold).toBeDefined()
   })
 
   test('the owner choosing the same option waits too; an option that moves the work wakes the lead', async () => {

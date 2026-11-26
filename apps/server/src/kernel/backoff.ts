@@ -1,5 +1,5 @@
 /**
- * A backoff: the Judge's answer to a stall that says "wait for it". The factory turns it into a timed wait instead of waking
+ * A backoff: an answer to a stall that says "wait for it". The factory turns it into a timed wait instead of waking
  * the lead, who would only find the same cause and block again. The first backoff waits `BACKOFF_BASE_MS`; each later one of
  * the same attempt waits twice as long, up to `BACKOFF_MAX_MS`. The answer is stored under the payload key `hold`.
  */
@@ -7,7 +7,8 @@ const BACKOFF_BASE_MS = 60 * 60_000
 const BACKOFF_MAX_MS = 12 * 60 * 60_000
 
 /** An option label that reads as a backoff: it begins with one of these words (`Hold until the update lands`). */
-const BACKOFF_LABEL = /^\s*(hold|wait|pause|park|defer|keep\s+(holding|waiting)|stay\s+(on\s+hold|blocked))\b/i
+const BACKOFF_LABEL =
+  /^\s*(hold|wait|pause|defer|keep\s+(holding|waiting)|stay\s+(on\s+hold|blocked)|park(ed)?(?=(\s+(it|this|the\s+issue))?(\s*$|\s+(until|till)\b)))\b/i
 
 export const isBackoff = (answer: string): boolean => BACKOFF_LABEL.test(answer)
 

@@ -456,8 +456,8 @@ export async function answerIn(
         ? 'judge'
         : 'factory'
   // A backoff answer to a stall the steward asked about (stored as the payload key `hold`): the Issue waits until a time
-  // instead of waking its lead to block again. The Judge's words may be free; anyone else's must be an option with no note
-  // of their own, which the lead would have to hear now.
+  // instead of waking its lead to block again. The Judge's words may be free and a default's note is the factory's; anyone
+  // else's answer must be an option with no note of their own, which the lead would have to hear now.
   let backoff: string | undefined
   let note = answering.note
   let noteActor: typeof actor = actor
@@ -465,7 +465,8 @@ export async function answerIn(
     fresh.askedBy === 'steward' &&
     isBackoff(answering.text) &&
     (answering.by === 'judge' ||
-      (!answering.note && fresh.form.options.some((option) => option.label === answering.text)))
+      ((answering.by === 'default' || !answering.note) &&
+        fresh.form.options.some((option) => option.label === answering.text)))
   if (waitsOut) {
     const history = await work.history(fresh.issueId)
     backoff = backoffUntil(at, history ? backoffsIn(history) : 0)

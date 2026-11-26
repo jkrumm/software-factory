@@ -109,6 +109,36 @@ const words = (text: string | null): Partial<LeadDeps> => ({
 })
 
 describe('a filed lead-row seat with moveUp', () => {
+  test('a block after a backoff is the awaited event not come: it does not move the lead up', async () => {
+    const issue = await leadWithMoveUp()
+    const block = (name: string) =>
+      w.event(issue, name, {
+        kind: 'stalled',
+        payload: { attempt: 1, cause: 'blocked', detail: 'the release is not out' },
+        actor: 'lead',
+      }) as Promise<Recorded>
+    await block('stall:1')
+    await w.event(issue, 'ask:1', {
+      kind: 'asked',
+      payload: { attempt: 1, decision: { id: 'decision_1', summary: 'wait?' } },
+      actor: 'steward',
+    })
+    const hold = new Date(w.clock.now().getTime() + 3_600_000).toISOString()
+    const answered = (await w.event(issue, 'answer:1', {
+      kind: 'answered',
+      payload: { decision: 'decision_1', answer: 'Wait', hold },
+      actor: 'judge',
+    })) as Recorded
+    await w.event(issue, 'wake:1', {
+      kind: 'woken',
+      payload: { since: answered.issue.version, detail: 'the time came' },
+      actor: 'factory',
+    })
+    await block('stall:2')
+    await w.deps.uow.run(({ work, quality }) => moveUpIfDue({ work, quality }, w.deps, { issueId: issue }))
+    expect(await moved(issue)).toEqual([])
+  })
+
   test('starts on the lead row and its brief says its --reason is the handover', async () => {
     const issue = await leadWithMoveUp()
     const prompt = w.terminals.started[0]?.prompt ?? ''
