@@ -12,6 +12,7 @@ import {
   dropped,
   eventKeyOf,
   isOpen,
+  joinableIncident,
   loadIssue,
   MAX_DISMISS_REASON,
   noteText,
@@ -193,11 +194,8 @@ export function createAlerts(d: { deps: IntakeDeps; ledger: Ledger }) {
     if (groupKey) {
       // Alerts on one host are serialized: two at once must see each other's incident, never open two.
       await s.intake.lock(`group:${groupKey}`)
-      const incident = await s.intake.latestIncident(groupKey)
-      if (incident && now.getTime() - incident.lastAlertAt.getTime() <= settings.incidentWindowMs) {
-        const issue = await loadIssue(s.work, incident.issueId)
-        if (isOpen(issue)) return join(s, r, alert, issue, groupKey)
-      }
+      const issue = await joinableIncident(s, groupKey, now, settings.incidentWindowMs)
+      if (issue) return join(s, r, alert, issue, groupKey)
     }
 
     if (ctx.decision?.settled && !stillFiring) return coveredBy(s, r, ctx.decision, evKey)

@@ -356,6 +356,25 @@ describe('correlation: one incident per host', () => {
     expect(await issues()).toEqual([{ id: 'issue_1', repo: 'vps', state: 'closed', outcome: 'healed' }])
   })
 
+  test('an incident whose alerts are all up again takes no new alert, and one with an alert still down does', async () => {
+    const first = done(await intake.receive(down('hyperdx', 'Infra memory >= 90%', 'down@1')))
+    const id = first.issue as IssueId
+    // a lead has it, so the up does not close the Issue as healed
+    await send(id, 'settled', { kind: 'settled', payload: {}, actor: 'factory' })
+    await send(id, 'admitted', { kind: 'admitted', payload: {}, actor: 'factory' })
+    clock.advance(60_000)
+    expect(done(await intake.receive(down('kuma', 'vps - Push', 'k1')))).toMatchObject({ detail: 'joined' })
+    done(await intake.receive(up('hyperdx', 'Infra memory >= 90%', 'up@1')))
+    expect(done(await intake.receive(down('kuma', 'vps - Door', 'k2')))).toMatchObject({ detail: 'joined' })
+    done(await intake.receive(up('kuma', 'vps - Push', 'k3')))
+    done(await intake.receive(up('kuma', 'vps - Door', 'k4')))
+    clock.advance(60_000)
+    expect(done(await intake.receive(down('hyperdx', 'api latency', 'h1')))).toMatchObject({
+      outcome: 'filed',
+      issue: 'issue_2',
+    })
+  })
+
   test('an alert after the window opens its own incident', async () => {
     done(await intake.receive(down('hyperdx', 'Infra memory >= 90%', 'down@1')))
     clock.advance(DEFAULT_INTAKE_SETTINGS.incidentWindowMs + 60_000)

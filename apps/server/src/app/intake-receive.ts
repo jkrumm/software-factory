@@ -17,6 +17,7 @@ import {
   eventKeyOf,
   type IntakeError,
   isOpen,
+  joinableIncident,
   loadIssue,
   type Out,
   type IntakeDeps,
@@ -80,10 +81,7 @@ export function createReceive(d: { deps: IntakeDeps; alerts: Alerts; signals: Si
       if (latest && isOpen(await loadIssue(s.work, latest.issueId))) return ok(true)
       const groupKey = groupOf(topology, r, signal.repo as string, info.host)
       if (!groupKey) return ok(false)
-      const incident = await s.intake.latestIncident(groupKey)
-      if (!incident || clock.now().getTime() - incident.lastAlertAt.getTime() > settings.incidentWindowMs)
-        return ok(false)
-      return ok(isOpen(await loadIssue(s.work, incident.issueId)))
+      return ok((await joinableIncident(s, groupKey, clock.now(), settings.incidentWindowMs)) !== null)
     })
     if (!handled.ok) return handled
     if (handled.value) return ok(undefined)
