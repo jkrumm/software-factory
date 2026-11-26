@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import type { MacbookVerbPort, PushPort, SyncPort } from '../../domains/errands/ports.ts'
-import { verbWords } from '../../domains/errands/triage.ts'
+import { verbWords } from '../../domains/errands/need.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 import { type Run, runProcess } from '../process.ts'
 

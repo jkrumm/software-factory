@@ -356,8 +356,9 @@ request's review by someone else. Each rule is one line with the symbol that hol
   asks again, which amends it; the second look answers or hands it to the owner, never back twice (`sentBackBefore`).
 
 **Errands** (`domains/errands/`, `app/checkpoints-errands.ts`)
-- Need is `secret`, `hands`, `approval` or `place` (`domains/errands/need.ts`). A stated need is checked for presence,
-  never stored.
+- Need is `secret`, `hands`, `approval` or `place` (`domains/errands/need.ts`). The rule's need comes first
+  and the stated one fills what the rule leaves open (`needOf`), except that a stated `place` outranks `hands` for a
+  command a fixed MacBook verb runs.
 - Before the owner sees it: rules, then `factory-errand`, then the owner. Rules: `screenByReview`, `screenByRule`,
   `screenByNeed` (`domains/errands/errand.ts`); `refuseKeyless`, `refuseBotCheck`, `refuseOffMacbook`, `verbFor`
   (`domains/errands/triage.ts`); `declinedMatch` (`app/checkpoints.ts`, `DECLINE_HOLD_MS`); `refuseHostClass`,

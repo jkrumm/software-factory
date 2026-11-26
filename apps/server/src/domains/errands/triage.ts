@@ -1,6 +1,5 @@
 import type { Host } from '../../kernel/hands.ts'
-import { normalizeCommand } from './match.ts'
-import { isSyncCommand, namesPhysical, namesSecret, needByRule } from './need.ts'
+import { type MacbookVerb, macbookVerbOf, namesPhysical, namesSecret, type Need, needByRule, needOf } from './need.ts'
 
 /**
  * The first decision about an Errand, taken by its shape when it is raised or requested and before it can page the owner:
@@ -18,6 +17,8 @@ export interface TriageInput {
   detail: string | null
   command: string | null
   host: Host | null
+  /** the stored need (`needOf`); absent before an Errand is stored */
+  need?: Need | null
 }
 
 /** The words an Errand's shape is read from: what it says and what it runs. */
@@ -158,42 +159,24 @@ export function refuseEmptyPlace(input: TriageInput, stated: StatedNeed | null):
 // (b) a MacBook command a fixed verb runs for him
 
 /**
- * The reports the gate's `report <name>` verb runs: one fixed read-only command each, mirrored by the MacBook's
- * `dotfiles/config/macbook-reports.tsv`. A command that is not exactly one of these is not a report.
+ * The verb to run for an Errand: its command is exactly a class and nothing in it names a secret. Words of a person's hands
+ * keep it from running too, unless the stored need is `place`: the lead stated that no hands are in it (`needOf`), and
+ * "No click needed" is not a click (issue 3349).
  */
-export const MACBOOK_REPORTS: Readonly<Record<string, string>> = {
-  'smb-mounts': 'mount | grep smbfs',
-  'ntfy-mac-update-check': 'ntfy-mac update --check',
-}
-
-/** `git -C ~/SourceRoot/<name> pull --ff-only` for one checkout under the owner's `~/SourceRoot`. */
-const REPO_PULL = /^git -C (?:~|\$HOME)\/SourceRoot\/([a-z0-9][a-z0-9._-]*) pull --ff-only$/
-
-/** A fixed verb of the MacBook's gate (`<verb> [<name>]` over the dedicated key): never anything but these three. */
-export type MacbookVerb =
-  | { verb: 'dotfiles-sync' }
-  | { verb: 'report'; name: string }
-  | { verb: 'repo-pull'; name: string }
-
-/** The words that go over ssh: the verb and its one validated name. */
-export const verbWords = (verb: MacbookVerb): string[] =>
-  verb.verb === 'dotfiles-sync' ? [verb.verb] : [verb.verb, verb.name]
-
-/** The MacBook verb that is exactly this command, or null. Hosts other than the MacBook (or none named) never match. */
-export function macbookVerbOf(command: string | null, host: Host | null): MacbookVerb | null {
-  if (command === null || (host !== null && host !== 'macbook' && host !== 'any')) return null
-  const line = normalizeCommand(command)
-  if (isSyncCommand(line)) return { verb: 'dotfiles-sync' }
-  for (const [name, text] of Object.entries(MACBOOK_REPORTS)) if (line === text) return { verb: 'report', name }
-  const pull = REPO_PULL.exec(line)
-  const repo = pull?.[1]
-  return repo === undefined || repo === 'dotfiles' ? null : { verb: 'repo-pull', name: repo }
-}
-
-/** The verb to run for an Errand: its command is exactly a class, and nothing in it names a secret or a person's hands. */
 export function verbFor(input: TriageInput): MacbookVerb | null {
-  if (namesSecret(textOf(input)) || needsHim(input)) return null
-  return macbookVerbOf(input.command, input.host)
+  const verb = macbookVerbOf(input.command, input.host)
+  if (verb === null || namesSecret(textOf(input))) return null
+  return input.need === 'place' || !needsHim(input) ? verb : null
+}
+
+/**
+ * What the judge's turn-away of an Errand whose command a fixed verb runs adds: the words that kept it from running were
+ * the lead's, and the lead can have it run. Empty for any other command.
+ */
+export function verbRoute(command: string | null, host: Host | null): string {
+  return macbookVerbOf(command, host) === null
+    ? ''
+    : ' The factory runs this command itself, with no dialog: raise it again with a new summary, `--need place`, no `--check` and no word of a secret.'
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -229,6 +212,6 @@ export function triage(
   if (empty) return { action: 'refuse', rule: 'empty_place', reason: empty }
   const unroutable = refuseUnroutable(input, context.stated)
   if (unroutable) return { action: 'refuse', rule: 'unroutable', reason: unroutable }
-  const verb = verbFor(input)
+  const verb = verbFor({ ...input, need: needOf(input, context.stated) })
   return verb ? { action: 'run', verb } : { action: 'reach' }
 }

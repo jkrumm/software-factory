@@ -5,7 +5,7 @@ import type { RunStatus } from '../../kernel/run.ts'
 import type { ErrandId } from './errand.ts'
 import type { Need } from './need.ts'
 import type { CheckRun, Host } from './request.ts'
-import type { MacbookVerb } from './triage.ts'
+import type { MacbookVerb } from './need.ts'
 
 export interface ErrandRecord {
   id: ErrandId

@@ -9,9 +9,16 @@ import {
   screenByNeed,
   screenByRule,
 } from '../domains/errands/errand.ts'
-import { MAX_RUN_TRIES, type Need, needOf, ranStillNeededNote } from '../domains/errands/need.ts'
+import {
+  type MacbookVerb,
+  MAX_RUN_TRIES,
+  type Need,
+  needOf,
+  ranStillNeededNote,
+  verbWords,
+} from '../domains/errands/need.ts'
 import { closedNote, SCREENED_SOURCES } from '../domains/errands/request.ts'
-import { type MacbookVerb, verbFor, verbWords } from '../domains/errands/triage.ts'
+import { verbFor, verbRoute } from '../domains/errands/triage.ts'
 import { firstErrorLine, outputNote } from '../kernel/run.ts'
 import { deepLink, errandPage } from '../domains/checkpoints/page.ts'
 import type { ErrandRecord, MacbookVerbPort } from '../domains/errands/ports.ts'
@@ -166,7 +173,8 @@ function record(deps: CheckpointLoopDeps, id: ErrandId, verdict: Verdict, reache
     if (found === 'finished' || found === 'dropped') return ok('dropped')
     const { errand } = found
     if (verdict.kind === 'turn_away') {
-      const turned = await turnAway(stores, deps, errand, verdict.by, verdict.reason, verdict.awaits)
+      const route = verdict.by === 'judge' ? verbRoute(errand.command, errand.host) : ''
+      const turned = await turnAway(stores, deps, errand, verdict.by, verdict.reason + route, verdict.awaits)
       return turned.ok ? ok('turned_away') : turned
     }
     if (verdict.kind === 'reach') {

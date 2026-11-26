@@ -1,4 +1,5 @@
 import type { Host } from '../../kernel/hands.ts'
+import { normalizeCommand } from './match.ts'
 
 /**
  * What an Errand needs from the owner, said once and stored (`factory.errands.need`), because the answer decides where it
@@ -101,10 +102,13 @@ export function needByRule(input: NeedInput): Need | null {
 
 /**
  * The need to store: the rule's, else the one the lead stated, else `hands`. Only the rule makes an `approval` (the server
- * runs what it vouches for: a lead's word is not enough), and a stated `place` needs a command to place.
+ * runs what it vouches for: a lead's word is not enough), and a stated `place` needs a command to place. One statement
+ * outranks the rule: `place` over its `hands` for a command a fixed MacBook verb runs, where the hands words are prose
+ * about a command that is fully known.
  */
 export function needOf(input: NeedInput, stated?: Need | null): Need {
   const byRule = needByRule(input)
+  if (byRule === 'hands' && stated === 'place' && macbookVerbOf(input.command, input.host) !== null) return 'place'
   if (byRule !== null) return byRule
   if (stated === 'secret' || stated === 'hands') return stated
   if (stated === 'place' && input.command !== null) return 'place'
@@ -130,6 +134,39 @@ const SYNC_COMMAND =
 
 /** Whether a command is exactly the dotfiles sync (whitespace aside). */
 export const isSyncCommand = (command: string): boolean => SYNC_COMMAND.test(command.replace(/\s+/g, ' ').trim())
+
+/**
+ * The reports the gate's `report <name>` verb runs: one fixed read-only command each, mirrored by the MacBook's
+ * `dotfiles/config/macbook-reports.tsv`. A command that is not exactly one of these is not a report.
+ */
+export const MACBOOK_REPORTS: Readonly<Record<string, string>> = {
+  'smb-mounts': 'mount | grep smbfs',
+  'ntfy-mac-update-check': 'ntfy-mac update --check',
+}
+
+/** `git -C ~/SourceRoot/<name> pull --ff-only` for one checkout under the owner's `~/SourceRoot`. */
+const REPO_PULL = /^git -C (?:~|\$HOME)\/SourceRoot\/([a-z0-9][a-z0-9._-]*) pull --ff-only$/
+
+/** A fixed verb of the MacBook's gate (`<verb> [<name>]` over the dedicated key): never anything but these three. */
+export type MacbookVerb =
+  | { verb: 'dotfiles-sync' }
+  | { verb: 'report'; name: string }
+  | { verb: 'repo-pull'; name: string }
+
+/** The words that go over ssh: the verb and its one validated name. */
+export const verbWords = (verb: MacbookVerb): string[] =>
+  verb.verb === 'dotfiles-sync' ? [verb.verb] : [verb.verb, verb.name]
+
+/** The MacBook verb that is exactly this command, or null. Hosts other than the MacBook (or none named) never match. */
+export function macbookVerbOf(command: string | null, host: Host | null): MacbookVerb | null {
+  if (command === null || (host !== null && host !== 'macbook' && host !== 'any')) return null
+  const line = normalizeCommand(command)
+  if (isSyncCommand(line)) return { verb: 'dotfiles-sync' }
+  for (const [name, text] of Object.entries(MACBOOK_REPORTS)) if (line === text) return { verb: 'report', name }
+  const pull = REPO_PULL.exec(line)
+  const repo = pull?.[1]
+  return repo === undefined || repo === 'dotfiles' ? null : { verb: 'repo-pull', name: repo }
+}
 
 /** Runs of a pushed or approved command that came back unsuccessful before it is no longer offered unchanged. */
 export const MAX_RUN_TRIES = 2
