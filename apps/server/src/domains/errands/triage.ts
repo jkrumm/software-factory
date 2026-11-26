@@ -5,7 +5,8 @@ import { type MacbookVerb, macbookVerbOf, namesPhysical, namesSecret, type Need,
  * The first decision about an Errand, taken by its shape when it is raised or requested and before it can page the owner:
  * refuse it with the words to do it yourself, run it through a fixed MacBook verb, or let it reach him. Only an Errand that
  * names no secret and no physical step can be refused for being the host's work or run by a verb; a secret, sudo, a
- * passphrase or a person's hands can only reach him (or be refused for a repeat he already declined).
+ * passphrase or a person's hands can only reach him (or be refused for a repeat he already declined). One exception: a
+ * fixed verb's command stated as `place` runs whatever hands words its prose holds (`verbFor`).
  */
 
 /** What an Errand states it needs (`--need`); `approval` is only ever the rules' word, never a lead's. */

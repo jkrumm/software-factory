@@ -173,8 +173,7 @@ function record(deps: CheckpointLoopDeps, id: ErrandId, verdict: Verdict, reache
     if (found === 'finished' || found === 'dropped') return ok('dropped')
     const { errand } = found
     if (verdict.kind === 'turn_away') {
-      const route = verdict.by === 'judge' ? verbRoute(errand.command, errand.host) : ''
-      const turned = await turnAway(stores, deps, errand, verdict.by, verdict.reason + route, verdict.awaits)
+      const turned = await turnAway(stores, deps, errand, verdict.by, verdict.reason, verdict.awaits)
       return turned.ok ? ok('turned_away') : turned
     }
     if (verdict.kind === 'reach') {
@@ -267,7 +266,8 @@ async function screenErrand(deps: CheckpointLoopDeps, id: ErrandId): Step<Errand
     const checked = checkErrandScreen(answer.value)
     if (checked.action === 'refused') verdict = { kind: 'failed', why: checked.why }
     else if (checked.action === 'pass') verdict = { kind: 'reach', by: 'judge', note: checked.note }
-    else verdict = { kind: 'turn_away', by: 'judge', reason: checked.reason }
+    // named on the first look only: an Errand that reached the owner may be there because its verb already failed
+    else verdict = { kind: 'turn_away', by: 'judge', reason: checked.reason + verbRoute(errand.command, errand.host) }
   }
   const done = await record(deps, id, verdict)
   return done.ok ? ok({ errand: id, outcome: done.value }) : done

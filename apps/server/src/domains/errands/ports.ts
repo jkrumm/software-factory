@@ -161,7 +161,7 @@ export interface SyncPort {
 }
 
 /**
- * A fixed verb of the MacBook's gate over the dedicated ssh key (`<verb> [<name>]` as its forced command reads it, `triage.ts`): `dotfiles-sync`,
+ * A fixed verb of the MacBook's gate over the dedicated ssh key (`<verb> [<name>]` as its forced command reads it, `need.ts`): `dotfiles-sync`,
  * `report <name>` (one read-only command of the MacBook's registry, exit 0 when it ran, whatever it said) and `repo-pull <name>`
  * (`git pull --ff-only` of one checkout under `~/SourceRoot`). Exit 126: the gate refuses the verb (unknown, or an older gate),
  * 255: the MacBook is unreachable. One call, never inside a transaction.
