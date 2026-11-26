@@ -554,26 +554,29 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
     async leadPeaks(now) {
       // An attempt's peak is its worktree's largest sample of the six hours before its last one, from the relearn point
       // on: a long-lived worktree does not carry a step it no longer runs. Settled: ended (no sample for ten minutes) or run for 30.
+      // Only the newest attempts of each repo are read back: their samples come by index (repo, at), and nothing sorts the
+      // whole table (joining all of it sorted 185k samples to disk, 400 ms of a core on every capacity read, 2026-11-26).
       const rows: unknown[] = await tx`
-        WITH counted AS (
-          SELECT s.repo, s.worktree, s.at, s.rss_mib FROM factory.lead_samples s
+        WITH lasts AS (
+          SELECT s.repo, s.worktree, max(s.at) AS last_at, r.at AS relearned_at FROM factory.lead_samples s
           LEFT JOIN factory.lead_relearn r ON r.repo = s.repo
           WHERE s.outside_slots AND (r.at IS NULL OR s.at >= r.at)
-        ), lasts AS (
-          SELECT repo, worktree, max(at) AS last_at FROM counted GROUP BY repo, worktree
-        ), peaks AS (
-          SELECT c.repo, c.worktree, max(c.rss_mib) AS peak, l.last_at, min(c.at) AS first_at
-          FROM counted c JOIN lasts l ON l.repo = c.repo AND l.worktree = c.worktree
-          WHERE c.at >= l.last_at - ${LEARN_WINDOW_MS / 1000} * interval '1 second'
-          GROUP BY c.repo, c.worktree, l.last_at
+          GROUP BY s.repo, s.worktree, r.at
         ), ranked AS (
-          SELECT repo, peak, last_at, first_at, row_number() OVER (PARTITION BY repo ORDER BY last_at DESC, worktree) AS newest,
+          SELECT repo, worktree, last_at, relearned_at,
+            row_number() OVER (PARTITION BY repo ORDER BY last_at DESC, worktree) AS newest,
             count(*) OVER (PARTITION BY repo) AS n
-          FROM peaks
+          FROM lasts
         )
-        SELECT repo, peak, n,
-          (last_at <= ${new Date(now.getTime() - ENDED_AFTER_MS)} OR last_at - first_at >= ${SETTLED_RUN_MS / 1000} * interval '1 second') AS settled
-        FROM ranked WHERE newest <= ${PEAKS_FETCHED} ORDER BY repo, newest`
+        SELECT k.repo, p.peak, k.n,
+          (k.last_at <= ${new Date(now.getTime() - ENDED_AFTER_MS)} OR k.last_at - p.first_at >= ${SETTLED_RUN_MS / 1000} * interval '1 second') AS settled
+        FROM ranked k, LATERAL (
+          SELECT max(s.rss_mib) AS peak, min(s.at) AS first_at FROM factory.lead_samples s
+          WHERE s.repo = k.repo AND s.worktree = k.worktree AND s.outside_slots
+            AND s.at >= k.last_at - ${LEARN_WINDOW_MS / 1000} * interval '1 second'
+            AND (k.relearned_at IS NULL OR s.at >= k.relearned_at)
+        ) p
+        WHERE k.newest <= ${PEAKS_FETCHED} ORDER BY k.repo, k.newest`
       const byRepo = new Map<string, LeadPeaks>()
       for (const raw of rows) {
         const row = PeakFactRow.parse(raw)
