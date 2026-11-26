@@ -573,7 +573,7 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
         FROM ranked k, LATERAL (
           SELECT max(s.rss_mib) AS peak, min(s.at) AS first_at FROM factory.lead_samples s
           WHERE s.repo = k.repo AND s.worktree = k.worktree AND s.outside_slots
-            AND s.at >= k.last_at - ${LEARN_WINDOW_MS / 1000} * interval '1 second'
+            AND s.at >= k.last_at - ${LEARN_WINDOW_MS / 1000} * interval '1 second' AND s.at <= k.last_at
             AND (k.relearned_at IS NULL OR s.at >= k.relearned_at)
         ) p
         WHERE k.newest <= ${PEAKS_FETCHED} ORDER BY k.repo, k.newest`
