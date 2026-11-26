@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import type { MacbookVerbPort, PushPort, SyncPort } from '../../domains/errands/ports.ts'
-import { verbWords } from '../../domains/errands/triage.ts'
+import { verbWords } from '../../domains/errands/need.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 import { type Run, runProcess } from '../process.ts'
 
@@ -57,7 +57,7 @@ const VERB_TIMEOUT_MS = 10 * 60_000
 
 /**
  * The MacBook's fixed verbs (`dotfiles-sync`, `report <name>`, `repo-pull <name>`) through the ssh alias `ask-human.sh` pushes
- * through. The words are the verb and one name the domain validated (`triage.ts`); the gate validates them again. `BatchMode`
+ * through. The words are the verb and one name the domain validated (`need.ts`); the gate validates them again. `BatchMode`
  * so a key that is not accepted fails at once; unset host, there is no MacBook to call.
  */
 export function askHumanVerbs(options: { host: string | null; run?: Run }): MacbookVerbPort {

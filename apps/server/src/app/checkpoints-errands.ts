@@ -9,9 +9,16 @@ import {
   screenByNeed,
   screenByRule,
 } from '../domains/errands/errand.ts'
-import { MAX_RUN_TRIES, type Need, needOf, ranStillNeededNote } from '../domains/errands/need.ts'
+import {
+  type MacbookVerb,
+  MAX_RUN_TRIES,
+  type Need,
+  needOf,
+  ranStillNeededNote,
+  verbWords,
+} from '../domains/errands/need.ts'
 import { closedNote, SCREENED_SOURCES } from '../domains/errands/request.ts'
-import { type MacbookVerb, verbFor, verbWords } from '../domains/errands/triage.ts'
+import { verbFor, verbRoute } from '../domains/errands/triage.ts'
 import { firstErrorLine, outputNote } from '../kernel/run.ts'
 import { deepLink, errandPage } from '../domains/checkpoints/page.ts'
 import type { ErrandRecord, MacbookVerbPort } from '../domains/errands/ports.ts'
@@ -259,7 +266,8 @@ async function screenErrand(deps: CheckpointLoopDeps, id: ErrandId): Step<Errand
     const checked = checkErrandScreen(answer.value)
     if (checked.action === 'refused') verdict = { kind: 'failed', why: checked.why }
     else if (checked.action === 'pass') verdict = { kind: 'reach', by: 'judge', note: checked.note }
-    else verdict = { kind: 'turn_away', by: 'judge', reason: checked.reason }
+    // named on the first look only: an Errand that reached the owner may be there because its verb already failed
+    else verdict = { kind: 'turn_away', by: 'judge', reason: checked.reason + verbRoute(errand.command, errand.host) }
   }
   const done = await record(deps, id, verdict)
   return done.ok ? ok({ errand: id, outcome: done.value }) : done

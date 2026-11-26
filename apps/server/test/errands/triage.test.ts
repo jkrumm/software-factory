@@ -2,8 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import { replayErrands, type ReplayRow, summarize, wronglyRun } from '../../src/domains/errands/triage-replay.ts'
 import {
   DECLINE_HOLD_MS,
-  macbookVerbOf,
-  MACBOOK_REPORTS,
   refuseBotCheck,
   refuseDeclined,
   refuseEmptyPlace,
@@ -14,8 +12,9 @@ import {
   type StatedNeed,
   type TriageInput,
   verbFor,
-  verbWords,
+  verbRoute,
 } from '../../src/domains/errands/triage.ts'
+import { macbookVerbOf, MACBOOK_REPORTS, needOf, verbWords } from '../../src/domains/errands/need.ts'
 
 const NOW = new Date('2026-11-16T12:00:00Z')
 
@@ -180,6 +179,42 @@ describe('(b) a MacBook command in a fixed class runs through its verb', () => {
     expect(
       verbFor(input({ summary: 'Pull it', command: 'git -C ~/SourceRoot/brain pull --ff-only', host: 'iphone' })),
     ).toBeNull()
+  })
+})
+
+describe('(b) a stated place beats the hands words of a fixed verb', () => {
+  // the second Errand of Issue 3349, as raised
+  const pull = input({
+    summary: 'Pull the fix that lets fin start on the MacBook without make install (890aa88)',
+    detail: 'No click needed beyond the gate: a plain fast-forward. After it, no install is required.',
+    command: 'git -C ~/SourceRoot/finances pull --ff-only',
+    host: 'macbook',
+  })
+
+  test('it is stored as a place and runs', () => {
+    expect(needOf(pull, 'place')).toBe('place')
+    expect(verbFor({ ...pull, need: 'place' })).toEqual({ verb: 'repo-pull', name: 'finances' })
+    expect(decide(pull, { stated: 'place' })).toMatchObject({ action: 'run' })
+  })
+
+  test('without that statement, or with a word of a secret, it does not run', () => {
+    expect(decide(pull, { stated: 'hands' })).toEqual({ action: 'reach' })
+    expect(needOf(pull, null)).toBe('hands')
+    const secret = { ...pull, detail: 'No sudo needed.' }
+    expect(needOf(secret, 'place')).toBe('secret')
+    expect(verbFor({ ...secret, need: 'place' })).toBeNull()
+  })
+
+  test('the statement changes nothing for a command no verb runs', () => {
+    const other = { ...pull, command: 'make -C ~/SourceRoot/finances install' }
+    expect(needOf(other, 'place')).toBe('hands')
+    expect(verbFor({ ...other, need: 'place' })).toBeNull()
+  })
+
+  test('a turn-away of a verb command names the way to have it run', () => {
+    expect(verbRoute(pull.command, 'macbook')).toContain('--need place')
+    expect(verbRoute('make install', 'macbook')).toBe('')
+    expect(verbRoute(null, null)).toBe('')
   })
 })
 
