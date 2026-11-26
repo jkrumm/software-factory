@@ -155,7 +155,7 @@ state):
 
 | Row state | Change the edge by |
 |-|-|
-| `waiting` or `filable` (no Issue yet) | editing the row's `after` in `docs/plan.yaml`, `factory plan check`, push, `factory project sync --fetch true` |
+| `waiting` or `filable` (no Issue yet) | editing the row's `after` in `docs/plan.yaml`, `factory plan check`, push, `factory project sync --fetch true` (the owner's; a lead waits for the planning pass) |
 | `open` (its Issue exists) | `factory planning after --issue <id> --after <id>` / `factory planning unafter --issue <id> --after <id>` on the Issue; editing the row's `after` changes nothing now |
 
 The Issue's edges are not in `factory issue show`; `factory read chain --format plain` lists what blocks each Issue
