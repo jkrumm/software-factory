@@ -3,12 +3,13 @@
 `packages/accounts` is the picker for N Claude Code subscriptions as a library and as the `claude-account` CLI: a registry of
 accounts, a per-account quota cache, the rule that says which account a new session starts on (rule v1.9, with the
 modes of registry v2 as rule v1.10: §Modes), and the logins' health. It is the port of the dotfiles picker (program "subscriptions", `docs/plan.yaml` row
-`subs-package`): the same behaviour behind the same CLI contract, installed beside the live CLI as `claude-account-next`
-until a switch row moves the callers.
+`subs-package`), with the same behaviour behind the same CLI contract. The dotfiles CLI is retired (dotfiles removed
+`scripts/claude-account.ts`, issue_3353): the golden outputs in `test/fixtures/parity-golden.json` are its last record.
+The mini links the package as `claude-account-next` until a switch row moves the callers.
 
 ## Contract
 
-The verbs, flags, stdout and `--json` shapes, exit codes and file locations are the dotfiles CLI's, so every reader of this
+The verbs, flags, stdout and `--json` shapes, exit codes and file locations are the dotfiles CLI's contract (frozen in the golden, §Tests and parity), so every reader of this
 CLI or its files (the statusline, usage tracker, dashboards, the launchers, the factory's admission) keeps working. `claude-account --help`
 lists the verbs, `claude-account <verb> --help` one in full; `claude-account --version` prints the package and its commit
 (`@software-factory/accounts 0.1.0 (<sha>)`). Exit: 0 ok, 1 negative answer (`session`, `latest`, `health`, `refresh --all`),
@@ -45,7 +46,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 - `homeLanes`: the lanes whose spawns start here; an exact lane name wins over a `prefix:*` wildcard. `loginBrowser`: the app a
   re-login opens (data for the relogin command). `enabled: false` ships an account dark until its login exists.
 - `policy`: the live picking policy (§The policy lab), absent = `v1.9`. `host`: the optional adapters, §The host block.
-- `fable`, `drain`, `version` and an account's `mode`: §Modes. Unknown top-level keys are ignored, so one registry serves this CLI and the dotfiles one.
+- `fable`, `drain`, `version` and an account's `mode`: §Modes. Unknown top-level keys are ignored, so a registry with keys this package does not know still reads.
 - The ids are letters, digits, `_` and `-` (they name cache files); `spill` is reserved.
 
 ## Layout of the package
@@ -590,7 +591,7 @@ the age (10 minutes) after which a reading admits nothing, the 401 mark of an ac
 ## Installing
 
 - **On the mini** the deploy (`make deploy`) links `~/.local/bin/claude-account-next` to the release's `packages/accounts/bin/claude-account.ts`
-  beside the live `claude-account`, which it never touches (a regular file at that path is left alone). `make rollback`
+  under the name `claude-account-next` until a switch row moves the callers (a regular file at that path is left alone). `make rollback`
   re-links it. The release holds the dependencies, so the entry runs as it is.
 - **Without the factory** (the MacBook has no checkout): the deploy builds one file beside the CLI entry, `<release>/packages/accounts/dist/claude-account` (`make accounts-bundle`, `ACCOUNTS_OUT=<path>`,
   builds it from a checkout), that runs with bun alone: no checkout, no `node_modules`, the commit baked in. Copy it to `~/.local/bin/claude-account`.
@@ -603,10 +604,10 @@ the age (10 minutes) after which a reading admits nothing, the 401 mark of an ac
 three-week simulation on the guessed load (`sim.test.ts`: it fails when a rule change wastes quota), the policy lab on the measured
 one (`lab.test.ts`: the load model's shape and its measurement, laxity, the verdict rule, the shadow log), the owner's adapters
 against fakes and the bundle.
-`test/parity.test.ts` runs one fixture registry, cache and clock through the dotfiles CLI and this one for every verb and lane
-(257 cases, each stdout, exit code and, for a writing verb, the files it left): identical. Where the dotfiles checkout exists
-it runs both; everywhere it holds the package to `test/fixtures/parity-golden.json`, what the dotfiles CLI printed
-(`bun packages/accounts/scripts/record-golden.ts` records it from the dotfiles CLI, only for a deliberate change of the contract).
+`test/parity.test.ts` runs one fixture registry, cache and clock through this CLI for every verb and lane
+(257 cases, each stdout, exit code and, for a writing verb, the files it left) and holds it to `test/fixtures/parity-golden.json`,
+what the dotfiles CLI printed when the golden was recorded. The dotfiles CLI is retired, so nothing re-records the golden:
+a deliberate change of the contract edits it by hand, in the same commit.
 
 The package's `src` type-checks under the root `noUncheckedIndexedAccess` (the server's program imports it: a lookup of an id that must exist goes through `required`, which throws where the old code would have crashed); its own `tsconfig.json` keeps the flag off for `test/` and `scripts/`, and `make check` runs both.
 

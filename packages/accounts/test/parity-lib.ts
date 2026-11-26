@@ -1,7 +1,7 @@
-// Parity with the dotfiles CLI (the live one): the same fixture registry, cache and clock go through both, every verb and
-// every lane, and stdout and the exit code must be identical. Where the dotfiles checkout exists (the mini) the test runs
-// both; everywhere (CI) the package is held to test/fixtures/parity-golden.json, what the dotfiles CLI printed.
-// Refresh the golden file after a deliberate change of the contract: UPDATE_PARITY_GOLDEN=1 bun test packages/accounts/test/parity.test.ts
+// The golden of the dotfiles CLI's contract (test/fixtures/parity-golden.json): the same fixture registry, cache and clock go
+// through the package CLI for every verb and lane, and stdout, exit code and the files a writing verb leaves must match what
+// the dotfiles CLI printed when it was recorded. The dotfiles CLI is retired; the golden changes only with a deliberate change
+// of the contract, by hand, in the same commit.
 import {
   chmodSync,
   existsSync,
@@ -12,17 +12,14 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { OWNER_HOST } from './owner-host.ts'
 
 const NOW = 1_800_000_000_000
 const H = 3600
-export const PACKAGE_CLI = join(import.meta.dir, '..', 'bin', 'claude-account.ts')
+const PACKAGE_CLI = join(import.meta.dir, '..', 'bin', 'claude-account.ts')
 export const GOLDEN = join(import.meta.dir, 'fixtures', 'parity-golden.json')
-export const DOTFILES_CLI =
-  process.env.CLAUDE_ACCOUNT_DOTFILES_CLI ?? join(homedir(), 'SourceRoot', 'dotfiles', 'scripts', 'claude-account.ts')
-export const haveDotfiles = existsSync(DOTFILES_CLI)
 
 type Account = { dir: string | null; plan: string; homeLanes: string[]; enabled: boolean }
 const accounts = (): Record<string, Account> => ({
@@ -270,7 +267,7 @@ const tree = (dir: string): Record<string, string> => {
   return out
 }
 
-export const run = async (cli: string, c: Case) => {
+export const run = async (c: Case) => {
   const caseDir = mkdtempSync(join(root, 'run-'))
   const cacheDir = join(caseDir, 'cache')
   mkdirSync(cacheDir)
@@ -292,12 +289,15 @@ export const run = async (cli: string, c: Case) => {
   }
   delete (env as Record<string, string | undefined>).CLAUDE_CONFIG_DIR
   if (c.env?.CLAUDE_CONFIG_DIR) env.CLAUDE_CONFIG_DIR = c.env.CLAUDE_CONFIG_DIR
-  const p = Bun.spawn(['bun', '--preload', join(import.meta.dir, 'fixtures', 'fixed-clock.ts'), cli, ...c.args], {
-    env,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    cwd: caseDir,
-  })
+  const p = Bun.spawn(
+    ['bun', '--preload', join(import.meta.dir, 'fixtures', 'fixed-clock.ts'), PACKAGE_CLI, ...c.args],
+    {
+      env,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      cwd: caseDir,
+    },
+  )
   const [out, rc] = await Promise.all([new Response(p.stdout).text(), p.exited])
   const result: { rc: number | null; out: string; state?: Record<string, string> } = { rc, out }
   if (c.state)
