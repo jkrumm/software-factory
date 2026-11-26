@@ -21,7 +21,7 @@ const WHERE = [
   'Something only for the owner to read and comment on, with no work for a lead (a report, a research page, a specification several Issues build from) is not an Issue: `factory artifact new --repo <repo> --title <title> --content @file [--content-format html] [--issue <id>]...` stores a Report no Issue owns (an HTML one starts from `apps/console/templates/artifact.html` in the factory repo and declares color-scheme); it shows on the Artifacts screen, takes his comments and revisions (`factory artifact revise <id> --content @file`) and links to the Issues it concerns (`factory artifact link <id> --issue <id>`). Never file an Issue and cancel it to carry one.',
   '`issue new` answers `{"issue": "issue_N", "id": "issue_N", "state", "filed"}` (and `seatCost`, one line, when a seat was filed): read `.id`. Other verbs answer `issue` as an object.',
   'Several Issues that depend on each other, or that are filed over time: do not file them one by one. Write rows into the repo `docs/plan.yaml` (the server files each row as an Issue once its `after` rows are done).',
-  'Format: `factory plan schema` (docs/plan.md); check before pushing: `factory plan check docs/plan.yaml`; read back after pushing: `factory project sync --fetch true`, then `factory project show <repo> --format plain`.',
+  "Format: `factory plan schema` (docs/plan.md); check before pushing: `factory plan check docs/plan.yaml`; read back after pushing: `factory project sync --fetch true`, then `factory project show <repo> --format plain` (both the owner's; a lead reads `factory project plan <repo>`).",
 ]
 
 const factsShape = `{${FILING.facts.keys.map((k) => `"${k.key}": "..."`).join(', ')}}`
