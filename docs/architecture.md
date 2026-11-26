@@ -218,8 +218,11 @@ Errand.
   the lead tick, never awaited), which is also the pass that clears the trees kept before this rule. On close, every `factory/<issue>-*` branch goes once its work is on origin's
   default (`adapters/git/branches.ts`).
 
-**Backoffs** (`kernel/backoff.ts`). A Judge's answer that reads as a backoff makes the wait a timer: one hour, doubling per backoff, at
-most twelve.
+**Backoffs** (`kernel/backoff.ts`). An answer to a steward's Decision that reads as a backoff (hold, wait, pause, park, defer) makes
+the wait a timer: one hour, doubling per backoff, at most twelve. The Judge's words may be free; anyone else's must be an
+option, with no note. A block after the first backoff of an attempt is the awaited event not come: it raises no new
+Decision when it follows the wake, and does not count towards moving the lead up. An awaited event with no Issue and no
+pull request is `issue defer --until`, never a block.
 
 ### Replan
 
@@ -344,7 +347,7 @@ request's review by someone else. Each rule is one line with the symbol that hol
 **Decisions** (`domains/checkpoints/decision.ts`)
 - A form that breaks a rule (a missing field, no class, a limit, an exhibit over its limit) is refused: 422 `missing_field`, every violation named, nothing stored (`readDecisionForm`, `askDecision`). A Spec named by `artifact` must be this Issue's, and the pictures of an exhibit must be ones its latest revision holds.
 - The Judge is given the class the lead claims, the Issue as filed (`facts`, from the case file in `app/case-agw.ts`) and the Spec's Build and Decided (`specHeadText`), beside the form.
-- A recommendation to keep waiting is refused (`refuseNoOpDefault`); what waits on a person is an Errand.
+- A lead's recommendation to keep waiting is refused (`refuseNoOpDefault`); what waits on a person is an Errand, an awaited event `issue defer`.
 - Settled in order: the Judge (`factory-ask`), the default after its wait when reversible, then the owner. Three Judge
   tries, 5 minutes apart (`decision_steps.tries`).
 - A second ask from the same asker amends the open Decision; `guardVerdict` checks the Judge's answer.

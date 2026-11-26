@@ -1058,12 +1058,19 @@ describe('refuseNoOpDefault', () => {
     noAnswer: { consequence: 'x', default: null, waitMinutes: null },
   })
 
-  test.each(['Keep waiting', 'keep waiting for the review', 'Wait for review', 'Do nothing', 'Hold', 'No-op'])(
-    '%s is no choice',
-    (label) => {
-      expect(refuseNoOpDefault(withLabel(label))).toContain('factory errand raise')
-    },
-  )
+  test.each([
+    'Keep waiting',
+    'keep waiting for the review',
+    'Wait for review',
+    'Do nothing',
+    'Hold',
+    'No-op',
+    'Park',
+    'Park until image-gateway ships portrait',
+    'Park the Issue until the vendor releases',
+  ])('%s is no choice', (label) => {
+    expect(refuseNoOpDefault(withLabel(label))).toContain('factory errand raise')
+  })
 
   test.each([
     'pino',
@@ -1071,6 +1078,7 @@ describe('refuseNoOpDefault', () => {
     'Wait for Issue 12 to land then ship',
     'Hold the release and ship the hotfix instead',
     'Merge when CI is green',
+    'Park the old route and ship the new one',
   ])('%s is a choice', (label) => {
     expect(refuseNoOpDefault(withLabel(label))).toBeNull()
   })

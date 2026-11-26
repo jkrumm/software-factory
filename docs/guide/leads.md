@@ -233,7 +233,7 @@ The excerpt of the rule itself:
 const straightAfter =
   cause === 'blocked' &&
   began !== undefined &&
-  began.at.getTime() - answered.at.getTime() <= QUICK_REBLOCK_MS &&
+  began.at.getTime() - heardAt.getTime() <= QUICK_REBLOCK_MS &&
 ```
 
 The same ship stated one acceptance line as not met: `stall:unreported` (37) and `stall:regressed` (15) were not changed, and the Issue named what to count over the next week.

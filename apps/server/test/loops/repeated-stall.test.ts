@@ -95,6 +95,27 @@ test('a block after a report of the lead (a ship) is a new question, however fas
   expect(repeatedStall(ID, records, 'blocked', REWORDED, records.at(-1)?.version ?? 0)).toBeNull()
 })
 
+test('a block straight after the wake of a backoff is the same stall, hours after the answer', () => {
+  const until = 65 * MIN
+  const records = log([
+    ...START.slice(0, -1),
+    {
+      at: 5 * MIN,
+      event: {
+        kind: 'answered',
+        payload: { decision: 'decision_1', answer: 'Keep paused', hold: new Date(T0.getTime() + until).toISOString() },
+        actor: 'judge',
+      },
+    },
+    { at: until, event: { kind: 'woken', payload: { since: 7, detail: 'the time came' }, actor: 'factory' } },
+    block(REWORDED, until + 2 * MIN),
+  ])
+  expect(repeatedStall(ID, records, 'blocked', REWORDED, records.at(-1)?.version ?? 0)).toEqual({
+    answeredAt: 7,
+    backedOff: true,
+  })
+})
+
 test('a note from the owner after the answer is news, however fast the block', () => {
   const records = log([
     ...START,

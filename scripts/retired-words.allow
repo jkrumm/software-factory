@@ -57,3 +57,8 @@ apps/server/migrations/1065_loop_pass_names.sql fix class  # moves the stored lo
 apps/server/migrations/1029_spec_screen.sql *  # an applied migration, never edited (checksum)
 apps/server/migrations/1075_spec_paths.sql *  # the contract migration names the table and columns it renames and drops
 apps/server/migrations/1051_verdict_by.sql spec screen  # an applied migration, never edited
+apps/server/src/domains/checkpoints/decision.ts park  # the guard matches the word an agent or the Judge writes in an option label
+apps/server/src/kernel/backoff.ts park  # the backoff matches the word an agent or the Judge writes in an answer
+apps/server/test/checkpoints/checkpoints.test.ts park  # the answer labels the backoff must read, as the Judge wrote them
+apps/server/test/checkpoints/domain.test.ts park  # the labels the no-choice guard must read
+apps/server/test/loops/backoff.test.ts park  # an answer the backoff must read
