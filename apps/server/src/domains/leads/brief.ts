@@ -42,7 +42,7 @@ The CLI fills \`--attempt\` from your session. A value \`-\` is read from stdin,
 - \`factory artifact show <artifact-id>\`, \`factory artifact revise <artifact-id> --content @file.md\` and \`factory artifact annotation-reply <artifact-id> <annotation-id> --disposition applied|deferred|declined --note "..."\`: read a verdict, answer \`changes\` with a revision, answer each annotation.
 - \`factory errand raise <id> --need secret|hands|place\`: a person's hands, never a CLI call a token can make.
 - \`factory door route-set\` and \`factory door route-remove\`: a monitor routed to your own Issue.
-- \`factory signal file --from agent:<repo> --title "..." --text "..."\`: follow-up work (\`--repo <other repo>\`); friction with the factory goes to \`--repo software-factory\`, never as an Issue you file yourself.
+- \`factory signal file --from agent:<repo> --title "..." --text "..."\`: follow-up work (\`--repo <other repo>\`); ordered work is \`docs/plan.yaml\` rows. Factory friction: \`--repo software-factory\`, not your own Issue.
 
 Answers to your Decisions, verdicts, notes from the owner and Watch or Verify failures arrive as notes typed into your session.
 `

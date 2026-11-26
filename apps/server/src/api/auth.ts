@@ -68,7 +68,7 @@ export const auth = (tokens: Tokens | undefined) =>
       const who = `only the ${rule.callers.join(', ')} token${rule.callers.length === 1 ? '' : 's'} may use it`
       const hint =
         caller === 'agent' && request.method === 'POST' && route === '/issues'
-          ? `: a lead files a signal, \`factory signal file --repo <repo>\`, and triage makes the Issue (${who})`
+          ? `: a lead files a signal, \`factory signal file --repo <repo>\`, and triage makes the Issue; Issues that must run in order are rows with \`after\` in docs/plan.yaml (\`factory plan schema\`) (${who})`
           : `: ${who}`
       throw refusal(403, `the ${caller} token may not use ${request.method} ${route}${hint}`, 'forbidden')
     }

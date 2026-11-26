@@ -63,6 +63,8 @@ describe('the filing contract', () => {
     expect(out).toContain('factory signal file --from agent:<your repo> --repo <that repo>')
     // the friction route: one signal on software-factory, never an Issue filed by the agent
     expect(out).toContain('factory signal file --from agent:<your repo> --repo software-factory')
+    // a lead cannot pass --after anywhere: the guide sends ordered follow-ups to the plan file
+    expect(out).toContain('A signal carries no `after`')
     expect(out).toContain('Never file that Issue yourself')
     expect(out).toContain('FACTORY_TOKEN')
     expect(out).toContain('not markdown')
