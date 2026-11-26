@@ -26,7 +26,7 @@ export const LANGUAGE = {
   'back at desk':
     'The Needs-you view (?mode=desk) of the open Errands by where the hands must be, each with its command to copy and Done and Not needed buttons',
   backoff:
-    'The Judge\'s answer to a stall the steward asked about that says "wait for it": a timed wait instead of a wake, one hour, doubling per backoff of the attempt, at most twelve (kernel/backoff.ts)',
+    "An answer to a stall the steward asked about that says \"wait for it\" (the Judge's, a default's, or the owner's option with no note): a timed wait instead of a wake, one hour, doubling per backoff of the attempt, at most twelve (kernel/backoff.ts)",
   bench:
     'A step kept on the mini after a run off it was red where the mini was green: an hour, doubling with each repeat within a week up to seven days, halved by a green run off the mini (kernel/remote-bench.ts)',
   'binding reason':

@@ -681,6 +681,59 @@ describe('settling, in turn', () => {
     expect(await effectsOf(issueId, 'note_lead')).toBe(1)
   })
 
+  const PARK = 'Park until image-gateway ships portrait'
+  async function stalledAsk(noAnswer: Record<string, unknown> = { consequence: 'stays stalled' }) {
+    const issueId = await workingIssue()
+    await record(issueId, 'stalled', {
+      kind: 'stalled',
+      payload: { attempt: 1, cause: 'blocked', detail: 'image-gateway has no portrait yet' },
+      actor: 'lead',
+    })
+    const options = [
+      { label: PARK, reversible: true, cost: 'nothing ships until it does' },
+      { label: 'drop', reversible: true, cost: 'filed again later' },
+    ]
+    const { decision } = value(
+      await askDecision(deps, {
+        issueId,
+        attempt: 1,
+        form: { ...FORM, options, recommendation: PARK, noAnswer },
+        by: 'steward',
+      }),
+    )
+    return { issueId, decision }
+  }
+
+  test('a Judge answer that parks a stall is a timed wait, not a wake of the lead', async () => {
+    const { decision } = await stalledAsk()
+    judgeAnswer = () => ok({ verdict: 'answer', answer: PARK, reason: 'nothing covers it yet', source: 'case file' })
+    value(await tryAnswer(deps, decision.id))
+    const shown = value(await showDecision(deps, decision.id))
+    expect(shown).toMatchObject({ settledBy: 'judge', answer: PARK })
+    const [row] = await db.sql`SELECT payload FROM factory.issue_events WHERE kind = 'answered'`
+    expect(row.payload.hold).toBe('2026-03-01T13:00:00.000Z')
+  })
+
+  test('the same option taken as the default waits too', async () => {
+    const { decision } = await stalledAsk({ consequence: 'stays stalled', default: PARK, waitMinutes: 30 })
+    value(await tryAnswer(deps, decision.id))
+    clock.advance(31 * 60_000)
+    value(await tryAnswer(deps, decision.id))
+    const [row] = await db.sql`SELECT payload FROM factory.issue_events WHERE kind = 'answered'`
+    expect(row.payload.hold).toBeDefined()
+  })
+
+  test('the owner choosing the same option waits too; an option that moves the work wakes the lead', async () => {
+    const parked = await stalledAsk()
+    expect(value(await answerDecision(deps, { decisionId: parked.decision.id, answer: PARK }))).toMatchObject({
+      issue: { state: 'waiting' },
+    })
+    const dropped = await stalledAsk()
+    expect(value(await answerDecision(deps, { decisionId: dropped.decision.id, answer: 'drop' }))).toMatchObject({
+      issue: { state: 'working' },
+    })
+  })
+
   test('two answerers at once: one answer, and the other sees it', async () => {
     const issueId = await workingIssue()
     judgeAnswer = () => ok({ verdict: 'answer', answer: 'pino', reason: 'r', source: 'plan: docs/x.md' })

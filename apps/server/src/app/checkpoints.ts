@@ -455,21 +455,32 @@ export async function answerIn(
       : answering.by === 'judge'
         ? 'judge'
         : 'factory'
-  // The Judge's backoff on a stall the steward asked about (stored as the payload key `hold`): the Issue waits until a time instead of waking its lead to block again.
+  // A backoff answer to a stall the steward asked about (stored as the payload key `hold`): the Issue waits until a time
+  // instead of waking its lead to block again. The Judge's words may be free and a default's note is the factory's; anyone
+  // else's answer must be an option with no note of their own, which the lead would have to hear now.
   let backoff: string | undefined
   let note = answering.note
-  if (answering.by === 'judge' && fresh.askedBy === 'steward' && isBackoff(answering.text)) {
+  let noteActor: typeof actor = actor
+  const waitsOut =
+    fresh.askedBy === 'steward' &&
+    isBackoff(answering.text) &&
+    (answering.by === 'judge' ||
+      ((answering.by === 'default' || !answering.note) &&
+        fresh.form.options.some((option) => option.label === answering.text)))
+  if (waitsOut) {
     const history = await work.history(fresh.issueId)
     backoff = backoffUntil(at, history ? backoffsIn(history) : 0)
+    // The factory's own words are never recorded as the owner's: his note binds a lead.
+    if (answering.by !== 'judge') noteActor = 'factory'
     note =
-      `${note ?? ''} The Issue waits until ${backoff} and you hear this then; if the cause is unchanged by then, report it again with what you checked, and the next wait is longer.`.trim()
+      `${note ?? ''} The Issue waits until ${backoff} and you hear this then: the answer was "${answering.text}". If what is awaited has not come by then, block again with what you checked, and the next wait is longer; if no Issue or Errand covers it, file one (\`factory signal file\`, or \`factory errand raise\` for a person's hands).`.trim()
   }
   if (note) {
     const noted = applied(
       await recordIn(work, deps, {
         issueId: fresh.issueId,
         key: key('noted', 'answer', fresh.id),
-        event: { kind: 'noted', payload: { text: note }, actor },
+        event: { kind: 'noted', payload: { text: note }, actor: noteActor },
       }),
       'noted',
     )

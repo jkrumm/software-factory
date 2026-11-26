@@ -180,10 +180,18 @@ export function repeatedStall(
   // was just given), so alike words are not the only proof: a block straight after the answer, with nothing reported by the
   // lead in between, is the same stall.
   const began = history.find((record) => record.version === since)
+  // After a backoff the lead heard the answer when its wait ended, so "straight after" counts from the last wake.
+  const backedOff = field(answered.payload, 'hold') !== ''
+  const woken = backedOff
+    ? history.findLast(
+        (record) => record.kind === 'woken' && record.version > answered.version && record.version < since,
+      )
+    : undefined
+  const heardAt = (woken ?? answered).at
   const straightAfter =
     cause === 'blocked' &&
     began !== undefined &&
-    began.at.getTime() - answered.at.getTime() <= QUICK_REBLOCK_MS &&
+    began.at.getTime() - heardAt.getTime() <= QUICK_REBLOCK_MS &&
     !history.some(
       (record) =>
         record.version > answered.version &&
@@ -193,7 +201,7 @@ export function repeatedStall(
     )
   const alike = [before.detail, ...chain].some((earlier) => sameWords(earlier, detail) >= SAME_STALL)
   if (!straightAfter && !alike) return null
-  return { answeredAt: answered.version, backedOff: field(answered.payload, 'hold') !== '' }
+  return { answeredAt: answered.version, backedOff }
 }
 
 /** What the steward knows of a stalled Issue, from its events alone; `windowOpen` comes from capacity afterwards. */

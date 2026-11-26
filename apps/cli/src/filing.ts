@@ -172,7 +172,10 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
     notice: shipNotice,
   },
   'issue.defer': {
-    help: "A deferral is for a short, named event, and it gives up your place until it ends; never defer to watch something over time. --review <pull request URL or #number> waits on someone else's review (a required review by a team or another person, work repos above all): the factory polls it every 15 minutes through `gh` or `glab` and wakes you when it is approved, gets changes requested or a new review comment, merges or closes; it shows as waiting on others, never in Needs you. A /review that agw answers `held` is deferred --until the reset time it prints.",
+    help: "A deferral is for a short, named event, and it gives up your place until it ends; never defer to watch something over time. --review <pull request URL or #number> waits on someone else's review (a required review by a team or another person, work repos above all): the factory polls it every 15 minutes through `gh` or `glab` and wakes you when it is approved, gets changes requested or a new review comment, merges or closes; it shows as waiting on others, never in Needs you. A /review that agw answers `held` is deferred --until the reset time it prints. An awaited event with no Issue and no pull request (another repo's change, a release) is waited on with --until, the time you look again: that is no block.",
+  },
+  'issue.block': {
+    help: "A block is a stall: you cannot go on and there is nothing to wait for. An awaited event (another repo's change, a release) is no block: `factory issue defer <id> --until <when to look again>`, or --after / --review where an Issue or a pull request covers it.",
   },
   'decision.take-default': {
     help: 'Settles your own open Decision with the default it names, once you built on it: it closes as the default taken and ends the wait, so `ship` is not refused for the time it would have run.',

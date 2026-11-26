@@ -1,5 +1,5 @@
 /**
- * A backoff: the Judge's answer to a stall that says "wait for it". The factory turns it into a timed wait instead of waking
+ * A backoff: an answer to a stall that says "wait for it". The factory turns it into a timed wait instead of waking
  * the lead, who would only find the same cause and block again. The first backoff waits `BACKOFF_BASE_MS`; each later one of
  * the same attempt waits twice as long, up to `BACKOFF_MAX_MS`. The answer is stored under the payload key `hold`.
  */
@@ -7,7 +7,8 @@ const BACKOFF_BASE_MS = 60 * 60_000
 const BACKOFF_MAX_MS = 12 * 60 * 60_000
 
 /** An option label that reads as a backoff: it begins with one of these words (`Hold until the update lands`). */
-const BACKOFF_LABEL = /^\s*(hold|wait|pause|defer|keep\s+(holding|waiting)|stay\s+(on\s+hold|blocked))\b/i
+const BACKOFF_LABEL =
+  /^\s*(hold|wait|pause|defer|keep\s+(holding|waiting)|stay\s+(on\s+hold|blocked)|park(ed)?(?=(\s+(it|this|the\s+issue))?(\s*$|\s+(until|till)\b)))\b/i
 
 export const isBackoff = (answer: string): boolean => BACKOFF_LABEL.test(answer)
 
@@ -28,17 +29,29 @@ interface Recorded {
 const has = (payload: unknown, name: string): boolean =>
   typeof payload === 'object' && payload !== null && Boolean((payload as Record<string, unknown>)[name])
 
+/** A backoff on an Issue's log: a Decision answered as one, or a repeated stall the steward deferred. Both are timed waits. */
+const isBackoffRecord = (record: Recorded): boolean =>
+  (record.kind === 'answered' && has(record.payload, 'hold')) ||
+  (record.kind === 'deferred' && record.actor === 'steward' && has(record.payload, 'until'))
+
+const thisAttempt = <T extends Recorded>(records: readonly T[]): readonly T[] =>
+  records.slice(records.findLastIndex((record) => record.kind === 'admitted') + 1)
+
+/** The backoffs an attempt had. `records` is the attempt's events, oldest first. */
+export const backoffsIn = (records: readonly Recorded[]): number => thisAttempt(records).filter(isBackoffRecord).length
+
 /**
- * The backoffs an attempt had: a Decision answered as one, and a repeated stall the steward deferred, both timed waits.
- * `records` is the attempt's events, oldest first.
+ * The attempt's records without the blocks made after its first backoff: such a block says the awaited event has not
+ * come, which is no struggle of the lead's.
  */
-export function backoffsIn(records: readonly Recorded[]): number {
-  const from = records.findLastIndex((record) => record.kind === 'admitted')
-  return records
-    .slice(from + 1)
-    .filter(
-      (record) =>
-        (record.kind === 'answered' && has(record.payload, 'hold')) ||
-        (record.kind === 'deferred' && record.actor === 'steward' && has(record.payload, 'until')),
-    ).length
+export function withoutAwaitedBlocks<T extends Recorded>(records: readonly T[]): T[] {
+  const current = thisAttempt(records)
+  const first = current.findIndex(isBackoffRecord)
+  if (first < 0) return [...records]
+  const awaited = new Set(
+    current
+      .slice(first + 1)
+      .filter((record) => record.kind === 'stalled' && (record.payload as { cause?: unknown }).cause === 'blocked'),
+  )
+  return records.filter((record) => !awaited.has(record))
 }

@@ -5,6 +5,7 @@ import { movable } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
 import type { IssueId } from '../kernel/ids.ts'
+import { withoutAwaitedBlocks } from '../kernel/backoff.ts'
 import { key } from '../kernel/keys.ts'
 import { ok, type Result } from '../kernel/result.ts'
 import { type IssueWriteError, type Recorded, recordIn, type WriteDeps } from './issues.ts'
@@ -16,7 +17,7 @@ const attemptOf = (payload: unknown): number | null => {
 
 /**
  * Moves a struggling light lead up, inside the caller's transaction, right after what it struggled with was stored: its
- * second stall (or one that says it is out of its depth), its second refused ship, or a regression of its first watch
+ * second stall (a block after a backoff not counted) or one that says it is out of its depth, its second refused ship, or a regression of its first watch
  * (`regressedWatch`: the caller records `moved_up` in place of the `regressed` it would send). Reads the attempt from the
  * Issue's events and the refused ships from quality. Null: the rule does not move it, and nothing was written.
  */
@@ -33,7 +34,7 @@ export async function moveUpIfDue(
   // and moving it up would start it there again.
   const step = stepOf(issue.ranOn)
   if (issue.state === 'closed' || !movable(issue) || !step) return ok(null)
-  const stalls = history.filter(
+  const stalls = withoutAwaitedBlocks(history).filter(
     (record) =>
       record.kind === 'stalled' &&
       attemptOf(record.payload) === issue.attempt &&

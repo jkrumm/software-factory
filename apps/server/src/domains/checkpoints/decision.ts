@@ -366,12 +366,13 @@ function checkedOf(problem: Problems, value: unknown): string {
 }
 
 /**
- * Labels that are no choice: "keep waiting", "wait for review", "do nothing", "hold". A label that goes on to a plan
+ * Labels that are no choice: "keep waiting", "wait for review", "do nothing", "hold", "park until the release". A label that goes on to a plan
  * ("Wait for Issue 12 to land, then ship", "Hold the release and ship the hotfix instead") is not matched.
  */
 const NO_OP_LABELS: readonly RegExp[] = [
-  /^(?:keep|continue|stay|remain|just|simply)\b.{0,12}\b(?:waiting|wait|blocked|paused)\b/i,
+  /^(?:keep|continue|stay|remain|just|simply)\b.{0,12}\b(?:waiting|wait|blocked|paused|parked)\b/i,
   /^(?:wait(?:ing)?|do(?:ing)? nothing|no[- ]?op|no action|nothing|hold|leave (?:it )?(?:as is|open|alone))\b[^,;:]{0,30}$/i,
+  /^park(?:ed)?(?: it| this| the issue)?(?: (?:until|till)\b[^,;:]*)?$/i,
 ]
 
 /**
@@ -383,7 +384,7 @@ export function refuseNoOpDefault(form: DecisionForm): string | null {
   const named = [form.recommendation, form.noAnswer.default].filter((label): label is string => label !== null)
   const offender = named.find((label) => NO_OP_LABELS.some((pattern) => pattern.test(label.trim())))
   if (offender === undefined) return null
-  return `a Decision is a choice, and "${offender}" is none: waiting never resolves. If the only real answer is a person's chore (approve a PR, rotate a key, click in a UI), raise an Errand with \`factory errand raise <id> --attempt <n> --summary "..." --detail "..." --tried "..."\`; otherwise recommend an option that moves the work. Nothing was raised.`
+  return `a Decision is a choice, and "${offender}" is none: waiting never resolves. If the only real answer is a person's chore (approve a PR, rotate a key, click in a UI), raise an Errand with \`factory errand raise <id> --attempt <n> --summary "..." --detail "..." --tried "..."\`; an awaited event that is nobody's chore here (another repo's change, a release) is \`factory issue defer <id> --until <when to look again>\`; otherwise recommend an option that moves the work. Nothing was raised.`
 }
 
 /** The label of the option a free-text answer names, ignoring case; null when it names none. */
