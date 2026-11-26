@@ -243,11 +243,9 @@ async function readRepo(sh: Shell, options: Options): Promise<Repo> {
   )
   const defaultBase =
     fromOrigin ||
-    (options.base
-      ? undefined
-      : json<{ defaultBranchRef?: { name?: string } }>(
-          (await sh.read(['gh', 'repo', 'view', '--json', 'defaultBranchRef'])) ?? '',
-        )?.defaultBranchRef?.name)
+    json<{ defaultBranchRef?: { name?: string } }>(
+      (await sh.read(['gh', 'repo', 'view', '--json', 'defaultBranchRef'])) ?? '',
+    )?.defaultBranchRef?.name
   const base = options.base ?? defaultBase
   if (!base)
     throw new Refused(
@@ -810,8 +808,16 @@ export async function landVerb(words: readonly string[], io: Io): Promise<number
     let pr: PullRequest | null = null
     if (repo.mode === 'pr') {
       pr = await pullRequest(sh, options.pr ?? repo.branch)
-      // a pull request aimed at another branch (a fix for the branch that runs production) lands there, unless `--base` says otherwise
-      if (pr?.baseRefName && !options.base && pr.baseRefName !== repo.base) repo = { ...repo, base: pr.baseRefName }
+      // a pull request aimed at another branch (a fix for the branch that runs production) lands there; `--base` must agree with it
+      if (pr?.baseRefName && pr.baseRefName !== repo.base) {
+        if (options.base)
+          throw new Refused(
+            'pr',
+            `--base ${options.base} but #${pr.number} is aimed at ${pr.baseRefName}: gh pr merge would merge into ${pr.baseRefName}`,
+            `gh pr edit ${pr.number} --base ${options.base}, or drop --base, then factory land again`,
+          )
+        repo = { ...repo, base: pr.baseRefName }
+      }
       if (!pr)
         throw new Refused(
           'pr',

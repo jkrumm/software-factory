@@ -211,6 +211,18 @@ describe('factory land', () => {
     expect(result.err).toContain('land: landed on v1:')
   })
 
+  test('--base that disagrees with the pull request base is refused before anything moves', async () => {
+    await releaseBranch()
+    const master = await masterOf()
+    const v1 = await git(origin, 'rev-parse', 'refs/heads/v1')
+    const result = await land(['--base', 'v1']).done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: pr: refused: --base v1 but #7 is aimed at master')
+    expect(await masterOf()).toBe(master)
+    expect(await git(origin, 'rev-parse', 'refs/heads/v1')).toBe(v1)
+    expect(await calls()).not.toContain('gh pr merge')
+  })
+
   test('the default branch is landed on with no ship hint', async () => {
     const result = await land().done
     expect(result.code).toBe(0)
