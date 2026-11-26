@@ -118,6 +118,26 @@ export async function loadIssue(work: WorkStore, id: IssueId): Promise<Issue | n
 
 export const isOpen = (issue: Issue | null): issue is Issue => issue !== null && issue.state !== 'closed'
 
+/**
+ * The Issue a new alert of this host joins: the newest incident, inside the window, its Issue open and one of its alerts
+ * still down. When every alert has reported up the incident is over, though its Issue may still ship or be watched: a later
+ * alert is its own firing, and the triage workflow may still amend an open Issue with it (a slow-routes alert of one repo
+ * joined a shipped version bump of another, 2026-11-26).
+ */
+export async function joinableIncident(
+  s: Pick<Stores, 'intake' | 'work'>,
+  groupKey: string,
+  now: Date,
+  windowMs: number,
+): Promise<Issue | null> {
+  const incident = await s.intake.latestIncident(groupKey)
+  if (!incident || now.getTime() - incident.lastAlertAt.getTime() > windowMs) return null
+  const alerts = (await s.intake.subjectsOfIssue(incident.issueId)).filter((row) => row.groupKey === groupKey)
+  if (alerts.length > 0 && alerts.every((row) => row.upAt !== null)) return null
+  const issue = await loadIssue(s.work, incident.issueId)
+  return isOpen(issue) ? issue : null
+}
+
 /** Writing a signal's record and its note on an Issue: what every road of intake ends in. */
 export function createLedger(deps: IntakeDeps) {
   const { clock, ids } = deps

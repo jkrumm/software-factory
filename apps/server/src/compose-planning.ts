@@ -13,6 +13,7 @@ import {
   claimQueued,
   claimStalled,
   queueView,
+  readMachine,
 } from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setProjectPrio, setQueueState, setRelearn } from './app/capacity-queue.ts'
@@ -178,6 +179,7 @@ export function composePlanning(input: {
     capacity: {
       limits: { ...limits, slots: settings.slots, slotsMax: settings.slotsMax },
       state: () => capacityState(capacity),
+      machine: () => readMachine(capacity),
       refresh: () => refreshState(capacity),
       accounts: () => accountsView(capacity),
       setAccountMode: (account, body) => setAccountMode(capacity, account, body),

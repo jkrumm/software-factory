@@ -113,7 +113,7 @@ The factory itself calls no model. Every judgment goes through an adapter in `ap
 
 **Example files:**
 
-- [`app/intake-receive.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-receive.ts#L103-L196): `receive`, the whole decision in order
+- [`app/intake-receive.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-receive.ts#L101-L194): `receive`, the whole decision in order
 - [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L44-L59): `gate`, who may put work in which repo
 - [`adapters/agw/amend.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/agw/amend.ts#L17-L70): the `factory-triage` call in amend mode and its checks
 - [`domains/planning/settle.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/settle.ts#L46-L61): `settleRule`, deterministic first
@@ -122,7 +122,7 @@ The factory itself calls no model. Every judgment goes through an adapter in `ap
 
 An incident is one root cause seen through many signals. An amendment is a signal added to an open Issue as a note instead of a new Issue.
 
-- **Incident.** Alerts from `kuma` and `hyperdx` that sit on one host join one Issue. When the VPS is down, three monitors fire and one Issue opens.
+- **Incident.** Alerts from `kuma` and `hyperdx` that sit on one host join one Issue. When the VPS is down, three monitors fire and one Issue opens. Once all of them are up again, a later alert starts anew.
 - **Amendment.** The lead of the open Issue hears the signal as a note. The Issue's scope grows; the queue does not.
 - **Healing.** A `down` waits out its project's heal grace. An `up` inside it files nothing (`healed`).
 - **A lead never amends itself.** The Issue whose lead files a signal is not a candidate for it: a follow-up is work for someone else.
@@ -233,7 +233,7 @@ A work repo is a repo no `project.yaml` describes, or one whose `project.yaml` s
 **Example files:**
 
 - [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L40-L59): `gate`, work repo before any other rule
-- [`app/intake-receive.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-receive.ts#L103-L129): `receive`, where the exception for an owner-filed lead sits
+- [`app/intake-receive.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-receive.ts#L101-L127): `receive`, where the exception for an owner-filed lead sits
 
 **Read more:**
 

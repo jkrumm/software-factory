@@ -178,6 +178,35 @@ interface Snapshot {
   owedAccounts: Map<IssueId, string>
 }
 
+/** The minute samples a host reading looks back on. */
+const RECENT_SAMPLES = Math.max(ALLOWANCE_SAMPLES, LOAD_TRIP_HISTORY_SAMPLES)
+
+// The instant reading (a rate since the last pass) and the minute samples' 300 s window: the higher gates, so a lull
+// between swapout bursts does not open the gate (Issue 858).
+const gatedMemory = (
+  instant: MemoryReading,
+  samples: Parameters<typeof sustainedSwapoutMb>[0],
+  now: Date,
+): MemoryReading => ({
+  ...instant,
+  swapoutMbPer300s: Math.max(instant.swapoutMbPer300s, sustainedSwapoutMb(samples, now)),
+})
+
+/**
+ * The load and memory the admission gate reads, and nothing else of `readHost`: `GET /v1/machine` is polled by every
+ * open Console page, and the whole reading (the account poll, the projects' doctors, the learned lead costs) made it answer
+ * in seconds on a loaded host (2026-11-26).
+ */
+export async function readMachine(deps: CapacityDeps): Promise<Pick<HostInputs, 'load' | 'memory'>> {
+  const load = await deps.host.load()
+  const memory = await deps.host.memory()
+  const recent = await deps.uow.run(async ({ capacity }) => ok(await capacity.recentHostSamples(RECENT_SAMPLES)))
+  return {
+    load: load.ok ? load.value : null,
+    memory: memory.ok ? gatedMemory(memory.value, recent.ok ? recent.value : [], deps.clock.now()) : null,
+  }
+}
+
 /** Reads what a host reading and an account poll say, outside any transaction. */
 export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
   const notes: string[] = []
@@ -199,7 +228,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     ok({
       projects: deps.doctor ? await planning.projects() : [],
       latest: await capacity.latestHostSample(),
-      recent: await capacity.recentHostSamples(Math.max(ALLOWANCE_SAMPLES, LOAD_TRIP_HISTORY_SAMPLES)),
+      recent: await capacity.recentHostSamples(RECENT_SAMPLES),
       slots: await capacity.slots(),
       stepMs: await capacity.stepMedianMs(new Date(now.getTime() - STEP_WINDOW_MS)),
       peaks: await capacity.leadPeaks(now),
@@ -233,17 +262,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     ),
     load: load.ok ? load.value : null,
     processes: newest && now.getTime() - newest.at.getTime() <= RSS_MAX_AGE_MS ? newest.processes : null,
-    // The instant reading (a rate since the last pass) and the minute samples' 300 s window: the higher gates, so a lull
-    // between swapout bursts does not open the gate (Issue 858).
-    memory: memory.ok
-      ? {
-          ...memory.value,
-          swapoutMbPer300s: Math.max(
-            memory.value.swapoutMbPer300s,
-            facts.ok ? sustainedSwapoutMb(facts.value.recent, now) : 0,
-          ),
-        }
-      : null,
+    memory: memory.ok ? gatedMemory(memory.value, facts.ok ? facts.value.recent : [], now) : null,
     ramMib,
     uptimeMs: uptime.ok ? uptime.value : null,
     // Without the samples the grace has nothing to go on, and a booting host admits nothing.

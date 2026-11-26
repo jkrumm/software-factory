@@ -123,7 +123,8 @@ Every input is one envelope (`source`, `kind`, `origin`, `trust`, `repo`, `finge
   is held, not dropped, so the owner can promote work it owes a work repo; any other agent signal to a work repo is
   dropped (`work_repo`). The `screen` loop never reads a work repo's signal.
 - **Incidents.** Monitoring alerts on one host or dependency inside `FACTORY_INCIDENT_WINDOW_MIN` join one incident
-  and one Issue.
+  and one Issue, while one of its alerts is still down. Once all have reported up the incident is over: a later alert is
+  not joined by host, though the triage workflow may still amend an open Issue with it.
 - **Amend or new.** A loop's finding (`intake.api.file` with a `LoopFinding`) is matched by its key alone
   (`findingKeyOf`: loop, class, repo, subject): an open Issue of that key takes it as a note, one closed within its
   repeat window counts it as a repeat (24 h from the filing, or `LoopFinding.repeatWindowMs` from the close), else it
@@ -659,7 +660,8 @@ words are blanked for the read token.
   /v1/throughput` sums per day as `deploys.days`), `starved: …` or `failing: …`. The heartbeat also carries
   `routeP95Ms` and `routeSamples` (`api/route-timer.ts`: the p95 of the server's own routes over 5 minutes; routes
   that wait on a port by design, the report reads and the first 120 s after a start are not timed), since `/health`
-  alone answered on 2026-11-14 while every database route timed out. The reader outside the server is the dev host's
+  alone answered on 2026-11-14 while every database route timed out. `GET /v1/machine`, polled by every open Console
+  page, reads the load and memory alone (`readMachine`), never the whole capacity state. The reader outside the server is the dev host's
   Uptime Kuma push monitor, the one filer of slow routes. Its message names no route: a timed answer of 2 s or more
   (`SLOW_ANSWER_MS`) is logged as it ends (`slow answer: <method> <route pattern> took <ms> ms` in the server's log,
   `api.slow_answer` in the telemetry), so look there first.

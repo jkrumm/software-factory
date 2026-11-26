@@ -5,6 +5,7 @@ import {
   claimStalled,
   moveWalled,
   queueView,
+  readMachine,
   releaseClaim,
   resumeClaim,
 } from '../../src/app/capacity-admit.ts'
@@ -246,6 +247,19 @@ describe('admission', () => {
     await seed(3)
     nextSample()
     expect((await pass()).admitted.map((a) => a.issue)).toEqual([two])
+  })
+
+  test("the machine's reading is load and memory alone, with the samples' sustained swapouts", async () => {
+    world.host.memoryValue = ok({ swapoutMbPer300s: 10, swapUsedPct: 40 })
+    await world.db.sql`
+      INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+      VALUES (${new Date(world.clock.now().getTime() - 60_000)}, 4, 80, 40, 11000, 1)`
+    const deps = {
+      ...world.deps,
+      accounts: { read: () => Promise.reject(new Error('the accounts were polled')) },
+      doctor: { read: () => Promise.reject(new Error('a doctor was asked')) },
+    }
+    expect((await readMachine(deps)).memory).toEqual({ swapoutMbPer300s: 2200, swapUsedPct: 40 })
   })
 
   test("a repo's lead peaks: from the relearn point, the last six hours of an attempt, and ended or 30 minutes in", async () => {

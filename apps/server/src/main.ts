@@ -353,13 +353,12 @@ async function main(env: Environment): Promise<void> {
     return view.ok ? queueReasonMap(view.value.queue) : null
   })
   const machine = async () => {
-    const state = await planning.capacity.state()
-    if (!state.ok) return null
+    const host = await planning.capacity.machine()
     const { limits } = planning.capacity
     return {
-      load: state.value.host.load,
+      load: host.load,
       loadCeiling: limits.loadCeiling,
-      memory: state.value.host.memory,
+      memory: host.memory,
       memoryCeilings: limits.memoryCeilings,
     }
   }

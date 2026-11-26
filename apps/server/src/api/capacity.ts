@@ -24,7 +24,7 @@ import {
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
-import type { CapacityLimits, PassResult, QueueEntry, QueueReasonKind } from '../app/capacity-admit.ts'
+import type { CapacityLimits, HostInputs, PassResult, QueueEntry, QueueReasonKind } from '../app/capacity-admit.ts'
 import type { AccountMode } from '@software-factory/contract'
 import type { AccountState, CapacityState } from '../app/capacity-view.ts'
 import type { QueueState, QueueStates } from '../domains/capacity/queue-state.ts'
@@ -52,6 +52,8 @@ export interface UnknownProject {
 export interface CapacityApi {
   limits: CapacityLimits & { slots: number; slotsMax: number }
   state(): Promise<Result<CapacityState, PortError>>
+  /** the load and memory the gate reads, without the rest of `state` (`GET /v1/machine`) */
+  machine(): Promise<Pick<HostInputs, 'load' | 'memory'>>
   refresh(): Promise<Result<AccountState[], PortError>>
   /** `GET /v1/accounts`: the package's status of every account with the factory's allowance and leads beside it */
   accounts(): Promise<Result<AccountsView, PortError>>
