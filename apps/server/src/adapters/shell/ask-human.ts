@@ -63,12 +63,12 @@ const VERB_TIMEOUT_MS = 10 * 60_000
 export function askHumanVerbs(options: { host: string | null; run?: Run }): MacbookVerbPort {
   const run = options.run ?? runProcess
   return {
-    async run(verb) {
+    async run(verb, call) {
       if (!options.host) return err(portError('gone', 'no MacBook ssh alias is set (FACTORY_ASK_HUMAN_HOST)'))
       try {
         const done = await run(
           ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', options.host, ...verbWords(verb)],
-          VERB_TIMEOUT_MS,
+          call?.timeoutMs ?? VERB_TIMEOUT_MS,
           { group: true },
         )
         return ok({ exit: done.exitCode, output: done.stdout })

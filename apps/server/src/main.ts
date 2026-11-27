@@ -242,7 +242,7 @@ async function main(env: Environment): Promise<void> {
     consoleUrl: checkpointSettings.line.consoleUrl,
     imageHosts: loadConsoleSettings(env).imageHosts,
     // a check that is one of the MacBook's fixed reports runs there, through the gate; any other runs here
-    checks: macbookCheckRunner({ local: shellCheckRunner(), macbook: macbookVerbs }),
+    checks: macbookCheckRunner({ shell: shellCheckRunner(), macbook: macbookVerbs }),
     // an approved Errand's command runs here, on the mini: a hang guard, never a budget (a release takes minutes)
     commands: shellCheckRunner(undefined, APPROVED_RUN_HANG_GUARD_MS),
     queuedAsks: queuedAsksIn(askQueueDir(env, { home: leadSettings.home })),

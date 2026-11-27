@@ -167,7 +167,7 @@ export interface SyncPort {
  * 255: the MacBook is unreachable. One call, never inside a transaction.
  */
 export interface MacbookVerbPort {
-  run(verb: MacbookVerb): Promise<Result<{ exit: number; output: string }>>
+  run(verb: MacbookVerb, options?: { timeoutMs?: number }): Promise<Result<{ exit: number; output: string }>>
 }
 
 /** The desk pass's own record: when it last ran, when the owner last came back, and whether the MacBook last answered. */
