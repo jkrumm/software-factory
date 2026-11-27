@@ -10,6 +10,7 @@ import { readCaseFile } from './read/case-file.ts'
 import { readSeatCost, seatCostLine } from './read/seat-cost.ts'
 import { askQueueDir, queuedAsksIn } from './adapters/checkpoints/queued-asks.ts'
 import { shellCheckRunner } from './adapters/shell/check-runner.ts'
+import { macbookCheckRunner } from './adapters/shell/macbook-check-runner.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
 import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { ledgerQuotaReader } from './adapters/planning/accounts-source.ts'
@@ -234,12 +235,14 @@ async function main(env: Environment): Promise<void> {
   })
   disagreementSignals.file = (body) => intake.api.file(body, 'agent')
   const checkpointSettings = loadCheckpointSettings(env, { home: leadSettings.home })
+  const macbookVerbs = askHumanVerbs({ host: loopSettings.askHumanHost })
   const checkpointDeps = {
     ...writes,
     blobs: fileBlobStore(checkpointSettings.blobDir),
     consoleUrl: checkpointSettings.line.consoleUrl,
     imageHosts: loadConsoleSettings(env).imageHosts,
-    checks: shellCheckRunner(),
+    // a check that is one of the MacBook's fixed reports runs there, through the gate; any other runs here
+    checks: macbookCheckRunner({ shell: shellCheckRunner(), macbook: macbookVerbs }),
     // an approved Errand's command runs here, on the mini: a hang guard, never a budget (a release takes minutes)
     commands: shellCheckRunner(undefined, APPROVED_RUN_HANG_GUARD_MS),
     queuedAsks: queuedAsksIn(askQueueDir(env, { home: leadSettings.home })),
@@ -247,7 +250,7 @@ async function main(env: Environment): Promise<void> {
     // The Judge and the Errand screen are workflows of the one agw port.
     agw,
     // an Errand that is exactly a report or a pull of the MacBook's fixed verbs runs through them, with no dialog
-    macbook: askHumanVerbs({ host: loopSettings.askHumanHost }),
+    macbook: macbookVerbs,
     recheckAfterMs: loopSettings.recheckAfterMs,
   }
   const checkpoints = checkpointUses(checkpointDeps)

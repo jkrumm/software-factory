@@ -164,10 +164,11 @@ export interface SyncPort {
  * A fixed verb of the MacBook's gate over the dedicated ssh key (`<verb> [<name>]` as its forced command reads it, `need.ts`): `dotfiles-sync`,
  * `report <name>` (one read-only command of the MacBook's registry, exit 0 when it ran, whatever it said) and `repo-pull <name>`
  * (`git pull --ff-only` of one checkout under `~/SourceRoot`). Exit 126: the gate refuses the verb (unknown, or an older gate),
- * 255: the MacBook is unreachable. One call, never inside a transaction.
+ * 255: the MacBook is unreachable. `options.timeoutMs` is the hang guard on the ssh call (default 10 minutes); a call it kills
+ * answers exit -1. One call, never inside a transaction.
  */
 export interface MacbookVerbPort {
-  run(verb: MacbookVerb): Promise<Result<{ exit: number; output: string }>>
+  run(verb: MacbookVerb, options?: { timeoutMs?: number }): Promise<Result<{ exit: number; output: string }>>
 }
 
 /** The desk pass's own record: when it last ran, when the owner last came back, and whether the MacBook last answered. */
