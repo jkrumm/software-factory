@@ -2,13 +2,16 @@ import { realpathSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { leadBranchIssue } from '../../../kernel/ids.ts'
 import { originDefault } from '../checkout.ts'
-import { gitOut, gitTry, type Tools } from '../git.ts'
+import { exec, gitOut, gitTry, type Tools } from '../git.ts'
 import { type Outcome, clean, finding, found, skipped } from './finding.ts'
 
 const STALE_DAYS = 30
 const DAY_S = 86_400
 /** A merged worktree or default-tip branch is a leftover only after this long without activity: a lead's fresh one is not. */
 const QUIET_S = 2 * DAY_S
+const GH_TIMEOUT_MS = 30_000
+/** The newest merged pull requests read for their head branches. */
+const MERGED_PRS = '1000'
 
 export interface Worktree {
   path: string
@@ -70,6 +73,44 @@ async function idleSeconds(tools: Tools, worktree: string, now: number): Promise
   return times.length ? now - Math.max(...times) : undefined
 }
 
+/**
+ * `${branch} ${sha}` for each branch whose pull request merged at that head. A squash or rebase merge leaves no merge in
+ * git's history, so `git branch --merged` cannot see it; the pull request records the head it merged at, and a branch still
+ * there is merged. Empty when gh cannot read the repo: the probe then keeps to git's answer.
+ */
+async function mergedPullRequestHeads(tools: Tools, path: string): Promise<Set<string>> {
+  const result = await exec(
+    [
+      tools.gh,
+      'pr',
+      'list',
+      '--state',
+      'merged',
+      '--limit',
+      MERGED_PRS,
+      '--json',
+      'headRefName,headRefOid,isCrossRepository',
+    ],
+    GH_TIMEOUT_MS,
+    path,
+  ).catch(() => undefined)
+  const stdout = result?.exitCode === 0 ? result.stdout : undefined
+  if (stdout === undefined) return new Set()
+  try {
+    const rows: unknown = JSON.parse(stdout)
+    if (!Array.isArray(rows)) return new Set()
+    return new Set(
+      rows.flatMap((row: { headRefName?: unknown; headRefOid?: unknown; isCrossRepository?: unknown }) =>
+        typeof row.headRefName === 'string' && typeof row.headRefOid === 'string' && row.isCrossRepository !== true
+          ? [`${row.headRefName} ${row.headRefOid}`]
+          : [],
+      ),
+    )
+  } catch {
+    return new Set()
+  }
+}
+
 const reason = (merged: boolean, days: number): string | undefined =>
   merged ? 'merged' : days > STALE_DAYS ? `untouched ${days} days` : undefined
 
@@ -129,12 +170,14 @@ export async function scanStale(tools: Tools, path: string): Promise<StaleScan |
   if (!remote.length && !linked.length) return 'no remote branches and no linked worktrees'
 
   const defaultTip = (await gitTry(tools, path, ['rev-parse', '--verify', '-q', target]))?.trim()
+  const squashed = remote.length ? await mergedPullRequestHeads(tools, path) : new Set<string>()
   const branches = remote
     .map((b) => ({
       name: b.name,
       ts: b.ts,
       why: reason(
-        mergedRemote.has(b.name) && (b.tip !== defaultTip || now - b.ts >= QUIET_S),
+        (mergedRemote.has(b.name) || squashed.has(`${b.name} ${b.tip}`)) &&
+          (b.tip !== defaultTip || now - b.ts >= QUIET_S),
         Math.floor((now - b.ts) / DAY_S),
       ),
     }))
