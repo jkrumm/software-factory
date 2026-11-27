@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { FACTS_EXAMPLE, FACTS_KEYS, MAX_AFTER_IDS, PLAN_LIMITS } from '@software-factory/contract'
+import { parseProject } from '@software-factory/contract/project'
 import { parseYamlText } from '../../src/adapters/planning/git-projects.ts'
 import { factsNote, filable, parsePlan, type PlanFile, rowStatuses } from '../../src/domains/planning/plan.ts'
 import { issueId } from '../../src/kernel/ids.ts'
@@ -20,7 +21,12 @@ const row = (key: string, extra: object = {}) => ({ key, title: key, facts: { wh
 
 describe('docs/plan.yaml', () => {
   test("the factory's own plan parses without a warning", async () => {
-    const result = parsed(await Bun.file(join(ROOT, 'docs', 'plan.yaml')).text())
+    // the lanes its rows may name are the ones the factory's own project.yaml declares
+    const projectYaml = parseYamlText(await Bun.file(join(ROOT, 'project.yaml')).text())
+    if (!projectYaml.ok) throw new Error(projectYaml.message)
+    const project = parseProject(projectYaml.value, 'software-factory')
+    if (!project.ok) throw new Error('project.yaml does not parse')
+    const result = parsed(await Bun.file(join(ROOT, 'docs', 'plan.yaml')).text(), Object.keys(project.project.lanes))
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.plan.rows.length).toBeGreaterThan(0)
