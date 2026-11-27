@@ -49,6 +49,21 @@ describe('the MacBook fixed verbs', () => {
     ])
   })
 
+  test('a call may bound the ssh run tighter than the verb default', async () => {
+    const limits: number[] = []
+    const port = askHumanVerbs({
+      host: 'h',
+      run: (_cmd, timeoutMs) => {
+        limits.push(timeoutMs)
+        return Promise.resolve({ exitCode: 0, stdout: '' })
+      },
+    })
+    await port.run({ verb: 'report', name: 'smb-mounts' }, { timeoutMs: 75_000 })
+    await port.run({ verb: 'report', name: 'smb-mounts' })
+    expect(limits[0]).toBe(75_000)
+    expect(limits[1]).toBeGreaterThan(75_000)
+  })
+
   test('the exit code comes as it is; no alias or a failed start is a port error', async () => {
     const down = askHumanVerbs({ host: 'h', run: () => Promise.resolve({ exitCode: 126, stdout: '' }) })
     expect(await down.run({ verb: 'report', name: 'x' })).toEqual({ ok: true, value: { exit: 126, output: '' } })
