@@ -19,7 +19,6 @@ import { prReview } from './adapters/reviews/pr.ts'
 import { githubCiLedger, githubCiLive } from './adapters/selfwatch/github.ts'
 import { gitMigrationFiles } from './adapters/selfwatch/git.ts'
 import { hostOverload } from './adapters/selfwatch/overload.ts'
-import { shellCheckRunner } from './adapters/shell/check-runner.ts'
 import { askHumanPush, askHumanSync } from './adapters/shell/ask-human.ts'
 import type { githubCi } from './adapters/quality/ci.ts'
 import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
@@ -239,7 +238,7 @@ export function composeLoops(ctx: LoopContext) {
         ...writes,
         blobs: fileBlobStore(ctx.checkpointSettings.blobDir),
         consoleUrl: ctx.checkpointSettings.line.consoleUrl,
-        checks: shellCheckRunner(),
+        checks: checkpointDeps.checks,
       },
       planning: writes,
       claimQueued: planning.claimQueued,
@@ -411,7 +410,7 @@ export function composeLoops(ctx: LoopContext) {
     digestLoop(wiring('digest'), { ...writes }),
     errandsLoop(wiring('errands'), {
       ...writes,
-      checks: shellCheckRunner(),
+      checks: checkpointDeps.checks,
       agw: ctx.agw,
       // a request an Issue joined ends for that Issue too
       end: async (errand, how) => {

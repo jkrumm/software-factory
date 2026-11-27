@@ -371,7 +371,9 @@ request's review by someone else. Each rule is one line with the symbol that hol
 - The same need joins the open Errand (`matchKey`, `app/checkpoints.ts`); `eachJoined` tells every joined Issue how it
   ended.
 - `--check` closes the Errand itself (`runCheck`, `resolveErrand`): exit 1..125 closes `not_needed`; 127 is `broken`
-  (`checkVerdict`, `tellCheckBroken`).
+  (`checkVerdict`, `tellCheckBroken`). A check runs on the mini, except one that is exactly a MacBook report
+  (`MACBOOK_REPORTS`): `adapters/shell/macbook-check-runner.ts` runs it through the gate's `report` verb and takes its
+  `[exit N]` as the exit; an unreachable MacBook, a timeout or a missing exit line is `unrunnable`.
 - The desk pass (`app/loops/desk.ts`, `domains/errands/desk.ts`) pushes MacBook dialogs through the dotfiles'
   ask-human script (the caller is `pushQueue`, `adapters/shell/ask-human.ts`), for `secret` and `hands` only. A
   `place` waits on Needs you; an `approval` never goes to the MacBook.
