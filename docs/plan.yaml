@@ -973,6 +973,8 @@ rows:
   # context and he is needed in about one Issue in a hundred). Six tracks, written against the code of that day. Rows without
   # `after` start at once, by prio (tracks A and C first); `lane: spine` rows change what a running lead depends on and run one at
   # a time (project.yaml `lanes`), each proven with FACTORY_REF before its merge; six read rows measure their track a week later.
+  # Waves, so each can be read before the next starts: tracks A and C, fix-follow and green-before-lock at once; track B from
+  # 2026-11-28, track D from 2026-11-29, tracks E and F from 2026-11-30 (`not_before` on the rows without `after`).
   # Renovation 2026-11, Track A: only what is his reaches the owner (Errands, held signals, the walls between the mini, the MacBook and 1Password).
   - key: ren-secrets-service-account
     repo: dotfiles
@@ -1447,6 +1449,7 @@ rows:
 
   # Renovation 2026-11, Track B: a lead decides, a plan enables it (the Judge and the Spec leave, one brief, a plan steward with tools).
   - key: ren-steward-decides-stalls
+    not_before: 2026-11-28T07:00:00Z
     prio: 30
     title: "The stall steward decides itself: wake, wait and retry, requeue, drop or an Errand, never a Decision"
     facts:
@@ -1674,6 +1677,7 @@ rows:
         A lead that started on the previous release finishes on this one without a hand, and after make rollback a lead started on this release finishes on the previous one: a test or one stated reason proves each direction.
         make check-fast passes.
   - key: ren-filing-guide
+    not_before: 2026-11-28T07:00:00Z
     prio: 30
     title: "Every door a filer uses says what a good Issue carries: why, what with paths, change, acceptance, decided, not"
     facts:
@@ -1698,6 +1702,7 @@ rows:
         After the deploy factory signal file --help names the six keys.
         make check-fast passes.
   - key: ren-plan-record
+    not_before: 2026-11-28T07:00:00Z
     prio: 30
     title: "An Issue records which session filed it"
     facts:
@@ -1746,6 +1751,7 @@ rows:
         After the deploy factory issue amend --help prints the verb.
         make check-fast and make docs-check pass.
   - key: ren-plan-record-paths
+    not_before: 2026-11-28T07:00:00Z
     prio: 30
     title: "factory read chain --paths shows which open Issues and unfiled plan rows name the same files"
     facts:
@@ -1768,6 +1774,7 @@ rows:
         After the deploy factory read chain --paths true --format json returns the overlaps array.
         make check-fast passes.
   - key: ren-plan-steward-agw
+    not_before: 2026-11-28T07:00:00Z
     prio: 30
     repo: agent-workflows
     seat: { tier: opus, effort: high, why: "The contract every later planning row applies and replays." }
@@ -1892,6 +1899,7 @@ rows:
         Tests: a held row yields one "Plan: <project>" Issue whose facts hold the row's new YAML, and a second held row amends it; a blocked head with two dependents that do not need its output loses those edges, each with a note; a gate row is left unchanged.
         make check-fast and make docs-check pass.
   - key: ren-dated-work
+    not_before: 2026-11-28T07:00:00Z
     prio: 30
     title: "Dated work waits unstarted: not_before at filing, and a lead's timer takes a reason and at most a day"
     facts:
@@ -1966,7 +1974,7 @@ rows:
 
   # Renovation 2026-11, Track C: stable, and it heals itself (watchdog, clean stop, weekly drill, red lines file their fix).
   - key: ren-hung-server-restarts-health
-    prio: 40
+    prio: 70
     kind: bug
     title: "A loop that has not finished a pass for three of its intervals reads not ok in GET /health and in factory read health"
     facts:
@@ -1989,7 +1997,7 @@ rows:
         The loop line names the loop and the time; the keys of .heartbeat are unchanged; make check-fast passes.
 
   - key: ren-hung-server-restarts
-    prio: 40
+    prio: 70
     kind: bug
     lane: spine
     seat: { role: lead, moveUp: true }
@@ -2021,7 +2029,7 @@ rows:
         A lead that started on the previous release finishes on this one without a hand, and after make rollback a lead started on this release finishes on the previous one: a test or one stated reason proves each direction.
 
   - key: ren-hung-server-restarts-claims
-    prio: 40
+    prio: 60
     kind: bug
     title: "Boot gives back every claim a dead process held, so an effect no longer waits 15 minutes after a kill"
     facts:
@@ -2044,7 +2052,7 @@ rows:
         make check-fast passes.
 
   - key: ren-hung-server-restarts-outside
-    prio: 40
+    prio: 60
     repo: dotfiles
     kind: feature
     title: "A factory server that is alive but does not answer is restarted from outside, with a backoff and never during a deploy"
@@ -2534,6 +2542,7 @@ rows:
         After the deploy `factory read project-page software-factory --format json` shows the count.
 
   - key: ren-loop-issues-last
+    not_before: 2026-11-29T07:00:00Z
     prio: 20
     title: "Issues a loop filed start last in their repo: an order inside one project, nothing held back"
     facts:
@@ -2556,6 +2565,7 @@ rows:
         A test proves the `filed` event of a loop's signal carries `loop`. `make check-fast` passes.
 
   - key: ren-lead-aim-reads-load
+    not_before: 2026-11-29T07:00:00Z
     prio: 20
     title: "The lead aim reads the test line and the host's load, not memory pressure, and its hold is recorded under its own word"
     facts:
@@ -2655,6 +2665,7 @@ rows:
         After the deploy `factory read flow --format json` showed an Issue that started.
 
   - key: ren-admission-dead-gates-pace
+    not_before: 2026-11-29T07:00:00Z
     prio: 20
     kind: chore
     title: "The queue state pace leaves: no project was ever set to it, and leads: 1 says the same"
@@ -2680,6 +2691,7 @@ rows:
         `make check-fast` passes.
 
   - key: ren-admission-dead-gates-finder
+    not_before: 2026-11-29T07:00:00Z
     prio: 20
     kind: chore
     title: "The cap finder and the clearing rate it trusts leave: nothing proposes to lift a repo's leads from a rate that is twice too high"
@@ -2703,6 +2715,7 @@ rows:
         `make check-fast` passes.
 
   - key: ren-admission-dead-gates-figure
+    not_before: 2026-11-29T07:00:00Z
     prio: 20
     kind: chore
     title: "The idle-allowance figure leaves the reads: it counts 40 account seats as supply on a host that carries ten leads"
@@ -2726,6 +2739,7 @@ rows:
         The Console's tests and `make check-fast` pass.
 
   - key: ren-long-steps-leave-mini
+    not_before: 2026-11-29T07:00:00Z
     prio: 20
     repo: basalt-ui
     title: "basalt-ui's four fast check steps are declared for the step host, so they leave the mini's test line when it is long"
@@ -2746,6 +2760,7 @@ rows:
         `make check-fast` passes on the mini with `FACTORY_SLOT_REMOTE=0`.
 
   - key: ren-strong-seat-by-reason
+    not_before: 2026-11-29T07:00:00Z
     prio: 20
     title: "Only a stated reason starts an Issue on the strong row: every other strong filing, a plan row's too, starts on the lead row and moves up"
     facts:
@@ -2839,6 +2854,7 @@ rows:
         - The Report states the 72-hour share for the ships since the range exists, beside the baseline of 8.4 %, and names what explains a gap over two points.
         - `factory read kpis --format json` carries the figure, and `make check-fast` passes.
   - key: ren-reason-table
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     seat: { role: lead, moveUp: true }
     title: "One typed table says why an Issue waits: three counts, thirteen reason words, no fallback"
@@ -2956,6 +2972,7 @@ rows:
         - After the deploy the Console strip, `factory read overview` and the Herdr bar show the same three numbers; the Report states them.
         - `make check-fast` passes.
   - key: ren-issue-row-columns
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     seat: { tier: opus, effort: high, why: "A data-model change every read builds on." }
     title: "The Issue row carries what its events say, proven by replay; the first read stops folding events in SQL"
@@ -2983,6 +3000,7 @@ rows:
         - `rg -c "issue_events" apps/server/src/read/issues.ts` prints less than 8.
         - The branch was proven on the mini with `FACTORY_REF=<branch> make deploy` and `make verify` before the merge.
   - key: ren-first-verification-by-proof
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     title: "First verification says what each pass proved, and counts regressions after the first pass"
     facts:
@@ -3006,6 +3024,7 @@ rows:
         - The Report states the week's share of passes with a full proof.
         - `make check-fast` passes.
   - key: ren-first-verification-by-proof-ledger
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: bug
     title: "The judgments ledger tells triage from the screen, counts a repeated alert once and shows how many answers were decided"
@@ -3033,6 +3052,7 @@ rows:
         - A day after the deploy `factory read judgments --format json` shows answers above 0 for the steward, and every line carries `decided`.
         - `make check-fast` passes.
   - key: ren-first-verification-by-proof-ci-attempts
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: bug
     title: "The CI ledger keeps every attempt of a run, so a rerun no longer hides a failure"
@@ -3082,6 +3102,7 @@ rows:
         - The Report prints the section as read on the mini.
         - `make check-fast` passes.
   - key: ren-finders-one-rule
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     title: "Every finder passes one gate and one ledger rule: a figure, the day it is read again, and a flat reading counts like a drop"
     facts:
@@ -3151,6 +3172,7 @@ rows:
         - The e2e test of the Improve page passes.
         - `make check-fast` passes.
   - key: ren-kpis-true
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: chore
     title: "Quota at reset stops being a KPI and stays as a figure beside queue wait"
@@ -3172,6 +3194,7 @@ rows:
         - `rg -n "quota_at_reset" packages/contract/src/thresholds.ts packages/contract/src/kpi-catalog.ts` finds nothing.
         - `bun scripts/kpi-table.ts --check` and `make check-fast` pass.
   - key: ren-kpis-true-cycle
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     title: "Cycle time counts done Issues only, with p90 and the oldest open Issue; cost per Issue by seat stands beside it"
     facts:
@@ -3194,6 +3217,7 @@ rows:
         - The Report gives the old and the new median of the last 7 days.
         - `make check-fast` passes.
   - key: ren-loops-removed
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: chore
     title: "A loop is declared in one place; its name, interval and help text follow"
@@ -3240,6 +3264,7 @@ rows:
         - The follow-up row is in `docs/plan.yaml` and `factory plan check docs/plan.yaml` passes.
         - `make check-fast` passes.
   - key: ren-loops-removed-finders
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: chore
     title: "The migration-clash finder, the second process-growth finder and the cochange row leave"
@@ -3263,6 +3288,7 @@ rows:
         - The selfwatch kinds test counts ten conditions.
         - `make check-fast` passes.
   - key: ren-contract-cli-removed
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: chore
     title: "The phase field and phaseOf leave the Issue reads"
@@ -3285,6 +3311,7 @@ rows:
         - The Console typechecks and the e2e test of the Issue page passes.
         - `make check-fast` passes.
   - key: ren-contract-cli-removed-commands
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: chore
     title: "Nine CLI commands nobody calls leave the command list; their routes stay"
@@ -3307,6 +3334,7 @@ rows:
         - `apps/server/test/policy.test.ts` passes unchanged: every route is still there.
         - The generated file is current, and `make check-fast` passes.
   - key: ren-contract-cli-removed-hooks
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: chore
     lane: spine
@@ -3334,6 +3362,7 @@ rows:
         - A lead that started on the previous release finishes on this one without a hand, and after make rollback a lead started on this release finishes on the previous one: a test or one stated reason proves each direction.
         - `make check-fast` passes.
   - key: ren-contract-cli-removed-unused
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: chore
     title: "The unused Eden client and intake's loop guard, which nothing can trigger, leave"
@@ -3356,6 +3385,7 @@ rows:
         - The follow-up row is in `docs/plan.yaml` and `factory plan check docs/plan.yaml` passes.
         - `make check-fast` passes.
   - key: ren-contract-cli-removed-checks
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: chore
     title: "Enum CHECK lists the contract already holds leave the database, bar those on the Issue's own tables"
@@ -3408,6 +3438,7 @@ rows:
         - The generator's `--check` runs in `check-static` and fails after a hand edit in a generated block.
         - `bun run --cwd apps/console language:check` and `make check-fast` pass.
   - key: ren-guide-quotes-out
+    not_before: 2026-11-30T07:00:00Z
     kind: docs
     seat: { role: lead, moveUp: true }
     title: "The guide stops quoting code and linking to line numbers: a doc names a file"
@@ -3430,6 +3461,7 @@ rows:
         - A test shows `guide-links.ts` failing on a link that ends in `#L12`.
         - `make guide-check` and `make check-fast` pass.
   - key: ren-docs-archive-out
+    not_before: 2026-11-30T07:00:00Z
     kind: docs
     title: "docs/research and docs/archive leave the tree; one line says where the history is"
     facts:
@@ -3449,6 +3481,7 @@ rows:
         - `rg -n "docs/(research|archive)" --glob '!docs/plan.yaml' .` finds only the line in `docs/decisions.md` and the generic skip lists of the hygiene code.
         - `make docs-check`, `make guide-check` and `make check-fast` pass.
   - key: ren-pictures-toolchain
+    not_before: 2026-11-30T07:00:00Z
     seat: { role: lead, moveUp: true }
     title: "One hand-written SVG per picture, a small script writes its light and dark file, and the first picture is drawn"
     facts:
@@ -3583,6 +3616,7 @@ rows:
         - The Report shows the start page and one picture page at 1800 by 1200, light and dark.
         - `make guide-check` and `make check-fast` pass.
   - key: ren-demo-on-fakes
+    not_before: 2026-11-30T07:00:00Z
     title: "make demo runs one Issue from filed to verified on fakes, with no agw, no terminal host and no account"
     facts:
       why: |-
@@ -3607,6 +3641,7 @@ rows:
 
   # Renovation 2026-11, Track F: a second program and shadow projects (program profile, OpenCode on open models, three settings).
   - key: ren-program-profile
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     lane: spine
     seat: { tier: opus, effort: high, why: "The seam every second lead program builds on: start, note, resume, events and stop of every lead pass through it." }
@@ -3663,6 +3698,7 @@ rows:
         make check-fast passes.
 
   - key: ren-opencode-by-hand
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     kind: chore
     seat: { role: lead, moveUp: true }
@@ -3833,6 +3869,7 @@ rows:
         Met: the Issue is closed done, the Report's id in the reason.
 
   - key: ren-shadow-settings
+    not_before: 2026-11-30T07:00:00Z
     prio: 10
     lane: spine
     seat: { role: lead, moveUp: true }

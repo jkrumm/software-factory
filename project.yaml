@@ -12,6 +12,7 @@ ship:
   - { via: pr }
 signals:
   github: { author: jkrumm, since: 2026-11-07T06:30:00Z, checks: true } # the owner's new issues come in; anyone else's need the label
+leads: 5 # what this repo's merge window clears (4 to 5, measured 19 to 26 November 2026); plan row ren-places-follow-merge replaces the number with a count that follows the merge
 lanes: { spine: 1 } # rows that change what a running lead depends on (the brief, land and its lock, the hooks, the watchdog) run one at a time
 slots: { run: 30m } # `make check-fast` runs in one slot; a rerun of one heavy suite to reproduce a CI failure fits
 budgets: { fast: 5m, peak: 4GiB, fail: 30% } # the throughput loop (docs/architecture.md): a day over one of these is a signal on this repo
