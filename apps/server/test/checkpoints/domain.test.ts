@@ -1084,6 +1084,7 @@ describe('refuseNoOpDefault', () => {
     'Park the old route and ship the new one',
     'Drop the legacy route and ship the new one',
     'Drop A or keep it',
+    'Drop',
   ])('%s is a choice', (label) => {
     expect(refuseNoOpDefault(withLabel(label))).toBeNull()
   })
