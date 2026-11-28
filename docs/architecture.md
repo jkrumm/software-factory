@@ -522,7 +522,10 @@ What each decides in code and what it files:
   deterministic conditions, no model; all but `budget_breach` are the factory itself on this repo. The kinds are
   `migration_clash`, `wait_overdue`, `lead_idle`, `inert_regression`, `heartbeat_stale`, `process_growth`,
   `swap_growth`, `process_storm`, `load_over_ceiling`, `slot_line`, `gates_passed` and `budget_breach` (a project's
-  `budgets:` against its last 24 hours of `step_costs`, `readBudgetFacts` in `read/throughput-loop.ts`). The host
+  `budgets:` against its last 24 hours of `step_costs`, `readBudgetFacts` in `read/throughput-loop.ts`). The `fail`
+  share counts only steps of the default branch or a merged head, never a lead branch's red-green loop, and its breach is
+  not filed while the throughput loop's `failed_run_minutes` improvement of the project is open, nor again after a
+  `dropped` Issue unless the share is worse than the one that Issue named (`failBreachHeld`). The host
   kinds read the host loop's rows; the overload kinds (`load_over_ceiling`, `slot_line`, `gates_passed`) carry an
   evidence block (`overloadEvidence`). A subject is its newest row in `loop_findings`: filed once and through the
   finder gate; the same evidence files nothing; changed evidence is filed again, which intake turns into a note on the

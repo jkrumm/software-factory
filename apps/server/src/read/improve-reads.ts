@@ -97,6 +97,8 @@ const WaitRowSchema = z.object({
   since_at: z.date().nullable(),
 })
 
+const ImprovementRow = z.object({ repo: z.string(), issue: z.string() })
+
 const ClosedRow = z.object({
   issue: z.string(),
   loop: z.enum(['friction', 'hygiene', 'selfwatch', 'throughput']),
@@ -309,6 +311,20 @@ export function improveReads(tx: SQL): ImproveReads {
             ? null
             : { samples: header.samples, idlePct: header.idle, userPct: header.usr, sysPct: header.sys },
       }
+    },
+
+    async openImprovements(kpi) {
+      const rows: unknown[] = await tx`
+        SELECT lf.repo, lf.issue_id AS issue FROM factory.loop_findings lf JOIN factory.issues i ON i.id = lf.issue_id
+        WHERE lf.loop = 'throughput' AND lf.class = ${kpi} AND i.state <> 'closed' AND NOT EXISTS (
+          SELECT 1 FROM factory.issue_events e WHERE e.issue_id = i.id AND e.kind = 'shipped' AND e.result = 'applied')
+        ORDER BY lf.filed_at`
+      return new Map(
+        rows.map((raw) => {
+          const row = ImprovementRow.parse(raw)
+          return [row.repo, row.issue]
+        }),
+      )
     },
 
     async closedFindings(loop, repo) {

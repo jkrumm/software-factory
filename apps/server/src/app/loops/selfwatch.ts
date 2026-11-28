@@ -48,7 +48,7 @@ import {
   type SelfwatchRow,
   subjectKeyOf,
 } from '../../domains/improve/selfwatch-model.ts'
-import { type BudgetFact, budgetFindings } from '../../domains/improve/throughput.ts'
+import { type BudgetFact, budgetFindings, failBreachHeld } from '../../domains/improve/throughput.ts'
 import { leadKey } from '../../domains/leads/names.ts'
 import type { LeadStore } from '../../domains/leads/ports.ts'
 import { isBuiltinInert } from '../../domains/quality/evidence.ts'
@@ -118,6 +118,8 @@ interface SelfwatchPass {
   deferred: number
   /** due to be filed and not: their finder is muted by the finder gate (mostly noise) */
   held: string[]
+  /** a `fail` breach due to be filed and not, each with why: its cost is already held or was already dropped */
+  covered: string[]
   cleared: number
   failed: { key: string; reason: string }[]
   /** sources not read this pass, each with why */
@@ -337,11 +339,23 @@ async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<SelfwatchPass,
   if (!settled.ok) return settled
   const gated = await readGate(deps, { loop: 'selfwatch', now })
   if (!gated.ok) return gated
-  // a muted finder is named before the cap counts: it does not use up a slot
+  const improving = await deps.uow.run(async ({ loopReads }) =>
+    ok(await loopReads.openImprovements('failed_run_minutes')),
+  )
+  if (!improving.ok) return improving
+  // a muted finder or a covered breach is named before the cap counts: it does not use up a slot
   const held: string[] = []
+  const covered: string[] = []
   const allowed = plan.file.filter((action) => {
-    if (gated.value.allows(subjectKeyOf(action.finding))) return true
-    held.push(subjectKeyOf(action.finding))
+    const subject = subjectKeyOf(action.finding)
+    // no row is written for either, so the next pass judges it again
+    const why = failBreachHeld(action.finding, { improving: improving.value, previous: settled.value.last(subject) })
+    if (why) {
+      covered.push(why)
+      return false
+    }
+    if (gated.value.allows(subject)) return true
+    held.push(subject)
     return false
   })
   const due = allowed.slice(0, MAX_SIGNALS_PER_PASS)
@@ -350,6 +364,7 @@ async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<SelfwatchPass,
     filed: [],
     deferred: allowed.length - due.length,
     held,
+    covered,
     cleared: plan.clear.length,
     failed: [],
     notes: gathered.value.notes,
@@ -419,6 +434,7 @@ const selfwatchSummary = (pass: SelfwatchPass): string =>
     `saw ${pass.seen} condition(s): filed ${pass.filed.length}`,
     pass.deferred > 0 ? `${pass.deferred} left for the next tick` : null,
     pass.held.length > 0 ? `muted by the finder gate: ${pass.held.join(', ')}` : null,
+    pass.covered.length > 0 ? `not filed: ${pass.covered.join(', ')}` : null,
     `cleared ${pass.cleared}`,
     pass.failed.length > 0 ? `${pass.failed.length} failed` : null,
     ...pass.notes,

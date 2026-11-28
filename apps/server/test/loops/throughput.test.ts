@@ -3,6 +3,8 @@ import { RETRO_MARKER } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresLoopStore } from '../../src/adapters/postgres/loop-store.ts'
+import type { ClosedFinding } from '../../src/domains/improve/ledger.ts'
+import { loopReads } from '../../src/read/loops.ts'
 import { throughputPass, throughputSummary } from '../../src/app/loops/throughput.ts'
 import type { UnitOfWork } from '../../src/app/unit-of-work.ts'
 import type { LoopStore } from '../../src/app/loops/stores.ts'
@@ -11,6 +13,7 @@ import { planSelfwatch } from '../../src/domains/improve/selfwatch.ts'
 import { subjectKeyOf } from '../../src/domains/improve/selfwatch-model.ts'
 import {
   budgetFindings,
+  failBreachHeld,
   figureOf,
   movedDown,
   rankCandidates,
@@ -46,10 +49,21 @@ afterAll(() => db.stop())
 
 const ago = (ms: number): Date => new Date(T0.getTime() - ms)
 
-async function step(input: { repo: string; name?: string; at: Date; ms: number; exit?: number; peak?: number }) {
+async function step(input: {
+  repo: string
+  name?: string
+  at: Date
+  ms: number
+  exit?: number
+  peak?: number
+  cwd?: string
+  commit?: string
+  dirty?: boolean
+}) {
   await db.sql`
-    INSERT INTO factory.step_costs (at, name, repo, duration_ms, wait_ms, exit_code, peak_rss_mib)
-    VALUES (${input.at}, ${input.name ?? `${input.repo} check`}, ${`/work/${input.repo}`}, ${input.ms}, 0, ${input.exit ?? 0}, ${input.peak ?? null})`
+    INSERT INTO factory.step_costs (at, name, repo, duration_ms, wait_ms, exit_code, peak_rss_mib, cwd, vcs_ref_head_revision, dirty)
+    VALUES (${input.at}, ${input.name ?? `${input.repo} check`}, ${`/work/${input.repo}`}, ${input.ms}, 0, ${input.exit ?? 0}, ${input.peak ?? null},
+      ${input.cwd ?? null}, ${input.commit ?? null}, ${input.dirty ?? null})`
 }
 
 let eventNo = 0
@@ -232,8 +246,8 @@ describe('a seeded budget breach', () => {
   describe('the failure share', () => {
     // the tests share one database, so each judges a project of its own
     let project = 'fl'
-    const run = (at: Date, name: string, exit: number) =>
-      step({ repo: project, name: `${project} ${name}`, at, ms: 1000, exit })
+    const run = (at: Date, name: string, exit: number, tree: { cwd?: string; commit?: string; dirty?: boolean } = {}) =>
+      step({ repo: project, name: `${project} ${name}`, at, ms: 1000, exit, ...tree })
     const fail = async (epoch: Date | null = null) => {
       const budgets = [{ project, repo: project, fastMs: null, peakMib: null, failShare: 0.3 }]
       const [fact] = await readBudgetFacts(db.sql, { now: T0, budgets, epoch })
@@ -267,19 +281,91 @@ describe('a seeded budget breach', () => {
       expect(fact.over).toBe(false)
     })
 
-    test('a red check-fast is left out of both counts and said', async () => {
+    test('a red lead branch before its merge is left out of both counts and said', async () => {
       project = 'fl3'
+      const lead = `/work/fl3/.claude/worktrees/factory-1-1`
       for (const day of [0, 1]) {
-        for (let i = 0; i < 6; i++) await run(ago(day * DAY + (i + 1) * HOUR), 'check-fast', i < 4 ? 1 : 0)
+        for (let i = 0; i < 6; i++) {
+          await run(ago(day * DAY + (i + 1) * HOUR), 'unit', 101, { cwd: lead, commit: 'base', dirty: true })
+        }
         for (let i = 0; i < 5; i++) await run(ago(day * DAY + (i + 7) * HOUR), 'unit', 0)
       }
       const fact = await fail()
-      expect(fact.value).toContain('0 of 7 steps failed (0%)')
+      expect(fact.value).toContain('0 of 5 steps failed (0%)')
       expect(fact.over).toBe(false)
       expect(fact.detail).toEqual([
-        '4 red check-fast runs are left out of the count: a lead fixes them before it pushes.',
+        '6 steps of lead branches before their merge are left out of the count: work still in progress.',
       ])
     })
+
+    test('a clean tree of a lead at a commit of the default branch counts, and a breach carries its share', async () => {
+      project = 'fl4'
+      await db.sql`
+        INSERT INTO factory.ci_runs (repo, run_id, workflow, event, head_branch, head_sha, queued_at, started_at, finished_at, conclusion)
+        VALUES ('fl4', 1, 'ci', 'push', 'master', 'landed', ${T0}, ${T0}, ${T0}, 'failure')`
+      const lead = `/work/fl4/.claude/worktrees/factory-1-1`
+      for (const day of [0, 1]) {
+        for (let i = 0; i < 3; i++) {
+          await run(ago(day * DAY + (i + 1) * HOUR), 'unit', 1, { cwd: lead, commit: 'landed', dirty: false })
+        }
+        // the same commit with uncommitted work is the lead's own, and so is a head CI never ran on master
+        await run(ago(day * DAY + 4 * HOUR), 'unit', 1, { cwd: lead, commit: 'landed', dirty: true })
+        await run(ago(day * DAY + 5 * HOUR), 'unit', 1, { cwd: lead, commit: 'branch', dirty: false })
+        for (let i = 0; i < 2; i++) await run(ago(day * DAY + (i + 6) * HOUR), 'unit', 0, { cwd: '/work/fl4' })
+      }
+      const fact = await fail()
+      expect(fact.value).toContain('3 of 5 steps failed (60%), the day before 3 of 5 (60%)')
+      expect(fact.over).toBe(true)
+      expect(budgetFindings([fact])[0]?.figure).toBe(60)
+    })
+
+    test('a breach is held while the failed-run improvement is open, and after a drop until the share is worse', () => {
+      const [finding] = budgetFindings([
+        { project: 'sf', repo: 'sf', budget: 'fail', limit: '20%', value: '40.5%', over: true, figure: 40.5 },
+      ])
+      if (!finding) throw new Error('no finding')
+      const dropped = (figure: number | null, outcome: 'dropped' | 'done' = 'dropped'): ClosedFinding => ({
+        issue: 'issue_3469',
+        loop: 'selfwatch',
+        repo: 'sf',
+        key: 'budget_breach:sf:fail',
+        figure,
+        verdict: null,
+        outcome,
+        filedAt: T0,
+        closedAt: T0,
+      })
+      const held = (previous?: ClosedFinding, improving = new Map<string, string>()) =>
+        failBreachHeld(finding, { improving, previous })
+      expect(held(undefined, new Map([['sf', 'issue_3386']]))).toContain('issue_3386')
+      expect(held(undefined, new Map([['other', 'issue_1']]))).toBeNull()
+      expect(held(dropped(40.5))).toContain('issue_3469 was dropped at 40.5%')
+      expect(held(dropped(30))).toBeNull()
+      expect(held(dropped(null))).toBeNull()
+      expect(held(dropped(50, 'done'))).toBeNull()
+      expect(
+        failBreachHeld({ ...finding, subject: 'sf:peak' }, { improving: new Map([['sf', 'x']]), previous: undefined }),
+      ).toBeNull()
+    })
+  })
+
+  test('the improvements held open are those not shipped and not closed, by project', async () => {
+    const reads = loopReads(db.sql)
+    const issueOf = async (id: string, repo: string, state: string, shipped: boolean) => {
+      await db.sql`
+        INSERT INTO factory.issues (id, repo, state, outcome, version)
+        VALUES (${id}, 'software-factory', ${state}, ${state === 'closed' ? 'dropped' : null}, 1)`
+      await db.sql`
+        INSERT INTO factory.loop_findings (issue_id, loop, repo, class, key, filed_at)
+        VALUES (${id}, 'throughput', ${repo}, 'failed_run_minutes', 'failed_run_minutes:*', ${T0})`
+      if (shipped) await event(id, 'shipped', T0, { version: 2, to: state })
+    }
+    await issueOf('issue_99001', 'waits', 'queued', false)
+    await issueOf('issue_99002', 'shipped', 'working', true)
+    await issueOf('issue_99003', 'closed', 'closed', false)
+    expect([...(await reads.openImprovements('failed_run_minutes'))]).toEqual([['waits', 'issue_99001']])
+    // these rows are no whole improvements: the daily pass below reads the ledger
+    await db.sql`DELETE FROM factory.loop_findings WHERE issue_id IN ('issue_99001', 'issue_99002', 'issue_99003')`
   })
 
   test('too few runs say nothing, and a budget left out is not judged', async () => {

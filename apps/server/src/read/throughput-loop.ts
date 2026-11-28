@@ -46,6 +46,7 @@ const StepRow = z.object({
   at: z.coerce.date(),
   commit: z.string().nullable(),
   cwd: z.string().nullable(),
+  dirty: z.boolean().nullable(),
 })
 
 const stepRunOf = (row: z.infer<typeof StepRow>): StepRun => ({
@@ -126,7 +127,7 @@ const stepRows = async (tx: SQL, from: Date, to: Date) =>
   (
     (await tx`
       SELECT ${tx.unsafe(REPO_OF_STEP)} AS repo, name, duration_ms, exit_code, peak_rss_mib AS peak, at,
-        vcs_ref_head_revision AS commit, cwd
+        vcs_ref_head_revision AS commit, cwd, dirty
       FROM factory.step_costs WHERE repo IS NOT NULL AND at >= ${from} AND at < ${to}`) as unknown[]
   ).map((raw) => StepRow.parse(raw))
 
@@ -387,16 +388,35 @@ export async function readWindowFacts(
 
 const isRed = (s: { exit_code: number | null }): boolean => s.exit_code !== null && s.exit_code !== 0
 
+/** Where a lead builds: a step in it is of a branch before its merge. */
+const LEAD_WORKTREE = /\/\.claude\/worktrees\//
+
+/**
+ * Whether the `fail` share counts a step: one run outside a lead's worktree, or in one on a clean tree at a commit CI ran
+ * on the default branch (`landed`, as `<repo> <sha>`). The rest is a lead's red-green loop on work in progress.
+ */
+const ofDefaultBranch = (s: z.infer<typeof StepRow>, landed: ReadonlySet<string>): boolean =>
+  !LEAD_WORKTREE.test(s.cwd ?? '') || (s.dirty === false && s.commit !== null && landed.has(`${s.repo} ${s.commit}`))
+
+/** The heads CI ran on a push to a default branch, as the CI ledger keeps them. */
+const landedHeads = async (tx: SQL): Promise<Set<string>> =>
+  new Set(
+    (
+      (await tx`
+        SELECT DISTINCT repo, head_sha FROM factory.ci_runs WHERE event = 'push' AND head_branch IN ('master', 'main')`) as unknown[]
+    )
+      .map((raw) => z.object({ repo: z.string(), head_sha: z.string() }).parse(raw))
+      .map((row) => `${row.repo} ${row.head_sha}`),
+  )
+
 interface FailShare {
   failed: number
-  /** the steps counted: every step bar a red `check-fast` */
   counted: number
   rate: number
 }
 
-/** The share of steps that exited non-zero, a red `check-fast` left out of both counts (a lead's pre-push fix loop). */
-function failShare(steps: readonly z.infer<typeof StepRow>[]): FailShare {
-  const counted = steps.filter((s) => !(isRed(s) && tierOf(s.name) === 'fast'))
+/** The share of the counted steps that exited non-zero. */
+function failShare(counted: readonly z.infer<typeof StepRow>[]): FailShare {
   const red = counted.filter(isRed).length
   return { failed: red, counted: counted.length, rate: counted.length === 0 ? 0 : red / counted.length }
 }
@@ -404,11 +424,11 @@ function failShare(steps: readonly z.infer<typeof StepRow>[]): FailShare {
 /** How many failing steps a breach names: the rest are a count, so the text stays one short line. */
 const FAILURES_NAMED = 8
 
-/** The counted failing steps by name and exit code, most first, so a lead needs no database read; `kept` red check-fast runs are said. */
-function failureLines(steps: readonly z.infer<typeof StepRow>[], kept: number): string[] {
+/** The counted failing steps by name and exit code, most first, so a lead needs no database read; `left` uncounted steps are said. */
+function failureLines(steps: readonly z.infer<typeof StepRow>[], left: number): string[] {
   const groups = new Map<string, { name: string; exit: number; count: number }>()
   for (const s of steps) {
-    if (!isRed(s) || tierOf(s.name) === 'fast') continue
+    if (!isRed(s)) continue
     const exit = s.exit_code ?? 0
     const key = `${s.name}\n${exit}`
     const group = groups.get(key) ?? { name: s.name, exit, count: 0 }
@@ -421,7 +441,8 @@ function failureLines(steps: readonly z.infer<typeof StepRow>[], kept: number): 
   const named = ranked.slice(0, FAILURES_NAMED).map((g) => `${g.name} exit ${g.exit} x${g.count}`)
   const rest = ranked.slice(FAILURES_NAMED).reduce((sum, g) => sum + g.count, 0)
   const lines = named.length === 0 ? [] : [`Failing steps: ${named.join('; ')}${rest > 0 ? `; ${rest} more` : ''}.`]
-  if (kept > 0) lines.push(`${kept} red check-fast runs are left out of the count: a lead fixes them before it pushes.`)
+  if (left > 0)
+    lines.push(`${left} steps of lead branches before their merge are left out of the count: work still in progress.`)
   return lines
 }
 
@@ -435,9 +456,9 @@ const share = (value: number): string => `${Math.round(value * 1000) / 10}%`
  * over a window the counting epoch cut under a day: it is one lead's red-green loop, not the project's day (the ranking
  * waits the same way, `MIN_RANK_DAYS`). `peak` is a maximum: a step over it is over in any window.
  *
- * `fail` leaves out a red `check-fast` (lint, tsc and the changed unit tests a lead fixes before it pushes: it never reaches
- * master), and is over only when the share held on the day before as well, judged over a whole day too: a one-day burst or
- * a window that reaches back past the epoch is no breach. The failing steps by name and exit code ride along as context.
+ * `fail` counts only steps of the default branch or a merged head (`ofDefaultBranch`), and is over only when the share
+ * held on the day before as well, judged over a whole day too: a one-day burst or a window that reaches back past the epoch
+ * is no breach. The failing steps by name and exit code ride along as context.
  */
 export async function readBudgetFacts(
   sql: SQL,
@@ -451,9 +472,10 @@ export async function readBudgetFacts(
   const before = countedFrom(new Date(dayAgo.getTime() - DAY_MS), options.epoch ?? null)
   const beforeWhole = dayAgo.getTime() - before.getTime() >= DAY_MS
   const wantsFail = wanted.some((b) => b.failShare !== null)
-  const { steps, prior } = await boundedRead(sql, 20_000, async (tx) => ({
+  const { steps, prior, landed } = await boundedRead(sql, 20_000, async (tx) => ({
     steps: await stepRows(tx, from, options.now),
     prior: wantsFail && beforeWhole ? await stepRows(tx, before, dayAgo) : [],
+    landed: wantsFail ? await landedHeads(tx) : new Set<string>(),
   }))
   const facts: BudgetFact[] = []
   for (const b of wanted) {
@@ -485,10 +507,10 @@ export async function readBudgetFacts(
       })
     }
     if (b.failShare !== null) {
-      const today = failShare(mine)
-      const yesterday = failShare(prior.filter((s) => s.repo === b.project))
+      const counted = mine.filter((s) => ofDefaultBranch(s, landed))
+      const today = failShare(counted)
+      const yesterday = failShare(prior.filter((s) => s.repo === b.project && ofDefaultBranch(s, landed)))
       const holds = (day: FailShare): boolean => day.counted >= MIN_FAIL_RUNS && day.rate > (b.failShare ?? 1)
-      const kept = mine.filter((s) => isRed(s) && tierOf(s.name) === 'fast').length
       facts.push({
         project: b.project,
         repo: b.repo,
@@ -498,7 +520,8 @@ export async function readBudgetFacts(
           beforeWhole ? `, the day before ${yesterday.failed} of ${yesterday.counted} (${share(yesterday.rate)})` : ''
         }`,
         over: wholeDay && beforeWhole && holds(today) && holds(yesterday),
-        detail: failureLines(mine, kept),
+        detail: failureLines(counted, mine.length - counted.length),
+        figure: Math.round(today.rate * 1000) / 10,
       })
     }
   }
