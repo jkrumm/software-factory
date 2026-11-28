@@ -21,6 +21,9 @@ interface Listed {
 
 const cutMarker = (lines: number): string => `[… ${lines} ${lines === 1 ? 'line' : 'lines'} cut]`
 
+/** Whether a detail holds a marker `condense` cut lines out of: its lines are then not all known. */
+export const hasCut = (detail: string): boolean => /\[… \d+ lines? cut\]/.test(detail)
+
 export function condense(text: string, max: number): string {
   const lines = text.split('\n')
   const listed = failingChecks(lines)

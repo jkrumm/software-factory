@@ -762,6 +762,26 @@ describe('the watch', () => {
     expect(view.watches[0]?.checks.map((c) => c.outcome)).toEqual(['red', 'red', 'red', 'red'])
   })
 
+  test('a reachability red is blocked until six hours after the window, then it is an ordinary red', async () => {
+    const issueId = await watching()
+    proofAnswer = () =>
+      ok([
+        {
+          name: 'make verify',
+          ok: false,
+          detail: 'exit 2: ssh: connect to host <host> port 2222: Operation timed out\nmake: *** [verify] Error 1',
+        },
+      ])
+    clock.advance(30 * 60_000)
+    value(await checkWatches(watchDeps()))
+    expect(await stateOf(issueId)).toMatchObject({ state: 'watching' })
+    clock.advance(6 * 60 * 60_000)
+    value(await checkWatches(watchDeps()))
+    const view = value(await showQuality({ uow }, issueId))
+    expect(view.watches[0]?.checks.map((c) => c.outcome)).toEqual(['blocked', 'red'])
+    expect(await stateOf(issueId)).toMatchObject({ state: 'watching' })
+  })
+
   test('a red that clears on a retry passes: a flaky probe never reaches the lead', async () => {
     const issueId = await watching()
     let first = true
