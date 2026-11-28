@@ -18,7 +18,7 @@ const GONE = /remote ref does not exist|unable to delete .*remote ref does not e
 
 /**
  * The scripted fix of the `stale` probe: it deletes what the probe calls merged and nothing else. A remote branch merged
- * into the default branch loses nothing (its commits are in the default); a worktree whose head is in the default branch and
+ * into the default branch loses nothing (its content is in the default, through the merge or squash that closed its pull request); a worktree whose head is in the default branch and
  * that nobody touched for two days loses nothing either, and `git worktree remove` without `--force` still refuses one with
  * changes or a lock. A branch or worktree that is only untouched is a decision, not a script's. Idempotent: a branch that is
  * gone already counts as deleted.

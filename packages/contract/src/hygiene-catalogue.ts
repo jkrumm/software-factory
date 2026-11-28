@@ -175,12 +175,12 @@ export const HYGIENE_CATALOGUE = [
     name: 'stale',
     fix: {
       keys: ['stale:branches', 'stale:worktrees'],
-      does: 'Deletes the remote branches merged into the default branch (`git push origin --delete`), prunes worktrees git calls prunable and removes the merged ones that are idle (`git worktree remove`, never `--force`: a dirty or locked one stays). The worktree of a lead (branch `factory/<issue>-<attempt>`, or its directory `factory-<issue>-<attempt>` once the branch is gone) is never touched: its finalization removes it.',
+      does: 'Deletes the remote branches merged into the default branch, or whose pull request merged at the tip of the branch (a squash or rebase merge; `git push origin --delete`), prunes worktrees git calls prunable and removes the merged ones that are idle (`git worktree remove`, never `--force`: a dirty or locked one stays). The worktree of a lead (branch `factory/<issue>-<attempt>`, or its directory `factory-<issue>-<attempt>` once the branch is gone) is never touched: its finalization removes it.',
       lands:
         'On the remote and the project checkout at once. Branches only untouched for 30 days and worktrees only untouched are not deleted: they stay a finding for a lead.',
     },
     summary:
-      'Remote branches merged into the default branch or untouched for 30 days, and leftover worktrees of branches that are gone.',
+      'Remote branches merged into the default branch (or whose pull request merged at their tip) or untouched for 30 days, and leftover worktrees of branches that are gone.',
     enabled: 'on',
     detect: null,
     cost: 'file',

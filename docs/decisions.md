@@ -327,8 +327,8 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   any work. Rule for deploy: none. A merged bump rides the repo's next ship exactly as a pushed one does (NL44); the pass never
   runs `make deploy`, least of all for this repo, whose deploy restarts the server that runs the pass. Field standard: Renovate
   with grouped updates and platform automerge; not taken for the reasons NL44 gives, and it would not run the check in a
-  test slot. Not done: Cargo, Python, Swift, Docker and Actions pins, and squash- or rebase-merged branches that
-  `stale:branches` does not call merged (a `gh pr list --state merged` read): each is its own signal. Review-gated repos are
+  test slot. Not done: Cargo, Python, Swift, Docker and Actions pins. Squash- and rebase-merged branches are no longer left out:
+  `stale:branches` calls a branch merged when its pull request merged at the branch's tip (`gh pr list --state merged`, `headRefOid`). Review-gated repos are
   not reached (work repos have no hygiene pass); a repo that requires a human review fails at the merge and goes to a lead.
   Switch: `FACTORY_HYGIENE_FIX=0`. Count over the next week: `fixes` rows of `deps` by outcome for the pull-request repos, the
   merge windows the passes held (`merge_windows` has them only where the CLI had a token) and `deps` Issues filed for them.

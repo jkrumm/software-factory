@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { defaultTools } from '../../src/adapters/hygiene/git.ts'
@@ -103,6 +103,47 @@ describe('parseWorktrees', () => {
 })
 
 describe('staleProbe', () => {
+  /** A gh whose `pr list` prints `json` and exits `exit`. */
+  const fakeGh = (json = '[]', exit = 0): string => {
+    const script = join(base, `gh-${++counter}`)
+    writeFileSync(script, `#!/bin/sh\necho "$*" > '${script}.args'\nprintf '%s' '${json}'\nexit ${exit}\n`)
+    chmodSync(script, 0o755)
+    return script
+  }
+  const headOf = (work: string, name: string): string => git(work, ['rev-parse', name]).trim()
+
+  test('red: a squash-merged branch whose pull request merged at its tip counts as merged', async () => {
+    const { work, throwaway } = fixture()
+    branch(work, 'squash-one', 90)
+    git(throwaway, ['fetch', '-q', 'origin'])
+    const row = { headRefName: 'squash-one', headRefOid: headOf(work, 'squash-one'), isCrossRepository: false }
+    const gh = fakeGh(JSON.stringify([row]))
+    const out = await staleProbe({ ...tools, gh }, throwaway)
+    expect(out.findings.find((f) => f.key === 'stale:branches')?.lines).toEqual(['origin/squash-one (merged)'])
+    expect(readFileSync(`${gh}.args`, 'utf8')).toContain('--base master')
+  })
+
+  test('green: a pull request that merged at another head leaves its branch untouched', async () => {
+    const { work, throwaway } = fixture()
+    branch(work, 'reused-one', 90)
+    git(throwaway, ['fetch', '-q', 'origin'])
+    const row = { headRefName: 'reused-one', headRefOid: 'f'.repeat(40), isCrossRepository: false }
+    const out = await staleProbe({ ...tools, gh: fakeGh(JSON.stringify([row])) }, throwaway)
+    expect(out.findings.find((f) => f.key === 'stale:branches')?.lines).toEqual([
+      'origin/reused-one (untouched 90 days)',
+    ])
+  })
+
+  test("green: a gh that cannot read the repo leaves git's answer alone", async () => {
+    const { work, throwaway } = fixture()
+    branch(work, 'squash-two', 90)
+    git(throwaway, ['fetch', '-q', 'origin'])
+    const out = await staleProbe({ ...tools, gh: fakeGh('', 1) }, throwaway)
+    expect(out.findings.find((f) => f.key === 'stale:branches')?.lines).toEqual([
+      'origin/squash-two (untouched 90 days)',
+    ])
+  })
+
   test('red: merged and untouched branches, merged first then oldest', async () => {
     const { work, throwaway } = fixture()
     branch(work, 'old-one', 90)
