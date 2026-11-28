@@ -1068,6 +1068,9 @@ describe('refuseNoOpDefault', () => {
     'Park',
     'Park until image-gateway ships portrait',
     'Park the Issue until the vendor releases',
+    'Close and refile',
+    'close as dropped and refile it',
+    'Drop it',
   ])('%s is no choice', (label) => {
     expect(refuseNoOpDefault(withLabel(label))).toContain('factory errand raise')
   })
@@ -1079,6 +1082,7 @@ describe('refuseNoOpDefault', () => {
     'Hold the release and ship the hotfix instead',
     'Merge when CI is green',
     'Park the old route and ship the new one',
+    'Drop the legacy route and ship the new one',
   ])('%s is a choice', (label) => {
     expect(refuseNoOpDefault(withLabel(label))).toBeNull()
   })
