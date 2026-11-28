@@ -170,7 +170,7 @@ The watch is the window after a ship, and Verify is the check that ends it: `mak
 
 - **It runs on its own loop,** so a slow verify never holds the leads' pass.
 - **CI of the landed commit counts.** In a pull-request project, Verify reads the default branch's CI for the exact merged commit. A run still running is neither green nor red, so the watch looks again and does not pass; one running past an hour is red. A red that the commit before it already had on the same failing check is inherited, not this change's regression.
-- **A red check is retried** up to three times, with a doubling delay, before it counts as a regression.
+- **A red check is retried** up to three times, with a doubling delay, before it counts as a regression. A red whose failing lines are all host reachability (an ssh that times out or is refused, a name that does not resolve, a MacBook offline) is rechecked at the recheck delay instead, and counts as an ordinary red only six hours after the window ends.
 - **A failure returns as a note.** `Regressed` goes back to the lead, who fixes forward. A revert is the lead's call, never a reflex. The lead goes back to work twice; the third regression stalls the Issue.
 
 issue_1809's checks, 2026-11-17:
