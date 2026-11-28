@@ -255,14 +255,22 @@ const REACHABILITY =
 /** A line make prints when a recipe fails: it says where the failure stopped, never what failed. */
 const RECIPE_WRAPPER = /^make(?:\[\d+\])?: \*\*\*/
 
+/** A reachability outage this long after the watch window ends is no longer waited on: the red counts as any other. */
+export const REACHABILITY_MAX_MS = 6 * 60 * 60_000
+
+/** A line `condense` cut out of a detail: the lines of such a detail are not all known. */
+const CUT_MARKER = /\[… \d+ lines? cut\]/
+
 /**
  * Marks each failed `make` check whose failing lines are all host reachability (the make wrapper lines aside) as
  * `blocked`: neither a pass nor a regression, looked at again after `recheckMs`, so an outage that clears is no fault of
- * the change. A red with any other failing line is the change's, as before. A check with no failing line is left alone.
+ * the change. Only before `until` (the ceiling, see `REACHABILITY_MAX_MS`), and never on a detail that was cut. A red
+ * with any other failing line is the change's, as before. A check with no failing line is left alone.
  */
-export function markReachability(checks: readonly Check[]): Check[] {
+export function markReachability(checks: readonly Check[], window: { now: Date; until: Date }): Check[] {
+  if (window.now >= window.until) return [...checks]
   return checks.map((check) => {
-    if (check.ok || check.blocked || !check.name.startsWith('make ')) return check
+    if (check.ok || check.blocked || !check.name.startsWith('make ') || CUT_MARKER.test(check.detail)) return check
     const lines = failingLines(check.detail).filter((line) => !RECIPE_WRAPPER.test(line))
     return lines.length > 0 && lines.every((line) => REACHABILITY.test(line)) ? { ...check, blocked: true } : check
   })
