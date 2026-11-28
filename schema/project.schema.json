@@ -360,7 +360,7 @@
           "pattern": "^(\\d+(?:\\.\\d+)?)(MiB|GiB)$"
         },
         "fail": {
-          "description": "the most of a day's check steps that may exit non-zero (`30%`); only steps of the default branch or a merged head count, and a breach needs the share on two days in a row",
+          "description": "the most of a day's check steps that may exit non-zero (`30%`); a lead branch's steps before its merge are not counted, and a breach needs the share on two days in a row",
           "consumer": "the throughput loop (apps/server/src/app/loops/throughput.ts)",
           "type": "string",
           "pattern": "^(\\d+(?:\\.\\d+)?)%$"

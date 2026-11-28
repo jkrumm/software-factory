@@ -523,7 +523,9 @@ What each decides in code and what it files:
   `migration_clash`, `wait_overdue`, `lead_idle`, `inert_regression`, `heartbeat_stale`, `process_growth`,
   `swap_growth`, `process_storm`, `load_over_ceiling`, `slot_line`, `gates_passed` and `budget_breach` (a project's
   `budgets:` against its last 24 hours of `step_costs`, `readBudgetFacts` in `read/throughput-loop.ts`). The `fail`
-  share counts only steps of the default branch or a merged head, never a lead branch's red-green loop, and its breach is
+  share counts the steps run outside a lead's worktree (a step records no branch: the main checkout stands for the default
+  branch) and, inside one, only a clean tree at a commit CI ran on a push to the default branch, so a lead branch's
+  red-green loop is left out; its breach is
   not filed while the throughput loop's `failed_run_minutes` improvement of the project is open, nor again after a
   `dropped` Issue unless the share is worse than the one that Issue named (`failBreachHeld`). The host
   kinds read the host loop's rows; the overload kinds (`load_over_ceiling`, `slot_line`, `gates_passed`) carry an

@@ -267,7 +267,7 @@ list's entry, `<name>` a map's key.
 | `budgets` | object | `{}` | what the repo's checks may cost; a day over one is a signal on the repo. A key left out is no budget |
 | `budgets.fast` | duration | — | the most the median of a day's fast-tier check runs may take (`5m`) |
 | `budgets.peak` | size | — | the most peak memory one check step may take (`4GiB`) |
-| `budgets.fail` | share | — | the most of a day's check steps that may exit non-zero (`30%`); only steps of the default branch or a merged head count, and a breach needs the share on two days in a row |
+| `budgets.fail` | share | — | the most of a day's check steps that may exit non-zero (`30%`); a lead branch's steps before its merge are not counted, and a breach needs the share on two days in a row |
 | `checks` | object or null | `null` | check tiers: a fast local check and the full gate (CI's when `ci` is true). Unset: the lead runs `make check` |
 | `checks.fast` | string | required | what a lead runs locally before each push (`make check-fast`) |
 | `checks.full` | string | `"make check"` | the complete gate |

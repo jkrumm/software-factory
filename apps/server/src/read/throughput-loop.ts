@@ -393,7 +393,9 @@ const LEAD_WORKTREE = /\/\.claude\/worktrees\//
 
 /**
  * Whether the `fail` share counts a step: one run outside a lead's worktree, or in one on a clean tree at a commit CI ran
- * on the default branch (`landed`, as `<repo> <sha>`). The rest is a lead's red-green loop on work in progress.
+ * on the default branch (`landed`, as `<repo> <sha>`). The rest is a lead's red-green loop on work in progress. A step
+ * records no branch, so the main checkout stands for the default branch; and a commit the CI ledger holds no push run for
+ * (a repo without CI, a run still going) counts in no lead worktree.
  */
 const ofDefaultBranch = (s: z.infer<typeof StepRow>, landed: ReadonlySet<string>): boolean =>
   !LEAD_WORKTREE.test(s.cwd ?? '') || (s.dirty === false && s.commit !== null && landed.has(`${s.repo} ${s.commit}`))
@@ -456,7 +458,7 @@ const share = (value: number): string => `${Math.round(value * 1000) / 10}%`
  * over a window the counting epoch cut under a day: it is one lead's red-green loop, not the project's day (the ranking
  * waits the same way, `MIN_RANK_DAYS`). `peak` is a maximum: a step over it is over in any window.
  *
- * `fail` counts only steps of the default branch or a merged head (`ofDefaultBranch`), and is over only when the share
+ * `fail` leaves out a lead branch's steps before its merge (`ofDefaultBranch`), and is over only when the share
  * held on the day before as well, judged over a whole day too: a one-day burst or a window that reaches back past the epoch
  * is no breach. The failing steps by name and exit code ride along as context.
  */
