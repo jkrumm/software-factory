@@ -5,6 +5,7 @@ import {
   type Check,
   ciCheck,
   markInherited,
+  markReachability,
   MAX_RETRIES,
   nextCheckAt,
   outcomeOf,
@@ -269,4 +270,75 @@ test('globs: ** crosses directories, * and ? stay in one segment, the rest is li
   expect(globMatches('a?.ts', 'ab.ts')).toBe(true)
   expect(globMatches('a.b', 'axb')).toBe(false)
   expect(globMatches('Makefile', 'Makefile')).toBe(true)
+})
+
+const open = { now: at(1), until: at(120) }
+
+test('a make red whose failing lines are host reachability is blocked: rechecked, never a regression', () => {
+  // the 3407 nightly lines during the mini DNS outage, and the 3323 ssh and MacBook-offline lines
+  const dns: Check = {
+    name: 'make verify',
+    ok: false,
+    detail: `exit 2: urllib.error.URLError: <urlopen error [Errno -3] Temporary failure in name resolution>
+socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+make: *** [verify] Error 1`,
+  }
+  const macbook: Check = {
+    name: 'make verify',
+    ok: false,
+    detail: `exit 2: ssh: connect to host <host> port 2222: Operation timed out
+ingest: <host> unreachable (MacBook asleep or offline)
+make: *** [verify] Error 1`,
+  }
+  const reds = Array.from({ length: MAX_RETRIES }, (_, i) => ({ at: at(i), outcome: 'red' as const }))
+  for (const check of [dns, macbook]) {
+    const marked = markReachability([check], open)
+    expect(marked[0]).toMatchObject({ ok: false, blocked: true })
+    expect(outcomeOf(marked)).toBe('blocked')
+    expect(stepOf(reds, marked)).toEqual({ kind: 'again' })
+    expect(nextCheckAt({ startedAt: at(0), windowMs: 0 }, [{ at: at(10), outcome: 'blocked' }], timing)).toEqual(at(15))
+  }
+})
+
+test('a red with any other failing line, a stale-data line among them, or a green or unnamed check is not reachability', () => {
+  const mixed: Check = {
+    name: 'make verify',
+    ok: false,
+    detail: `exit 2: ssh: connect to host <host> port 2222: Operation timed out
+stale: iu-portal newest row 2026-11-23T20:56:11.991Z is 54.7h old (limit 48h)
+make: *** [verify] Error 1`,
+  }
+  expect(markReachability([mixed], open)).toEqual([mixed])
+  const stale: Check = { name: 'make verify', ok: false, detail: 'exit 2: stale: iu-portal is 54.7h old (limit 48h)' }
+  expect(markReachability([stale], open)).toEqual([stale])
+  expect(markReachability([red], open)).toEqual([red])
+  expect(markReachability([green], open)).toEqual([green])
+  const probe: Check = {
+    name: 'probe',
+    ok: false,
+    detail: 'ssh: connect to host <host> port 2222: Operation timed out',
+  }
+  expect(markReachability([probe], open)).toEqual([probe])
+  expect(stepOf(Array(MAX_RETRIES).fill({ at: at(0), outcome: 'red' }), markReachability([mixed], open))).toEqual({
+    kind: 'regress',
+    detail: expect.any(String),
+  })
+})
+
+test('a reachability block lapses at its ceiling, and a cut detail is never blocked', () => {
+  const ssh: Check = {
+    name: 'make verify',
+    ok: false,
+    detail: 'exit 2: ssh: connect to host <host> port 2222: Operation timed out',
+  }
+  expect(markReachability([ssh], { now: at(119), until: at(120) })[0]).toMatchObject({ blocked: true })
+  expect(markReachability([ssh], { now: at(120), until: at(120) })).toEqual([ssh])
+  const cut: Check = {
+    name: 'make verify',
+    ok: false,
+    detail: `exit 2: ssh: connect to host <host> port 2222: Operation timed out
+[… 12 lines cut]
+make: *** [verify] Error 1`,
+  }
+  expect(markReachability([cut], open)).toEqual([cut])
 })

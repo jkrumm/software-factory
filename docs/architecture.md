@@ -324,7 +324,7 @@ Ubuntu 24.04. The step host is the owner's setting ([settings](settings.md)). On
   run on the `watch` loop, so a slow verify never holds the leads' pass. What it runs is the synced `project.yaml`
   (`app/quality-projects.ts`: deploy mode, `hold` as the window, the `make verify` target, URL targets, probes); a
   repo without one is read from its Makefile (`adapters/quality/projects.ts`). Only mode `make` reads `make version`.
-  A red check is retried with a doubling delay before it is a regression; a regression returns the Issue to its lead,
+  A red check is retried with a doubling delay before it is a regression; a red whose failing lines are all host reachability is rechecked at the recheck delay instead and counts only six hours after the window (`REACHABILITY_MAX_MS`); a regression returns the Issue to its lead,
   twice, then it stalls. A checkout that cannot be read is rechecked, never passed. A `verify` that also reads state the repo does not own (a host-wide
   deploy gate) is the repo's to narrow: `deploy.targets` naming `make <own target>` runs that one instead; the factory keeps no list of
   other owners' lines.
