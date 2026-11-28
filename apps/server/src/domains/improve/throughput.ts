@@ -5,8 +5,8 @@
  * the largest is the one worth a lead's time.
  */
 import { DEFAULT_TENANT_BUDGET_MIB } from '../../kernel/throughput-limits.ts'
-import { movedDown as movedBy } from './ledger.ts'
-import type { Finding } from './selfwatch-model.ts'
+import { movedDown as movedBy, type ClosedFinding } from './ledger.ts'
+import { subjectKeyOf, type Finding } from './selfwatch-model.ts'
 import {
   BASELINE_DAYS,
   DEFAULT_PEAK_MIB,
@@ -671,6 +671,8 @@ export interface BudgetFact {
   over: boolean
   /** more lines for the lead (the failing steps of a `fail` breach): context, never hashed */
   detail?: string[]
+  /** the day's number the breach is filed against, kept in the ledger (a `fail` breach: the failed share in percent) */
+  figure?: number
 }
 
 /** A breach of a project budget as a self-watch finding: one signal on the project's repo until the figure is back inside. */
@@ -682,6 +684,7 @@ export function budgetFindings(facts: readonly BudgetFact[]): Finding[] {
       subject: `${fact.project}:${fact.budget}`,
       repo: fact.repo,
       title: `Throughput budget: ${fact.project} is over its ${fact.budget} budget of ${fact.limit}`,
+      ...(fact.figure === undefined ? {} : { figure: fact.figure }),
       facts: [`budget ${fact.budget} of ${fact.project} is ${fact.limit}`, 'the last day is over it'],
       context: [
         `Last day: ${fact.value}.`,
@@ -690,6 +693,25 @@ export function budgetFindings(facts: readonly BudgetFact[]): Finding[] {
       ],
       reproduce: `factory read throughput --hours 24 | .project[] | select(.repo == "${fact.project}")`,
     }))
+}
+
+/**
+ * Why a `fail` breach is not filed now, or null to file it (any other finding: null). The cost of failed runs is the one
+ * the throughput loop ranks (`failed_run_minutes`): while that improvement of the project is not shipped and not closed
+ * (`improving`, by project) the breach is the same cost twice. After the breach's last Issue closed `dropped`
+ * (`previous`), only a share worse than the one that Issue was filed against is news.
+ */
+export function failBreachHeld(
+  finding: Finding,
+  input: { improving: ReadonlyMap<string, string>; previous: ClosedFinding | undefined },
+): string | null {
+  if (finding.kind !== 'budget_breach' || !finding.subject.endsWith(':fail')) return null
+  const improvement = input.improving.get(finding.subject.slice(0, -':fail'.length))
+  if (improvement) return `${subjectKeyOf(finding)} (${improvement} holds the cost of its failed runs)`
+  const { previous } = input
+  if (previous?.outcome !== 'dropped' || previous.figure === null || finding.figure === undefined) return null
+  if (finding.figure > previous.figure) return null
+  return `${subjectKeyOf(finding)} (${previous.issue} was dropped at ${previous.figure}%, now ${finding.figure}%)`
 }
 
 /** A project's budgets as the loop judges them, with the repo text intake files its signals on. */

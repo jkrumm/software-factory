@@ -15,7 +15,7 @@ import type {
 import type { DigestIssue, DigestRecord, LatestDigest } from './digest.ts'
 import type { LoopName } from '@software-factory/contract'
 import type { ClosedFinding, Judged, LedgerLoop } from './ledger.ts'
-import type { FindingRow, LedgerChange } from './throughput.ts'
+import type { FindingRow, LedgerChange, ThroughputKpi } from './throughput.ts'
 import type { FinderIssue, FindingLoop } from './finders.ts'
 
 /** One friction pass (a day or 200 closed Issues) as recorded (`migrations/0950_friction.sql`). */
@@ -267,6 +267,8 @@ export interface ImproveReads {
   allClassIssues(): Promise<{ loop: FindingLoop; class: string; issues: FinderIssue[] }[]>
   /** the loop's findings whose Issue closed that have no verdict yet, and the newest closed one of each key; `repo` narrows to one repo */
   closedFindings(loop: LedgerLoop, repo?: string): Promise<ClosedFinding[]>
+  /** the throughput loop's improvements of one figure whose Issue has not shipped and not closed: the Issue by project (self-watch) */
+  openImprovements(kpi: ThroughputKpi): Promise<Map<string, string>>
   /** the timer and dependency waits of the repo's Issues, with the times their exit is judged from (self-watch) */
   openWaits(repo: string): Promise<WaitFact[]>
   /** the notable processes of the host's minutes since `since`, oldest first (self-watch: runaway growth) */

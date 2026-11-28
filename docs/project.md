@@ -206,7 +206,7 @@ checks: { fast: make check-fast, full: make check, ci: true }
   the `junit` reporter with `outputFile` built from `process.env.FACTORY_JUNIT_DIR`, pytest `--junitxml=$FACTORY_JUNIT_DIR/<name>.xml`.
   Make expands the variable before the slot starts, so put the flags on a target that runs inside the `check` slot, or run it as
   `factory slot run -- make <target>`. Another project's Makefile is its own repo's to adopt.
-- **Budgets.** `budgets: { fast: 90s, peak: 2GiB, fail: 10% }` (each key optional) bounds what a project's checks may cost: `fast` the median of a day's fast-tier runs, `peak` the largest peak memory of one step, `fail` the share of a day's steps that exited non-zero (a red `check-fast` left out; over on two days in a row). A breach is a signal on the project's repo the day it happens and again only after the figure was back inside (`docs/architecture.md`, `selfwatch`); `peak` is also the target of the throughput loop's memory finding.
+- **Budgets.** `budgets: { fast: 90s, peak: 2GiB, fail: 10% }` (each key optional) bounds what a project's checks may cost: `fast` the median of a day's fast-tier runs, `peak` the largest peak memory of one step, `fail` the share of a day's steps that exited non-zero (steps of a lead branch before its merge left out; over on two days in a row). A breach is a signal on the project's repo the day it happens and again only after the figure was back inside (`docs/architecture.md`, `selfwatch`); `peak` is also the target of the throughput loop's memory finding.
 - `factory project show` prints `checks` (`null` for none). Another project's `checks:` is its own repo's to adopt: the
   Makefile target and the CI workflow it names are that repo's.
 
@@ -267,7 +267,7 @@ list's entry, `<name>` a map's key.
 | `budgets` | object | `{}` | what the repo's checks may cost; a day over one is a signal on the repo. A key left out is no budget |
 | `budgets.fast` | duration | — | the most the median of a day's fast-tier check runs may take (`5m`) |
 | `budgets.peak` | size | — | the most peak memory one check step may take (`4GiB`) |
-| `budgets.fail` | share | — | the most of a day's check steps that may exit non-zero (`30%`); a red `check-fast` is not counted, and a breach needs the share on two days in a row |
+| `budgets.fail` | share | — | the most of a day's check steps that may exit non-zero (`30%`); a lead branch's steps before its merge are not counted, and a breach needs the share on two days in a row |
 | `checks` | object or null | `null` | check tiers: a fast local check and the full gate (CI's when `ci` is true). Unset: the lead runs `make check` |
 | `checks.fast` | string | required | what a lead runs locally before each push (`make check-fast`) |
 | `checks.full` | string | `"make check"` | the complete gate |

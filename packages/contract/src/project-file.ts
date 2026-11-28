@@ -285,7 +285,7 @@ const Budgets = z.strictObject({
     .optional()
     .meta(
       about(
-        "the most of a day's check steps that may exit non-zero (`30%`); a red `check-fast` is not counted, and a breach needs the share on two days in a row",
+        "the most of a day's check steps that may exit non-zero (`30%`); a lead branch's steps before its merge are not counted, and a breach needs the share on two days in a row",
         THROUGHPUT,
       ),
     ),

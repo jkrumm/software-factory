@@ -13,6 +13,8 @@ import type { UnitOfWork } from '../unit-of-work.ts'
 export interface Ledger {
   /** the line a finding's signal carries when its key filed an Issue that closed (`null` for a key with none); `now` is the figure it is filed against now */
   lastTime(key: string, now: number | null): string | null
+  /** the newest Issue of the key that closed, with any verdict of this pass */
+  last(key: string): ClosedFinding | undefined
 }
 
 /**
@@ -32,6 +34,9 @@ export async function settleClosed(
     const newest = newestByKey(
       rows.map((row) => ({ ...row, verdict: verdicts.get(`${row.issue}\n${row.key}`) ?? row.verdict })),
     )
-    return ok({ lastTime: (key, now) => lastTime(newest.get(key), now) } satisfies Ledger)
+    return ok({
+      lastTime: (key, now) => lastTime(newest.get(key), now),
+      last: (key) => newest.get(key),
+    } satisfies Ledger)
   })
 }
