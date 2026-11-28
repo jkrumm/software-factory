@@ -76,10 +76,13 @@ export const DEFAULT_PRIOR_MIB = 2048
 /**
  * The name a step is learned and stored under. A caller in a linked worktree (`<repo>/.claude/worktrees/<dir>`) may name its step
  * after the worktree directory (`factory-1146-1 unit`): every lead's step would be new to the server, so the directory word is
- * replaced by the project's name (`basalt-ui unit`), the way a repo is always stored as its project name. Any other name stays.
+ * replaced by the project's name (`basalt-ui unit`), the way a repo is always stored as its project name. A run the caller
+ * left unnamed around `make` arrives as `make <targets>` and takes the project's name in front, so one project's targets are
+ * not learned as another's. Any other name stays.
  */
 export function stepNameOf(name: string, cwd: string | null | undefined, project: string | null | undefined): string {
   if (!cwd || !project) return name
+  if (name.startsWith('make ')) return `${project} ${name}`
   const space = name.indexOf(' ')
   const first = space === -1 ? name : name.slice(0, space)
   const parts = cwd.split('/')

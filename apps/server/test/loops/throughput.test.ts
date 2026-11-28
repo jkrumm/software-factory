@@ -462,9 +462,36 @@ describe('the daily pass', () => {
     const again = filedBodies.slice(before).find((b) => b.repo === 'beta')
     expect(again?.text).toContain('Comes back: an earlier improvement')
     expect(again?.text).toContain('did not move from 4096')
+    // only the runs since the ship were counted, and the finding lists them
+    expect(again?.text).toContain('when the last fix of this figure')
+    expect(again?.text).toContain('(90th percentile of 4 runs)')
+    expect(again?.text).toContain('Runs over the budget, largest peak first:')
+    expect(again?.text).toContain('beta check, peak 4096 MiB, 10 min, exit 0')
     const [reopened] =
       await db.sql`SELECT reopens FROM factory.loop_findings WHERE loop = 'throughput' AND repo = 'beta' AND verdict IS NULL AND shipped_at IS NULL`
     expect(reopened?.reopens).toBe(issueOf('beta'))
+  })
+
+  test('a step of another tier whose runs all predate the shipped fix is not filed', async () => {
+    const [open] =
+      await db.sql`SELECT issue_id FROM factory.loop_findings WHERE loop = 'throughput' AND repo = 'beta' AND verdict IS NULL AND shipped_at IS NULL`
+    for (let i = 0; i < 4; i++) {
+      await step({
+        repo: 'beta',
+        name: 'beta e2e',
+        at: new Date(now.getTime() - (i + 1) * HOUR),
+        ms: 600_000,
+        peak: 5000,
+      })
+    }
+    const shipAt = new Date(now.getTime() - HOUR / 2)
+    await event(open.issue_id, 'shipped', shipAt, { version: 30, to: 'watching' })
+    // one run since the fix is no percentile
+    await step({ repo: 'beta', name: 'beta e2e', at: new Date(now.getTime() - HOUR / 4), ms: 600_000, peak: 5000 })
+    const before = filedBodies.length
+    const pass = await throughputPass(deps())
+    expect(pass.ok && pass.value.filed.map((f) => f.project)).not.toContain('beta')
+    expect(filedBodies.slice(before).map((b) => b.repo)).not.toContain('beta')
   })
 
   test('the weekly retro’s ledger carries the loop’s own after as a clean window', async () => {

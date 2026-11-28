@@ -262,7 +262,8 @@ so repair still runs.
   five minute samples). A trip is held until the newest three samples are at three quarters of the ceiling or under: one
   reading back under the ceiling reopens nothing (on 2026-11-21 the gate reopened 42 times on such a dip and 26 were
   followed by a load over 47). While swap grows or the tripwire holds, only the first step runs, base slots included.
-- **Fit**: a step's peak is learned per project (`stepNameOf`, `domains/capacity/costs.ts`) as the p80 of its eight
+- **Fit**: a step's peak is learned per project (`stepNameOf`, `domains/capacity/costs.ts`; a run without `--name` is
+  named after its program, and `make` after its targets too: `<project> make check`) as the p80 of its eight
   newest runs; a step with nothing learned is sized by a prior and never refused (`stepPrior`). Free memory is the
   kernel's (`freeMibOf`, `kernel_free_pct`).
 - **Order**: `lineOrder`. A small step passes a head that does not fit; a passed head's memory is reserved after ten
@@ -774,6 +775,10 @@ throughput rows of `loop_findings`) ranks once a day, with no model, what cost t
   never a growth finding (`isVmTenant`): its host footprint climbs to its configured ceiling and stays, so a rise below
   it, or a deliberate raise, is no leak. A VM that was not there (median 0) still is one, and every VM counts in the
   class budget.
+
+`failed_run_minutes` and `step_peak_mib` are counted from single runs, so after a fix of one shipped (a ledger row of
+the same project and KPI, any subject) only the runs since that ship count while it is inside the 7 days (`lastFixOf`,
+`countedSince`), a step tier needing 3 of them; the finding says so and lists the runs it was computed from, at most 20.
 
 A cost under 30 minutes is not a finding; a cost the newest 3 days already left behind is not filed; at most 5 a pass
 (`kernel/signal-budget.ts`); a project holds one open improvement. The signal carries the measured before, a target
