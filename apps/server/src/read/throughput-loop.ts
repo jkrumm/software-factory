@@ -5,6 +5,7 @@ import type {
   IssueFate,
   ProjectBudgets,
   ProjectShape,
+  StepRun,
   TenantFacts,
   WaitFact,
   WindowFacts,
@@ -43,6 +44,18 @@ const StepRow = z.object({
   exit_code: z.coerce.number().nullable(),
   peak: z.coerce.number().nullable(),
   at: z.coerce.date(),
+  commit: z.string().nullable(),
+  cwd: z.string().nullable(),
+})
+
+const stepRunOf = (row: z.infer<typeof StepRow>): StepRun => ({
+  at: row.at,
+  name: row.name,
+  minutes: row.duration_ms / 60_000,
+  peakMib: row.peak,
+  exitCode: row.exit_code,
+  commit: row.commit,
+  dir: row.cwd?.replace(/\/+$/, '').split('/').at(-1) || null,
 })
 
 const percentile = (sorted: readonly number[], p: number): number => {
@@ -112,7 +125,8 @@ function waitFacts(rows: readonly WaitRow[], shapes: ReadonlyMap<string, Project
 const stepRows = async (tx: SQL, from: Date, to: Date) =>
   (
     (await tx`
-      SELECT ${tx.unsafe(REPO_OF_STEP)} AS repo, name, duration_ms, exit_code, peak_rss_mib AS peak, at
+      SELECT ${tx.unsafe(REPO_OF_STEP)} AS repo, name, duration_ms, exit_code, peak_rss_mib AS peak, at,
+        vcs_ref_head_revision AS commit, cwd
       FROM factory.step_costs WHERE repo IS NOT NULL AND at >= ${from} AND at < ${to}`) as unknown[]
   ).map((raw) => StepRow.parse(raw))
 
@@ -228,22 +242,34 @@ export async function readWindowFacts(
     const steps = await stepRows(tx, from, to)
 
     const runs = new Map<string, WindowFacts['runs'][number]>()
-    const peaks = new Map<string, { project: string; tier: string; peaks: number[]; minutes: number[] }>()
+    const peaks = new Map<
+      string,
+      { project: string; tier: string; peaks: number[]; minutes: number[]; rows: z.infer<typeof StepRow>[] }
+    >()
     for (const row of steps) {
       const failed = row.exit_code !== null && row.exit_code !== 0
       const minutes = row.duration_ms / 60_000
-      const r = runs.get(row.repo) ?? { project: row.repo, runs: 0, failedRuns: 0, failedMinutes: 0, minutes: 0 }
+      const r = runs.get(row.repo) ?? {
+        project: row.repo,
+        runs: 0,
+        failedRuns: 0,
+        failedMinutes: 0,
+        minutes: 0,
+        failed: [] as StepRun[],
+      }
       r.runs++
       r.minutes += minutes
       if (failed) {
         r.failedRuns++
         r.failedMinutes += minutes
+        r.failed?.push(stepRunOf(row))
       }
       runs.set(row.repo, r)
       if (row.peak === null) continue
       const tier = tierOf(row.name)
       const k = `${row.repo}\n${tier}`
-      const p = peaks.get(k) ?? { project: row.repo, tier, peaks: [], minutes: [] }
+      const p = peaks.get(k) ?? { project: row.repo, tier, peaks: [], minutes: [], rows: [] }
+      p.rows.push(row)
       p.peaks.push(row.peak)
       p.minutes.push(minutes)
       peaks.set(k, p)
@@ -338,6 +364,7 @@ export async function readWindowFacts(
           ),
           budgetMib,
           overMinutes: p.peaks.reduce((sum, peak, i) => (peak > budgetMib ? sum + (p.minutes[i] ?? 0) : sum), 0),
+          over: p.rows.filter((row) => (row.peak ?? 0) > budgetMib).map(stepRunOf),
         }
       }),
       processes: grown.map((raw) => {

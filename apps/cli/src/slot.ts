@@ -251,6 +251,27 @@ async function runHeld(program: string, args: string[], io: Io): Promise<number>
   }
 }
 
+/** A `make` option whose value is the next word, short ones possibly bundled (`-sC dir`). */
+const MAKE_VALUE_OPTION = /^(-[A-Za-z]*[CfIoW]|--(directory|file|makefile))$/
+/** A `make` option that takes the next word only when that is a number (`-j 4`). */
+const MAKE_NUMBER_OPTION = /^(-[A-Za-z]*[jl]|--(jobs|load-average))$/
+
+/**
+ * The name of a step run without `--name`: the program, and for `make` its targets too (`make check-fast`, `make lint+test`),
+ * so the step costs do not read every target as one step.
+ */
+export function unnamedStep(program: string, args: readonly string[]): string {
+  if (program.slice(program.lastIndexOf('/') + 1) !== 'make') return program
+  const targets: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    const word = args[i] ?? ''
+    if (MAKE_VALUE_OPTION.test(word)) i++
+    else if (MAKE_NUMBER_OPTION.test(word) && /^\d/.test(args[i + 1] ?? '')) i++
+    else if (!word.startsWith('-') && !word.includes('=')) targets.push(word)
+  }
+  return targets.length === 0 ? 'make' : `make ${targets.join('+')}`
+}
+
 /**
  * `factory slot run [--name <label>] -- <cmd> [args…]`: takes one of the host's test slots from the server, runs the
  * command with this process's own stdin, stdout and stderr, renews the lease while it runs and gives the slot back when
@@ -274,7 +295,7 @@ async function slotRun(input: { name?: string; command: string[] }, io: Io): Pro
 
   const base = io.env.FACTORY_URL || DEFAULT_URL
   const { token, failure } = await credentialOf(io.env)
-  const name = (input.name ?? program).slice(0, MAX_SLOT_NAME)
+  const name = (input.name ?? unnamedStep(program, args)).slice(0, MAX_SLOT_NAME)
   const id = `${process.pid}-${crypto.randomUUID()}`
   const waitMs = number(io.env.FACTORY_SLOT_WAIT_MS, DEFAULT_SLOT_WAIT_MS)
   const open = io.env.FACTORY_SLOT_OPEN === '1'

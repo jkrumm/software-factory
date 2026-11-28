@@ -46,17 +46,51 @@ const MIN_COST_MINUTES = 30
 const PER_ISSUE_FACTOR = 1.25
 /** An after within this share of the before has not moved. */
 const MOVED_SHARE = 0.1
+/** The KPIs counted from single runs: a shipped fix of one retires the project's runs from before it (`lastFixOf`). */
+const RUN_KPIS: readonly string[] = ['failed_run_minutes', 'step_peak_mib']
+/** A step peak is not read again from fewer runs than this since the last fix: one run is no percentile. */
+const MIN_RUNS_SINCE_FIX = 3
+/** The most runs a finding lists. */
+const RUNS_LISTED = 20
 /** The share of `before` a time figure is asked to fall to. */
 const TARGET_SHARE = 0.5
+
+/** One finished test-slot step, as a finding lists the runs behind its figure. */
+export interface StepRun {
+  at: Date
+  name: string
+  minutes: number
+  peakMib: number | null
+  exitCode: number | null
+  commit: string | null
+  /** the last directory of where it was started: a lead's worktree names its Issue */
+  dir: string | null
+}
 
 /** The host in the window `[from, to)`, as the loop reads it: raw figures per project, thresholds not applied. */
 export interface WindowFacts {
   days: number
-  runs: { project: string; runs: number; failedRuns: number; failedMinutes: number; minutes: number }[]
+  runs: {
+    project: string
+    runs: number
+    failedRuns: number
+    failedMinutes: number
+    minutes: number
+    failed?: StepRun[]
+  }[]
   /** slot minutes and Issues closed `done` in the window; the median of the same ratio per day over the 14 days before (null: none) */
   perIssue: { project: string; minutes: number; closed: number; baselineMedian: number | null }[]
   /** per project and tier: runs with a peak, their 90th percentile, the project's peak budget and the minutes of runs over it */
-  steps: { project: string; tier: string; runs: number; peakP90Mib: number; budgetMib: number; overMinutes: number }[]
+  steps: {
+    project: string
+    tier: string
+    runs: number
+    peakP90Mib: number
+    budgetMib: number
+    overMinutes: number
+    /** the runs over the budget */
+    over?: StepRun[]
+  }[]
   /** a process whose footprint grew between its first and last notable minute in the window */
   processes: { name: string; class: string; project: string; grownMib: number; minutes: number }[]
   /** the minutes queued Issues waited for a reason a lead can cut, per reason and the project it is acted on */
@@ -125,11 +159,51 @@ export interface Candidate {
   target: number
   costMinutes: number
   query: string
+  /** the runs the figure was computed from, one line each; absent for a figure no single run makes */
+  evidence?: string[]
+  /** set when only the runs since a shipped fix were counted */
+  since?: FixShip
 }
+
+/** A shipped improvement of a project's KPI. */
+export interface FixShip {
+  at: Date
+  issueId: string
+}
+
+const runLine = (r: StepRun): string =>
+  [
+    `${r.at.toISOString().slice(0, 16)}Z ${r.name}`,
+    r.peakMib === null ? null : `peak ${r.peakMib} MiB`,
+    `${Math.round(r.minutes * 10) / 10} min`,
+    r.exitCode === null ? 'no exit code' : `exit ${r.exitCode}`,
+    r.commit === null ? null : `commit ${r.commit.slice(0, 8)}`,
+    r.dir === null ? null : `in ${r.dir}`,
+  ]
+    .filter((part) => part !== null)
+    .join(', ')
+
+/** The listed runs, largest first by `size`, and how many are left out. */
+const evidenceOf = (runs: readonly StepRun[] | undefined, size: (r: StepRun) => number): { evidence?: string[] } => {
+  if (!runs || runs.length === 0) return {}
+  const listed = runs
+    .toSorted((a, b) => size(b) - size(a) || b.at.getTime() - a.at.getTime())
+    .slice(0, RUNS_LISTED)
+    .map(runLine)
+  const rest = runs.length - listed.length
+  return { evidence: rest > 0 ? [...listed, `${rest} more`] : listed }
+}
+
+const byCost = (a: Candidate, b: Candidate): number =>
+  b.costMinutes - a.costMinutes ||
+  a.project.localeCompare(b.project) ||
+  a.kpi.localeCompare(b.kpi) ||
+  a.subject.localeCompare(b.subject)
 
 const round = (value: number, decimals = 1): number => Math.round(value * 10 ** decimals) / 10 ** decimals
 
-const READ = 'factory read throughput --hours 168'
+const READ_HOURS = '--hours 168'
+const READ = `factory read throughput ${READ_HOURS}`
 const MINUTES_PER_DAY = 1440
 
 const gib = (mib: number): string => `${round(mib / 1024)} GiB`
@@ -190,7 +264,8 @@ export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null 
       unit: 'slot-minutes/day',
       target: round(perDay * TARGET_SHARE),
       costMinutes: round(r.failedMinutes),
-      query: `${READ} | .tests.byProject[] | select(.repo == "${r.project}") | .failedRunMinutes, divided by the ${days} days`,
+      query: `${READ} | .tests.byProject[] | select(.repo == "${r.project}") | .failedRunMinutes, divided by the ${round(days, 2)} days`,
+      ...evidenceOf(r.failed, (run) => run.minutes),
     })
   }
   for (const p of facts.perIssue) {
@@ -221,6 +296,7 @@ export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null 
       target: s.budgetMib,
       costMinutes: round(s.overMinutes),
       query: `step_costs of ${s.project}, tier ${s.tier}: the 90th percentile of peak_rss_mib; \`${READ} | .project[] | select(.repo == "${s.project}") | .slot.peakMib\` for the largest`,
+      ...evidenceOf(s.over, (run) => run.peakMib ?? 0),
     })
   }
   for (const p of facts.processes) {
@@ -263,14 +339,37 @@ export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null 
     })
   }
   if (tenants) found.push(...tenantCandidates(facts, tenants))
-  return found.toSorted(
-    (a, b) =>
-      b.costMinutes - a.costMinutes ||
-      a.project.localeCompare(b.project) ||
-      a.kpi.localeCompare(b.kpi) ||
-      a.subject.localeCompare(b.subject),
-  )
+  return found.toSorted(byCost)
 }
+
+/** The newest shipped fix of the candidate's project and KPI, whatever its subject; null for a KPI not counted from runs. */
+export function lastFixOf(rows: readonly FindingRow[], c: Pick<Candidate, 'project' | 'kpi'>): FixShip | null {
+  if (!RUN_KPIS.includes(c.kpi)) return null
+  let last: FixShip | null = null
+  for (const r of rows) {
+    if (r.project !== c.project || r.kpi !== c.kpi || !r.shippedAt) continue
+    if (!last || r.shippedAt > last.at) last = { at: r.shippedAt, issueId: r.issueId }
+  }
+  return last
+}
+
+/**
+ * A candidate read again from `facts` of the window since the last fix, so runs the fix already covered make no finding;
+ * null when those runs do not rank it (under its threshold, or too few of them for a step's percentile).
+ */
+export function countedSince(facts: WindowFacts, candidate: Candidate, fix: FixShip): Candidate | null {
+  const again = rankCandidates(facts).find((c) => subjectKey(c) === subjectKey(candidate))
+  if (!again) return null
+  if (again.kpi === 'step_peak_mib') {
+    const step = facts.steps.find((s) => s.project === again.project && s.tier === again.subject)
+    if (!step || step.runs < MIN_RUNS_SINCE_FIX) return null
+  }
+  // the read that shows the figure again covers the same window as the figure
+  const hours = Math.max(1, Math.round(facts.days * 24))
+  return { ...again, query: again.query.replace(READ_HOURS, `--hours ${hours}`), since: fix }
+}
+
+export const rankOrder = (candidates: readonly Candidate[]): Candidate[] => candidates.toSorted(byCost)
 
 /**
  * The two findings about standing memory, both filed on `policy.project` (a tenant is a launchd job or VM that repo
@@ -523,8 +622,11 @@ export const improvementTitle = (c: Pick<Candidate, 'project' | 'kpi' | 'subject
  * and the marker the weekly retro's ledger reads (`kpi= before= direction=`, on one line at the end).
  */
 export function improvementText(c: Candidate, input: { date: string; reopens: FindingRow | null }): string {
+  const window = c.since
+    ? `since ${c.since.at.toISOString().slice(0, 16)}Z, when the last fix of this figure (${c.since.issueId}) shipped; earlier runs are not counted`
+    : `in the last ${RANK_DAYS} days`
   const lines = [
-    `Why: ${c.label}. It is the largest measured cost of ${c.project} in the last ${RANK_DAYS} days (${num(c.costMinutes)} minutes), ranked by the throughput loop without a model.`,
+    `Why: ${c.label}. It is the largest measured cost of ${c.project} ${window} (${num(c.costMinutes)} minutes), ranked by the throughput loop without a model.`,
     `Measured before: ${num(c.value)} ${c.unit} (kpi ${c.kpi}${c.subject === '*' ? '' : `, ${c.subject}`}). Target: ${num(c.target)} ${c.unit}.`,
     `Query: ${c.query}.`,
   ]
@@ -542,6 +644,10 @@ export function improvementText(c: Candidate, input: { date: string; reopens: Fi
     lines.push(
       `Comes back: an earlier improvement (${input.reopens.issueId ?? 'no Issue'}) shipped on ${input.reopens.shippedAt?.toISOString().slice(0, 10) ?? 'a date not recorded'}; its after of ${num(input.reopens.after ?? 0)} ${c.unit} did not move from ${num(input.reopens.before)}. Find what the earlier change did not reach.`,
     )
+  }
+  if (c.evidence) {
+    const what = c.kpi === 'step_peak_mib' ? 'over the budget, largest peak first' : 'that failed, longest first'
+    lines.push(`Runs ${what}:\n${c.evidence.map((line) => `- ${line}`).join('\n')}`)
   }
   lines.push(
     `Change only what moves this figure and keep the same coverage of what ships. Three days after the ship the loop reads the figure again over those days and says whether it moved; if it did not, this comes back.`,

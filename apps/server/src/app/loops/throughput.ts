@@ -10,6 +10,7 @@ import {
   type Candidate,
   alreadyAtTarget,
   AFTER_DAYS,
+  countedSince,
   figureOf,
   type FindingRow,
   heldSubjects,
@@ -17,11 +18,13 @@ import {
   improvementText,
   improvementTitle,
   type IssueFate,
+  lastFixOf,
   type ProjectBudgets,
   type ProjectShape,
   type TenantPolicy,
   RANK_DAYS,
   rankCandidates,
+  rankOrder,
   readLedger,
   reopenedFrom,
   subjectKey,
@@ -206,7 +209,15 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
   // a project with an improvement open is asked for no second one
   pass.held = projects.map((p) => p.project).filter((project) => holdsProject(rows, project))
   const top = new Map<string, Candidate>()
-  const ranked = rankCandidates(facts, deps.tenants)
+  let ranked: Candidate[]
+  try {
+    ranked = await withoutFixedRuns(rankCandidates(facts, deps.tenants), rows, now, (from) =>
+      deps.facts({ from, to: now }, { baseline: false, peakBudgetMib, shapes }),
+    )
+  } catch (error) {
+    pass.notes.push(`costs since a fix not read: ${error instanceof Error ? error.message : String(error)}`)
+    return ok(pass)
+  }
   if (!byProject.has(deps.tenants.project) && ranked.some((c) => c.project === deps.tenants.project)) {
     pass.notes.push(`standing memory not filed: ${deps.tenants.project} is not a followed project`)
   }
@@ -293,6 +304,32 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
     })
   }
   return ok(pass)
+}
+
+/**
+ * The ranking with every figure a shipped fix of its project and KPI reaches into read again from the runs since that ship
+ * (`countedSince`): the runs before it are covered by the fix.
+ */
+async function withoutFixedRuns(
+  ranked: readonly Candidate[],
+  rows: readonly FindingRow[],
+  now: Date,
+  factsSince: (from: Date) => Promise<WindowFacts>,
+): Promise<Candidate[]> {
+  const read = new Map<number, WindowFacts>()
+  const kept: Candidate[] = []
+  for (const candidate of ranked) {
+    const fix = lastFixOf(rows, candidate)
+    if (!fix || fix.at.getTime() <= now.getTime() - RANK_DAYS * DAY_MS) {
+      kept.push(candidate)
+      continue
+    }
+    const since = read.get(fix.at.getTime()) ?? (await factsSince(fix.at))
+    read.set(fix.at.getTime(), since)
+    const again = countedSince(since, candidate, fix)
+    if (again) kept.push(again)
+  }
+  return rankOrder(kept)
 }
 
 /**

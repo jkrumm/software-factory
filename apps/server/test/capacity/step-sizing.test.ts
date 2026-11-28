@@ -9,6 +9,8 @@ const WORKTREE = '/src/p/.claude/worktrees/factory-1-1'
 describe('the name a step is learned under', () => {
   test('a worktree word becomes the project, anything else stays', () => {
     expect(stepNameOf('factory-1-1 unit', WORKTREE, 'p')).toBe('p unit')
+    expect(stepNameOf('make check', '/src/p', 'p')).toBe('p make check')
+    expect(stepNameOf('make check', '/src/p', undefined)).toBe('make check')
     expect(stepNameOf('factory-1-1 unit', `${WORKTREE}/apps/server`, 'p')).toBe('p unit')
     expect(stepNameOf('factory-1-1', WORKTREE, 'p')).toBe('p')
     expect(stepNameOf('p unit', WORKTREE, 'p')).toBe('p unit')
