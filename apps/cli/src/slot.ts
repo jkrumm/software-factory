@@ -251,8 +251,10 @@ async function runHeld(program: string, args: string[], io: Io): Promise<number>
   }
 }
 
-/** The `make` options whose value is the next word. */
-const MAKE_VALUE_OPTIONS = new Set(['-C', '-f', '-I', '-o', '-W', '--directory', '--file', '--makefile'])
+/** A `make` option whose value is the next word, short ones possibly bundled (`-sC dir`). */
+const MAKE_VALUE_OPTION = /^(-[A-Za-z]*[CfIoW]|--(directory|file|makefile))$/
+/** A `make` option that takes the next word only when that is a number (`-j 4`). */
+const MAKE_NUMBER_OPTION = /^(-[A-Za-z]*[jl]|--(jobs|load-average))$/
 
 /**
  * The name of a step run without `--name`: the program, and for `make` its targets too (`make check-fast`, `make lint+test`),
@@ -263,8 +265,8 @@ export function unnamedStep(program: string, args: readonly string[]): string {
   const targets: string[] = []
   for (let i = 0; i < args.length; i++) {
     const word = args[i] ?? ''
-    if (MAKE_VALUE_OPTIONS.has(word)) i++
-    else if ((word === '-j' || word === '-l') && /^\d/.test(args[i + 1] ?? '')) i++
+    if (MAKE_VALUE_OPTION.test(word)) i++
+    else if (MAKE_NUMBER_OPTION.test(word) && /^\d/.test(args[i + 1] ?? '')) i++
     else if (!word.startsWith('-') && !word.includes('=')) targets.push(word)
   }
   return targets.length === 0 ? 'make' : `make ${targets.join('+')}`

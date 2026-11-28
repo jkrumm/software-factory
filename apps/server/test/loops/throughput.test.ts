@@ -465,6 +465,8 @@ describe('the daily pass', () => {
     // only the runs since the ship were counted, and the finding lists them
     expect(again?.text).toContain('when the last fix of this figure')
     expect(again?.text).toContain('(90th percentile of 4 runs)')
+    // the query reads the same window as the figure: the three days and an hour since the ship
+    expect(again?.text).toContain('factory read throughput --hours 73 ')
     expect(again?.text).toContain('Runs over the budget, largest peak first:')
     expect(again?.text).toContain('beta check, peak 4096 MiB, 10 min, exit 0')
     const [reopened] =

@@ -202,7 +202,8 @@ const byCost = (a: Candidate, b: Candidate): number =>
 
 const round = (value: number, decimals = 1): number => Math.round(value * 10 ** decimals) / 10 ** decimals
 
-const READ = 'factory read throughput --hours 168'
+const READ_HOURS = '--hours 168'
+const READ = `factory read throughput ${READ_HOURS}`
 const MINUTES_PER_DAY = 1440
 
 const gib = (mib: number): string => `${round(mib / 1024)} GiB`
@@ -263,7 +264,7 @@ export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null 
       unit: 'slot-minutes/day',
       target: round(perDay * TARGET_SHARE),
       costMinutes: round(r.failedMinutes),
-      query: `${READ} | .tests.byProject[] | select(.repo == "${r.project}") | .failedRunMinutes, divided by the ${days} days`,
+      query: `${READ} | .tests.byProject[] | select(.repo == "${r.project}") | .failedRunMinutes, divided by the ${round(days, 2)} days`,
       ...evidenceOf(r.failed, (run) => run.minutes),
     })
   }
@@ -363,7 +364,9 @@ export function countedSince(facts: WindowFacts, candidate: Candidate, fix: FixS
     const step = facts.steps.find((s) => s.project === again.project && s.tier === again.subject)
     if (!step || step.runs < MIN_RUNS_SINCE_FIX) return null
   }
-  return { ...again, since: fix }
+  // the read that shows the figure again covers the same window as the figure
+  const hours = Math.max(1, Math.round(facts.days * 24))
+  return { ...again, query: again.query.replace(READ_HOURS, `--hours ${hours}`), since: fix }
 }
 
 export const rankOrder = (candidates: readonly Candidate[]): Candidate[] => candidates.toSorted(byCost)
