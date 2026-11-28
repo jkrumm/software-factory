@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { defaultTools } from '../../src/adapters/hygiene/git.ts'
@@ -106,7 +106,7 @@ describe('staleProbe', () => {
   /** A gh whose `pr list` prints `json` and exits `exit`. */
   const fakeGh = (json = '[]', exit = 0): string => {
     const script = join(base, `gh-${++counter}`)
-    writeFileSync(script, `#!/bin/sh\nprintf '%s' '${json}'\nexit ${exit}\n`)
+    writeFileSync(script, `#!/bin/sh\necho "$*" > '${script}.args'\nprintf '%s' '${json}'\nexit ${exit}\n`)
     chmodSync(script, 0o755)
     return script
   }
@@ -117,8 +117,10 @@ describe('staleProbe', () => {
     branch(work, 'squash-one', 90)
     git(throwaway, ['fetch', '-q', 'origin'])
     const row = { headRefName: 'squash-one', headRefOid: headOf(work, 'squash-one'), isCrossRepository: false }
-    const out = await staleProbe({ ...tools, gh: fakeGh(JSON.stringify([row])) }, throwaway)
+    const gh = fakeGh(JSON.stringify([row]))
+    const out = await staleProbe({ ...tools, gh }, throwaway)
     expect(out.findings.find((f) => f.key === 'stale:branches')?.lines).toEqual(['origin/squash-one (merged)'])
+    expect(readFileSync(`${gh}.args`, 'utf8')).toContain('--base master')
   })
 
   test('green: a pull request that merged at another head leaves its branch untouched', async () => {
