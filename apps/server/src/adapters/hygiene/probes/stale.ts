@@ -78,7 +78,7 @@ async function idleSeconds(tools: Tools, worktree: string, now: number): Promise
  * git's history, so `git branch --merged` cannot see it; the pull request records the head it merged at, and a branch still
  * there is merged. Empty when gh cannot read the repo: the probe then keeps to git's answer.
  */
-async function mergedPullRequestHeads(tools: Tools, path: string): Promise<Set<string>> {
+async function mergedPullRequestHeads(tools: Tools, path: string, base: string): Promise<Set<string>> {
   const result = await exec(
     [
       tools.gh,
@@ -86,6 +86,8 @@ async function mergedPullRequestHeads(tools: Tools, path: string): Promise<Set<s
       'list',
       '--state',
       'merged',
+      '--base',
+      base,
       '--limit',
       MERGED_PRS,
       '--json',
@@ -170,7 +172,7 @@ export async function scanStale(tools: Tools, path: string): Promise<StaleScan |
   if (!remote.length && !linked.length) return 'no remote branches and no linked worktrees'
 
   const defaultTip = (await gitTry(tools, path, ['rev-parse', '--verify', '-q', target]))?.trim()
-  const squashed = remote.length ? await mergedPullRequestHeads(tools, path) : new Set<string>()
+  const squashed = remote.length ? await mergedPullRequestHeads(tools, path, defaultName) : new Set<string>()
   const branches = remote
     .map((b) => ({
       name: b.name,
@@ -202,7 +204,7 @@ export async function scanStale(tools: Tools, path: string): Promise<StaleScan |
   return { defaultName, remoteCount: remote.length, linkedCount: linked.length, branches, worktrees }
 }
 
-/** Remote branches merged into the default branch or untouched for 30 days, and leftover worktrees (prunable, merged or untouched). */
+/** Remote branches merged into the default branch (or whose pull request merged at their tip) or untouched for 30 days, and leftover worktrees (prunable, merged or untouched). */
 export async function staleProbe(tools: Tools, path: string): Promise<Outcome> {
   const scan = await scanStale(tools, path)
   if (typeof scan === 'string') return skipped(scan)

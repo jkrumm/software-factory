@@ -173,7 +173,7 @@ Every command (`make <target>`, `bun run <script>`) and path a `README.md` names
 
 ### stale
 
-Remote branches merged into the default branch or untouched for 30 days, and leftover worktrees of branches that are gone.
+Remote branches merged into the default branch (or whose pull request merged at their tip) or untouched for 30 days, and leftover worktrees of branches that are gone.
 
 - **Default:** on for every project.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.

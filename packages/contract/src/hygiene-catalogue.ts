@@ -180,7 +180,7 @@ export const HYGIENE_CATALOGUE = [
         'On the remote and the project checkout at once. Branches only untouched for 30 days and worktrees only untouched are not deleted: they stay a finding for a lead.',
     },
     summary:
-      'Remote branches merged into the default branch or untouched for 30 days, and leftover worktrees of branches that are gone.',
+      'Remote branches merged into the default branch (or whose pull request merged at their tip) or untouched for 30 days, and leftover worktrees of branches that are gone.',
     enabled: 'on',
     detect: null,
     cost: 'file',
