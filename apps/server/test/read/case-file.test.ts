@@ -171,7 +171,7 @@ function recorder() {
     },
   }
   const port = casedAgw(inner, {
-    read: (subject) => readCaseFile(db.sql, subject),
+    read: (subject) => readCaseFile(db.sql, subject, undefined, clock.now()),
     agents: gitAgentsHead({ timeoutMs: 5_000 }),
     lastWords: async (path) =>
       ok(path === '/tmp/transcript.jsonl' ? 'Waiting on the CI run of pull request 12.' : null),
