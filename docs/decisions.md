@@ -511,7 +511,7 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   their own successor for ten rounds (about 1,180 dollars in cycle runs and 880 in their fix rows, ten days). Cycle 10 asked
   whether a cycle with no referenced case may converge on its other clauses; the Decision closed on its default (keep the
   protocol), the owner has not ruled, and each later cycle logged the open question and filed the next. A default only ends the
-  asking Issue's wait. Decision: order 2 of the lead brief says a row that files its own successor is spend, so when what lets
+  asking Issue's wait. Decision: order 2 of the lead brief says where the work files its next round, ask again with no default (the spend clause left order 2 on 2026-11-28, for the byte cap), so when what lets
   its rounds end rests on a default or on silence, the lead asks again before the next round, with no default, the cost of the
   last rounds and what stopping leaves undone; the notes of a default taken (the wait running out, `take-default`) say the same.
   No detector: the factory cannot tell a recurring question from a new one by words, and a count of same-named Issues would file
