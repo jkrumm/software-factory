@@ -4,6 +4,7 @@ import {
   DEFAULT_RECHECK_MS,
   DEFAULT_RETRY_MS,
   markInherited,
+  markReachability,
   nextCheckAt,
   outcomeOf,
   stepOf,
@@ -169,7 +170,7 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
   const ran = await deps.proof.run(input, deps.signal)
   // The proof answers an error only when the server is stopping: the checks say nothing, the next server asks again.
   if (!ran.ok || deps.signal.aborted) return releaseThen(release, ok(undefined))
-  const checks = markInherited(ran.value, baseline)
+  const checks = markInherited(markReachability(ran.value), baseline)
 
   const recorded = await deps.uow.run(async ({ work, quality }) => {
     const at = deps.clock.now()

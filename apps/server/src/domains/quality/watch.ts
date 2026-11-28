@@ -244,6 +244,30 @@ export function markInherited(checks: readonly Check[], baseline: readonly Check
   })
 }
 
+/**
+ * The lines a `make` check prints when a host it reads is out of reach: an ssh that times out or is refused, a name that
+ * does not resolve (gaierror, URLError), a MacBook that is asleep or offline. They say what stopped the check, not that
+ * the change is wrong.
+ */
+const REACHABILITY =
+  /connect to (?:host )?\S+ port \d+: (?:Operation timed out|Connection timed out|Connection refused)|\bgaierror\b|\bURLError\b|nodename nor servname|Name or service not known|Temporary failure in name resolution|Could not resolve hostname|\bMacBook\b[^\n]*\b(?:asleep|offline|unreachable)\b/i
+
+/** A line make prints when a recipe fails: it says where the failure stopped, never what failed. */
+const RECIPE_WRAPPER = /^make(?:\[\d+\])?: \*\*\*/
+
+/**
+ * Marks each failed `make` check whose failing lines are all host reachability (the make wrapper lines aside) as
+ * `blocked`: neither a pass nor a regression, looked at again after `recheckMs`, so an outage that clears is no fault of
+ * the change. A red with any other failing line is the change's, as before. A check with no failing line is left alone.
+ */
+export function markReachability(checks: readonly Check[]): Check[] {
+  return checks.map((check) => {
+    if (check.ok || check.blocked || !check.name.startsWith('make ')) return check
+    const lines = failingLines(check.detail).filter((line) => !RECIPE_WRAPPER.test(line))
+    return lines.length > 0 && lines.every((line) => REACHABILITY.test(line)) ? { ...check, blocked: true } : check
+  })
+}
+
 /** A run of verify as it stands in the watch's history. */
 export interface Ran {
   at: Date
