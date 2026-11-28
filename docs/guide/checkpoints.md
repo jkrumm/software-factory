@@ -14,7 +14,7 @@ A Decision is one question with its case, and the only way a lead asks the owner
 - **Every violation at once.** A form that breaks a rule is refused with every violation named, and nothing is stored.
 - **A recommendation is an option.** It must be the label of one of the options.
 - **A default is reversible.** `noAnswer.default` names a reversible option and comes with `waitMinutes` (1 to 10080). Both are given or neither is. When the wait runs out, the default is taken; a lead that already went on with it takes it sooner with `factory decision take-default <id> --attempt <n>`.
-- **Waiting is not a choice.** A recommendation or default of "Keep waiting", "Wait for review", "Do nothing", "Hold", "Park until the release", "Drop" or "Close and refile" is refused. A person's chore is an Errand, and an awaited event is `issue defer`. The steward's own asks are exempt: a hold is a real answer to a stall, and it becomes a timed wait.
+- **Waiting is not a choice.** A recommendation or default of "Keep waiting", "Wait for review", "Do nothing", "Hold", "Park until the release", "Drop it" or "Close and refile" is refused. A person's chore is an Errand, and an awaited event is `issue defer`. The steward's own asks are exempt: a hold is a real answer to a stall, and it becomes a timed wait.
 - **Three steps, in order.** The Judge (next section), the default after its wait (or taken by the lead), the owner. The Decision records who settled it: `judge`, `default`, `owner`, or `orchestrator` when it answers for the owner. (Rows from before 2026-11-20 may also say `policy`: that step is gone, and `project.yaml`'s `policy:` key is accepted and dropped.)
 
 <!-- snippet: apps/server/src/domains/checkpoints/decision.ts NO_OP_LABELS -->
@@ -23,7 +23,7 @@ const NO_OP_LABELS: readonly RegExp[] = [
   /^(?:keep|continue|stay|remain|just|simply)\b.{0,12}\b(?:waiting|wait|blocked|paused|parked)\b/i,
   /^(?:wait(?:ing)?|do(?:ing)? nothing|no[- ]?op|no action|nothing|hold|leave (?:it )?(?:as is|open|alone))\b[^,;:]{0,30}$/i,
   /^park(?:ed)?(?: it| this| the issue)?(?: (?:until|till)\b[^,;:]*)?$/i,
-  /^(?:close(?: (?:it|this|the issue))? as dropped(?: and (?:re-?file|file again|refile)(?: (?:it|this|the issue))?)?|close(?: (?:it|this|the issue))? and (?:re-?file|file again|refile)(?: (?:it|this|the issue))?|drop(?: (?:it|this|the issue))?)$/i,
+  /^(?:close(?: (?:it|this|the issue))? as dropped(?: and (?:re-?file|file again|refile)(?: (?:it|this|the issue))?)?|close(?: (?:it|this|the issue))? and (?:re-?file|file again|refile)(?: (?:it|this|the issue))?|drop (?:it|this|the issue))$/i,
 ]
 ```
 

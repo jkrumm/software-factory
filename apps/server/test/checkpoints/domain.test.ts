@@ -1083,6 +1083,7 @@ describe('refuseNoOpDefault', () => {
     'Merge when CI is green',
     'Park the old route and ship the new one',
     'Drop the legacy route and ship the new one',
+    'Drop A or keep it',
   ])('%s is a choice', (label) => {
     expect(refuseNoOpDefault(withLabel(label))).toBeNull()
   })

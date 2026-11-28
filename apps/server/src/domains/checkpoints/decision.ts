@@ -366,14 +366,14 @@ function checkedOf(problem: Problems, value: unknown): string {
 }
 
 /**
- * Labels that are no choice: "keep waiting", "wait for review", "do nothing", "hold", "park until the release", "close and refile", "drop". A label that goes on to a plan
+ * Labels that are no choice: "keep waiting", "wait for review", "do nothing", "hold", "park until the release", "close and refile", "drop it". A label that goes on to a plan
  * ("Wait for Issue 12 to land, then ship", "Hold the release and ship the hotfix instead") is not matched.
  */
 const NO_OP_LABELS: readonly RegExp[] = [
   /^(?:keep|continue|stay|remain|just|simply)\b.{0,12}\b(?:waiting|wait|blocked|paused|parked)\b/i,
   /^(?:wait(?:ing)?|do(?:ing)? nothing|no[- ]?op|no action|nothing|hold|leave (?:it )?(?:as is|open|alone))\b[^,;:]{0,30}$/i,
   /^park(?:ed)?(?: it| this| the issue)?(?: (?:until|till)\b[^,;:]*)?$/i,
-  /^(?:close(?: (?:it|this|the issue))? as dropped(?: and (?:re-?file|file again|refile)(?: (?:it|this|the issue))?)?|close(?: (?:it|this|the issue))? and (?:re-?file|file again|refile)(?: (?:it|this|the issue))?|drop(?: (?:it|this|the issue))?)$/i,
+  /^(?:close(?: (?:it|this|the issue))? as dropped(?: and (?:re-?file|file again|refile)(?: (?:it|this|the issue))?)?|close(?: (?:it|this|the issue))? and (?:re-?file|file again|refile)(?: (?:it|this|the issue))?|drop (?:it|this|the issue))$/i,
 ]
 
 /**
